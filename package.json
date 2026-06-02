@@ -9,7 +9,11 @@
     "check": "tsc --noEmit --incremental false"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "@vercel/blob": "^2.4.0",
+    "mammoth": "^1.12.0",
     "next": "^16.0.0",
+    "node-html-parser": "^7.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

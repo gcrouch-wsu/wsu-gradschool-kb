@@ -1,17 +1,17 @@
 import { notFound } from "next/navigation";
-import { getAssetBySlug, getKbBySlug } from "@/lib/demo-data";
+import { getAssetBySlug, getKbBySlug } from "@/lib/kb-store";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ kbSlug: string; assetSlug: string }> },
 ) {
   const { kbSlug, assetSlug } = await params;
-  const kb = getKbBySlug(kbSlug);
+  const kb = await getKbBySlug(kbSlug);
   if (!kb) {
     notFound();
   }
 
-  const asset = getAssetBySlug(kb.id, assetSlug);
+  const asset = await getAssetBySlug(kb.id, assetSlug);
   if (!asset) {
     notFound();
   }

@@ -3,8 +3,9 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WSU Graduate School Knowledge Base",
-  description: "Public knowledge base prototype for Graduate School guidance and managed assets.",
+  title: "WSU Knowledge Base",
+  description:
+    "Washington State University knowledge base platform. Browse published knowledge bases, including the Graduate School knowledge base.",
 };
 
 // The per-request CSP nonce (set in middleware.ts) can only be attached to inline
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <header className="site-header">
           <div className="site-header__inner">
             <Link className="brand" href="/">
-              WSU Graduate School KB
+              WSU Knowledge Base
             </Link>
             <nav className="nav" aria-label="Primary">
               <Link href="/">Knowledge bases</Link>

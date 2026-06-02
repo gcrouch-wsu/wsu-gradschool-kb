@@ -1,4 +1,4 @@
-import type { Asset, KbPage, KnowledgeBase } from "@/lib/types";
+import type { Asset, KbDataset, KbPage, KnowledgeBase } from "@/lib/types";
 
 export const knowledgeBases: KnowledgeBase[] = [
   {
@@ -60,6 +60,7 @@ export const pages: KbPage[] = [
     path: ["procedures"],
     summary: "Procedural guidance for maintaining Graduate School knowledge base content.",
     status: "published",
+    visibility: "public",
     ownerLabel: "Graduate School Outreach and Technology",
     contactEmail: "gradschool@wsu.edu",
     lastReviewedDate: "2026-06-02",
@@ -83,6 +84,7 @@ export const pages: KbPage[] = [
     path: ["templates"],
     summary: "Managed templates available to graduate programs.",
     status: "published",
+    visibility: "staff",
     ownerLabel: "Graduate School",
     contactEmail: "gradschool@wsu.edu",
     lastReviewedDate: "2026-06-02",
@@ -107,6 +109,7 @@ export const pages: KbPage[] = [
     summary:
       "How Graduate School partners access, review, and update public program fact sheets.",
     status: "published",
+    visibility: "public",
     ownerLabel: "Graduate School Outreach and Technology",
     contactEmail: "gradschool@wsu.edu",
     lastReviewedDate: "2026-06-02",
@@ -164,6 +167,7 @@ export const pages: KbPage[] = [
     summary:
       "Guidance and templates for maintaining graduate program handbooks.",
     status: "published",
+    visibility: "staff",
     ownerLabel: "Graduate School",
     contactEmail: "gradschool@wsu.edu",
     lastReviewedDate: "2026-06-02",
@@ -198,75 +202,13 @@ export const pages: KbPage[] = [
   },
 ];
 
-export function getPublishedKbs() {
-  return knowledgeBases.filter((kb) => kb.status === "published");
-}
-
-export function getKbBySlug(slug: string) {
-  return knowledgeBases.find((kb) => kb.slug === slug && kb.status === "published") ?? null;
-}
-
-export function getKbById(id: string) {
-  return knowledgeBases.find((kb) => kb.id === id) ?? null;
-}
-
-export function getPublishedPagesForKb(kbId: string) {
-  return pages.filter((page) => page.kbId === kbId && page.status === "published");
-}
-
-export function getPageByPath(kbId: string, path: string[]) {
-  return (
-    pages.find(
-      (page) =>
-        page.kbId === kbId &&
-        page.status === "published" &&
-        page.path.join("/") === path.join("/"),
-    ) ?? null
-  );
-}
-
-export function getAssetBySlug(homeKbId: string, slug: string) {
-  return (
-    assets.find(
-      (asset) =>
-        asset.homeKbId === homeKbId &&
-        asset.slug === slug &&
-        asset.status === "active",
-    ) ?? null
-  );
-}
-
-export function getAssetById(assetId: string) {
-  return assets.find((asset) => asset.id === assetId && asset.status === "active") ?? null;
-}
-
-export function searchKb(kbId: string, query: string) {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    return [];
-  }
-
-  const pageResults = getPublishedPagesForKb(kbId)
-    .map((page) => {
-      const body = page.blocks
-        .map((block) => ("text" in block ? block.text : "items" in block ? block.items.join(" ") : ""))
-        .join(" ");
-      const haystack = `${page.title} ${page.summary} ${body}`.toLowerCase();
-      return haystack.includes(normalized)
-        ? { type: "page" as const, id: page.id, title: page.title, summary: page.summary, path: page.path }
-        : null;
-    })
-    .filter((result): result is NonNullable<typeof result> => Boolean(result));
-
-  const assetResults = assets
-    .filter((asset) => asset.homeKbId === kbId && asset.status === "active")
-    .map((asset) => {
-      const haystack = `${asset.title} ${asset.description} ${asset.slug}`.toLowerCase();
-      return haystack.includes(normalized)
-        ? { type: "asset" as const, id: asset.id, title: asset.title, summary: asset.description, slug: asset.slug }
-        : null;
-    })
-    .filter((result): result is NonNullable<typeof result> => Boolean(result));
-
-  return [...pageResults, ...assetResults];
-}
+/**
+ * Seed dataset used to (a) bootstrap an empty Neon database on first run and
+ * (b) serve as the in-memory fallback when DATABASE_URL is not configured.
+ * All query/visibility/tree logic lives in `kb-store.ts`.
+ */
+export const seedDataset: KbDataset = {
+  knowledgeBases,
+  pages,
+  assets,
+};

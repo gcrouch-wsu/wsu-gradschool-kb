@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { getAssetById, getKbById } from "@/lib/demo-data";
+import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
 import type { ContentBlock } from "@/lib/types";
 
-function AssetLink({ assetId }: { assetId: string }) {
-  const asset = getAssetById(assetId);
+async function AssetLink({ assetId }: { assetId: string }) {
+  const asset = await getAssetById(assetId);
   if (!asset) {
     return <p className="alert">Referenced asset is unavailable.</p>;
   }
 
-  const kb = getKbById(asset.homeKbId);
+  const kb = await getKbById(asset.homeKbId);
   const href = kb ? `/kb/${kb.slug}/files/${asset.slug}` : "#";
 
   return (
@@ -39,9 +39,13 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
 
         if (block.type === "heading") {
           return block.level === 2 ? (
-            <h2 key={block.blockId}>{block.text}</h2>
+            <h2 className="anchor-heading" id={block.blockId} key={block.blockId}>
+              {block.text}
+            </h2>
           ) : (
-            <h3 key={block.blockId}>{block.text}</h3>
+            <h3 className="anchor-heading" id={block.blockId} key={block.blockId}>
+              {block.text}
+            </h3>
           );
         }
 
@@ -61,6 +65,17 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
             <div className="alert" key={block.blockId}>
               {block.text}
             </div>
+          );
+        }
+
+        if (block.type === "image") {
+          return (
+            <figure className="content-image" key={block.blockId}>
+              {/* Imported images are served from Vercel Blob; dimensions are unknown. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt={block.alt ?? ""} loading="lazy" src={block.url} />
+              {block.alt && <figcaption>{block.alt}</figcaption>}
+            </figure>
           );
         }
 

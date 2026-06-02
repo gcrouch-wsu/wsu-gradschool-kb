@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAssetById, getKbById, getKbBySlug, searchKb } from "@/lib/demo-data";
+import { getCurrentAdminSession } from "@/lib/auth";
+import { getAssetById, getKbById, getKbBySlug, searchKb } from "@/lib/kb-store";
 
 export default async function SearchPage({
   params,
@@ -11,12 +12,26 @@ export default async function SearchPage({
 }) {
   const { kbSlug } = await params;
   const { q = "" } = await searchParams;
-  const kb = getKbBySlug(kbSlug);
+  const kb = await getKbBySlug(kbSlug);
   if (!kb) {
     notFound();
   }
 
-  const results = searchKb(kb.id, q);
+  const isStaff = Boolean(await getCurrentAdminSession());
+  const results = await searchKb(kb.id, q, isStaff);
+  const resultsWithHref = await Promise.all(
+    results.map(async (result) => {
+      if (result.type === "page") {
+        return { result, href: `/kb/${kb.slug}/${result.path.join("/")}` };
+      }
+      const asset = await getAssetById(result.id);
+      const homeKb = asset ? await getKbById(asset.homeKbId) : null;
+      return {
+        result,
+        href: asset && homeKb ? `/kb/${homeKb.slug}/files/${asset.slug}` : "#",
+      };
+    }),
+  );
 
   return (
     <div className="page-shell">
@@ -36,27 +51,15 @@ export default async function SearchPage({
       {!q.trim() && <p>Enter a search term.</p>}
       {q.trim() && results.length === 0 && <p>No results found.</p>}
       <div className="grid">
-        {results.map((result) => {
-          let href = "#";
-          if (result.type === "page") {
-            href = `/kb/${kb.slug}/${result.path.join("/")}`;
-          } else {
-            const asset = getAssetById(result.id);
-            const homeKb = asset ? getKbById(asset.homeKbId) : null;
-            if (asset && homeKb) {
-              href = `/kb/${homeKb.slug}/files/${asset.slug}`;
-            }
-          }
-          return (
-            <article className="card" key={`${result.type}-${result.id}`}>
-              <p className="eyebrow">{result.type}</p>
-              <h3>
-                <Link href={href}>{result.title}</Link>
-              </h3>
-              <p>{result.summary}</p>
-            </article>
-          );
-        })}
+        {resultsWithHref.map(({ result, href }) => (
+          <article className="card" key={`${result.type}-${result.id}`}>
+            <p className="eyebrow">{result.type}</p>
+            <h3>
+              <Link href={href}>{result.title}</Link>
+            </h3>
+            <p>{result.summary}</p>
+          </article>
+        ))}
       </div>
     </div>
   );

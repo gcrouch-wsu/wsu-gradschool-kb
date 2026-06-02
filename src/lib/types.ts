@@ -12,6 +12,8 @@ export interface KnowledgeBase {
   updatedOn: string;
 }
 
+export type PageVisibility = "public" | "staff";
+
 export interface KbPage {
   id: string;
   kbId: string;
@@ -20,6 +22,7 @@ export interface KbPage {
   path: string[];
   summary: string;
   status: PageStatus;
+  visibility: PageVisibility;
   ownerLabel: string;
   contactEmail: string;
   lastReviewedDate: string;
@@ -29,11 +32,23 @@ export interface KbPage {
   relatedAssetIds: string[];
 }
 
+export interface PageTreeNode {
+  page: KbPage;
+  children: PageTreeNode[];
+}
+
+export interface KbDataset {
+  knowledgeBases: KnowledgeBase[];
+  pages: KbPage[];
+  assets: Asset[];
+}
+
 export type ContentBlock =
   | { blockId: string; type: "paragraph"; text: string }
   | { blockId: string; type: "heading"; level: 2 | 3; text: string }
   | { blockId: string; type: "list"; ordered?: boolean; items: string[] }
   | { blockId: string; type: "alert"; variant: "info" | "warning"; text: string }
+  | { blockId: string; type: "image"; url: string; alt?: string }
   | { blockId: string; type: "asset_link"; assetId: string; label?: string };
 
 export interface Asset {

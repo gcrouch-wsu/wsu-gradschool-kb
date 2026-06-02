@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageBlocks } from "@/components/PageBlocks";
+import { PageTree } from "@/components/PageTree";
+import { TableOfContents } from "@/components/TableOfContents";
+import { getCurrentAdminSession } from "@/lib/auth";
 import {
+  buildPageTree,
   getAssetById,
+  getBreadcrumbs,
   getKbById,
   getKbBySlug,
   getPageByPath,
-  getPublishedPagesForKb,
-} from "@/lib/demo-data";
+} from "@/lib/kb-store";
 import { formatBytes, formatDate } from "@/lib/format";
 
 export default async function KbArticlePage({
@@ -16,65 +20,87 @@ export default async function KbArticlePage({
   params: Promise<{ kbSlug: string; pagePath: string[] }>;
 }) {
   const { kbSlug, pagePath } = await params;
-  const kb = getKbBySlug(kbSlug);
+  const kb = await getKbBySlug(kbSlug);
   if (!kb) {
     notFound();
   }
 
-  const page = getPageByPath(kb.id, pagePath);
+  const isStaff = Boolean(await getCurrentAdminSession());
+  const page = await getPageByPath(kb.id, pagePath, isStaff);
   if (!page) {
     notFound();
   }
 
-  const pages = getPublishedPagesForKb(kb.id);
-  const relatedAssets = page.relatedAssetIds
-    .map((assetId) => getAssetById(assetId))
-    .filter((asset) => asset !== null);
+  const tree = await buildPageTree(kb.id, isStaff);
+  const breadcrumbs = await getBreadcrumbs(kb.id, page.path, isStaff);
+  const currentPath = page.path.join("/");
+  const relatedAssets = (
+    await Promise.all(page.relatedAssetIds.map((assetId) => getAssetById(assetId)))
+  ).filter((asset) => asset !== null);
+  const relatedFiles = await Promise.all(
+    relatedAssets.map(async (asset) => {
+      const homeKb = await getKbById(asset.homeKbId);
+      return { asset, href: homeKb ? `/kb/${homeKb.slug}/files/${asset.slug}` : "#" };
+    }),
+  );
 
   return (
     <div className="page-shell">
       <div className="layout">
-        <aside className="sidebar" aria-label="Section navigation">
+        <aside className="sidebar page-tree" aria-label="Section navigation">
           <strong>{kb.title}</strong>
-          <ul>
-            {pages.map((navPage) => (
-              <li key={navPage.id}>
-                <Link href={`/kb/${kb.slug}/${navPage.path.join("/")}`}>{navPage.title}</Link>
-              </li>
-            ))}
-          </ul>
+          <PageTree currentPath={currentPath} kbSlug={kb.slug} nodes={tree} />
         </aside>
         <article className="article">
-          <p className="eyebrow">Article</p>
+          <nav aria-label="Breadcrumb" className="breadcrumbs">
+            <ol>
+              <li>
+                <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
+              </li>
+              {breadcrumbs.map((crumb) => {
+                const crumbPath = crumb.path.join("/");
+                const isCurrent = crumbPath === currentPath;
+                return (
+                  <li key={crumb.id}>
+                    {isCurrent ? (
+                      <span aria-current="page">{crumb.title}</span>
+                    ) : (
+                      <Link href={`/kb/${kb.slug}/${crumbPath}`}>{crumb.title}</Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+          <p className="eyebrow">
+            Article
+            {page.status === "draft" && <span className="badge badge--draft"> Draft</span>}
+            {page.visibility === "staff" && <span className="badge badge--staff"> Staff only</span>}
+          </p>
           <h1>{page.title}</h1>
           <p className="lead">{page.summary}</p>
           <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
+          <TableOfContents blocks={page.blocks} />
           <PageBlocks blocks={page.blocks} />
 
-          {relatedAssets.length > 0 && (
+          {relatedFiles.length > 0 && (
             <>
               <h2>Related Files</h2>
               <div className="grid">
-                {relatedAssets.map((asset) => {
-                  const homeKb = getKbById(asset.homeKbId);
-                  const href = homeKb
-                    ? `/kb/${homeKb.slug}/files/${asset.slug}`
-                    : "#";
-                  return (
-                    <div className="asset-link" key={asset.id}>
-                      <div aria-hidden="true">File</div>
-                      <div>
-                        <strong>
-                          <Link href={href}>{asset.title}</Link>
-                        </strong>
-                        <p>{asset.description}</p>
-                        <p className="meta">
-                          {asset.mimeType.split(";")[0]} · {formatBytes(asset.fileSizeBytes)}
-                        </p>
-                      </div>
+                {relatedFiles.map(({ asset, href }) => (
+                  <div className="asset-link" key={asset.id}>
+                    <div aria-hidden="true">File</div>
+                    <div>
+                      <strong>
+                        <Link href={href}>{asset.title}</Link>
+                      </strong>
+                      <p>{asset.description}</p>
+                      <p className="meta">
+                        {asset.mimeType.split(";")[0]} · {formatBytes(asset.fileSizeBytes)}
+                      </p>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </>
           )}
