@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageBlocks } from "@/components/PageBlocks";
 import {
   getAssetById,
+  getKbById,
   getKbBySlug,
   getPageByPath,
   getPublishedPagesForKb,
@@ -26,7 +27,9 @@ export default async function KbArticlePage({
   }
 
   const pages = getPublishedPagesForKb(kb.id);
-  const relatedAssets = page.relatedAssetIds.map(getAssetById).filter((asset) => asset !== null);
+  const relatedAssets = page.relatedAssetIds
+    .map((assetId) => getAssetById(assetId))
+    .filter((asset) => asset !== null);
 
   return (
     <div className="page-shell">
@@ -52,20 +55,26 @@ export default async function KbArticlePage({
             <>
               <h2>Related Files</h2>
               <div className="grid">
-                {relatedAssets.map((asset) => (
-                  <div className="asset-link" key={asset.id}>
-                    <div aria-hidden="true">File</div>
-                    <div>
-                      <strong>
-                        <Link href={`/kb/${kb.slug}/files/${asset.slug}`}>{asset.title}</Link>
-                      </strong>
-                      <p>{asset.description}</p>
-                      <p className="meta">
-                        {asset.mimeType.split(";")[0]} · {formatBytes(asset.fileSizeBytes)}
-                      </p>
+                {relatedAssets.map((asset) => {
+                  const homeKb = getKbById(asset.homeKbId);
+                  const href = homeKb
+                    ? `/kb/${homeKb.slug}/files/${asset.slug}`
+                    : "#";
+                  return (
+                    <div className="asset-link" key={asset.id}>
+                      <div aria-hidden="true">File</div>
+                      <div>
+                        <strong>
+                          <Link href={href}>{asset.title}</Link>
+                        </strong>
+                        <p>{asset.description}</p>
+                        <p className="meta">
+                          {asset.mimeType.split(";")[0]} · {formatBytes(asset.fileSizeBytes)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}

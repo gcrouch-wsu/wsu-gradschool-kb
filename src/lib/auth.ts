@@ -9,16 +9,28 @@ interface AdminSession {
   expiresAt: number;
 }
 
+function requireInProduction(name: string, value: string | undefined) {
+  if (process.env.NODE_ENV === "production" && !value) {
+    throw new Error(
+      `${name} must be set in production. Refusing to fall back to development defaults.`,
+    );
+  }
+  return value;
+}
+
 function getAdminEmail() {
-  return process.env.KB_ADMIN_EMAIL?.trim() || "admin@example.edu";
+  return requireInProduction("KB_ADMIN_EMAIL", process.env.KB_ADMIN_EMAIL?.trim()) || "admin@example.edu";
 }
 
 function getAdminPassword() {
-  return process.env.KB_ADMIN_PASSWORD || "ChangeMe123!";
+  return requireInProduction("KB_ADMIN_PASSWORD", process.env.KB_ADMIN_PASSWORD) || "ChangeMe123!";
 }
 
 function getSessionSecret() {
-  return process.env.KB_ADMIN_SESSION_SECRET || `dev-secret:${getAdminEmail()}:${getAdminPassword()}`;
+  return (
+    requireInProduction("KB_ADMIN_SESSION_SECRET", process.env.KB_ADMIN_SESSION_SECRET) ||
+    `dev-secret:${getAdminEmail()}:${getAdminPassword()}`
+  );
 }
 
 function toBase64Url(value: string) {
@@ -45,7 +57,9 @@ function safeEqual(left: string, right: string) {
 }
 
 export function validateAdminCredentials(email: string, password: string) {
-  return email.trim().toLowerCase() === getAdminEmail().toLowerCase() && password === getAdminPassword();
+  const emailMatches = email.trim().toLowerCase() === getAdminEmail().toLowerCase();
+  const passwordMatches = safeEqual(password, getAdminPassword());
+  return emailMatches && passwordMatches;
 }
 
 export function createAdminSessionToken(email = getAdminEmail()) {

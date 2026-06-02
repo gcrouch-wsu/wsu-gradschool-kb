@@ -53,6 +53,52 @@ export const assets: Asset[] = [
 
 export const pages: KbPage[] = [
   {
+    id: "page-section-procedures",
+    kbId: "kb-grad-school",
+    title: "Procedures",
+    slug: "procedures",
+    path: ["procedures"],
+    summary: "Procedural guidance for maintaining Graduate School knowledge base content.",
+    status: "published",
+    ownerLabel: "Graduate School Outreach and Technology",
+    contactEmail: "gradschool@wsu.edu",
+    lastReviewedDate: "2026-06-02",
+    updatedDisplayDate: "2026-06-02",
+    relatedPageIds: ["page-program-fact-sheets"],
+    relatedAssetIds: [],
+    blocks: [
+      {
+        blockId: "intro",
+        type: "paragraph",
+        text:
+          "This section collects step-by-step procedures used by Graduate School partners to maintain public information.",
+      },
+    ],
+  },
+  {
+    id: "page-section-templates",
+    kbId: "kb-grad-school",
+    title: "Templates",
+    slug: "templates",
+    path: ["templates"],
+    summary: "Managed templates available to graduate programs.",
+    status: "published",
+    ownerLabel: "Graduate School",
+    contactEmail: "gradschool@wsu.edu",
+    lastReviewedDate: "2026-06-02",
+    updatedDisplayDate: "2026-06-02",
+    relatedPageIds: ["page-handbooks"],
+    relatedAssetIds: [],
+    blocks: [
+      {
+        blockId: "intro",
+        type: "paragraph",
+        text:
+          "Templates in this section are served through stable KB asset routes so they can be replaced without breaking links from program websites.",
+      },
+    ],
+  },
+  {
     id: "page-program-fact-sheets",
     kbId: "kb-grad-school",
     title: "Maintaining Program Fact Sheets",

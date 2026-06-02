@@ -1,8 +1,9 @@
 export function formatDate(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeZone: "America/Los_Angeles",
-  }).format(new Date(`${date}T12:00:00-07:00`));
+  }).format(new Date(Date.UTC(year, month - 1, day, 19)));
 }
 
 export function formatBytes(bytes: number) {

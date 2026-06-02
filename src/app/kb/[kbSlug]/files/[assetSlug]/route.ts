@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getAssetBySlug, getKbBySlug } from "@/lib/demo-data";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ kbSlug: string; assetSlug: string }> },
 ) {
   const { kbSlug, assetSlug } = await params;
@@ -16,13 +16,18 @@ export async function GET(
     notFound();
   }
 
-  return new Response(asset.body, {
-    headers: {
-      "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
-      "Content-Disposition": `inline; filename="${asset.slug}.txt"`,
-      "Content-Type": asset.mimeType,
-      ETag: `"${asset.versionId}"`,
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  const etag = `"${asset.versionId}"`;
+  const headers = {
+    "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+    "Content-Disposition": `inline; filename="${asset.slug}.txt"`,
+    "Content-Type": asset.mimeType,
+    ETag: etag,
+    "X-Content-Type-Options": "nosniff",
+  };
+
+  if (request.headers.get("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  return new Response(asset.body, { headers });
 }

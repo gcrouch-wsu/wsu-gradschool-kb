@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { assets, getPublishedKbs, pages } from "@/lib/demo-data";
@@ -21,11 +20,11 @@ export default async function AdminPage() {
         Signed in as {session.email}. This deployable shell is ready for the persistent Postgres and Blob-backed
         implementation phases.
       </p>
-      <p>
-        <Link className="button" href="/api/admin/logout">
+      <form action="/api/admin/logout" method="post">
+        <button className="button" type="submit">
           Sign out
-        </Link>
-      </p>
+        </button>
+      </form>
       <div className="grid grid--two">
         <article className="card">
           <h2>Knowledge Bases</h2>

@@ -6,7 +6,9 @@ import { useState } from "react";
 export function AdminSignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/admin";
+  const requestedNext = searchParams.get("next") || "/admin";
+  const next =
+    requestedNext === "/admin" || requestedNext.startsWith("/admin/") ? requestedNext : "/admin";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export function AdminSignInForm() {
         return;
       }
 
-      router.replace(next.startsWith("/admin") ? next : "/admin");
+      router.replace(next);
       router.refresh();
     } catch {
       setError("Unable to sign in.");

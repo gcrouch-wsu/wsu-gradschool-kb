@@ -49,8 +49,8 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
           const ListTag = block.ordered ? "ol" : "ul";
           return (
             <ListTag key={block.blockId}>
-              {block.items.map((item) => (
-                <li key={item}>{item}</li>
+              {block.items.map((item, index) => (
+                <li key={`${block.blockId}-${index}`}>{item}</li>
               ))}
             </ListTag>
           );
