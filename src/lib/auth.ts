@@ -1,0 +1,95 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
+
+export const ADMIN_COOKIE_NAME = "kb_admin_session";
+const SESSION_TTL_SECONDS = 60 * 60 * 8;
+
+interface AdminSession {
+  email: string;
+  expiresAt: number;
+}
+
+function getAdminEmail() {
+  return process.env.KB_ADMIN_EMAIL?.trim() || "admin@example.edu";
+}
+
+function getAdminPassword() {
+  return process.env.KB_ADMIN_PASSWORD || "ChangeMe123!";
+}
+
+function getSessionSecret() {
+  return process.env.KB_ADMIN_SESSION_SECRET || `dev-secret:${getAdminEmail()}:${getAdminPassword()}`;
+}
+
+function toBase64Url(value: string) {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function fromBase64Url(value: string) {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function sign(value: string) {
+  return createHmac("sha256", getSessionSecret()).update(value).digest("base64url");
+}
+
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  const maxLength = Math.max(leftBuffer.length, rightBuffer.length);
+  const leftPadded = Buffer.alloc(maxLength);
+  const rightPadded = Buffer.alloc(maxLength);
+  leftBuffer.copy(leftPadded);
+  rightBuffer.copy(rightPadded);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftPadded, rightPadded);
+}
+
+export function validateAdminCredentials(email: string, password: string) {
+  return email.trim().toLowerCase() === getAdminEmail().toLowerCase() && password === getAdminPassword();
+}
+
+export function createAdminSessionToken(email = getAdminEmail()) {
+  const payload = toBase64Url(
+    JSON.stringify({
+      email,
+      expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000,
+    } satisfies AdminSession),
+  );
+  return `${payload}.${sign(payload)}`;
+}
+
+export function readAdminSessionToken(token: string | undefined) {
+  if (!token) {
+    return null;
+  }
+
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature || !safeEqual(signature, sign(payload))) {
+    return null;
+  }
+
+  try {
+    const session = JSON.parse(fromBase64Url(payload)) as Partial<AdminSession>;
+    if (!session.email || typeof session.expiresAt !== "number" || session.expiresAt <= Date.now()) {
+      return null;
+    }
+    return session as AdminSession;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCurrentAdminSession() {
+  const cookieStore = await cookies();
+  return readAdminSessionToken(cookieStore.get(ADMIN_COOKIE_NAME)?.value);
+}
+
+export function getAdminCookieOptions(maxAge = SESSION_TTL_SECONDS) {
+  return {
+    httpOnly: true,
+    maxAge,
+    path: "/",
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+  };
+}
