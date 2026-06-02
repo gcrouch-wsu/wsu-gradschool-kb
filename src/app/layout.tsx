@@ -7,6 +7,10 @@ export const metadata: Metadata = {
   description: "Public knowledge base prototype for Graduate School guidance and managed assets.",
 };
 
+// The per-request CSP nonce (set in middleware.ts) can only be attached to inline
+// scripts during request-time rendering, so the app must not be statically prerendered.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">

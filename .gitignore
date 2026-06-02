@@ -13,3 +13,6 @@ project_spec.md
 .claude/
 *.doc
 *.doc.docx
+
+.vercel
+.env*

@@ -10,15 +10,12 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   async headers() {
+    // Content-Security-Policy is set per-request in middleware.ts so Next.js can
+    // attach a unique nonce to its inline bootstrap/hydration scripts.
     return [
       {
         source: "/(.*)",
         headers: [
-          {
-            key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-          },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
