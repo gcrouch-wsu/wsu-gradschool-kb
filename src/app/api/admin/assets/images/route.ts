@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
 import { isBlobEnabled, isSupportedImageType, uploadImportImage } from "@/lib/blob";
 import { createImageAsset, getKbById } from "@/lib/kb-store";
+import { requireAdminMutation } from "@/lib/security";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  const session = await getCurrentAdminSession();
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const formData = await request.formData().catch(() => null);

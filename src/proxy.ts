@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS } from "@/lib/session-constants";
 
 export function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID().replaceAll("-", "");
@@ -30,6 +31,24 @@ export function proxy(request: NextRequest) {
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("content-security-policy", csp);
+
+  // Slide the idle-timeout window forward on each authenticated navigation by
+  // re-setting the existing session cookie with a fresh max-age. The cookie value
+  // is opaque here (it is verified in Node route handlers / server components);
+  // this only refreshes the browser-side idle expiry.
+  const session = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (session) {
+    response.cookies.set({
+      name: ADMIN_COOKIE_NAME,
+      value: session,
+      httpOnly: true,
+      maxAge: IDLE_TTL_SECONDS,
+      path: "/",
+      sameSite: "lax",
+      secure: isProduction,
+    });
+  }
+
   return response;
 }
 

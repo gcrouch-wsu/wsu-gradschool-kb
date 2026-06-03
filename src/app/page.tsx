@@ -22,6 +22,9 @@ export default async function HomePage() {
       </section>
       <div className="page-shell">
         <h2>Published knowledge bases</h2>
+        {kbs.length === 0 && (
+          <p className="empty">No knowledge bases are published yet. Check back soon.</p>
+        )}
         <div className="grid grid--two">
           {kbs.map((kb) => (
             <article className="card" key={kb.id}>

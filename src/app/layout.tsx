@@ -8,9 +8,11 @@ export const metadata: Metadata = {
     "Washington State University knowledge base platform. Browse published knowledge bases, including the Graduate School knowledge base.",
 };
 
-// The per-request CSP nonce (set in middleware.ts) can only be attached to inline
+// The per-request CSP nonce (set in src/proxy.ts) can only be attached to inline
 // scripts during request-time rendering, so the app must not be statically prerendered.
 export const dynamic = "force-dynamic";
+
+const currentYear = new Date().getFullYear();
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -32,6 +34,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </div>
         </header>
         <main id="main">{children}</main>
+        <footer className="site-footer">
+          <div className="site-footer__inner">
+            <div>
+              <div className="site-footer__brand">Washington State University Knowledge Base</div>
+              <p className="meta">Public procedures, guidance, and managed resources for WSU partners.</p>
+            </div>
+            <nav aria-label="Footer">
+              <Link href="/">Knowledge bases</Link>
+              <Link href="/kb/graduate-school">Graduate School</Link>
+              <Link href="/admin">Admin</Link>
+            </nav>
+          </div>
+          <div className="site-footer__inner" style={{ paddingTop: 0 }}>
+            <p className="meta">© {currentYear} Washington State University</p>
+          </div>
+        </footer>
       </body>
     </html>
   );

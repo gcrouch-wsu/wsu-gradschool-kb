@@ -69,7 +69,8 @@ This spec describes the full target system. The current repository is a deployab
 * Structured table rendering with captions and header row/header column support.
 * Image block rendering honors editor-controlled width.
 * Staff-aware visibility model: public pages are visible to everyone; staff-only and draft pages are visible to authenticated admin users.
-* Public KB-scoped search at `/kb/[kbSlug]/search` using case-insensitive substring matching across pages and assets.
+* Public KB-scoped search at `/kb/[kbSlug]/search` with simple relevance ranking (exact-title > title prefix > title substring > summary > body, plus asset title/description/slug), case-insensitive.
+* Public search rate limiting by client key, returning a friendly notice when exceeded (in-memory, per-instance for the MVP).
 * Admin sign-in page at `/admin/sign-in`.
 * `POST /api/admin/session` for sign in and `POST /api/admin/logout` for sign out.
 * Admin dashboard at `/admin` requiring an authenticated session.
@@ -87,14 +88,20 @@ This spec describes the full target system. The current repository is a deployab
 * Admins can publish an existing page.
 * Moving a page cascades path updates to descendant pages so the page tree remains connected.
 * Admin page tree manager supports manual ordering, drag/drop nesting, row-level edit actions, and direct draft publish actions.
-* HMAC-signed, HTTP-only admin session cookie with 8-hour fixed lifetime, `SameSite=Lax`, and `Secure` in production.
+* HMAC-signed, HTTP-only admin session cookie with an 8-hour absolute lifetime plus a 60-minute idle timeout (cookie max-age slid forward on each authenticated navigation), `SameSite=Lax`, and `Secure` in production.
 * Production auth environment validation for `KB_ADMIN_EMAIL`, `KB_ADMIN_PASSWORD`, and `KB_ADMIN_SESSION_SECRET`.
+* Same-origin (Origin/Referer) CSRF enforcement on all state-changing admin routes.
+* Login rate limiting keyed by client and account, returning HTTP 429 with `Retry-After` (in-memory, per-instance for the MVP).
+* Reserved-slug validation enforced on page create/update, blocking slugs that would collide with application routes; errors surface in the admin UI.
+* Accessibility and required-metadata publish gate: publishing is blocked on missing summary/owner/contact/last-reviewed metadata, skipped heading levels, vague link text, empty link destinations, images without alt text, header-less tables, and references to non-active assets. Failures are listed in the page editor and page-tree manager.
+* Admin page-editor fields for governance metadata (owner/office, contact email, last reviewed date) so pages can satisfy the publish gate.
 * Neon Postgres integration when `DATABASE_URL` is set.
 * Development fallback to the seed dataset when `DATABASE_URL` is unset.
 * Minimal auto-created database tables for KBs, pages, and assets.
 * Automatic seed insertion into an empty Neon database.
 * Admin DOCX import screen at `/admin/import`.
 * Single-file `.docx` parse API with a 10 MB current route-level limit.
+* DOCX import rejects macro-enabled Office formats (`.docm`/`.dotm`) and empty files; imported hyperlinks are restricted to safe schemes (`http`, `https`, `mailto`) by the sanitizer.
 * DOCX conversion for headings, paragraphs, lists, tables, supported inline formatting, and supported embedded web images.
 * Import preview with block counts, outline, messages, and image thumbnails.
 * Import commit flow that lets the admin choose KB, parent path, title, slug, summary, and visibility.
@@ -102,9 +109,11 @@ This spec describes the full target system. The current repository is a deployab
 * Optional Vercel Blob upload for supported imported images when `BLOB_READ_WRITE_TOKEN` is configured.
 * Imported DOCX images are promoted into managed active image asset records when the imported draft is committed.
 * Stable public asset route at `/kb/[kbSlug]/files/[assetSlug]`.
-* Stream-first asset delivery for current seed/database asset bodies with `ETag`, `304`, `Cache-Control`, `Content-Type`, `Content-Disposition`, and `X-Content-Type-Options: nosniff`.
+* Stream-first asset delivery for current seed/database asset bodies with `ETag`, `304`, `Cache-Control`, `Content-Type`, `Content-Disposition`, and `X-Content-Type-Options: nosniff`. URL-backed asset bodies are fetched only from the trusted object-storage host (SSRF guard).
+* Asset bodies are loaded only by the file-delivery route; list, render, and search queries select asset metadata without the (potentially large) body column.
 * Secure response headers through `next.config.ts` and nonce-based Content Security Policy middleware.
-* Skip-to-content link, semantic landmarks, visible focus styles, and responsive WSU-themed public styling.
+* Allowlist-based, DOM-parsed rich-text sanitizer for admin-authored and imported inline formatting (drops all attributes except validated anchor `href`).
+* Skip-to-content link, semantic landmarks, visible focus styles, and responsive WSU-themed public styling with a site header, footer, and empty states.
 
 ### Partially built
 
@@ -112,23 +121,23 @@ This spec describes the full target system. The current repository is a deployab
 * Persistent storage: Neon is supported for the minimal current tables, but the full schema, migrations, and production invariants are not implemented.
 * Asset management: stable asset routes, asset records, page-editor image upload, and imported-image asset promotion exist, but there is no file manager UX, direct-to-blob asset upload, metadata workflow, usage tracking, version table, replacement flow, archive flow, or shared asset workflow.
 * DOCX import: single-file parse/preview/commit exists and creates managed image assets for supported embedded media, but it is not a persistent staged-import workflow.
-* Security: signed admin cookies, production env validation, CSP, and baseline headers exist, but CSRF protection, rate limiting, idle timeout, managed users, and KB-scoped RBAC are not built.
-* Search: KB-scoped search exists, but Postgres FTS, alias materialization, ranking, and analytics are not built.
+* Security: signed admin cookies with idle timeout, production env validation, same-origin (Origin/Referer) CSRF enforcement, login and public-search rate limiting, CSP, and baseline headers exist; anti-CSRF tokens, a shared/distributed rate-limit store, session-secret rotation handling, managed users, and KB-scoped RBAC are not built.
+* Search: KB-scoped search with simple relevance ranking (title/summary/body and asset metadata) exists, but Postgres FTS, alias materialization, and analytics are not built.
 * Block model: the renderer and basic editor support a small block subset, but the full editor-facing block JSON schema is not implemented.
-* Page editing: metadata, nesting, manual ordering, draft save, publish, WYSIWYG-style block editing with formatting toolbars, table blocks, managed image insertion, and image resizing are built; final editor polish, publish gates, versions, locks, redirects, and audit logging remain unbuilt.
+* Page editing: metadata (including governance fields: owner, contact, last reviewed date), nesting, manual ordering, draft save, publish with an accessibility/metadata gate, WYSIWYG-style block editing with formatting toolbars, table blocks, managed image insertion, and image resizing are built; final editor polish, page versions, locks, redirects, and audit logging remain unbuilt.
 
 ### Not yet built, but still in scope
 
 * User table, KB User Assignment table, owner/admin/editor management, and KB-scoped permission checks.
-* CSRF tokens, login rate limiting, public search rate limiting, idle session timeout, and session-secret rotation handling.
-* KB management UI, template selection, and reserved-slug validation through the admin UI.
+* Anti-CSRF tokens (same-origin Origin/Referer checks are already enforced), a shared/distributed rate-limit store, and session-secret rotation handling.
+* KB management UI and template selection through the admin UI.
 * Final WYSIWYG/manual page editor polish beyond the current pragmatic block editor.
 * Managed image replacement, stored dimensions, and accessibility metadata beyond current page-editor upload/import promotion.
 * Richer KB page section controls for grouping pages under meaningful public navigation headers.
 * Draft/published body separation.
 * Autosave, manual save, optimistic concurrency tokens, and edit locks.
 * Page versions and restore-into-draft.
-* Publishing workflow and accessibility gate.
+* Publishing approval workflow: the accessibility and required-metadata gate is built, but version snapshots, edit locks, and audit events on publish are not.
 * Page unpublish, archive, and restore controls.
 * Asset library/file manager UX.
 * Direct-to-blob upload flow for normal assets and large imports.
@@ -154,7 +163,7 @@ This spec describes the full target system. The current repository is a deployab
 * The admin model is a single bootstrap account, not managed users.
 * The current database schema is intentionally minimal and should be replaced by migrations before production use.
 * Imported draft pages are canonical draft pages immediately after commit; there is no saved staging table yet.
-* Publishing directly changes a page from draft to published without an accessibility gate, approval check, version snapshot, lock, or audit event.
+* Publishing runs an accessibility and required-metadata gate, but still changes a page from draft to published without an approval check, version snapshot, lock, or audit event.
 * Page movement updates descendant paths but does not yet create redirects from prior URLs.
 * Imported images are promoted into managed image assets on draft commit, but there is no persistent staged-media review before commit.
 * The current DOCX upload path goes through a route handler and is limited to 10 MB; the target system still requires direct-to-blob for larger imports.
@@ -2088,6 +2097,9 @@ Built:
 * Bootstrap-owner admin auth via environment variables (no managed-user table yet)
 * Production requirement for admin auth environment variables
 * Secure baseline headers and nonce-based CSP middleware
+* Same-origin (Origin/Referer) CSRF enforcement on admin mutations
+* Login rate limiting; sliding idle session timeout on the admin cookie
+* Reserved-slug validation on page create/update
 * Optional Neon Postgres connection through `DATABASE_URL`
 * Minimal KB/page/asset tables auto-created at runtime for the current prototype
 * Seed data fallback for local development
@@ -2096,11 +2108,11 @@ Not yet built:
 
 * Full PostgreSQL schema and migration tool
 * User and KB user assignment tables; managed-user accounts
-* CSRF tokens; login and search rate limiting
-* Idle session timeout
+* Anti-CSRF tokens (same-origin checks are enforced); shared/distributed rate-limit store
+* Session-secret rotation handling
 * Owner/admin/editor role enforcement; KB assignments
 * Developer/config-managed KB templates
-* Reserved-slug validation through the admin UI
+* KB management UI and template selection
 * Audit log plumbing
 
 ### Phase 1: Public Read Path with Fixtures - _Mostly built_
@@ -2116,12 +2128,12 @@ Built:
 * Table of contents for heading-rich pages
 * Related pages and related files
 * Staff-aware preview of draft and staff-only pages for authenticated admin users
-* Public KB-scoped search (substring match against seeded content; Postgres FTS deferred until persistence exists)
+* Public KB-scoped search with simple relevance ranking and public-search rate limiting (Postgres FTS deferred until persistence matures)
 * Accessible public chrome (skip link, semantic landmarks, focus styles, mobile layout)
 
 Remaining:
 
-* Postgres FTS-backed search with ranking
+* Postgres FTS-backed search with advanced ranking
 * Alias-aware search
 * Public archived/draft route test coverage
 * Final production public styling/accessibility pass
@@ -2195,11 +2207,11 @@ Not yet built:
 
 Built:
 
-* Basic direct publish action from the admin page editor
+* Basic direct publish action from the admin page editor and page-tree manager
+* Publishing accessibility and required-metadata gate (blocks publish and lists issues)
 
 Not yet built:
 
-* Publishing accessibility gate
 * Page version snapshots on publish
 * Page restore into draft
 * Edit locks with autosave refresh
@@ -2274,7 +2286,7 @@ Before launch:
 
 ## 28. Minimum Viable Product
 
-The current repository now includes a basic page-management MVP slice, but the full MVP has not been reached because the asset manager, staged-import records, accessibility publishing gate, user roles, and audit/version workflows are still missing. The MVP should include the items listed below. Each item is marked with current build status in the repository.
+The current repository now includes a basic page-management MVP slice, but the full MVP has not been reached because the asset manager, staged-import records, user roles, and audit/version workflows are still missing. The MVP should include the items listed below. Each item is marked with current build status in the repository.
 
 Built:
 
@@ -2284,7 +2296,7 @@ Built:
 * Nested page routing
 * Hierarchical page tree
 * Breadcrumbs and table of contents
-* Public KB-scoped search (substring match; FTS deferred)
+* Public KB-scoped search (relevance-ranked; rate-limited; FTS deferred)
 * Admin login using bootstrap-owner credentials
 * Admin dashboard
 * Admin page list
@@ -2310,6 +2322,13 @@ Built:
 * Last reviewed date (on seeded data)
 * Public "Updated on" date
 * Baseline CSP and security response headers
+* Same-origin (Origin/Referer) CSRF enforcement on admin mutations
+* Login rate limiting and sliding idle session timeout
+* Reserved-slug validation on page create/update
+* Governance metadata editing (owner, contact email, last reviewed date) in the page editor
+* Accessibility and required-metadata publish gate
+* DOCX macro-format rejection and safe-scheme hyperlink sanitization
+* SSRF-guarded asset streaming; asset bodies excluded from list/render queries
 
 Partially built:
 
@@ -2319,12 +2338,12 @@ Partially built:
 * DOCX import exists and creates managed image assets, but it is not persistent import staging and does not include staged media review.
 * Persistence exists for minimal tables, but not the full schema or migrations.
 * Page editor exists with WYSIWYG-style block editing, but it is not the final polished editor/library implementation.
-* Publishing exists, but without the required accessibility gate, page version snapshot, redirects, lock, or audit entry.
+* Publishing exists with the accessibility and required-metadata gate, but without page version snapshot, redirects, lock, or audit entry.
 
 Not yet built:
 
 * Existing-custom-admin-model user table; admin/editor user management
-* CSRF protection and rate limiting
+* Anti-CSRF tokens (same-origin checks are enforced); shared/distributed rate-limit store
 * Owner/admin/editor roles
 * KB assignment permissions
 * Draft/published page content separation
@@ -2342,7 +2361,6 @@ Not yet built:
 * Required alt text for meaningful images
 * Per-version image alt text confirmation on replacement
 * Required descriptions for active document assets
-* Publishing rules for required metadata/accessibility
 * Page version restore into draft
 * Redirect management and redirect CSV staging
 * Edit locks

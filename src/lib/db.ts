@@ -300,18 +300,46 @@ export async function updatePages(pages: KbPage[]): Promise<void> {
   }
 }
 
-/** Load the full dataset from Neon (schema is created and seeded on first call). */
+/**
+ * Load the full dataset from Neon (schema is created and seeded on first call).
+ *
+ * The `body` column is intentionally NOT selected here. Asset bodies can be large
+ * (e.g. base64 image data), and this dataset is read on every public page render
+ * for metadata, navigation, and search. Bodies are streamed on demand by the
+ * stable file route via `loadAssetForDelivery`. Listed assets carry an empty body.
+ */
 export async function loadDatasetFromDb(): Promise<KbDataset> {
   await ensureSchema();
   const sql = getSql();
   const [kbRows, pageRows, assetRows] = await Promise.all([
     sql`SELECT * FROM knowledge_bases`,
     sql`SELECT * FROM kb_pages`,
-    sql`SELECT * FROM kb_assets`,
+    sql`
+      SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
+        file_size_bytes, status, owner_label, last_reviewed_date,
+        updated_display_date, version_id, '' AS body
+      FROM kb_assets
+    `,
   ]);
   return {
     knowledgeBases: (kbRows as unknown as KbRow[]).map(mapKb),
     pages: (pageRows as unknown as PageRow[]).map(mapPage),
     assets: (assetRows as unknown as AssetRow[]).map(mapAsset),
   };
+}
+
+/**
+ * Load a single active asset including its `body` for the stable file route.
+ * Returns null when no matching active asset exists.
+ */
+export async function loadAssetForDelivery(homeKbId: string, slug: string): Promise<Asset | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT * FROM kb_assets
+    WHERE home_kb_id = ${homeKbId} AND slug = ${slug} AND status = 'active'
+    LIMIT 1
+  `) as unknown as AssetRow[];
+  const row = rows[0];
+  return row ? mapAsset(row) : null;
 }

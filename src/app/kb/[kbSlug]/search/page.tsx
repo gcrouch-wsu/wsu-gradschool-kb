@@ -1,7 +1,13 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { getAssetById, getKbById, getKbBySlug, searchKb } from "@/lib/kb-store";
+import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
+
+// Public search is rate-limited per client to reduce abuse (project_spec.md §4/§20).
+const SEARCH_LIMIT = 30;
+const SEARCH_WINDOW_SECONDS = 60;
 
 export default async function SearchPage({
   params,
@@ -18,7 +24,15 @@ export default async function SearchPage({
   }
 
   const isStaff = Boolean(await getCurrentAdminSession());
-  const results = await searchKb(kb.id, q, isStaff);
+
+  // Only count requests that actually run a query against the limit.
+  let rateLimited = false;
+  if (q.trim()) {
+    const clientKey = clientKeyFromHeaders(await headers());
+    rateLimited = !rateLimit(`search:${clientKey}`, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS).allowed;
+  }
+
+  const results = rateLimited ? [] : await searchKb(kb.id, q, isStaff);
   const resultsWithHref = await Promise.all(
     results.map(async (result) => {
       if (result.type === "page") {
@@ -37,23 +51,44 @@ export default async function SearchPage({
     <div className="page-shell">
       <p className="eyebrow">Search</p>
       <h1>{kb.title}</h1>
-      <form className="form">
+      <form className="kb-search" role="search">
         <label>
-          <span className="meta">Search this KB</span>
-          <input className="input" defaultValue={q} name="q" type="search" />
+          <span className="meta">Search this knowledge base</span>
+          <input
+            className="input"
+            defaultValue={q}
+            name="q"
+            placeholder={`Search ${kb.title}…`}
+            type="search"
+          />
         </label>
-        <button className="button" type="submit">
+        <button className="button" type="submit" style={{ alignSelf: "end" }}>
           Search
         </button>
       </form>
 
       <h2>Results</h2>
-      {!q.trim() && <p>Enter a search term.</p>}
-      {q.trim() && results.length === 0 && <p>No results found.</p>}
+      {rateLimited ? (
+        <p className="empty">Too many searches in a short time. Please wait a moment and try again.</p>
+      ) : (
+        <>
+          {q.trim() && results.length > 0 && (
+            <p className="meta">
+              {results.length} result{results.length === 1 ? "" : "s"} for &ldquo;{q.trim()}&rdquo;
+            </p>
+          )}
+          {!q.trim() && (
+            <p className="empty">Enter a search term to find pages and files in {kb.title}.</p>
+          )}
+          {q.trim() && results.length === 0 && (
+            <p className="empty">No results found for &ldquo;{q.trim()}&rdquo;.</p>
+          )}
+        </>
+      )}
       <div className="grid">
         {resultsWithHref.map(({ result, href }) => (
           <article className="card" key={`${result.type}-${result.id}`}>
-            <p className="eyebrow">{result.type}</p>
+            <p className="eyebrow">{result.type === "asset" ? "File" : "Page"}</p>
             <h3>
               <Link href={href}>{result.title}</Link>
             </h3>

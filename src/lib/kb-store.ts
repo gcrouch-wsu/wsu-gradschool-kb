@@ -1,7 +1,14 @@
 import { cache } from "react";
-import { insertAsset, insertPage, isDatabaseEnabled, loadDatasetFromDb, updatePages } from "@/lib/db";
+import {
+  insertAsset,
+  insertPage,
+  isDatabaseEnabled,
+  loadAssetForDelivery,
+  loadDatasetFromDb,
+  updatePages,
+} from "@/lib/db";
 import { seedDataset } from "@/lib/demo-data";
-import { slugify } from "@/lib/slug";
+import { assertPageSlugAllowed, slugify } from "@/lib/slug";
 import type {
   Asset,
   ContentBlock,
@@ -221,6 +228,34 @@ export async function getAssetById(assetId: string): Promise<Asset | null> {
   return dataset.assets.find((asset) => asset.id === assetId && asset.status === "active") ?? null;
 }
 
+/** Status of an asset by id (any status), or null if it does not exist. */
+export async function getAssetStatusById(assetId: string): Promise<string | null> {
+  const dataset = await getDataset();
+  return dataset.assets.find((asset) => asset.id === assetId)?.status ?? null;
+}
+
+/**
+ * Resolve an active asset including its `body` for the stable file route. Unlike
+ * `getAssetBySlug`, this loads the (potentially large) body, so it must only be
+ * used by the streaming delivery route — not by list/render paths.
+ */
+export async function getAssetForDelivery(homeKbId: string, slug: string): Promise<Asset | null> {
+  if (isDatabaseEnabled()) {
+    return loadAssetForDelivery(homeKbId, slug);
+  }
+  const seedMatch = seedDataset.assets.find(
+    (asset) => asset.homeKbId === homeKbId && asset.slug === slug && asset.status === "active",
+  );
+  if (seedMatch) {
+    return seedMatch;
+  }
+  return (
+    runtimeAssets().find(
+      (asset) => asset.homeKbId === homeKbId && asset.slug === slug && asset.status === "active",
+    ) ?? null
+  );
+}
+
 export interface CreateImageAssetInput {
   body: string;
   fileSizeBytes: number;
@@ -282,6 +317,51 @@ export type SearchResult =
   | { type: "page"; id: string; title: string; summary: string; path: string[] }
   | { type: "asset"; id: string; title: string; summary: string; slug: string };
 
+function pageBodyText(page: KbPage): string {
+  return page.blocks
+    .map((block) =>
+      "text" in block
+        ? block.text
+        : "items" in block
+          ? block.items.join(" ")
+          : "rows" in block
+            ? block.rows.flat().join(" ")
+            : "",
+    )
+    .join(" ");
+}
+
+/**
+ * Score a field match. Exact equality and prefix matches rank above a plain
+ * substring hit so the most relevant results surface first (project_spec.md §14).
+ */
+function fieldScore(field: string, query: string, weights: { exact: number; prefix: number; includes: number }) {
+  const value = field.trim().toLowerCase();
+  if (!value) {
+    return 0;
+  }
+  if (value === query) {
+    return weights.exact;
+  }
+  if (value.startsWith(query)) {
+    return weights.prefix;
+  }
+  if (value.includes(query)) {
+    return weights.includes;
+  }
+  return 0;
+}
+
+interface ScoredResult {
+  result: SearchResult;
+  score: number;
+}
+
+/**
+ * KB-scoped search with simple relevance ranking. Until Postgres FTS + aliases
+ * land (project_spec.md §14), this ranks current titles highest, then summaries,
+ * then body and asset metadata. Results are deduped by record and sorted by score.
+ */
 export async function searchKb(
   kbId: string,
   query: string,
@@ -294,37 +374,39 @@ export async function searchKb(
 
   const dataset = await getDataset();
 
-  const pageResults: SearchResult[] = visiblePages(dataset, kbId, includeStaff)
-    .map((page): SearchResult | null => {
-      const body = page.blocks
-        .map((block) =>
-          "text" in block
-            ? block.text
-            : "items" in block
-              ? block.items.join(" ")
-              : "rows" in block
-                ? block.rows.flat().join(" ")
-                : "",
-        )
-        .join(" ");
-      const haystack = `${page.title} ${page.summary} ${body}`.toLowerCase();
-      return haystack.includes(normalized)
-        ? { type: "page", id: page.id, title: page.title, summary: page.summary, path: page.path }
-        : null;
-    })
-    .filter((result): result is SearchResult => result !== null);
+  const scored: ScoredResult[] = [];
 
-  const assetResults: SearchResult[] = dataset.assets
-    .filter((asset) => asset.homeKbId === kbId && asset.status === "active")
-    .map((asset): SearchResult | null => {
-      const haystack = `${asset.title} ${asset.description} ${asset.slug}`.toLowerCase();
-      return haystack.includes(normalized)
-        ? { type: "asset", id: asset.id, title: asset.title, summary: asset.description, slug: asset.slug }
-        : null;
-    })
-    .filter((result): result is SearchResult => result !== null);
+  for (const page of visiblePages(dataset, kbId, includeStaff)) {
+    const titleScore = fieldScore(page.title, normalized, { exact: 100, prefix: 60, includes: 40 });
+    const summaryScore = fieldScore(page.summary, normalized, { exact: 25, prefix: 25, includes: 25 });
+    const bodyScore = fieldScore(pageBodyText(page), normalized, { exact: 10, prefix: 10, includes: 10 });
+    const score = titleScore + summaryScore + bodyScore;
+    if (score > 0) {
+      scored.push({
+        score,
+        result: { type: "page", id: page.id, title: page.title, summary: page.summary, path: page.path },
+      });
+    }
+  }
 
-  return [...pageResults, ...assetResults];
+  for (const asset of dataset.assets) {
+    if (asset.homeKbId !== kbId || asset.status !== "active") {
+      continue;
+    }
+    const titleScore = fieldScore(asset.title, normalized, { exact: 90, prefix: 50, includes: 30 });
+    const descriptionScore = fieldScore(asset.description, normalized, { exact: 15, prefix: 15, includes: 15 });
+    const slugScore = fieldScore(asset.slug, normalized, { exact: 15, prefix: 15, includes: 15 });
+    const score = titleScore + descriptionScore + slugScore;
+    if (score > 0) {
+      scored.push({
+        score,
+        result: { type: "asset", id: asset.id, title: asset.title, summary: asset.description, slug: asset.slug },
+      });
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
+  return scored.map((entry) => entry.result);
 }
 
 /** Admin dashboard counts (published pages / active assets across all KBs). */
@@ -393,6 +475,7 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
   }
 
   const baseSlug = slugify(input.slug?.trim() || input.title);
+  assertPageSlugAllowed(baseSlug);
   const siblingSlugs = new Set(
     dataset.pages
       .filter(
@@ -460,6 +543,9 @@ export interface UpdatePageInput {
   status?: PageStatus;
   blocks: ContentBlock[];
   sortOrder?: number;
+  ownerLabel?: string;
+  contactEmail?: string;
+  lastReviewedDate?: string;
 }
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -507,6 +593,7 @@ export async function updatePage(input: UpdatePageInput): Promise<KbPage> {
   }
 
   const baseSlug = slugify(input.slug?.trim() || input.title);
+  assertPageSlugAllowed(baseSlug);
   const siblingSlugs = new Set(
     dataset.pages
       .filter(
@@ -541,6 +628,9 @@ export async function updatePage(input: UpdatePageInput): Promise<KbPage> {
           summary: input.summary?.trim() ?? "",
           status: input.status ?? page.status,
           visibility: input.visibility ?? page.visibility,
+          ownerLabel: input.ownerLabel?.trim() ?? page.ownerLabel,
+          contactEmail: input.contactEmail?.trim() ?? page.contactEmail,
+          lastReviewedDate: input.lastReviewedDate?.trim() || page.lastReviewedDate,
           updatedDisplayDate: today,
           blocks: input.blocks,
         };

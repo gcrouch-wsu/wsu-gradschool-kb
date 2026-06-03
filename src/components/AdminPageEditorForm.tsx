@@ -60,9 +60,13 @@ export function AdminPageEditorForm({
   const [summary, setSummary] = useState(page.summary);
   const [visibility, setVisibility] = useState<PageVisibility>(page.visibility);
   const [parentPath, setParentPath] = useState(page.path.slice(0, -1).join("/"));
+  const [ownerLabel, setOwnerLabel] = useState(page.ownerLabel);
+  const [contactEmail, setContactEmail] = useState(page.contactEmail);
+  const [lastReviewedDate, setLastReviewedDate] = useState(page.lastReviewedDate);
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
   const [busy, setBusy] = useState<EditableStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [issues, setIssues] = useState<string[]>([]);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [savedStatus, setSavedStatus] = useState<PageStatus>(page.status);
 
@@ -96,6 +100,7 @@ export function AdminPageEditorForm({
   async function submit(status: EditableStatus) {
     setBusy(status);
     setError(null);
+    setIssues([]);
     setSavedUrl(null);
     try {
       const response = await fetch(`/api/admin/pages/${page.id}`, {
@@ -109,11 +114,17 @@ export function AdminPageEditorForm({
           status,
           parentPath: parentPath ? parentPath.split("/") : [],
           sortOrder: page.sortOrder,
+          ownerLabel,
+          contactEmail,
+          lastReviewedDate,
           blocks,
         }),
       });
       const data = await response.json();
       if (!response.ok) {
+        if (Array.isArray(data.issues) && data.issues.length > 0) {
+          setIssues(data.issues as string[]);
+        }
         throw new Error(data.message ?? "Could not save the page.");
       }
       setSavedStatus(status);
@@ -153,8 +164,18 @@ export function AdminPageEditorForm({
     <div className="editor-layout">
       <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
         {error && <p className="error">{error}</p>}
+        {issues.length > 0 && (
+          <div className="error" role="alert">
+            <strong>Publishing is blocked until these are fixed:</strong>
+            <ul className="issue-list">
+              {issues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {savedUrl && (
-          <p className="alert">
+          <p className="alert alert--success">
             Saved as <strong>{savedStatus}</strong>. <Link href={savedUrl}>View page</Link>
           </p>
         )}
@@ -200,6 +221,42 @@ export function AdminPageEditorForm({
               <option value="public">Public</option>
               <option value="staff">Staff only</option>
             </select>
+          </label>
+        </fieldset>
+
+        <fieldset className="fieldset">
+          <legend>Governance</legend>
+          <p className="meta">
+            Required before publishing. Owner and contact are kept in admin metadata; the public page shows
+            only the &ldquo;Updated on&rdquo; date.
+          </p>
+          <label>
+            <span className="meta">Owner or office</span>
+            <input
+              className="input"
+              onChange={(event) => setOwnerLabel(event.target.value)}
+              placeholder="e.g. Graduate School Outreach and Technology"
+              value={ownerLabel}
+            />
+          </label>
+          <label>
+            <span className="meta">Contact email</span>
+            <input
+              className="input"
+              onChange={(event) => setContactEmail(event.target.value)}
+              placeholder="name@wsu.edu"
+              type="email"
+              value={contactEmail}
+            />
+          </label>
+          <label>
+            <span className="meta">Last reviewed date</span>
+            <input
+              className="input"
+              onChange={(event) => setLastReviewedDate(event.target.value)}
+              type="date"
+              value={lastReviewedDate}
+            />
           </label>
         </fieldset>
 

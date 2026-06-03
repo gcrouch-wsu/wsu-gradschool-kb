@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
 import { updatePageLayout } from "@/lib/kb-store";
+import { requireAdminMutation } from "@/lib/security";
 
 interface LayoutBody {
   kbId?: unknown;
@@ -14,9 +14,9 @@ interface LayoutItemBody {
 }
 
 export async function PATCH(request: Request) {
-  const session = await getCurrentAdminSession();
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const body = (await request.json().catch(() => null)) as LayoutBody | null;

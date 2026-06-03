@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
 import { isBlobEnabled, uploadImportImage } from "@/lib/blob";
 import { convertDocxToBlocks } from "@/lib/docx-import";
+import { requireAdminMutation } from "@/lib/security";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+// Macro-enabled Office formats are rejected (project_spec.md §20).
+const MACRO_EXTENSIONS = [".docm", ".dotm", ".dot"];
 
 export async function POST(request: Request) {
-  const session = await getCurrentAdminSession();
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const formData = await request.formData().catch(() => null);
@@ -19,11 +22,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "No file uploaded." }, { status: 400 });
   }
 
-  const isDocx =
-    file.name.toLowerCase().endsWith(".docx") ||
-    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const lowerName = file.name.toLowerCase();
+  if (MACRO_EXTENSIONS.some((ext) => lowerName.endsWith(ext)) || file.type.includes("macroEnabled")) {
+    return NextResponse.json(
+      { message: "Macro-enabled Word files are not allowed. Save as a plain .docx and try again." },
+      { status: 400 },
+    );
+  }
+
+  const isDocx = lowerName.endsWith(".docx") || file.type === DOCX_CONTENT_TYPE;
   if (!isDocx) {
     return NextResponse.json({ message: "Please upload a .docx file." }, { status: 400 });
+  }
+
+  if (file.size === 0) {
+    return NextResponse.json({ message: "That file is empty." }, { status: 400 });
   }
 
   if (file.size > MAX_BYTES) {

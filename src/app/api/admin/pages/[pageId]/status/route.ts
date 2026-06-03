@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
-import { getKbById, updatePageStatus } from "@/lib/kb-store";
+import { getAssetStatusById, getKbById, getPageByIdForAdmin, updatePageStatus } from "@/lib/kb-store";
+import { validatePageForPublish } from "@/lib/publish-gate";
+import { requireAdminMutation } from "@/lib/security";
 import type { PageStatus } from "@/lib/types";
 
 interface StatusBody {
@@ -11,9 +12,9 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<unknown> },
 ) {
-  const session = await getCurrentAdminSession();
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const params = (await context.params) as { pageId?: unknown };
@@ -24,6 +25,24 @@ export async function PATCH(
 
   if (!status) {
     return NextResponse.json({ message: "Status must be draft or published." }, { status: 400 });
+  }
+
+  // Publishing from the tree runs the same gate against the page's stored content.
+  if (status === "published") {
+    const existing = await getPageByIdForAdmin(pageId);
+    if (!existing) {
+      return NextResponse.json({ message: "Page not found." }, { status: 404 });
+    }
+    const issues = await validatePageForPublish(existing, getAssetStatusById);
+    if (issues.length > 0) {
+      return NextResponse.json(
+        {
+          message: "This page cannot be published yet. Open the editor to resolve the issues below.",
+          issues,
+        },
+        { status: 422 },
+      );
+    }
   }
 
   try {

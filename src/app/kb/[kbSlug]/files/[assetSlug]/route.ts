@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getAssetBySlug, getKbBySlug } from "@/lib/kb-store";
+import { getAssetForDelivery, getKbBySlug } from "@/lib/kb-store";
 
 function dataUriToResponseBody(dataUri: string) {
   const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUri);
@@ -12,6 +12,28 @@ function dataUriToResponseBody(dataUri: string) {
   };
 }
 
+/**
+ * Asset bodies stored as URLs are streamed through this route to keep the public
+ * URL stable. To avoid turning that into a server-side request forgery (SSRF)
+ * primitive, only fetch from the trusted object-storage host. Any other URL is
+ * treated as an unavailable asset.
+ */
+function isTrustedAssetUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") {
+    return false;
+  }
+  return (
+    url.hostname === "blob.vercel-storage.com" ||
+    url.hostname.endsWith(".public.blob.vercel-storage.com")
+  );
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ kbSlug: string; assetSlug: string }> },
@@ -22,7 +44,7 @@ export async function GET(
     notFound();
   }
 
-  const asset = await getAssetBySlug(kb.id, assetSlug);
+  const asset = await getAssetForDelivery(kb.id, assetSlug);
   if (!asset) {
     notFound();
   }
@@ -59,6 +81,9 @@ export async function GET(
   }
 
   if (asset.body.startsWith("http://") || asset.body.startsWith("https://")) {
+    if (!isTrustedAssetUrl(asset.body)) {
+      notFound();
+    }
     const upstream = await fetch(asset.body);
     if (!upstream.ok || !upstream.body) {
       notFound();

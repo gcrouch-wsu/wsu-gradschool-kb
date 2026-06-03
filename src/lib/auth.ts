@@ -1,8 +1,15 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS } from "@/lib/session-constants";
 
-export const ADMIN_COOKIE_NAME = "kb_admin_session";
+export { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS };
+
+// Absolute session lifetime, enforced inside the signed token.
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
+// The cookie's max-age is set to IDLE_TTL_SECONDS and slid forward on each
+// authenticated navigation (see src/proxy.ts), so an inactive session is dropped
+// by the browser after the idle window even though the token's absolute lifetime
+// is longer. project_spec.md §4 recommends 8h fixed lifetime + 60m idle.
 
 interface AdminSession {
   email: string;
@@ -116,7 +123,7 @@ export async function getCurrentAdminSession() {
   return readAdminSessionToken(cookieStore.get(ADMIN_COOKIE_NAME)?.value);
 }
 
-export function getAdminCookieOptions(maxAge = SESSION_TTL_SECONDS) {
+export function getAdminCookieOptions(maxAge = IDLE_TTL_SECONDS) {
   return {
     httpOnly: true,
     maxAge,

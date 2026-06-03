@@ -91,6 +91,7 @@ export function AdminPageTreeManager({
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [issues, setIssues] = useState<string[]>([]);
 
   const displayPages = useMemo(() => sortedPages(pages), [pages]);
 
@@ -155,6 +156,7 @@ export function AdminPageTreeManager({
     setStatusBusyId(pageId);
     setError(null);
     setMessage(null);
+    setIssues([]);
     try {
       const response = await fetch(`/api/admin/pages/${pageId}/status`, {
         method: "PATCH",
@@ -163,6 +165,9 @@ export function AdminPageTreeManager({
       });
       const data = await response.json();
       if (!response.ok) {
+        if (Array.isArray(data.issues) && data.issues.length > 0) {
+          setIssues(data.issues as string[]);
+        }
         throw new Error(data.message ?? "Could not update page status.");
       }
       setPages((current) =>
@@ -183,7 +188,17 @@ export function AdminPageTreeManager({
   return (
     <div className="page-tree-manager">
       {error && <p className="error">{error}</p>}
-      {message && <p className="alert">{message}</p>}
+      {issues.length > 0 && (
+        <div className="error" role="alert">
+          <strong>Publishing is blocked until these are fixed:</strong>
+          <ul className="issue-list">
+            {issues.map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {message && <p className="alert alert--success">{message}</p>}
       <div className="admin-actions">
         <button className="button" disabled={busy} onClick={saveLayout} type="button">
           {busy ? "Saving..." : "Save page tree"}

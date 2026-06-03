@@ -33,21 +33,21 @@ export default async function AdminPage() {
         </form>
       </div>
       <div className="grid grid--two">
-        <article className="card">
-          <h2>Knowledge Bases</h2>
-          <p>{counts.publishedKbs} published KB</p>
+        <article className="card stat-card">
+          <span className="stat-card__value">{counts.publishedKbs}</span>
+          <span className="stat-card__label">Published knowledge bases</span>
+        </article>
+        <article className="card stat-card">
+          <span className="stat-card__value">{counts.publishedPages}</span>
+          <span className="stat-card__label">Published pages</span>
+        </article>
+        <article className="card stat-card">
+          <span className="stat-card__value">{counts.activeAssets}</span>
+          <span className="stat-card__label">Active assets</span>
         </article>
         <article className="card">
-          <h2>Pages</h2>
-          <p>{counts.publishedPages} published pages</p>
-        </article>
-        <article className="card">
-          <h2>Assets</h2>
-          <p>{counts.activeAssets} active assets</p>
-        </article>
-        <article className="card">
-          <h2>Storage</h2>
-          <p>
+          <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Storage</h2>
+          <p className="meta">
             {counts.storageMode === "neon"
               ? "Reading from Neon Postgres. Schema auto-creates and seeds on first run."
               : "Using in-memory seed data. Set DATABASE_URL to persist to Neon."}

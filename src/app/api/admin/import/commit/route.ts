@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
 import { createImageAsset, createPage, getKbById } from "@/lib/kb-store";
+import { requireAdminMutation } from "@/lib/security";
 import type { ContentBlock, PageVisibility } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -84,9 +84,9 @@ async function promoteImportedImagesToAssets(
 }
 
 export async function POST(request: Request) {
-  const session = await getCurrentAdminSession();
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const body = (await request.json().catch(() => null)) as CommitBody | null;

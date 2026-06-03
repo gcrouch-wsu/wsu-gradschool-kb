@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
-import { getKbById, updatePage } from "@/lib/kb-store";
+import { getAssetStatusById, getKbById, updatePage } from "@/lib/kb-store";
+import { validatePageForPublish } from "@/lib/publish-gate";
+import { requireAdminMutation } from "@/lib/security";
 import type { ContentBlock, PageStatus, PageVisibility } from "@/lib/types";
 
 interface UpdateBody {
@@ -12,15 +13,18 @@ interface UpdateBody {
   status?: unknown;
   sortOrder?: unknown;
   blocks?: unknown;
+  ownerLabel?: unknown;
+  contactEmail?: unknown;
+  lastReviewedDate?: unknown;
 }
 
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ pageId: string }> },
 ) {
-  const session = await getCurrentAdminSession();
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const { pageId } = await context.params;
@@ -32,6 +36,9 @@ export async function PATCH(
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const slug = typeof body.slug === "string" ? body.slug : undefined;
   const summary = typeof body.summary === "string" ? body.summary : undefined;
+  const ownerLabel = typeof body.ownerLabel === "string" ? body.ownerLabel : undefined;
+  const contactEmail = typeof body.contactEmail === "string" ? body.contactEmail : undefined;
+  const lastReviewedDate = typeof body.lastReviewedDate === "string" ? body.lastReviewedDate : undefined;
   const visibility: PageVisibility = body.visibility === "staff" ? "staff" : "public";
   const status: PageStatus = body.status === "published" ? "published" : "draft";
   const sortOrder = typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : undefined;
@@ -47,6 +54,29 @@ export async function PATCH(
     return NextResponse.json({ message: "A page must have at least one content block." }, { status: 400 });
   }
 
+  // Publishing runs the accessibility + governance gate before any write so a page
+  // that fails the checks is never made public (project_spec.md §17).
+  if (status === "published") {
+    const issues = await validatePageForPublish(
+      {
+        title,
+        slug: slug ?? "",
+        summary: summary ?? "",
+        ownerLabel: ownerLabel ?? "",
+        contactEmail: contactEmail ?? "",
+        lastReviewedDate: lastReviewedDate ?? "",
+        blocks,
+      },
+      getAssetStatusById,
+    );
+    if (issues.length > 0) {
+      return NextResponse.json(
+        { message: "This page cannot be published yet. Resolve the issues below and try again.", issues },
+        { status: 422 },
+      );
+    }
+  }
+
   try {
     const page = await updatePage({
       pageId,
@@ -58,6 +88,9 @@ export async function PATCH(
       status,
       sortOrder,
       blocks,
+      ownerLabel,
+      contactEmail,
+      lastReviewedDate,
     });
     const kb = await getKbById(page.kbId);
     const url = kb ? `/kb/${kb.slug}/${page.path.join("/")}` : null;
