@@ -8,9 +8,11 @@ import {
   updatePages,
 } from "@/lib/db";
 import { seedDataset } from "@/lib/demo-data";
+import { extractAssetUsages } from "@/lib/asset-lifecycle";
 import { assertPageSlugAllowed, slugify } from "@/lib/slug";
 import type {
   Asset,
+  AssetUsage,
   ContentBlock,
   KbDataset,
   KbPage,
@@ -232,6 +234,15 @@ export async function getAssetById(assetId: string): Promise<Asset | null> {
 export async function getAssetStatusById(assetId: string): Promise<string | null> {
   const dataset = await getDataset();
   return dataset.assets.find((asset) => asset.id === assetId)?.status ?? null;
+}
+
+/**
+ * Every place an asset is used across pages, for impact review before replacing
+ * or archiving it (project_spec.md §11). Reads current page content.
+ */
+export async function getAssetUsages(assetId: string): Promise<AssetUsage[]> {
+  const dataset = await getDataset();
+  return extractAssetUsages(dataset.pages, assetId);
 }
 
 /**

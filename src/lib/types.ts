@@ -2,6 +2,41 @@ export type KbStatus = "draft" | "published" | "archived";
 export type PageStatus = "draft" | "published" | "archived";
 export type AssetStatus = "draft" | "active" | "archived";
 export type AssetType = "document" | "image";
+export type AssetVersionStatus = "draft" | "active" | "replaced" | "archived";
+
+/**
+ * One stored file behind an asset. The asset's stable public URL always resolves
+ * to its single `active` version; replacing an asset adds a new version and
+ * demotes the prior active one to `replaced` (retained for admin rollback only).
+ * See project_spec.md §10 "Asset Version".
+ */
+export interface AssetVersion {
+  id: string;
+  assetId: string;
+  versionNumber: number;
+  status: AssetVersionStatus;
+  body: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  originalFilename: string;
+  width?: number;
+  height?: number;
+  uploadedAt: string;
+  notes?: string;
+}
+
+export type AssetUsageType = "inline_image" | "inline_link" | "related";
+
+/** Where a single asset is used, for impact review before replace/archive. */
+export interface AssetUsage {
+  assetId: string;
+  pageId: string;
+  pageTitle: string;
+  pageStatus: PageStatus;
+  usageType: AssetUsageType;
+  blockId?: string;
+  usesAltText?: boolean;
+}
 
 export interface KnowledgeBase {
   id: string;
