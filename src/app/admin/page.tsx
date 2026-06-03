@@ -20,6 +20,9 @@ export default async function AdminPage() {
         Signed in as {session.email}. Content store: <strong>{storageLabel}</strong>.
       </p>
       <div className="admin-actions">
+        <Link className="button" href="/admin/pages">
+          Manage pages
+        </Link>
         <Link className="button" href="/admin/import">
           Import from Word (.docx)
         </Link>

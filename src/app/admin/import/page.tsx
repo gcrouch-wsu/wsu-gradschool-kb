@@ -32,7 +32,7 @@ export default async function AdminImportPage() {
       <p className="eyebrow">Admin</p>
       <h1>Import from Word (.docx)</h1>
       <p className="lead">
-        Upload a Confluence-exported Word document. It is converted into KB content, staged for review,
+        Upload a Confluence-exported Word document. It is converted into KB content, previewed for review,
         and saved as a <strong>draft</strong> page nested under the location you choose.
       </p>
       <p className="meta">

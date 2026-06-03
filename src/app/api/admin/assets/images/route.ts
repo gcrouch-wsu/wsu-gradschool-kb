@@ -1,0 +1,63 @@
+import { NextResponse } from "next/server";
+import { getCurrentAdminSession } from "@/lib/auth";
+import { isBlobEnabled, isSupportedImageType, uploadImportImage } from "@/lib/blob";
+import { createImageAsset, getKbById } from "@/lib/kb-store";
+
+export const runtime = "nodejs";
+
+const MAX_BYTES = 10 * 1024 * 1024;
+
+export async function POST(request: Request) {
+  const session = await getCurrentAdminSession();
+  if (!session) {
+    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  }
+
+  const formData = await request.formData().catch(() => null);
+  const file = formData?.get("file");
+  const kbId = formData?.get("kbId");
+  const alt = formData?.get("alt");
+  if (!(file instanceof File) || typeof kbId !== "string") {
+    return NextResponse.json({ message: "Image file and knowledge base are required." }, { status: 400 });
+  }
+  if (!isSupportedImageType(file.type)) {
+    return NextResponse.json({ message: "Use a PNG, JPG, GIF, WebP, or SVG image." }, { status: 400 });
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json({ message: "Image is larger than 10 MB." }, { status: 400 });
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  let body = "";
+  if (isBlobEnabled()) {
+    const url = await uploadImportImage(buffer, file.type);
+    if (url) {
+      body = url;
+    }
+  }
+  if (!body) {
+    body = `data:${file.type.toLowerCase()};base64,${buffer.toString("base64")}`;
+  }
+
+  try {
+    const asset = await createImageAsset({
+      body,
+      fileSizeBytes: file.size,
+      homeKbId: kbId,
+      mimeType: file.type.toLowerCase(),
+      originalFilename: file.name,
+      title: file.name.replace(/\.[^.]+$/, ""),
+    });
+    const kb = await getKbById(asset.homeKbId);
+    const url = kb ? `/kb/${kb.slug}/files/${asset.slug}` : null;
+    return NextResponse.json({
+      ok: true,
+      asset,
+      alt: typeof alt === "string" ? alt : "",
+      url,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not upload image.";
+    return NextResponse.json({ message }, { status: 400 });
+  }
+}

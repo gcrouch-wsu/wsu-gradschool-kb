@@ -37,7 +37,14 @@ a:hover {
 
 a:focus-visible,
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+textarea:focus-visible,
+select:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
@@ -208,6 +215,11 @@ p {
   color: #6b4e10;
 }
 
+.badge--section {
+  background: #e9f5ec;
+  color: #23612f;
+}
+
 .breadcrumbs {
   margin-bottom: 1rem;
 }
@@ -272,6 +284,12 @@ p {
   text-decoration: none;
 }
 
+.button--small {
+  border-radius: 999px;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+}
+
 .button:hover {
   background: var(--wsu-crimson-dark);
   color: white;
@@ -320,6 +338,83 @@ p {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.admin-inline-actions {
+  margin: 0 0 1rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editor-layout {
+  margin-top: 1.5rem;
+}
+
+.editor-form {
+  max-width: none;
+}
+
+.fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 1rem;
+}
+
+.fieldset legend {
+  font-weight: 700;
+  padding: 0 0.35rem;
+}
+
+.block-editor {
+  background: #fbfaf8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.block-editor__header,
+.field-row {
+  align-items: start;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.field-row {
+  grid-template-columns: minmax(140px, 0.35fr) minmax(0, 1fr);
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
 }
 
 /* On-page table of contents */
@@ -426,10 +521,152 @@ p {
   max-width: 100%;
 }
 
+.content-image--editor {
+  margin-bottom: 0;
+}
+
+.content-image--editor img {
+  display: block;
+  width: 100%;
+}
+
 .content-image figcaption {
   color: var(--muted);
   font-size: 0.85rem;
   margin-top: 0.35rem;
+}
+
+.content-table-wrap {
+  margin: 1.25rem 0;
+  overflow-x: auto;
+}
+
+.content-table {
+  background: var(--paper);
+  border-collapse: collapse;
+  min-width: 480px;
+  width: 100%;
+}
+
+.content-table caption {
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.content-table th,
+.content-table td {
+  border: 1px solid var(--line);
+  padding: 0.65rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.content-table th {
+  background: #f3efeb;
+}
+
+.editor-toolbar,
+.block-editor__actions,
+.tree-editor__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.table-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.wysiwyg-surface {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 2.75rem;
+  padding: 0.75rem;
+}
+
+.wysiwyg-paragraph {
+  line-height: 1.65;
+}
+
+.wysiwyg-list {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.wysiwyg-list .wysiwyg-surface {
+  margin: 0.35rem 0;
+}
+
+.wysiwyg-table-cell {
+  background: var(--paper);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  min-height: 2.5rem;
+  min-width: 10rem;
+  padding: 0.55rem;
+}
+
+.table-editor__table td {
+  padding: 0.35rem;
+}
+
+.managed-image-tools {
+  background: var(--paper);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.checkbox-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.page-tree-manager {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.tree-editor {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-editor__item {
+  cursor: grab;
+}
+
+.tree-editor__item:active {
+  cursor: grabbing;
+}
+
+.tree-editor__row {
+  align-items: center;
+  background: #fbfaf8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 0.75rem;
+}
+
+.tree-editor__handle {
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 @media (max-width: 760px) {
@@ -444,6 +681,12 @@ p {
   }
 
   .import-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .block-editor__header,
+  .field-row,
+  .tree-editor__row {
     grid-template-columns: 1fr;
   }
 }

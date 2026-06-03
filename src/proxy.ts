@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+export function proxy(request: NextRequest) {
+  const nonce = crypto.randomUUID().replaceAll("-", "");
   const isProduction = process.env.NODE_ENV === "production";
 
   // Next.js emits inline bootstrap/RSC-payload scripts that must be allowed via a

@@ -58,6 +58,7 @@ export const pages: KbPage[] = [
     title: "Procedures",
     slug: "procedures",
     path: ["procedures"],
+    sortOrder: 10,
     summary: "Procedural guidance for maintaining Graduate School knowledge base content.",
     status: "published",
     visibility: "public",
@@ -82,6 +83,7 @@ export const pages: KbPage[] = [
     title: "Templates",
     slug: "templates",
     path: ["templates"],
+    sortOrder: 20,
     summary: "Managed templates available to graduate programs.",
     status: "published",
     visibility: "staff",
@@ -106,6 +108,7 @@ export const pages: KbPage[] = [
     title: "Maintaining Program Fact Sheets",
     slug: "maintaining-program-fact-sheets",
     path: ["procedures", "maintaining-program-fact-sheets"],
+    sortOrder: 10,
     summary:
       "How Graduate School partners access, review, and update public program fact sheets.",
     status: "published",
@@ -152,6 +155,19 @@ export const pages: KbPage[] = [
         ],
       },
       {
+        blockId: "review-table",
+        type: "table",
+        caption: "Recommended fact sheet review checks",
+        hasHeaderRow: true,
+        hasHeaderColumn: false,
+        rows: [
+          ["Area", "Check"],
+          ["Program details", "Confirm degree, certificate, and application information."],
+          ["Contact", "Use a shared mailbox where possible."],
+          ["Links", "Confirm public links and managed file links still work."],
+        ],
+      },
+      {
         blockId: "file-link-checklist",
         type: "asset_link",
         assetId: "asset-fact-sheet-checklist",
@@ -164,6 +180,7 @@ export const pages: KbPage[] = [
     title: "Graduate Program Handbooks",
     slug: "graduate-program-handbooks",
     path: ["templates", "graduate-program-handbooks"],
+    sortOrder: 10,
     summary:
       "Guidance and templates for maintaining graduate program handbooks.",
     status: "published",

@@ -48,6 +48,7 @@ async function ensureSchema() {
           kb_id TEXT NOT NULL,
           slug TEXT NOT NULL,
           path TEXT NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
           title TEXT NOT NULL,
           summary TEXT NOT NULL DEFAULT '',
           status TEXT NOT NULL DEFAULT 'draft',
@@ -61,6 +62,7 @@ async function ensureSchema() {
           related_asset_ids JSONB NOT NULL DEFAULT '[]'::jsonb
         )
       `;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0`;
       await sql`
         CREATE TABLE IF NOT EXISTS kb_assets (
           id TEXT PRIMARY KEY,
@@ -125,10 +127,10 @@ async function seedIfEmpty() {
   for (const page of seedDataset.pages) {
     await sql`
       INSERT INTO kb_pages (
-        id, kb_id, slug, path, title, summary, status, visibility, owner_label, contact_email,
+        id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
         last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids
       ) VALUES (
-        ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.title},
+        ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
         ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
         ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
         ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)}
@@ -152,6 +154,7 @@ interface PageRow {
   kb_id: string;
   slug: string;
   path: string;
+  sort_order: number;
   title: string;
   summary: string;
   status: string;
@@ -199,6 +202,7 @@ function mapPage(row: PageRow): KbPage {
     kbId: row.kb_id,
     slug: row.slug,
     path: row.path ? row.path.split("/") : [],
+    sortOrder: row.sort_order ?? 0,
     title: row.title,
     summary: row.summary,
     status: row.status as KbPage["status"],
@@ -238,15 +242,62 @@ export async function insertPage(page: KbPage): Promise<void> {
   const sql = getSql();
   await sql`
     INSERT INTO kb_pages (
-      id, kb_id, slug, path, title, summary, status, visibility, owner_label, contact_email,
+      id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids
     ) VALUES (
-      ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.title},
+      ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
       ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
       ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
       ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)}
     )
   `;
+}
+
+/** Insert a managed asset into Neon. */
+export async function insertAsset(asset: Asset): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO kb_assets (
+      id, home_kb_id, slug, title, description, asset_type, mime_type, file_size_bytes,
+      status, owner_label, last_reviewed_date, updated_display_date, version_id, body
+    ) VALUES (
+      ${asset.id}, ${asset.homeKbId}, ${asset.slug}, ${asset.title}, ${asset.description},
+      ${asset.assetType}, ${asset.mimeType}, ${asset.fileSizeBytes}, ${asset.status},
+      ${asset.ownerLabel}, ${asset.lastReviewedDate}, ${asset.updatedDisplayDate},
+      ${asset.versionId}, ${asset.body}
+    )
+  `;
+}
+
+/** Update existing pages in Neon. Used for page edits and move cascades. */
+export async function updatePages(pages: KbPage[]): Promise<void> {
+  if (pages.length === 0) {
+    return;
+  }
+  await ensureSchema();
+  const sql = getSql();
+  for (const page of pages) {
+    await sql`
+      UPDATE kb_pages
+      SET
+        slug = ${page.slug},
+        path = ${page.path.join("/")},
+        sort_order = ${page.sortOrder},
+        title = ${page.title},
+        summary = ${page.summary},
+        status = ${page.status},
+        visibility = ${page.visibility},
+        owner_label = ${page.ownerLabel},
+        contact_email = ${page.contactEmail},
+        last_reviewed_date = ${page.lastReviewedDate},
+        updated_display_date = ${page.updatedDisplayDate},
+        blocks = ${JSON.stringify(page.blocks)},
+        related_page_ids = ${JSON.stringify(page.relatedPageIds)},
+        related_asset_ids = ${JSON.stringify(page.relatedAssetIds)}
+      WHERE id = ${page.id}
+    `;
+  }
 }
 
 /** Load the full dataset from Neon (schema is created and seeded on first call). */

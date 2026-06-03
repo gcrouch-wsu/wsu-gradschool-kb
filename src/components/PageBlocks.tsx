@@ -29,6 +29,29 @@ async function AssetLink({ assetId }: { assetId: string }) {
   );
 }
 
+async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "image" }> }) {
+  let src = block.url ?? "";
+  if (block.assetId) {
+    const asset = await getAssetById(block.assetId);
+    const kb = asset ? await getKbById(asset.homeKbId) : null;
+    if (asset && kb) {
+      src = `/kb/${kb.slug}/files/${asset.slug}`;
+    }
+  }
+  if (!src) {
+    return <p className="alert">Referenced image is unavailable.</p>;
+  }
+
+  const widthPercent = Math.min(100, Math.max(25, block.widthPercent ?? 100));
+  return (
+    <figure className="content-image" style={{ maxWidth: `${widthPercent}%` }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img alt={block.alt ?? ""} loading="lazy" src={src} />
+      {block.alt && <figcaption>{block.alt}</figcaption>}
+    </figure>
+  );
+}
+
 export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
   return (
     <>
@@ -69,13 +92,45 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
         }
 
         if (block.type === "image") {
+          return <ImageBlock block={block} key={block.blockId} />;
+        }
+
+        if (block.type === "table") {
+          const [headerRow, ...bodyRows] = block.rows;
+          const rows = block.hasHeaderRow ? bodyRows : block.rows;
           return (
-            <figure className="content-image" key={block.blockId}>
-              {/* Imported images are served from Vercel Blob; dimensions are unknown. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt={block.alt ?? ""} loading="lazy" src={block.url} />
-              {block.alt && <figcaption>{block.alt}</figcaption>}
-            </figure>
+            <div className="content-table-wrap" key={block.blockId}>
+              <table className="content-table">
+                {block.caption && <caption>{block.caption}</caption>}
+                {block.hasHeaderRow && headerRow && (
+                  <thead>
+                    <tr>
+                      {headerRow.map((cell, index) => (
+                        <th key={`${block.blockId}-head-${index}`} scope="col">
+                          {cell}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                )}
+                <tbody>
+                  {rows.map((row, rowIndex) => (
+                    <tr key={`${block.blockId}-row-${rowIndex}`}>
+                      {row.map((cell, cellIndex) => {
+                        const isHeaderCell = block.hasHeaderColumn && cellIndex === 0;
+                        return isHeaderCell ? (
+                          <th key={`${block.blockId}-${rowIndex}-${cellIndex}`} scope="row">
+                            {cell}
+                          </th>
+                        ) : (
+                          <td key={`${block.blockId}-${rowIndex}-${cellIndex}`}>{cell}</td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           );
         }
 

@@ -18,17 +18,35 @@ function requireInProduction(name: string, value: string | undefined) {
   return value;
 }
 
+function readEnv(name: string) {
+  const value = process.env[name]?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
 function getAdminEmail() {
-  return requireInProduction("KB_ADMIN_EMAIL", process.env.KB_ADMIN_EMAIL?.trim()) || "admin@example.edu";
+  return (
+    requireInProduction(
+      "KB_ADMIN_EMAIL or BOOTSTRAP_OWNER_EMAIL",
+      readEnv("KB_ADMIN_EMAIL") || readEnv("BOOTSTRAP_OWNER_EMAIL"),
+    ) || "admin@example.edu"
+  );
 }
 
 function getAdminPassword() {
-  return requireInProduction("KB_ADMIN_PASSWORD", process.env.KB_ADMIN_PASSWORD) || "ChangeMe123!";
+  return (
+    requireInProduction(
+      "KB_ADMIN_PASSWORD or BOOTSTRAP_OWNER_PASSWORD",
+      readEnv("KB_ADMIN_PASSWORD") || readEnv("BOOTSTRAP_OWNER_PASSWORD"),
+    ) || "ChangeMe123!"
+  );
 }
 
 function getSessionSecret() {
   return (
-    requireInProduction("KB_ADMIN_SESSION_SECRET", process.env.KB_ADMIN_SESSION_SECRET) ||
+    requireInProduction(
+      "KB_ADMIN_SESSION_SECRET or BOOTSTRAP_OWNER_SESSION_SECRET",
+      readEnv("KB_ADMIN_SESSION_SECRET") || readEnv("BOOTSTRAP_OWNER_SESSION_SECRET"),
+    ) ||
     `dev-secret:${getAdminEmail()}:${getAdminPassword()}`
   );
 }

@@ -7,9 +7,9 @@ coverage/
 .env*.local
 *.tsbuildinfo
 vercel.json.local
+.next-dev.log
 
 # Internal planning / source content (not part of the deployable app)
-project_spec.md
 .claude/
 *.doc
 *.doc.docx

@@ -32,6 +32,7 @@ export function AdminImportForm({ kbOptions }: { kbOptions: ImportKbOption[] }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+  const [createdPageId, setCreatedPageId] = useState<string | null>(null);
 
   const [kbId, setKbId] = useState(kbOptions[0]?.id ?? "");
   const [parentPath, setParentPath] = useState("");
@@ -65,7 +66,8 @@ export function AdminImportForm({ kbOptions }: { kbOptions: ImportKbOption[] }) 
     }
     return parsed.blocks
       .filter((block): block is Extract<ContentBlock, { type: "image" }> => block.type === "image")
-      .map((block) => block.url);
+      .map((block) => block.url)
+      .filter((url): url is string => Boolean(url));
   }, [parsed]);
 
   async function handleParse(event: React.FormEvent) {
@@ -123,6 +125,7 @@ export function AdminImportForm({ kbOptions }: { kbOptions: ImportKbOption[] }) 
         throw new Error(data.message ?? "Could not create the page.");
       }
       setCreatedUrl(data.url ?? null);
+      setCreatedPageId(data.pageId ?? null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not create the page.");
     } finally {
@@ -135,6 +138,7 @@ export function AdminImportForm({ kbOptions }: { kbOptions: ImportKbOption[] }) 
     setParsed(null);
     setError(null);
     setCreatedUrl(null);
+    setCreatedPageId(null);
     setTitle("");
     setSlug("");
     setSummary("");
@@ -155,6 +159,13 @@ export function AdminImportForm({ kbOptions }: { kbOptions: ImportKbOption[] }) 
             <span className="meta">Saved. Find it in the knowledge base navigation.</span>
           )}
         </p>
+        {createdPageId && (
+          <p>
+            <a className="button button--ghost" href={`/admin/pages/${createdPageId}`}>
+              Edit or publish draft
+            </a>
+          </p>
+        )}
         <p className="meta">
           <button className="button button--ghost" onClick={reset} type="button">
             Import another document

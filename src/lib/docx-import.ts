@@ -21,6 +21,15 @@ export interface ConvertOptions {
   uploadImage?: ImageUploader;
 }
 
+const DATA_URI_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+]);
+
 function isElement(node: Node): node is HTMLElement {
   // node-html-parser element nodes expose a tagName; text/comment nodes do not.
   return (node as HTMLElement).tagName !== undefined && (node as HTMLElement).tagName !== null;
@@ -43,42 +52,55 @@ export async function convertDocxToBlocks(
 ): Promise<ParsedDocx> {
   const hasUploader = Boolean(options.uploadImage);
   let uploadedImages = 0;
+  let inlinedImages = 0;
   let skippedImages = 0;
 
   // When a handler is provided, upload each image during conversion and inline
-  // its public URL as the <img src>. Unsupported types / failures resolve to an
-  // empty src, which the walker treats as "skip".
-  const convertImage = hasUploader
-    ? mammoth.images.imgElement(async (image) => {
+  // its public URL as the <img src>. If object storage is unavailable, preserve
+  // web-renderable images as data URIs so imported screenshots are not stripped.
+  const convertImage = mammoth.images.imgElement(async (image) => {
+    const normalizedType = image.contentType.toLowerCase();
+    const altText = (image as { altText?: string }).altText ?? "";
+    if (!DATA_URI_IMAGE_TYPES.has(normalizedType)) {
+      skippedImages += 1;
+      return { src: "" };
+    }
+
+    try {
+      const base64 = await image.read("base64");
+      if (hasUploader) {
         try {
-          const base64 = await image.read("base64");
           const data = Buffer.from(base64, "base64");
           const url = await options.uploadImage!(data, image.contentType);
           if (url) {
             uploadedImages += 1;
-            const altText = (image as { altText?: string }).altText ?? "";
             return { src: url, alt: altText };
           }
         } catch {
-          // fall through to skip
+          // Fall back to a data URI below so a temporary Blob outage does not
+          // silently strip all screenshots from the imported draft.
         }
-        skippedImages += 1;
-        return { src: "" };
-      })
-    : undefined;
+      }
+      inlinedImages += 1;
+      return { src: `data:${normalizedType};base64,${base64}`, alt: altText };
+    } catch {
+      skippedImages += 1;
+      return { src: "" };
+    }
+  });
 
   // NOTE: mammoth's signature is convertToHtml(input, options) — image/style
   // options MUST go in the second argument or they are silently ignored.
   const { value: html, messages: mammothMessages } = await mammoth.convertToHtml(
     { buffer },
-    convertImage ? { convertImage } : {},
+    { convertImage },
   );
   const root = parse(html, { blockTextElements: { pre: true } });
 
   const blocks: ContentBlock[] = [];
   const messages: string[] = [];
   let title: string | null = null;
-  let skippedTables = 0;
+  let importedTables = 0;
   let index = 0;
 
   const nextId = (prefix: string) => `${prefix}-${index++}`;
@@ -87,12 +109,9 @@ export async function convertDocxToBlocks(
     const imgs = node.tagName?.toLowerCase() === "img" ? [node] : node.querySelectorAll("img");
     for (const img of imgs) {
       const src = img.getAttribute("src") ?? "";
-      if (src.startsWith("http")) {
+      if (src.startsWith("http") || src.startsWith("data:image/")) {
         const alt = collapseWhitespace(img.getAttribute("alt") ?? "");
         blocks.push({ blockId: nextId("image"), type: "image", url: src, alt: alt || undefined });
-      } else if (!hasUploader) {
-        // Default mammoth output embeds images as data URIs; count them as skipped.
-        skippedImages += 1;
       }
     }
   };
@@ -149,7 +168,26 @@ export async function convertDocxToBlocks(
     }
 
     if (tag === "table") {
-      skippedTables += 1;
+      const rows = node
+        .querySelectorAll("tr")
+        .map((row) =>
+          row
+            .querySelectorAll("th,td")
+            .map((cell) => collapseWhitespace(cell.text)),
+        )
+        .filter((row) => row.some((cell) => cell.length > 0));
+      if (rows.length > 0) {
+        const firstRowHasHeader = node.querySelector("tr th") !== null;
+        blocks.push({
+          blockId: nextId("table"),
+          type: "table",
+          caption: "",
+          hasHeaderRow: firstRowHasHeader || rows.length > 1,
+          hasHeaderColumn: false,
+          rows,
+        });
+        importedTables += 1;
+      }
       continue;
     }
 
@@ -166,13 +204,18 @@ export async function convertDocxToBlocks(
     }
   }
 
-  if (skippedTables > 0) {
+  if (importedTables > 0) {
     messages.push(
-      `${skippedTables} table${skippedTables === 1 ? "" : "s"} were skipped (tables are not yet supported).`,
+      `${importedTables} table${importedTables === 1 ? "" : "s"} imported. Review headers and captions before publishing.`,
     );
   }
   if (uploadedImages > 0) {
     messages.push(`${uploadedImages} image${uploadedImages === 1 ? "" : "s"} imported.`);
+  }
+  if (inlinedImages > 0) {
+    messages.push(
+      `${inlinedImages} image${inlinedImages === 1 ? "" : "s"} preserved inline because Blob storage was unavailable or upload failed.`,
+    );
   }
   if (skippedImages > 0) {
     messages.push(

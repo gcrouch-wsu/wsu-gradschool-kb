@@ -20,6 +20,7 @@ export interface KbPage {
   title: string;
   slug: string;
   path: string[];
+  sortOrder: number;
   summary: string;
   status: PageStatus;
   visibility: PageVisibility;
@@ -48,7 +49,15 @@ export type ContentBlock =
   | { blockId: string; type: "heading"; level: 2 | 3; text: string }
   | { blockId: string; type: "list"; ordered?: boolean; items: string[] }
   | { blockId: string; type: "alert"; variant: "info" | "warning"; text: string }
-  | { blockId: string; type: "image"; url: string; alt?: string }
+  | { blockId: string; type: "image"; assetId?: string; url?: string; alt?: string; widthPercent?: number }
+  | {
+      blockId: string;
+      type: "table";
+      caption?: string;
+      hasHeaderRow: boolean;
+      hasHeaderColumn: boolean;
+      rows: string[][];
+    }
   | { blockId: string; type: "asset_link"; assetId: string; label?: string };
 
 export interface Asset {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentAdminSession } from "@/lib/auth";
-import { createPage, getKbById } from "@/lib/kb-store";
+import { createImageAsset, createPage, getKbById } from "@/lib/kb-store";
 import type { ContentBlock, PageVisibility } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -13,6 +13,74 @@ interface CommitBody {
   summary?: unknown;
   visibility?: unknown;
   blocks?: unknown;
+}
+
+function imageExtension(mimeType: string) {
+  if (mimeType.includes("png")) return "png";
+  if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
+  if (mimeType.includes("gif")) return "gif";
+  if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("svg")) return "svg";
+  return "img";
+}
+
+function inferImageMimeType(src: string) {
+  const dataUriMatch = /^data:([^;]+);base64,/i.exec(src);
+  if (dataUriMatch) {
+    return dataUriMatch[1].toLowerCase();
+  }
+  const withoutQuery = src.split("?")[0]?.toLowerCase() ?? "";
+  if (withoutQuery.endsWith(".png")) return "image/png";
+  if (withoutQuery.endsWith(".jpg") || withoutQuery.endsWith(".jpeg")) return "image/jpeg";
+  if (withoutQuery.endsWith(".gif")) return "image/gif";
+  if (withoutQuery.endsWith(".webp")) return "image/webp";
+  if (withoutQuery.endsWith(".svg")) return "image/svg+xml";
+  return "image/png";
+}
+
+function estimateImageSize(src: string) {
+  const dataUriMatch = /^data:[^;]+;base64,(.+)$/i.exec(src);
+  if (!dataUriMatch) {
+    return 0;
+  }
+  return Buffer.byteLength(dataUriMatch[1], "base64");
+}
+
+async function promoteImportedImagesToAssets(
+  blocks: ContentBlock[],
+  kbId: string,
+  kbSlug: string,
+  pageTitle: string,
+) {
+  let imageIndex = 0;
+  const managedBlocks: ContentBlock[] = [];
+  for (const block of blocks) {
+    if (block.type !== "image" || block.assetId || !block.url) {
+      managedBlocks.push(block);
+      continue;
+    }
+    if (!block.url.startsWith("data:image/") && !block.url.startsWith("http://") && !block.url.startsWith("https://")) {
+      managedBlocks.push(block);
+      continue;
+    }
+    imageIndex += 1;
+    const mimeType = inferImageMimeType(block.url);
+    const extension = imageExtension(mimeType);
+    const asset = await createImageAsset({
+      body: block.url,
+      fileSizeBytes: estimateImageSize(block.url),
+      homeKbId: kbId,
+      mimeType,
+      originalFilename: `${pageTitle}-image-${imageIndex}.${extension}`,
+      title: `${pageTitle} image ${imageIndex}`,
+    });
+    managedBlocks.push({
+      ...block,
+      assetId: asset.id,
+      url: `/kb/${kbSlug}/files/${asset.slug}`,
+    });
+  }
+  return managedBlocks;
 }
 
 export async function POST(request: Request) {
@@ -44,6 +112,11 @@ export async function POST(request: Request) {
   }
 
   try {
+    const kb = await getKbById(kbId);
+    if (!kb) {
+      return NextResponse.json({ message: "Knowledge base not found." }, { status: 400 });
+    }
+    const managedBlocks = await promoteImportedImagesToAssets(blocks, kbId, kb.slug, title);
     const page = await createPage({
       kbId,
       title,
@@ -52,9 +125,8 @@ export async function POST(request: Request) {
       visibility,
       parentPath,
       status: "draft",
-      blocks,
+      blocks: managedBlocks,
     });
-    const kb = await getKbById(page.kbId);
     const url = kb ? `/kb/${kb.slug}/${page.path.join("/")}` : null;
     return NextResponse.json({ ok: true, pageId: page.id, url });
   } catch (error) {

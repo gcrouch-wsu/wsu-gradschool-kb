@@ -77,6 +77,13 @@ export default async function KbArticlePage({
             {page.status === "draft" && <span className="badge badge--draft"> Draft</span>}
             {page.visibility === "staff" && <span className="badge badge--staff"> Staff only</span>}
           </p>
+          {isStaff && (
+            <p className="admin-inline-actions">
+              <Link className="button button--small" href={`/admin/pages/${page.id}`}>
+                Edit page
+              </Link>
+            </p>
+          )}
           <h1>{page.title}</h1>
           <p className="lead">{page.summary}</p>
           <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
