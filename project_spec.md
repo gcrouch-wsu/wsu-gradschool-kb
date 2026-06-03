@@ -79,6 +79,7 @@ This spec describes the full target system. The current repository is a deployab
 * Admins can edit page title, slug, summary, visibility, parent/nesting location, and imported block content.
 * Admins can add and edit paragraph, heading, list, alert, image, and table blocks.
 * Admins can edit content in WYSIWYG-style block surfaces for paragraphs, headings, lists, alerts, and table cells.
+* Text editing surfaces include formatting toolbars for bold, italic, underline, strikethrough, superscript, subscript, links, unlink, and clear formatting.
 * Admins can upload images from the page editor into managed image asset records.
 * Admins can resize managed image and fallback image URL blocks with constrained width controls.
 * Admins can edit table captions, row/column content, header row setting, and header column setting.
@@ -94,7 +95,7 @@ This spec describes the full target system. The current repository is a deployab
 * Automatic seed insertion into an empty Neon database.
 * Admin DOCX import screen at `/admin/import`.
 * Single-file `.docx` parse API with a 10 MB current route-level limit.
-* DOCX conversion for headings, paragraphs, lists, and supported embedded web images.
+* DOCX conversion for headings, paragraphs, lists, tables, supported inline formatting, and supported embedded web images.
 * Import preview with block counts, outline, messages, and image thumbnails.
 * Import commit flow that lets the admin choose KB, parent path, title, slug, summary, and visibility.
 * Imported content is saved as a draft page.
@@ -114,7 +115,7 @@ This spec describes the full target system. The current repository is a deployab
 * Security: signed admin cookies, production env validation, CSP, and baseline headers exist, but CSRF protection, rate limiting, idle timeout, managed users, and KB-scoped RBAC are not built.
 * Search: KB-scoped search exists, but Postgres FTS, alias materialization, ranking, and analytics are not built.
 * Block model: the renderer and basic editor support a small block subset, but the full editor-facing block JSON schema is not implemented.
-* Page editing: metadata, nesting, manual ordering, draft save, publish, WYSIWYG-style block editing, table blocks, managed image insertion, and image resizing are built; final editor polish, publish gates, versions, locks, redirects, and audit logging remain unbuilt.
+* Page editing: metadata, nesting, manual ordering, draft save, publish, WYSIWYG-style block editing with formatting toolbars, table blocks, managed image insertion, and image resizing are built; final editor polish, publish gates, versions, locks, redirects, and audit logging remain unbuilt.
 
 ### Not yet built, but still in scope
 
@@ -2167,6 +2168,7 @@ Built:
 * Admin page editor for existing pages
 * Edit page title, slug, summary, visibility, parent/nesting location, and supported imported block content
 * WYSIWYG-style editing surfaces for paragraphs, headings, lists, alerts, and table cells
+* Rich text toolbars for supported inline formatting in fact sheets and other KB pages
 * Add and edit table blocks with captions, header row, and header column controls
 * Add managed image blocks by uploading images from the page editor
 * Add and resize managed image and fallback image URL blocks
@@ -2223,7 +2225,7 @@ Add:
 Built:
 
 * Single DOCX import screen for authenticated admins
-* DOCX parsing for headings, paragraphs, lists, tables, and supported web images
+* DOCX parsing for headings, paragraphs, lists, tables, supported inline formatting, and supported web images
 * Preview/review UI before commit
 * Editor/admin choice of KB, parent path, page title, slug, summary, and visibility before commit
 * Commit imported content as a draft page
@@ -2286,7 +2288,7 @@ Built:
 * Admin login using bootstrap-owner credentials
 * Admin dashboard
 * Admin page list
-* Basic WYSIWYG-style admin page editor
+* Basic WYSIWYG-style admin page editor with rich text formatting toolbars
 * Move/nest pages under parent pages
 * Reorder pages within sibling groups
 * Drag/drop page nesting through the admin page tree manager

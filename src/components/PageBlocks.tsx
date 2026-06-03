@@ -1,7 +1,18 @@
 import Link from "next/link";
 import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
+import { sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
+
+function RichText({ html, text }: { html?: string; text: string }) {
+  return (
+    <span
+      dangerouslySetInnerHTML={{
+        __html: sanitizeRichText(html ?? textToRichText(text)),
+      }}
+    />
+  );
+}
 
 async function AssetLink({ assetId }: { assetId: string }) {
   const asset = await getAssetById(assetId);
@@ -57,17 +68,21 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
     <>
       {blocks.map((block) => {
         if (block.type === "paragraph") {
-          return <p key={block.blockId}>{block.text}</p>;
+          return (
+            <p key={block.blockId}>
+              <RichText html={block.html} text={block.text} />
+            </p>
+          );
         }
 
         if (block.type === "heading") {
           return block.level === 2 ? (
             <h2 className="anchor-heading" id={block.blockId} key={block.blockId}>
-              {block.text}
+              <RichText html={block.html} text={block.text} />
             </h2>
           ) : (
             <h3 className="anchor-heading" id={block.blockId} key={block.blockId}>
-              {block.text}
+              <RichText html={block.html} text={block.text} />
             </h3>
           );
         }
@@ -77,7 +92,9 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
           return (
             <ListTag key={block.blockId}>
               {block.items.map((item, index) => (
-                <li key={`${block.blockId}-${index}`}>{item}</li>
+                <li key={`${block.blockId}-${index}`}>
+                  <RichText html={block.itemHtml?.[index]} text={item} />
+                </li>
               ))}
             </ListTag>
           );
@@ -86,7 +103,7 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
         if (block.type === "alert") {
           return (
             <div className="alert" key={block.blockId}>
-              {block.text}
+              <RichText html={block.html} text={block.text} />
             </div>
           );
         }
@@ -107,7 +124,7 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
                     <tr>
                       {headerRow.map((cell, index) => (
                         <th key={`${block.blockId}-head-${index}`} scope="col">
-                          {cell}
+                          <RichText html={block.rowsHtml?.[0]?.[index]} text={cell} />
                         </th>
                       ))}
                     </tr>
@@ -120,10 +137,18 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
                         const isHeaderCell = block.hasHeaderColumn && cellIndex === 0;
                         return isHeaderCell ? (
                           <th key={`${block.blockId}-${rowIndex}-${cellIndex}`} scope="row">
-                            {cell}
+                            <RichText
+                              html={block.rowsHtml?.[block.hasHeaderRow ? rowIndex + 1 : rowIndex]?.[cellIndex]}
+                              text={cell}
+                            />
                           </th>
                         ) : (
-                          <td key={`${block.blockId}-${rowIndex}-${cellIndex}`}>{cell}</td>
+                          <td key={`${block.blockId}-${rowIndex}-${cellIndex}`}>
+                            <RichText
+                              html={block.rowsHtml?.[block.hasHeaderRow ? rowIndex + 1 : rowIndex]?.[cellIndex]}
+                              text={cell}
+                            />
+                          </td>
                         );
                       })}
                     </tr>

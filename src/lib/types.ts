@@ -45,10 +45,10 @@ export interface KbDataset {
 }
 
 export type ContentBlock =
-  | { blockId: string; type: "paragraph"; text: string }
-  | { blockId: string; type: "heading"; level: 2 | 3; text: string }
-  | { blockId: string; type: "list"; ordered?: boolean; items: string[] }
-  | { blockId: string; type: "alert"; variant: "info" | "warning"; text: string }
+  | { blockId: string; type: "paragraph"; text: string; html?: string }
+  | { blockId: string; type: "heading"; level: 2 | 3; text: string; html?: string }
+  | { blockId: string; type: "list"; ordered?: boolean; items: string[]; itemHtml?: string[] }
+  | { blockId: string; type: "alert"; variant: "info" | "warning"; text: string; html?: string }
   | { blockId: string; type: "image"; assetId?: string; url?: string; alt?: string; widthPercent?: number }
   | {
       blockId: string;
@@ -57,6 +57,7 @@ export type ContentBlock =
       hasHeaderRow: boolean;
       hasHeaderColumn: boolean;
       rows: string[][];
+      rowsHtml?: string[][];
     }
   | { blockId: string; type: "asset_link"; assetId: string; label?: string };
 

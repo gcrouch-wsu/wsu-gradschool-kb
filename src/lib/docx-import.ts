@@ -1,5 +1,6 @@
 import mammoth from "mammoth";
 import { parse, type HTMLElement, type Node } from "node-html-parser";
+import { richTextToPlainText, sanitizeRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 
 export interface ParsedDocx {
@@ -37,6 +38,14 @@ function isElement(node: Node): node is HTMLElement {
 
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function inlineHtml(node: HTMLElement) {
+  return sanitizeRichText(node.innerHTML);
+}
+
+function inlineText(node: HTMLElement) {
+  return collapseWhitespace(richTextToPlainText(inlineHtml(node)) || node.text);
 }
 
 /**
@@ -126,7 +135,8 @@ export async function convertDocxToBlocks(
     }
 
     if (tag === "h1" || tag === "h2") {
-      const text = collapseWhitespace(node.text);
+      const html = inlineHtml(node);
+      const text = inlineText(node);
       if (!text) {
         continue;
       }
@@ -135,34 +145,38 @@ export async function convertDocxToBlocks(
         title = text;
         continue;
       }
-      blocks.push({ blockId: nextId("heading"), type: "heading", level: 2, text });
+      blocks.push({ blockId: nextId("heading"), type: "heading", level: 2, text, html });
       continue;
     }
 
     if (tag === "h3" || tag === "h4" || tag === "h5" || tag === "h6") {
-      const text = collapseWhitespace(node.text);
+      const html = inlineHtml(node);
+      const text = inlineText(node);
       if (text) {
-        blocks.push({ blockId: nextId("heading"), type: "heading", level: 3, text });
+        blocks.push({ blockId: nextId("heading"), type: "heading", level: 3, text, html });
       }
       continue;
     }
 
     if (tag === "p") {
       extractImages(node);
-      const text = collapseWhitespace(node.text);
+      const html = inlineHtml(node);
+      const text = inlineText(node);
       if (text) {
-        blocks.push({ blockId: nextId("paragraph"), type: "paragraph", text });
+        blocks.push({ blockId: nextId("paragraph"), type: "paragraph", text, html });
       }
       continue;
     }
 
     if (tag === "ul" || tag === "ol") {
-      const items = node
-        .querySelectorAll("li")
-        .map((li) => collapseWhitespace(li.text))
-        .filter((item) => item.length > 0);
+      const listItems = node.querySelectorAll("li").map((li) => ({
+        html: inlineHtml(li),
+        text: inlineText(li),
+      }));
+      const items = listItems.map((item) => item.text).filter((item) => item.length > 0);
+      const itemHtml = listItems.filter((item) => item.text.length > 0).map((item) => item.html);
       if (items.length > 0) {
-        blocks.push({ blockId: nextId("list"), type: "list", ordered: tag === "ol", items });
+        blocks.push({ blockId: nextId("list"), type: "list", ordered: tag === "ol", items, itemHtml });
       }
       continue;
     }
@@ -173,9 +187,17 @@ export async function convertDocxToBlocks(
         .map((row) =>
           row
             .querySelectorAll("th,td")
-            .map((cell) => collapseWhitespace(cell.text)),
+            .map((cell) => inlineText(cell)),
         )
         .filter((row) => row.some((cell) => cell.length > 0));
+      const rowsHtml = node
+        .querySelectorAll("tr")
+        .map((row) =>
+          row
+            .querySelectorAll("th,td")
+            .map((cell) => inlineHtml(cell)),
+        )
+        .filter((row) => row.some((cell) => richTextToPlainText(cell).length > 0));
       if (rows.length > 0) {
         const firstRowHasHeader = node.querySelector("tr th") !== null;
         blocks.push({
@@ -185,6 +207,7 @@ export async function convertDocxToBlocks(
           hasHeaderRow: firstRowHasHeader || rows.length > 1,
           hasHeaderColumn: false,
           rows,
+          rowsHtml,
         });
         importedTables += 1;
       }
@@ -198,9 +221,10 @@ export async function convertDocxToBlocks(
 
     // Fallback: capture any other text-bearing block as a paragraph.
     extractImages(node);
-    const text = collapseWhitespace(node.text);
+    const html = inlineHtml(node);
+    const text = inlineText(node);
     if (text) {
-      blocks.push({ blockId: nextId("paragraph"), type: "paragraph", text });
+      blocks.push({ blockId: nextId("paragraph"), type: "paragraph", text, html });
     }
   }
 

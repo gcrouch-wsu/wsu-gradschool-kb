@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { richTextToPlainText, sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
 
 interface ParentOption {
@@ -13,6 +14,7 @@ interface ParentOption {
 
 type EditableStatus = "draft" | "published";
 type AddableBlockType = "paragraph" | "heading" | "list" | "alert" | "image" | "table";
+type RichTextElement = "div" | "h2" | "h3" | "li";
 
 function newBlock(type: AddableBlockType): ContentBlock {
   const blockId = `block-${crypto.randomUUID()}`;
@@ -245,6 +247,94 @@ export function AdminPageEditorForm({
   );
 }
 
+function RichTextToolbar() {
+  function apply(command: string, value?: string) {
+    document.execCommand(command, false, value);
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.isContentEditable) {
+      active.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      active.focus();
+    }
+  }
+
+  function addLink() {
+    const href = window.prompt("Link URL");
+    if (!href) {
+      return;
+    }
+    apply("createLink", href);
+  }
+
+  const buttonClass = "rich-text-toolbar__button";
+  return (
+    <div className="rich-text-toolbar" aria-label="Text formatting toolbar">
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("bold")} type="button">
+        B
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("italic")} type="button">
+        I
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("underline")} type="button">
+        U
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("strikeThrough")} type="button">
+        S
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("superscript")} type="button">
+        Sup
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("subscript")} type="button">
+        Sub
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={addLink} type="button">
+        Link
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("unlink")} type="button">
+        Unlink
+      </button>
+      <button className={buttonClass} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("removeFormat")} type="button">
+        Clear
+      </button>
+    </div>
+  );
+}
+
+function RichTextEditable({
+  className,
+  element = "div",
+  text,
+  html,
+  onChange,
+}: {
+  className?: string;
+  element?: RichTextElement;
+  text: string;
+  html?: string;
+  onChange: (html: string, text: string) => void;
+}) {
+  const Tag = element;
+  const value = sanitizeRichText(html ?? textToRichText(text));
+
+  return (
+    <>
+      <RichTextToolbar />
+      <Tag
+        className={className}
+        contentEditable
+        dangerouslySetInnerHTML={{ __html: value }}
+        onBlur={(event) => {
+          const cleanHtml = sanitizeRichText(event.currentTarget.innerHTML);
+          if (event.currentTarget.innerHTML !== cleanHtml) {
+            event.currentTarget.innerHTML = cleanHtml;
+          }
+          onChange(cleanHtml, richTextToPlainText(cleanHtml));
+        }}
+        suppressContentEditableWarning
+      />
+    </>
+  );
+}
+
 function BlockEditor({
   block,
   canMoveDown,
@@ -320,14 +410,12 @@ function BlockEditor({
         </div>
       </div>
       {block.type === "paragraph" && (
-        <div
+        <RichTextEditable
           className="wysiwyg-surface wysiwyg-paragraph"
-          contentEditable
-          onBlur={(event) => onChange({ ...block, text: event.currentTarget.textContent ?? "" })}
-          suppressContentEditableWarning
-        >
-          {block.text}
-        </div>
+          html={block.html}
+          onChange={(html, text) => onChange({ ...block, html, text })}
+          text={block.text}
+        />
       )}
       {block.type === "heading" && (
         <>
@@ -343,23 +431,21 @@ function BlockEditor({
             </select>
           </label>
           {block.level === 2 ? (
-            <h2
+            <RichTextEditable
               className="wysiwyg-surface"
-              contentEditable
-              onBlur={(event) => onChange({ ...block, text: event.currentTarget.textContent ?? "" })}
-              suppressContentEditableWarning
-            >
-              {block.text}
-            </h2>
+              element="h2"
+              html={block.html}
+              onChange={(html, text) => onChange({ ...block, html, text })}
+              text={block.text}
+            />
           ) : (
-            <h3
+            <RichTextEditable
               className="wysiwyg-surface"
-              contentEditable
-              onBlur={(event) => onChange({ ...block, text: event.currentTarget.textContent ?? "" })}
-              suppressContentEditableWarning
-            >
-              {block.text}
-            </h3>
+              element="h3"
+              html={block.html}
+              onChange={(html, text) => onChange({ ...block, html, text })}
+              text={block.text}
+            />
           )}
         </>
       )}
@@ -373,46 +459,36 @@ function BlockEditor({
             />
             Ordered list
           </label>
-          {block.ordered ? (
-            <ol className="wysiwyg-list">
-              {block.items.map((item, itemIndex) => (
-                <li
-                  className="wysiwyg-surface"
-                  contentEditable
-                  key={`${block.blockId}-${itemIndex}`}
-                  onBlur={(event) => {
-                    const items = [...block.items];
-                    items[itemIndex] = event.currentTarget.textContent ?? "";
-                    onChange({ ...block, items: items.filter((value) => value.trim().length > 0) });
-                  }}
-                  suppressContentEditableWarning
-                >
-                  {item}
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <ul className="wysiwyg-list">
-              {block.items.map((item, itemIndex) => (
-                <li
-                  className="wysiwyg-surface"
-                  contentEditable
-                  key={`${block.blockId}-${itemIndex}`}
-                  onBlur={(event) => {
-                    const items = [...block.items];
-                    items[itemIndex] = event.currentTarget.textContent ?? "";
-                    onChange({ ...block, items: items.filter((value) => value.trim().length > 0) });
-                  }}
-                  suppressContentEditableWarning
-                >
-                  {item}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="list-item-editor-list">
+            {block.items.map((item, itemIndex) => (
+              <div className="list-item-editor" key={`${block.blockId}-${itemIndex}`}>
+                <span className="list-item-editor__marker">{block.ordered ? `${itemIndex + 1}.` : "-"}</span>
+                <div className="list-item-editor__body">
+                  <RichTextEditable
+                    className="wysiwyg-surface"
+                    html={block.itemHtml?.[itemIndex]}
+                    onChange={(html, text) => {
+                      const items = [...block.items];
+                      const itemHtml = [...(block.itemHtml ?? block.items.map((value) => textToRichText(value)))];
+                      items[itemIndex] = text;
+                      itemHtml[itemIndex] = html;
+                      onChange({ ...block, items, itemHtml });
+                    }}
+                    text={item}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
           <button
             className="button button--ghost button--small"
-            onClick={() => onChange({ ...block, items: [...block.items, "New list item"] })}
+            onClick={() =>
+              onChange({
+                ...block,
+                items: [...block.items, "New list item"],
+                itemHtml: [...(block.itemHtml ?? block.items.map((value) => textToRichText(value))), "New list item"],
+              })
+            }
             type="button"
           >
             Add item
@@ -432,14 +508,12 @@ function BlockEditor({
               <option value="warning">Warning</option>
             </select>
           </label>
-          <div
+          <RichTextEditable
             className="alert wysiwyg-surface"
-            contentEditable
-            onBlur={(event) => onChange({ ...block, text: event.currentTarget.textContent ?? "" })}
-            suppressContentEditableWarning
-          >
-            {block.text}
-          </div>
+            html={block.html}
+            onChange={(html, text) => onChange({ ...block, html, text })}
+            text={block.text}
+          />
         </>
       )}
       {block.type === "image" && (
@@ -514,8 +588,14 @@ function TableBlockEditor({
 }) {
   const columnCount = Math.max(1, ...block.rows.map((row) => row.length));
   const normalizedRows = block.rows.length > 0 ? block.rows : [[""]];
+  const normalizedRowsHtml = normalizedRows.map((row, rowIndex) =>
+    Array.from({ length: columnCount }, (_, columnIndex) => {
+      const html = block.rowsHtml?.[rowIndex]?.[columnIndex];
+      return html ?? textToRichText(row[columnIndex] ?? "");
+    }),
+  );
 
-  function updateCell(rowIndex: number, columnIndex: number, value: string) {
+  function updateCell(rowIndex: number, columnIndex: number, value: string, html: string) {
     const rows = normalizedRows.map((row, currentRowIndex) => {
       const nextRow = [...row];
       while (nextRow.length < columnCount) {
@@ -526,29 +606,43 @@ function TableBlockEditor({
       }
       return nextRow;
     });
-    onChange({ ...block, rows });
+    const rowsHtml = normalizedRowsHtml.map((row) => [...row]);
+    rowsHtml[rowIndex][columnIndex] = html;
+    onChange({ ...block, rows, rowsHtml });
   }
 
   function addRow() {
-    onChange({ ...block, rows: [...normalizedRows, Array.from({ length: columnCount }, () => "")] });
+    onChange({
+      ...block,
+      rows: [...normalizedRows, Array.from({ length: columnCount }, () => "")],
+      rowsHtml: [...normalizedRowsHtml, Array.from({ length: columnCount }, () => "")],
+    });
   }
 
   function removeRow() {
     if (normalizedRows.length <= 1) {
       return;
     }
-    onChange({ ...block, rows: normalizedRows.slice(0, -1) });
+    onChange({ ...block, rows: normalizedRows.slice(0, -1), rowsHtml: normalizedRowsHtml.slice(0, -1) });
   }
 
   function addColumn() {
-    onChange({ ...block, rows: normalizedRows.map((row) => [...row, ""]) });
+    onChange({
+      ...block,
+      rows: normalizedRows.map((row) => [...row, ""]),
+      rowsHtml: normalizedRowsHtml.map((row) => [...row, ""]),
+    });
   }
 
   function removeColumn() {
     if (columnCount <= 1) {
       return;
     }
-    onChange({ ...block, rows: normalizedRows.map((row) => row.slice(0, -1)) });
+    onChange({
+      ...block,
+      rows: normalizedRows.map((row) => row.slice(0, -1)),
+      rowsHtml: normalizedRowsHtml.map((row) => row.slice(0, -1)),
+    });
   }
 
   return (
@@ -586,16 +680,12 @@ function TableBlockEditor({
               <tr key={rowIndex}>
                 {Array.from({ length: columnCount }, (_, columnIndex) => (
                   <td key={`${rowIndex}-${columnIndex}`}>
-                    <div
-                      aria-label={`Row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                    <RichTextEditable
                       className="wysiwyg-table-cell"
-                      contentEditable
-                      onBlur={(event) => updateCell(rowIndex, columnIndex, event.currentTarget.textContent ?? "")}
-                      role="textbox"
-                      suppressContentEditableWarning
-                    >
-                      {row[columnIndex] ?? ""}
-                    </div>
+                      html={normalizedRowsHtml[rowIndex]?.[columnIndex]}
+                      onChange={(html, text) => updateCell(rowIndex, columnIndex, text, html)}
+                      text={row[columnIndex] ?? ""}
+                    />
                   </td>
                 ))}
               </tr>

@@ -70,6 +70,6 @@ Embedded images are promoted into managed image assets when the draft is created
 
 ## Managing Pages
 
-Signed-in admins can manage pages at `/admin/pages`. The current editor supports reopening drafts, editing page metadata and content blocks in a WYSIWYG-style surface, moving a page under a different parent, saving as draft, and publishing. Save and publish actions are available at the top and bottom of the page editor.
+Signed-in admins can manage pages at `/admin/pages`. The current editor supports reopening drafts, editing page metadata and content blocks in a WYSIWYG-style surface with formatting toolbars, moving a page under a different parent, saving as draft, and publishing. Save and publish actions are available at the top and bottom of the page editor.
 
-The page manager also includes an early page-tree editor. Admins can reorder pages by dragging, drag one page onto another page's "Nest dragged" target to change nesting, edit a page, and publish drafts directly from the tree. The editor supports paragraphs, headings, lists, alerts, editable tables, managed image upload/insertion, fallback image URL blocks, and image width controls.
+The page manager also includes an early page-tree editor. Admins can reorder pages by dragging, drag one page onto another page's "Nest dragged" target to change nesting, edit a page, and publish drafts directly from the tree. The editor supports paragraphs, headings, lists, alerts, editable tables, managed image upload/insertion, fallback image URL blocks, and image width controls. Supported DOCX inline formatting is preserved on import and can be edited in the page editor.
