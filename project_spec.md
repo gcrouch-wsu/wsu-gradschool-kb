@@ -1,242 +1,224 @@
-# Project Spec: Public Multi-KB Platform with Managed Assets
+# WSU Knowledge Base — Build & Handoff Guide
 
-## 1. Project Overview
+A public, multi–knowledge-base platform for Washington State University's Graduate School,
+replacing public Confluence content. Clean accessible public KBs + a focused admin for pages,
+managed assets (images/docs/video), DOCX imports, redirects, and review.
 
-This project will create a public knowledge base platform to replace or supplement public Confluence-based Graduate School knowledge base content.
-
-The application provides clean, accessible public knowledge bases and a focused administrative interface for managing pages, images, documents, videos, imports, redirects, and review workflows.
-
-The primary goals are:
-
-1. Provide clearer, more polished, and more accessible public KB front ends.
-2. Support multiple public knowledge bases from one application.
-3. Manage images, documents, and videos as first-class assets instead of unmanaged attachments.
-4. Allow staff to replace an asset (file update) without breaking public links.
-5. Show where each asset is used before replacement, archiving, or metadata changes.
-6. Improve accessibility, search, navigation, and content governance.
-7. Reduce reliance on Confluence for public-facing knowledge base content.
-
-## 2. Intended Users
-
-### Public Users
-* Graduate program staff, faculty, prospective/current students, and external partners.
-* No login required.
-
-### Administrative Users (Staff)
-* Owners, Admins, and Editors who maintain KB content and assets.
-* Requires authentication and role-based access.
+This document is the **handoff reference** for future work: what exists, how it's built, how to
+run/test it, the non-obvious gotchas, and ideas for what to build next. Resolved-issue history
+lives in git, not here.
 
 ---
 
-## Implementation Status (current repository)
+## 1. Goals
 
-The project is in a functional "Pilot Ready" state. The core architecture, high-risk
-technical features, and the multi-user/security build phase are implemented, and the
-Neon-only paths are now verified against a live database (KI-1 resolved). Remaining work is
-administrative depth (management UIs), wiring the live-DB suite into CI, and the KI-2 follow-ups.
+1. Clearer, more polished, more accessible public KB front-ends than Confluence.
+2. Multiple public KBs from one app.
+3. Images/documents/video as first-class **managed assets**, not loose attachments.
+4. Replace an asset's file without breaking its public link.
+5. Show where an asset is used before replace/archive.
+6. Strong accessibility, search, navigation, and content governance.
 
-### Built and Verified
-* **Framework**: Next.js 16 / React 19 / TypeScript / App Router / Neon Postgres.
-* **Public KB**: Home pages, article routes, hierarchical navigation, breadcrumbs, and a **3-column docs layout** (nav · article · sticky on-page TOC rail) that is fully responsive and collapses gracefully on tablet/mobile.
-* **Editor**: Block-based editor for Paragraphs, Headings (H2/H3), Lists (with auto-nesting styles), Info/Warning callouts, Images, Tables, Videos, Cards, and internal Editor Notes. Rich-text toolbar with fonts/sizes/colors, **text alignment** (left/center/right), and a **link dialog** (create or edit existing links with display text + new-tab target; `rel="noopener noreferrer"` enforced).
-* **Media & Images**: A unified **Media picker** inserts images/files from the asset library, uploads new files, or embeds YouTube/Vimeo/direct videos. Images have inline **align + resize controls** (reveal on click) and an **alt-text editor** (write a description, mark decorative, optionally save to the asset).
-* **Asset System**: Stable public routes (`/kb/{kbSlug}/files/{assetSlug}`), version history, and usage tracking.
-* **Importing**: Robust DOCX staged import with style/image extraction and review.
-* **UX/A11y**: WSU-branded professional UI, accessible color system, focus management, header sign-in identity + **Sign out**, an **accessible PDF export** (browser print-to-tagged-PDF over semantic HTML), modal dialogs with focus trap/Escape/focus-return rendered via portals, and a **publishing gate** that highlights the offending fields/images when a publish is blocked.
-* **Publish workflow**: Publish/Save-changes **saves the current form first** (no stale validation), an **unsaved-changes** indicator, and a confirm before status actions that would ignore in-progress edits.
-* **Editor Fixes**: Resolved font/size controls, cursor jumping, toolbar state highlighting, and toolbar wrapping.
+## 2. Users & roles
 
-### Built — Verified against live Neon
-The following landed in the latest build phases. Logic, type checks, and the in-memory
-test suite (86 tests) pass, and the Neon-only paths (edit locks, atomic reorder, FTS,
-editor scoping) are now **verified against a live Postgres database** by the
-`DATABASE_URL`-gated suite (`npm run test:db`) — see *KI-1 (Resolved)*.
-* **Auth & Security**: `users` and `kb_user_assignments` tables, HMAC-signed session cookies, and role-based access. **Owners/Admins are KB-wide; Editors are scoped to their assigned KBs, and that scope is enforced on both mutations and list-view visibility** (`requireKbAccess` on every editor-reachable mutation, including the resolve-by-id import-commit and redirect routes; admin list views and the asset-list endpoint filtered via `accessibleKbIds`/`filterKbsForSession`; users list owner-only — KI-3 resolved). User management (`/admin/users`, owner-only, with a **search + chips** per-editor KB-assignment picker) and KB management (`/admin/kbs`) screens are present.
-* **Per-KB theming ("Manage Styles")**: Owner-only screen (`/admin/kbs/[kbId]/styles`) to set colors (body text + separate H1/H2/H3 + accent/surface/etc.), body/heading fonts, a responsive type scale, and the editor's font/size/color palette, with a live preview, WCAG contrast checks, and JSON import/export. Validated tokens (hex/rem/font-keys) are injected as scoped CSS variables — no CSS-injection risk. Theme persistence requires a database; injection works with the default theme without one.
-* **Summary display toggle**: pages can keep a summary (used for search/meta) but optionally hide it as a lead paragraph on the public page (`page.showSummary`).
-* **Video Support**: First-class `video` asset type and editor block; YouTube/Vimeo URL → `embedId`/`provider` parsing; sandboxed, lazy-loaded, `referrerPolicy`-hardened iframes; round-trip serialization.
-* **Card Sections**: Recursive `card` block with create/reorder and background styling (Paper / Wash / Crimson). Card titles render as semantic `<strong>` (not headings) to keep the document outline clean. Parser enforces `MAX_NESTING_DEPTH = 3`.
-* **Edit Locks**: DB-backed locks with atomic acquisition (`tryAcquirePageLock`), `TIMESTAMPTZ`-owned expiry, a 60s client heartbeat / 2-minute TTL, and **write-path enforcement** — saves and reorders run in a single transaction that rolls back on a lock conflict (no partial/clobbered writes).
-* **Search (Postgres FTS)**: `tsvector` + GIN indices, `websearch_to_tsquery` with `:*` prefix/type-ahead, page-over-asset rank bias, a recursive staff-visibility prune so public search cannot leak staff-only pages, and a de-noised block-text extractor that indexes paragraph/heading/list/table/caption text (not raw JSON).
-* **Navigation**: TOC depth control (H2 vs H2+H3), recursive into Cards; editor toolbar wrapping.
-* **Maintenance**: `assertNever` exhaustiveness guards across the type union, renderer, and both serializers.
+- **Public** — no login; reads published KBs.
+- **Owner** — full access (KB-wide), plus user management, KB creation, theming, site settings.
+- **Admin** — KB-wide content/asset management.
+- **Editor** — scoped to assigned KBs only (`kb_user_assignments`).
 
-### Partially Built
-* **Multi-KB Support**: Data model, routes, a KB management screen (`/admin/kbs`), and per-KB theming exist; templates/advanced settings are still thin.
-* **Asset Library**: Table view plus a media picker and per-image alt/description editing exist; advanced file management and direct-to-blob large uploads are pending.
-* **TOC polish**: Right-rail TOC is in place; scroll-spy active-section highlighting is a future enhancement.
+Role checks: `requireAdminMutation` (valid same-origin session) + per-route role/scope checks;
+KB scope via `canAccessKb` / `accessibleKbIds` / `filterKbsForSession` in `src/lib/auth.ts`.
+
+## 3. Tech stack
+
+- **Next.js 16 / React 19 / TypeScript**, App Router. Server Components for reads; route handlers
+  under `src/app/api/admin/**` for mutations.
+- **Neon Postgres** (`@neondatabase/serverless`, HTTP driver) — all metadata/content.
+- **Vercel Blob** — image/document bytes and temporary DOCX uploads.
+- **Styling**: hand-written CSS in `src/app/globals.css` with WSU-brand CSS variables; per-KB theme
+  tokens injected as scoped CSS variables.
+- **Tests**: Vitest. **CI**: GitHub Actions (`.github/workflows/ci.yml`).
 
 ---
 
-## Known Issues & Verification Gaps
+## 4. Architecture & key modules
 
-### KI-1 — Neon/Postgres live-DB verification (Resolved)
-The edit-lock enforcement and Postgres FTS features execute **only** when `DATABASE_URL`
-is set. These paths have now been **verified against a live Neon database** by an automated,
-`DATABASE_URL`-gated integration suite (`src/lib/ki1.db.test.ts`, run with `npm run test:db`).
-The suite self-skips when no database is configured, so the default `npm test` is unaffected.
+### Content model
+- A page's body is a `ContentBlock[]` union (`src/lib/types.ts`): paragraph, heading (H2/H3), list,
+  alert (callout), image, table, asset_link, card (recursive, max depth 3), video, section_divider,
+  and a legacy `editor_note` block (superseded by anchored notes — see below).
+- **Serialization** (`src/lib/page-document.ts`): `blocksToDocumentHtml` (blocks → editor HTML) and
+  `documentHtmlToBlocks` (editor HTML → blocks). Inline rich text is sanitized by
+  `src/lib/rich-text.ts` (allowlist rebuild; the public renderer uses the same sanitizer).
 
-> **Atomicity regression found and fixed during verification.** While writing the suite we
-> found that `updatePages` had been refactored into a **non-transactional sequential loop**
-> (the original CTE/transaction machinery was dead code), so a multi-row move/reorder could
-> **half-apply** on a lock conflict — breaking the "atomic rollback" guarantee. `updatePages`
-> now writes the whole batch in a single `sql.transaction([...])`, with a data-modifying CTE
-> whose `CASE … THEN 1 / 0` guard raises `22012` to roll back the batch when any row is locked.
+### Editor (`src/components/PageDocumentEditor.tsx`)
+- The editor groups blocks into **sections**; a run of inline blocks renders as one
+  `contentEditable` "flow" surface, round-tripped through `page-document.ts` on input/blur.
+  Tables, cards, videos, and asset links are their own section editors.
+- Toolbar formatting, links, alt text, and **notes** live in `src/lib/page-editor-format.ts`
+  (selection save/restore + `document.execCommand`, plus DOM helpers). Selection plumbing is in
+  `src/lib/rich-text-selection.ts`.
+- **Notes are Word-style anchored comments**: a note wraps the selected text in an inline
+  `<span class="doc-note" data-note-body="…">`. They render as a highlight + pin in the editor and
+  are **stripped from the public page and search** — preserved in stored block HTML only because
+  the editor storage paths call `sanitizeRichText(html, { keepNotes: true })`; the public
+  `RichText` renderer omits the flag and unwraps them. Add/edit/remove via `NoteDialog` +
+  `commitNote`/`removeNote` (mirrors the link flow).
+- **Callouts**: a single info-style callout (Warning was removed; legacy warnings normalize to info
+  on next save).
 
-The three previously-unproven assumptions are now confirmed by the passing suite:
-1. ✅ A data-modifying CTE rolls back when its trailing `CASE … ELSE 1 / 0` guard raises.
-2. ✅ `sql.transaction([...])` issues `ROLLBACK` on any in-transaction error, making multi-row move/reorder batches all-or-nothing.
-3. ✅ `NeonDbError.code` surfaces the Postgres SQLSTATE `22012` that the conflict handler keys on.
+### Assets (`src/lib/kb-store.ts`, `src/lib/asset-lifecycle.ts`)
+- Stable public route `/kb/{kbSlug}/files/{assetSlug}` serves the **active version** (so file
+  replacement doesn't break links). Version history + usage tracking included.
+- **Video** assets are external links with dedicated columns (`video_provider`,
+  `video_external_id`, `video_url`); the file route 307-redirects to the canonical URL
+  (`videoDeliveryUrl` in `src/lib/video.ts`), it does not stream bytes.
+- Image **alt text** can be saved to the asset's own `alt_text` column (separate from the human
+  `description`).
 
-**Verified scenarios (all passing against live Neon):**
-* **Lock conflict / no-clobber:** a save by user B against a page locked by user A throws *"this page is locked by another user or your lock has expired"* and the row is unchanged.
-* **Atomic reorder rollback:** a multi-row batch where one page is locked fails with **no** other rows mutated (proves rollback, not partial write).
-* **Lock expiry:** once a lock passes its TTL, another user can acquire it.
-* **FTS safety/quality:** punctuation-heavy queries (`C++`, `AT&T`, `i-20`, `20% off`) return results, never a 500; a term that appears only in a list item is found; a published page under a `staff` ancestor never appears in public (non-staff) search results.
-* **Editor scoping:** an editor's `canAccessKb` is true only for assigned KBs; owners/admins are KB-wide.
+### Search (Postgres FTS, in `kb-store.ts` + `migrations`)
+- `tsvector` columns + GIN indices, maintained by a trigger using a block-text extractor that
+  indexes paragraph/heading/list/table/caption text (not raw JSON, not editor notes).
+- `websearch_to_tsquery` + `:*` prefix; query tokens sanitized so punctuation never 500s.
+- A correlated `NOT EXISTS` prune hides any public page under a `staff` ancestor from public search.
 
-**Remaining (CI):** wire `npm run test:db` into CI against a dedicated Neon test branch so these
-checks run automatically on every change (today they are run on demand).
+### Edit locks (`src/lib/db.ts`)
+- DB-backed per-page locks: `tryAcquirePageLock`, 2-minute TTL, 60s client heartbeat
+  (`AdminPageEditorForm`). All page writes go through `updatePages`, which runs the whole batch in
+  **one `sql.transaction`** so a multi-row move/reorder is atomic; a lock conflict on any row
+  aborts and rolls back the batch. Status-only changes use `updatePageStatusColumn` (no lock, no
+  full-row rewrite). **See the gotcha in §7 about the abort guard.**
 
-### KI-3 — Editor KB-scoping (Resolved)
-Editor scoping is **enforced on mutations** (page create/edit/status/reorder/lock; asset
-upload/replace/activate/status/description; DOCX import stage + commit; redirect
-create/update/delete) via `requireKbAccess`. Owners/Admins are KB-wide. All previously-noted
-gaps are now closed:
-1. ✅ **Admin list-view visibility is filtered.** The `/admin/pages` and `/admin/assets`
-   screens run their KB list through `filterKbsForSession`, and `GET /api/admin/assets` calls
-   `requireKbAccess` (an explicit `kbId` is now required), so editors can no longer browse or
-   enumerate content in KBs they aren't assigned to. The `/admin/kbs` list endpoint already
-   403s non-owners/admins. Separately, `GET /api/admin/users` is now **owner-only** (it
-   previously returned the full staff directory to any signed-in session). Scoping helpers
-   (`accessibleKbIds`, `filterKbsForSession`) live in `src/lib/auth.ts`.
-2. ✅ **The two resolve-by-id routes are guarded.**
-   `POST /api/admin/import/staged/[stagedImportId]/commit` resolves the staged import's target
-   KB (via `getStagedImportDetail`) and `DELETE`/`PATCH /api/admin/redirects/[redirectId]`
-   resolve the redirect's KB (via the new `getRedirectById` helper in `kb-store.ts`); each
-   calls `requireKbAccess` before acting and returns 404 when the record doesn't exist.
-3. **Editor self-service of users/KBs is correctly blocked** (owner-only routes). There is
-   still no per-KB "manager/admin" tier — KB-wide Admin is all-or-nothing. Add a scoped admin
-   tier only if needed (not required for pilot).
+### Site settings (`src/lib/site-settings.ts`, `/admin/settings`)
+- Owner-editable home hero copy (eyebrow/title/intro), single-row `site_settings` table, read by
+  the home page; falls back to defaults when unset or no DB.
 
-Enforcement was verified to not block Owners; the per-Editor 403/filtering path depends on the
-same live-DB verification as KI-1 (assignments live in `kb_user_assignments`).
+### Home page (`src/app/page.tsx`)
+- Renders published KBs as a **list** (scales better than cards). A signed-in **editor** also sees
+  their assigned KBs (drafts badged); owners/admins/public see all published.
 
-> **Fixed (assignment regression):** Assigning an editor to a KB previously failed with
-> `null value in column "email"` because `updateUser` issued a full-row UPDATE while the PATCH
-> route sent only changed fields. `updateUser` now does a partial update (`COALESCE` per column),
-> so role/assignment edits no longer null out the rest of the user row.
-
-### KI-2 — Recommended follow-ups (All resolved)
-* ✅ **Video asset model (Medium) — Resolved.** Managed videos now have dedicated `kb_assets`
-  columns — `video_provider`, `video_external_id`, `video_url` (migration `012`, backfilled in
-  app code for legacy rows) — instead of overloading the version `body`/synthetic mime. The
-  stable file route (`/kb/{slug}/files/{assetSlug}`) now **307-redirects** a video to its
-  canonical https URL (`videoDeliveryUrl` in `src/lib/video.ts`) rather than streaming the URL
-  as text. Verified by unit tests (`video.test.ts`) and a live-DB round-trip (`ki1.db.test.ts`).
-* ✅ **Alt text vs. asset description (Low) — Resolved.** Added a dedicated `kb_assets.alt_text`
-  column (migration `013`); "save alt to asset" now writes `altText` via `updateAssetAltText`,
-  so it no longer overloads the human-facing `description`. Verified live (`ki1.db.test.ts`).
-* ✅ **Over-deep nesting (Low) — Resolved.** Card content beyond `MAX_NESTING_DEPTH = 3` is now
-  **flattened up** into the parent level instead of being silently dropped on save
-  (`documentHtmlToBlocks` in `src/lib/page-document.ts`). Verified by `page-document.test.ts`.
-* ✅ **Status/publish toggle (Low) — Resolved.** `updatePageStatus` now updates **only** the
-  `status`/`updated_display_date` columns (`updatePageStatusColumn`) instead of rewriting the
-  whole row, so a publish/unpublish can't clobber a concurrent editor's content — which is why it
-  safely needs no edit lock. Verified live (`ki1.db.test.ts`).
-* ✅ **FTS visibility subquery scaling (Low) — Resolved.** Added index
-  `idx_kb_pages_staff_prune ON kb_pages(kb_id, visibility, path)` (migration `013`) to support the
-  staff-prune correlated subquery as KBs grow.
+### Imports & redirects
+- DOCX staged import (`/admin/import`) with style/image extraction and review before commit.
+- Auto-redirects recorded when a published page's path changes; managed at `/admin/redirects`.
 
 ---
 
-## 3. Scope & Key Features
+## 5. Data model & migrations
 
-### Content Navigation & TOC
-* **Global Navigation**: Sidebar page tree for deep hierarchy.
-* **Page TOC**: Automatically generated from page headings (recurses into Cards).
-    * ✅ Depth control (H2 only, or H2+H3) to keep TOCs clean on long pages.
-    * ✅ Rendered in a **sticky right rail** on wide screens (3-column docs layout), inline on tablet/mobile.
-* **Breadcrumbs**: Clear path back to KB home.
-
-### Managed Assets (Images, Docs, Video)
-* **Stable Links**: Asset URLs point to the *active* version, allowing file updates without link breakage.
-* ✅ **Video Support**: Link/embed videos as managed assets (YouTube/Vimeo/direct), with title and embed parsing.
-* ✅ **Media picker**: One entry point to insert library images/files, upload new files, or embed video.
-* ✅ **Alt text**: Per-image alt-text editor with a "decorative" option; optional save back to the asset; the publish gate highlights images missing alt.
-
-### Admin Editor Enhancements
-* ✅ **Toolbar Wrapping**: The editor toolbar wraps gracefully in narrow views.
-* ✅ **Card Sections**: Create, reorder, and style (Paper/Wash/Crimson) visual cards; recursive content.
-* ✅ **Text & image alignment**: Flush-left / center / flush-right for text and images.
-* ✅ **Links**: Dialog to create or edit existing links (display text, URL, open-in-new-tab).
-* ✅ **Editor Notes**: Internal notes visible only while editing — never published and excluded from public search.
-* ✅ **Multi-User Workflow**: Edit locks to prevent concurrent overwrites.
-
-### KB Management
-* **KB Admin**: UI to create new KBs, set slugs, and assign templates.
-* **Access Control**: Owner/Admin/Editor roles based on Graduate School scholarship/smartsheet-viewer patterns.
+- Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
+  there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
+  (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
+  backfills. Current head: **`014_site_settings`**.
+- Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
+  `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`.
+- Seed data: `src/lib/demo-data.ts` (used both for the no-DB in-memory mode and first-run seeding).
 
 ---
 
-## 4. Technical Architecture
+## 6. Running, testing, CI
 
-### Tech Stack
-* **Front End**: Next.js (App Router), React 19.
-* **Styling**: Vanilla CSS with professional variables (WSU brand).
-* **Database**: Neon Postgres (relational metadata, content, audit logs).
-* **Storage**: Vercel Blob (images, documents, temporary imports).
+```bash
+npm install
+npm run dev        # http://localhost:3000
+npm run build      # production build
+npm run check      # tsc --noEmit
+npm test           # Vitest unit suite (in-memory; live-DB tests self-skip)
+npm run test:db    # live-DB integration suite against DATABASE_URL (reads .env.local)
+```
 
-### Security
-* **Authentication**: Password-based login with hashed credentials in Postgres.
-* **Sessions**: HMAC-signed HTTP-only cookies with sliding expiration.
-* **CSRF**: Same-origin enforcement (Origin/Referer) + SameSite: Lax cookies.
-* **Rate Limiting**: Applied to login and public search.
+**Environment** (`.env.local`; see `.env.example`):
+- `KB_ADMIN_EMAIL` / `KB_ADMIN_PASSWORD` / `KB_ADMIN_SESSION_SECRET` — bootstrap owner + cookie
+  signing (aliases `BOOTSTRAP_OWNER_*` also accepted). Required in production.
+- `DATABASE_URL` — Neon connection string. **Unset = in-memory seed mode** (fine for quick local UI
+  work; not durable). Set = Neon (schema auto-creates/seeds).
+- `BLOB_READ_WRITE_TOKEN` — Vercel Blob; without it, DOCX import skips images.
 
----
-
-## 5. Build Plan
-
-### Phase 1: Authentication & User Management — ✅ Implemented (pending live-DB verification)
-* ✅ Implement `users` and `kb_user_assignments` tables.
-* ✅ Admin UI for managing users and roles (`/admin/users`).
-* ✅ Port authentication logic from `wsu-gradschool-smartsheet-viewer`; header identity + Sign out.
-
-### Phase 2: KB Management UI — ✅ Implemented (basic)
-* ✅ KB management screen (`/admin/kbs`) to create/edit knowledge bases.
-* ⬜ Templates and advanced per-KB settings remain thin.
-
-### Phase 3: Editor Content Evolution — ✅ Implemented
-* ✅ **Video Assets**: Video support in the asset library and a "Video Block" in the editor (with YouTube/Vimeo embed parsing), backed by dedicated `video_provider`/`video_external_id`/`video_url` columns (KI-2 resolved).
-* ✅ **Card Sections**: Block model refactored to support "Card" containers with reorderable children and style attributes.
-* ✅ **Media picker, link dialog, text/image alignment, alt-text editing, and internal editor notes.**
-* ✅ **Toolbar Polish**: Toolbar wraps correctly; button hover contrast fixed.
-
-### Phase 4: Navigation Depth & Layout — ✅ Implemented
-* ✅ `TableOfContents` and editor metadata support configurable depth (H2 vs H2+H3), recursing into Cards.
-* ✅ Responsive 3-column docs layout with a sticky right-rail TOC.
-
-### Phase 5: Production Hardening — ✅ Implemented (one external step: add the CI DB secret)
-* ~~Resolve **KI-1**~~ — ✅ done. Live-DB verification of edit locks, atomic reorder, FTS, and
-  editor scoping is implemented as the gated suite `npm run test:db` and passes against Neon.
-  An atomicity regression found during this work was fixed. A GitHub Actions workflow
-  (`.github/workflows/ci.yml`) runs type-check + unit tests on every push/PR and runs the
-  live-DB suite when a `DATABASE_URL` repo secret (a Neon **test** branch) is configured.
-  **Remaining:** add that secret in GitHub repo settings.
-* ~~Close **KI-3**~~ — ✅ done (list-view filtering, owner-only users list, and the two resolve-by-id routes are all guarded).
-* ~~Address **KI-2** follow-ups~~ — ✅ all done (video asset model, alt-text column, card-nesting flatten, status-only update, FTS prune index).
-* Optional polish: TOC scroll-spy, deeper KB templates/settings.
+**CI** (`.github/workflows/ci.yml`): on every push/PR runs type-check + unit tests; runs
+`npm run test:db` **only when a `DATABASE_URL` repo secret is set** (point it at a dedicated Neon
+**test** branch — the suite writes/deletes data). The live-DB step is set per-step, never job-wide,
+so the in-memory run never sees a database.
 
 ---
 
-## 6. Acceptance Criteria
+## 7. Conventions & gotchas (read before changing these areas)
 
-1.  **Professionalism**: UI matches WSU brand and feels high-end/stable.
-2.  **Accessibility**: WCAG 2.2 AA compliant. No "click here" links or missing alt text.
-3.  **Durability**: Asset replacement never breaks a public link. *(✅ Managed videos now also keep a stable public URL — the file route redirects to the canonical video link; see KI-2.)*
-4.  **Security**: Only authorized editors can modify assigned KBs, and public search never surfaces staff-only pages. *(✅ Met: editor-scope enforcement on mutations, admin **list-view** filtering, the per-editor `canAccessKb` path, and the staff-visibility FTS prune are all implemented and **verified against live Neon** — see KI-1.)*
-5.  **Simplicity**: The system is easier to use and navigate than Confluence.
+- **Postgres folds constant expressions at plan time.** The edit-lock abort guard divides by the
+  *non-constant* updated-row count — `SELECT 1 / (SELECT count(*) FROM updated)`. A literal `1 / 0`
+  is folded and raises on **every** save, not just conflicts. Keep the divisor runtime-evaluated.
+- **`sanitizeRichText` is used for both storage and public render.** Notes survive only with
+  `{ keepNotes: true }` (editor storage paths in `page-document.ts`); the default strips them. Don't
+  flip the default on, or note bodies leak to the public page/search.
+- **`getDataset()` in `kb-store.ts` is wrapped in React `cache()`.** Within a request it memoizes;
+  raw SQL writes won't be reflected by a cached read in the same request. Tests that need the real
+  write path use the lower-level `db.ts` functions directly.
+- **`@next/env` skips `.env.local` when `NODE_ENV=test`.** The DB test setup
+  (`vitest.db.setup.ts`) parses `.env.local` manually for that reason.
+- **In-memory vs Neon**: everything works without a DB via the seed dataset, but locks, FTS, users,
+  assignments, theming persistence, and site settings only do something real with `DATABASE_URL`.
+- **The editor surface binds once** (stable ref callback in `PageDocumentEditor`); re-creating the
+  ref each render previously thrashed selection/caret. Keep callbacks stable / behind refs.
+- **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`),
+  not on by default in dev.
 
-> **Production-readiness gate:** Criterion 4's live-DB checks (lock-conflict, atomic-rollback,
-> FTS-safety, editor scoping) now **pass against a real Neon instance** via `npm run test:db`
-> (KI-1 resolved), so criterion 4 is met. Criterion 3 now holds for managed videos too (KI-2 video model resolved).
+---
+
+## 8. Current feature status
+
+**Working & verified (unit + live-DB):**
+- Multi-KB public site, 3-column docs layout, breadcrumbs, depth-controlled right-rail TOC.
+- Block editor (rich text, alignment, links, media picker, cards, tables, video, anchored notes).
+- Managed assets with stable links + versions; managed video model; per-image alt text.
+- Postgres FTS with staff-visibility prune and punctuation safety.
+- Auth (HMAC cookies), Owner/Admin/Editor roles, per-KB editor scoping on mutations **and** list
+  views; owner-only user management with a search+chips KB-assignment picker.
+- Per-KB theming ("Manage Styles"); owner Site Settings; summary-display toggle.
+- DOCX staged import; auto-redirects.
+- Edit locks with atomic multi-row writes; accessible PDF export; publishing gate.
+- CI (type-check + unit always; live-DB when the secret is configured).
+
+**Thin / partial:**
+- KB management: create/edit + theming exist; **templates and advanced per-KB settings** are thin.
+- Asset library: table + media picker + alt/description editing; **no advanced file management or
+  direct-to-blob large uploads**.
+- Notes UX: inline highlight + pin only (no positioned margin rail).
+- TOC: no scroll-spy active-section highlighting.
+
+## 9. Known limitations
+
+- No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
+- Image insertion does not yet prefill alt from the asset's `alt_text` (the column exists; the
+  read/prefill path in `MediaPicker` is not wired).
+- The contenteditable editor is custom; complex selection edge cases may still surface and should be
+  verified in a real browser after editor changes.
+- Rate limiting exists for login/search but hasn't been load-verified.
+
+---
+
+## 10. Future improvement ideas
+
+**Editor**
+- Notes: a positioned **margin/comment rail** (true Word-style), comment threads/resolve, and an
+  author/timestamp per note (would move note bodies from the inline attribute to a page-level store).
+- Consider a hardened editor core (e.g., a maintained rich-text framework) if contenteditable
+  selection bugs persist.
+- Wire alt-text **prefill** from the asset's `alt_text` when inserting a library image.
+
+**Public experience**
+- Home: search/filter and pagination as KB count grows; optional grouping/categories.
+- TOC scroll-spy; "copy link to heading"; previous/next page navigation.
+
+**KB management**
+- KB **templates** and advanced per-KB settings (default visibility, nav options, landing layout).
+- Bulk page operations; trash/restore; scheduled publish.
+
+**Assets**
+- Direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact view.
+
+**Governance & ops**
+- Audit log of admin actions; per-KB activity feed.
+- Add `npm run test:db` to CI against an ephemeral Neon branch per PR (currently one shared secret).
+- More integration coverage (publish gate, import commit, redirect creation) in the gated suite.
+- Accessibility audit pass (automated axe run in CI) and a real rate-limit load test.
+
+**Access control**
+- Optional scoped per-KB admin/manager tier if delegated administration is needed.
