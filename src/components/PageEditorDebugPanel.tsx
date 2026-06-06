@@ -33,7 +33,7 @@ export function PageEditorDebugPanel() {
   }
 
   return (
-    <details className="page-editor-debug" open>
+    <details className="page-editor-debug">
       <summary>Editor toolbar debug</summary>
       <p className="meta">
         Last action at <strong>{snap.at || "—"}</strong>. Persist logs with{" "}

@@ -34,8 +34,11 @@ let snapshot: PageEditorDebugSnapshot = { ...initial };
 const listeners = new Set<() => void>();
 
 export function isPageEditorDebugEnabled(): boolean {
+  // Opt-in only — this diagnostic panel does not show during normal editing
+  // (including `npm run dev`). Turn it on with `?editorDebug=1` on the URL or
+  // `localStorage.setItem("kb-editor-debug", "1")` when diagnosing the toolbar.
   if (typeof window === "undefined") {
-    return process.env.NODE_ENV === "development";
+    return false;
   }
   try {
     if (localStorage.getItem("kb-editor-debug") === "1") {
@@ -47,7 +50,7 @@ export function isPageEditorDebugEnabled(): boolean {
   } catch {
     /* ignore */
   }
-  return process.env.NODE_ENV === "development";
+  return false;
 }
 
 export function getPageEditorDebugSnapshot(): PageEditorDebugSnapshot {
