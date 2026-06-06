@@ -7,6 +7,7 @@
 
 export interface ThemeColors {
   ink: string; // body text
+  heading: string; // heading text (H1–H4)
   accent: string; // brand / links / buttons
   muted: string; // secondary text
   line: string; // borders
@@ -66,6 +67,7 @@ export function fontStack(key: string): string {
 export const DEFAULT_THEME: KbTheme = {
   colors: {
     ink: "#1d1a1b",
+    heading: "#1d1a1b",
     accent: "#a60f2d",
     muted: "#6b6466",
     line: "#e4ddd8",
@@ -149,6 +151,7 @@ export function mergeTheme(input: unknown): KbTheme {
   return {
     colors: {
       ink: safeHex(c.ink, DEFAULT_THEME.colors.ink),
+      heading: safeHex(c.heading, DEFAULT_THEME.colors.heading),
       accent: safeHex(c.accent, DEFAULT_THEME.colors.accent),
       muted: safeHex(c.muted, DEFAULT_THEME.colors.muted),
       line: safeHex(c.line, DEFAULT_THEME.colors.line),
@@ -240,6 +243,7 @@ export function themeToEditorPalette(theme: KbTheme): EditorPalette {
 export function themeToCssVars(theme: KbTheme): Record<string, string> {
   return {
     "--ink": theme.colors.ink,
+    "--heading-color": theme.colors.heading,
     "--wsu-crimson": theme.colors.accent,
     "--wsu-crimson-dark": darken(theme.colors.accent),
     "--muted": theme.colors.muted,

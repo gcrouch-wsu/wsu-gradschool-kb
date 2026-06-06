@@ -13,7 +13,8 @@ import {
 } from "@/lib/kb-theme";
 
 const COLOR_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: string }[] = [
-  { key: "ink", label: "Text", help: "Body and heading text" },
+  { key: "ink", label: "Body text", help: "Paragraph and list text" },
+  { key: "heading", label: "Heading text", help: "H1–H3 headings" },
   { key: "accent", label: "Brand / accent", help: "Links, buttons, highlights" },
   { key: "muted", label: "Muted text", help: "Secondary captions and meta" },
   { key: "paper", label: "Surface", help: "Cards and panels" },
@@ -310,8 +311,9 @@ export function ThemeEditor({
 
         <div className="theme-contrast">
           <strong className="meta">Accessibility (WCAG contrast)</strong>
-          <ContrastRow bg={theme.colors.paper} fg={theme.colors.ink} label="Text on surface" />
-          <ContrastRow bg={theme.colors.wash} fg={theme.colors.ink} label="Text on background" />
+          <ContrastRow bg={theme.colors.paper} fg={theme.colors.ink} label="Body text on surface" />
+          <ContrastRow bg={theme.colors.wash} fg={theme.colors.ink} label="Body text on background" />
+          <ContrastRow bg={theme.colors.wash} fg={theme.colors.heading} label="Heading on background" />
           <ContrastRow bg={theme.colors.paper} fg={theme.colors.muted} label="Muted on surface" />
           <ContrastRow bg={theme.colors.accent} fg="#ffffff" label="Button label on brand" />
           <ContrastRow bg={theme.colors.paper} fg={theme.colors.accent} label="Link on surface" />

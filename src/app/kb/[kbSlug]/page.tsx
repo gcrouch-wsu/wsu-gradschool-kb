@@ -20,7 +20,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
   const themeVars = themeToCssVars(kb.theme ?? DEFAULT_THEME) as CSSProperties;
 
   return (
-    <div style={themeVars}>
+    <div className="kb-theme-root" style={themeVars}>
       <section className="hero">
         <div className="site-header__inner">
           <div>

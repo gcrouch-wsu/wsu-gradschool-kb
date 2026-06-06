@@ -3,6 +3,7 @@
   --wsu-crimson-dark: #7f0b22;
   --wsu-gray: #5e6a71;
   --ink: #1d1a1b;
+  --heading-color: var(--ink);
   --muted: #6b6466;
   --line: #e4ddd8;
   --line-strong: #d2c9c3;
@@ -53,6 +54,11 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Wrapper that carries a KB theme: scale the base body text from the theme.
+   (rem is root-relative, so this is independent of where the wrapper sits.) */
+.kb-theme-root {
   font-size: var(--base-size);
 }
 
@@ -244,7 +250,7 @@ h4 {
   line-height: 1.25;
   margin: 0;
   letter-spacing: -0.02em;
-  color: var(--ink);
+  color: var(--heading-color);
   font-family: var(--font-heading);
 }
 
@@ -2504,6 +2510,7 @@ article li > ol {
   padding: 1.5rem;
   color: var(--ink);
   font-family: var(--font-body);
+  font-size: var(--base-size);
 }
 
 .theme-preview__surface a {

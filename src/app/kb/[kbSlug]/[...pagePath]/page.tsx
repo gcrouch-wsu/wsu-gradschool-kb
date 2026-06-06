@@ -85,7 +85,7 @@ export default async function KbArticlePage({
   const themeVars = themeToCssVars(kb.theme ?? DEFAULT_THEME) as CSSProperties;
 
   return (
-    <div className="page-shell" style={themeVars}>
+    <div className="page-shell kb-theme-root" style={themeVars}>
       <div className={`layout${showTocRail ? " layout--with-toc" : ""}`}>
         <aside className="sidebar page-tree" aria-label="Section navigation">
           <strong>{kb.title}</strong>
