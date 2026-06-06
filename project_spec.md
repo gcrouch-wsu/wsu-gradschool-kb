@@ -46,10 +46,12 @@ work is administrative depth (management UIs) and the production verification no
 * **Editor Fixes**: Resolved font/size controls, cursor jumping, toolbar state highlighting, and toolbar wrapping.
 
 ### Built — Pending Live-DB Verification
-The following landed in the latest build phase. Logic, type checks, and the in-memory
-test suite (81 tests) pass, but the Neon-only paths have **not** been exercised against a
+The following landed in the latest build phases. Logic, type checks, and the in-memory
+test suite (86 tests) pass, but the Neon-only paths have **not** been exercised against a
 live Postgres instance (see *Known Issues & Verification Gaps*).
-* **Auth & Security**: `users` and `kb_user_assignments` tables, HMAC-signed session cookies, and role-based access (Owner/Admin/Editor) with KB-scoping. Admin UI for managing users (`/admin/users`) and KBs (`/admin/kbs`) is present.
+* **Auth & Security**: `users` and `kb_user_assignments` tables, HMAC-signed session cookies, and role-based access. **Owners/Admins are KB-wide; Editors are scoped to their assigned KBs and that scope is now enforced** (`requireKbAccess` on every editor-reachable mutation — see KI-3 for the remaining gaps). User management (`/admin/users`, with per-editor KB assignment) and KB management (`/admin/kbs`) screens are present.
+* **Per-KB theming ("Manage Styles")**: Owner-only screen (`/admin/kbs/[kbId]/styles`) to set colors (body text + separate H1/H2/H3 + accent/surface/etc.), body/heading fonts, a responsive type scale, and the editor's font/size/color palette, with a live preview, WCAG contrast checks, and JSON import/export. Validated tokens (hex/rem/font-keys) are injected as scoped CSS variables — no CSS-injection risk. Theme persistence requires a database; injection works with the default theme without one.
+* **Summary display toggle**: pages can keep a summary (used for search/meta) but optionally hide it as a lead paragraph on the public page (`page.showSummary`).
 * **Video Support**: First-class `video` asset type and editor block; YouTube/Vimeo URL → `embedId`/`provider` parsing; sandboxed, lazy-loaded, `referrerPolicy`-hardened iframes; round-trip serialization.
 * **Card Sections**: Recursive `card` block with create/reorder and background styling (Paper / Wash / Crimson). Card titles render as semantic `<strong>` (not headings) to keep the document outline clean. Parser enforces `MAX_NESTING_DEPTH = 3`.
 * **Edit Locks**: DB-backed locks with atomic acquisition (`tryAcquirePageLock`), `TIMESTAMPTZ`-owned expiry, a 60s client heartbeat / 2-minute TTL, and **write-path enforcement** — saves and reorders run in a single transaction that rolls back on a lock conflict (no partial/clobbered writes).
@@ -58,9 +60,9 @@ live Postgres instance (see *Known Issues & Verification Gaps*).
 * **Maintenance**: `assertNever` exhaustiveness guards across the type union, renderer, and both serializers.
 
 ### Partially Built
-* **Multi-KB Support**: Data model, routes, and a KB management screen (`/admin/kbs`) exist; templates/advanced settings are still thin.
+* **Multi-KB Support**: Data model, routes, a KB management screen (`/admin/kbs`), and per-KB theming exist; templates/advanced settings are still thin.
 * **Asset Library**: Table view plus a media picker and per-image alt/description editing exist; advanced file management and direct-to-blob large uploads are pending.
-* **User Management UI**: Auth backend, roles, and a `/admin/users` screen exist; finer KB-role assignment flows can be deepened.
+* **Editor KB-scoping**: Mutations are enforced; admin **list** views and a couple of resolve-by-id routes are not yet scoped (see **KI-3**).
 * **TOC polish**: Right-rail TOC is in place; scroll-spy active-section highlighting is a future enhancement.
 
 ---
@@ -89,6 +91,25 @@ without a database, but they must be confirmed before this is considered product
 * **Lock expiry:** Let A's lock pass its 2-minute TTL without a heartbeat; B should then acquire and save successfully.
 * **FTS safety/quality:** Search punctuation-heavy queries (`C++`, `AT&T`, `i-20`, `20% off`) → results, never a 500. Confirm a term that appears only in a list item or table cell is found. Confirm a published page under a `staff` ancestor never appears in public (non-staff) search results.
 * Add these as an automated integration suite gated on `DATABASE_URL` (skipped when unset) so CI covers them against a Neon test branch.
+
+### KI-3 — Editor KB-scoping: remaining gaps (Medium)
+Editor scoping is **enforced on mutations** (page create/edit/status/reorder/lock; asset
+upload/replace/activate/status/description; DOCX import stage + commit; redirect creation)
+via `requireKbAccess`. Owners/Admins are KB-wide. What's **not** yet covered:
+1. **Admin list views are not filtered (visibility, not mutation).** An editor can still *see*
+   pages, assets, and KBs from KBs they aren't assigned to in the admin tables (`/admin/pages`,
+   `/admin/assets`, `/admin/kbs`). They cannot modify them (mutations are blocked), but the
+   lists should be filtered to assigned KBs for editors. Scope the list endpoints/queries.
+2. **Two resolve-by-id routes are unguarded** (lower risk — their creation entry points are
+   guarded): `POST /api/admin/import/staged/[stagedImportId]/commit` and
+   `DELETE /api/admin/redirects/[redirectId]`. Harden by resolving the record's KB and calling
+   `requireKbAccess` before acting.
+3. **Editor self-service of users/KBs is correctly blocked** (owner-only routes), but there is
+   no per-KB "manager/admin" tier — KB-wide Admin is all-or-nothing. Add a scoped admin tier
+   only if needed.
+
+Enforcement was verified to not block Owners; the per-Editor 403 path depends on the same
+live-DB verification as KI-1 (assignments live in `kb_user_assignments`).
 
 ### KI-2 — Recommended follow-ups (Medium / Low)
 * **Video asset model (Medium)**: Video links are stored in the asset `body`/version model designed for binary blobs (`fileSizeBytes: 0`, synthetic mime). The "replace file without breaking link" guarantee doesn't map to external URLs, and the stable file route would stream the URL as text. Give managed video dedicated columns (`provider`, `external_id`) instead of overloading `AssetVersion.body`.
@@ -167,6 +188,7 @@ without a database, but they must be confirmed before this is considered product
 
 ### Phase 5: Production Hardening — ⬜ Next
 * Resolve **KI-1** (live-DB verification of edit locks + FTS) and stand up the gated integration suite.
+* Close **KI-3** (filter admin list views by editor assignment; guard the two resolve-by-id routes).
 * Address **KI-2** follow-ups (video asset model, nesting-overflow handling).
 * Optional polish: TOC scroll-spy, deeper KB templates/settings.
 
@@ -177,7 +199,7 @@ without a database, but they must be confirmed before this is considered product
 1.  **Professionalism**: UI matches WSU brand and feels high-end/stable.
 2.  **Accessibility**: WCAG 2.2 AA compliant. No "click here" links or missing alt text.
 3.  **Durability**: Asset replacement never breaks a public link. *(Caveat: does not yet hold for video links — see KI-2.)*
-4.  **Security**: Only authorized editors can modify assigned KBs, and public search never surfaces staff-only pages. *(Enforcement and the staff-visibility prune are implemented but require the KI-1 live-DB verification before this criterion can be marked met.)*
+4.  **Security**: Only authorized editors can modify assigned KBs, and public search never surfaces staff-only pages. *(Editor-scope enforcement on mutations and the staff-visibility prune are implemented; admin **list-view** filtering for editors is still pending (**KI-3**), and the per-editor 403 path plus the FTS prune require the **KI-1** live-DB verification before this criterion is fully met.)*
 5.  **Simplicity**: The system is easier to use and navigate than Confluence.
 
 > **Production-readiness gate:** Criteria 3 and 4 depend on the verification described in
