@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { updatePageLayout } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 interface LayoutBody {
   kbId?: unknown;
@@ -34,6 +34,11 @@ export async function PATCH(request: Request) {
 
   if (!kbId || items.length === 0) {
     return NextResponse.json({ message: "Knowledge base and layout items are required." }, { status: 400 });
+  }
+
+  const denied = await requireKbAccess(guard.session, kbId);
+  if (denied) {
+    return denied;
   }
 
   try {

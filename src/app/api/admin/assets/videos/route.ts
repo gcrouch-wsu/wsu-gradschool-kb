@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createManagedAsset } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import { parseVideoUrl } from "@/lib/video";
 
 export async function POST(request: Request) {
@@ -10,6 +10,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body || !body.kbId || !body.url) {
     return NextResponse.json({ message: "Knowledge base ID and URL are required." }, { status: 400 });
+  }
+
+  const denied = await requireKbAccess(guard.session, body.kbId);
+  if (denied) {
+    return denied;
   }
 
   const { provider, embedId } = parseVideoUrl(body.url);

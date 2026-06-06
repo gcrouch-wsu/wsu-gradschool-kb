@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { insertUser, listUsers, replaceUserAssignments } from "@/lib/db-users";
+import { insertUser, listUserAssignments, listUsers, replaceUserAssignments } from "@/lib/db-users";
 import { isDatabaseEnabled } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requireAdminMutation } from "@/lib/security";
@@ -19,8 +19,13 @@ export async function GET(request: Request) {
 
   try {
     const users = await listUsers();
-    // Scrub password hashes before sending to client
-    const safeUsers = users.map(({ passwordHash, ...user }) => user);
+    // Scrub password hashes and attach each editor's KB assignments.
+    const safeUsers = await Promise.all(
+      users.map(async ({ passwordHash, ...user }) => ({
+        ...user,
+        kbAssignments: user.role === "editor" ? await listUserAssignments(user.id) : [],
+      })),
+    );
     return NextResponse.json({ users: safeUsers });
   } catch (error) {
     return NextResponse.json({ message: "Failed to list users." }, { status: 500 });

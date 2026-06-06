@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { tryAcquirePageLock, releasePageLock, isDatabaseEnabled } from "@/lib/db";
-import { requireAdminMutation } from "@/lib/security";
+import { getPageByIdForAdmin } from "@/lib/kb-store";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export async function POST(
   request: Request,
@@ -15,6 +16,12 @@ export async function POST(
 
   const { pageId } = await context.params;
   const userEmail = guard.session.email;
+
+  const lockPage = await getPageByIdForAdmin(pageId);
+  const denied = await requireKbAccess(guard.session, lockPage?.kbId);
+  if (denied) {
+    return denied;
+  }
 
   try {
     const ok = await tryAcquirePageLock(pageId, userEmail);

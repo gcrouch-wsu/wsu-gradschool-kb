@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRedirectsForAdmin, upsertManualRedirect } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -40,6 +40,11 @@ export async function POST(request: Request) {
 
   if (!kbId || !fromPath || !toPath) {
     return NextResponse.json({ message: "kbId, fromPath, and toPath are required." }, { status: 400 });
+  }
+
+  const denied = await requireKbAccess(guard.session, kbId);
+  if (denied) {
+    return denied;
   }
 
   try {

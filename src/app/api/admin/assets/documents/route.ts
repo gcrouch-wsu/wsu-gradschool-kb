@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isBlobEnabled, isSupportedDocumentType, uploadAssetBlob } from "@/lib/blob";
 import { createManagedAsset, getKbById } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -20,6 +20,10 @@ export async function POST(request: Request) {
   const description = formData?.get("description");
   if (!(file instanceof File) || typeof kbId !== "string") {
     return NextResponse.json({ message: "File and knowledge base are required." }, { status: 400 });
+  }
+  const denied = await requireKbAccess(guard.session, kbId);
+  if (denied) {
+    return denied;
   }
   if (!isSupportedDocumentType(file.type)) {
     return NextResponse.json(

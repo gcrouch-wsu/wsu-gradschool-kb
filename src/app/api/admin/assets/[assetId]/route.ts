@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { updateAssetDescription } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { getAssetHomeKbId, updateAssetDescription } from "@/lib/kb-store";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 /** Update editable asset metadata (currently the description / default alt text). */
 export async function PATCH(request: Request, context: { params: Promise<{ assetId: string }> }) {
@@ -10,6 +10,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ asset
   }
 
   const { assetId } = await context.params;
+
+  const denied = await requireKbAccess(guard.session, await getAssetHomeKbId(assetId));
+  if (denied) {
+    return denied;
+  }
+
   const body = (await request.json().catch(() => null)) as { description?: unknown } | null;
   if (!body || typeof body.description !== "string") {
     return NextResponse.json({ message: "A description is required." }, { status: 400 });

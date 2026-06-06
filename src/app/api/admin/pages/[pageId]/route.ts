@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAssetStatusById, getKbById, updatePage } from "@/lib/kb-store";
+import { getAssetStatusById, getKbById, getPageByIdForAdmin, updatePage } from "@/lib/kb-store";
 import { validatePageForPublish } from "@/lib/publish-gate";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageStatus, PageVisibility } from "@/lib/types";
 
 interface UpdateBody {
@@ -31,6 +31,14 @@ export async function PATCH(
   }
 
   const { pageId } = await context.params;
+
+  // Editors may only modify pages in a KB they are assigned to.
+  const existingPage = await getPageByIdForAdmin(pageId);
+  const denied = await requireKbAccess(guard.session, existingPage?.kbId);
+  if (denied) {
+    return denied;
+  }
+
   const body = (await request.json().catch(() => null)) as UpdateBody | null;
   if (!body) {
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });

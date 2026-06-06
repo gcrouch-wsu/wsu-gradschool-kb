@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { commitImportWithImagePromotion } from "@/lib/import-commit";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageVisibility } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -42,6 +42,11 @@ export async function POST(request: Request) {
   }
   if (blocks.length === 0) {
     return NextResponse.json({ message: "There is no content to import." }, { status: 400 });
+  }
+
+  const denied = await requireKbAccess(guard.session, kbId);
+  if (denied) {
+    return denied;
   }
 
   try {

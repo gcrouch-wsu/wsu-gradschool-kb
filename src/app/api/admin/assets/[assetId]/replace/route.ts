@@ -6,7 +6,7 @@ import {
   uploadAssetBlob,
 } from "@/lib/blob";
 import { addDraftReplacementVersion, getAssetAdminDetail } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -25,6 +25,10 @@ export async function POST(
   const detail = await getAssetAdminDetail(assetId);
   if (!detail) {
     return NextResponse.json({ message: "Asset not found." }, { status: 404 });
+  }
+  const denied = await requireKbAccess(guard.session, detail.asset.homeKbId);
+  if (denied) {
+    return denied;
   }
 
   const formData = await request.formData().catch(() => null);

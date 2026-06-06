@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createPage } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export async function POST(request: Request) {
   const guard = await requireAdminMutation(request);
@@ -9,6 +9,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body || !body.kbId || !body.title) {
     return NextResponse.json({ message: "Knowledge base and title are required." }, { status: 400 });
+  }
+
+  const denied = await requireKbAccess(guard.session, body.kbId);
+  if (denied) {
+    return denied;
   }
 
   try {

@@ -323,6 +323,12 @@ export async function getAssetStatusById(assetId: string): Promise<string | null
   return dataset.assets.find((asset) => asset.id === assetId)?.status ?? null;
 }
 
+/** Home KB of an asset (any status), for KB-scope checks. Null if not found. */
+export async function getAssetHomeKbId(assetId: string): Promise<string | null> {
+  const dataset = await getDataset();
+  return dataset.assets.find((asset) => asset.id === normalizeRecordId(assetId))?.homeKbId ?? null;
+}
+
 /**
  * Every place an asset is used across pages, for impact review before replacing
  * or archiving it (project_spec.md §11). Reads current page content.

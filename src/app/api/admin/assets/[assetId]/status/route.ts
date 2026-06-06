@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAssetAdminDetail, getKbById, updateAssetStatus } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { AssetStatus } from "@/lib/types";
 
 interface StatusBody {
@@ -33,6 +33,10 @@ export async function PATCH(
   const existing = await getAssetAdminDetail(assetId);
   if (!existing) {
     return NextResponse.json({ message: "Asset not found." }, { status: 404 });
+  }
+  const denied = await requireKbAccess(guard.session, existing.asset.homeKbId);
+  if (denied) {
+    return denied;
   }
 
   try {

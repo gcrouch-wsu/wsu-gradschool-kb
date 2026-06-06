@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAssetStatusById, getKbById, getPageByIdForAdmin, updatePageStatus } from "@/lib/kb-store";
 import { validatePageForPublish } from "@/lib/publish-gate";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { PageStatus } from "@/lib/types";
 
 interface StatusBody {
@@ -19,6 +19,13 @@ export async function PATCH(
 
   const params = (await context.params) as { pageId?: unknown };
   const pageId = typeof params.pageId === "string" ? params.pageId : "";
+
+  const existingPage = await getPageByIdForAdmin(pageId);
+  const denied = await requireKbAccess(guard.session, existingPage?.kbId);
+  if (denied) {
+    return denied;
+  }
+
   const body = (await request.json().catch(() => null)) as StatusBody | null;
   const status: PageStatus | null =
     body?.status === "published" ||

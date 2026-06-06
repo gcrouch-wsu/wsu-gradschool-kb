@@ -1,8 +1,31 @@
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { canAccessKb, getCurrentAdminSession } from "@/lib/auth";
 import { isSameOrigin } from "@/lib/origin";
 
 export { isSameOrigin };
+
+/**
+ * KB-scope check for editor-reachable mutations. Owners/Admins are KB-wide;
+ * Editors must be assigned to the target KB (kb_user_assignments). Returns a
+ * ready-to-return error response when access is denied, or null when allowed.
+ */
+export async function requireKbAccess(
+  session: { userId: string; email: string; role: string },
+  kbId: string | null | undefined,
+): Promise<NextResponse | null> {
+  if (!kbId) {
+    return NextResponse.json({ message: "Knowledge base not found." }, { status: 404 });
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allowed = await canAccessKb(session as any, kbId);
+  if (!allowed) {
+    return NextResponse.json(
+      { message: "You are not assigned to this knowledge base." },
+      { status: 403 },
+    );
+  }
+  return null;
+}
 
 type AdminGuardResult =
   | { ok: true; email: string; session: any }

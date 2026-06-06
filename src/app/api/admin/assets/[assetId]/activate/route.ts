@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { activateAssetVersion, getAssetAdminDetail, getKbById } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { activateAssetVersion, getAssetAdminDetail, getAssetHomeKbId, getKbById } from "@/lib/kb-store";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -18,6 +18,12 @@ export async function POST(
   }
 
   const { assetId } = await context.params;
+
+  const denied = await requireKbAccess(guard.session, await getAssetHomeKbId(assetId));
+  if (denied) {
+    return denied;
+  }
+
   const body = (await request.json().catch(() => null)) as ActivateBody | null;
   const versionId = typeof body?.versionId === "string" ? body.versionId : "";
   if (!versionId) {
