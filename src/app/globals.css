@@ -297,6 +297,67 @@ p {
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
+/* Home page knowledge-base list (scales better than cards as KB count grows). */
+.kb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.kb-list__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.1rem 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.kb-list__item:first-child {
+  border-top: none;
+}
+
+.kb-list__item:hover {
+  background: var(--wash);
+}
+
+.kb-list__main {
+  min-width: 0;
+}
+
+.kb-list__title {
+  margin: 0;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.kb-list__desc {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.kb-list__meta {
+  margin: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .kb-list__item {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+}
+
 .card { min-width: 0; 
   background: var(--paper);
   border: 1px solid var(--line);
@@ -1929,6 +1990,28 @@ article li > ol {
 
 .doc-editor-note__body {
   display: block;
+}
+
+/* Anchored editor notes (Word-style comments). Highlighted in the editor; the
+   public sanitizer strips the span, so this never appears on published pages. */
+.doc-note {
+  background: color-mix(in srgb, #f6c343 28%, transparent);
+  border-bottom: 2px solid #d99100;
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0 1px;
+}
+
+.doc-note::after {
+  content: "💬";
+  font-size: 0.7em;
+  vertical-align: super;
+  margin-left: 1px;
+  user-select: none;
+}
+
+.doc-note:hover {
+  background: color-mix(in srgb, #f6c343 45%, transparent);
 }
 
 /* Media picker modal */

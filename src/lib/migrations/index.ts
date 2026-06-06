@@ -412,6 +412,21 @@ const migrations: Migration[] = [
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_pages_staff_prune ON kb_pages(kb_id, visibility, path)`;
     },
   },
+  {
+    id: "014_site_settings",
+    async up(sql) {
+      // Single-row, owner-editable platform settings (currently the home hero copy).
+      await sql`
+        CREATE TABLE IF NOT EXISTS site_settings (
+          id TEXT PRIMARY KEY DEFAULT 'singleton',
+          home_eyebrow TEXT NOT NULL DEFAULT '',
+          home_title TEXT NOT NULL DEFAULT '',
+          home_intro TEXT NOT NULL DEFAULT '',
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

@@ -35,6 +35,9 @@ export default async function AdminPage() {
             <Link className="button" href="/admin/users">
               Manage users
             </Link>
+            <Link className="button" href="/admin/settings">
+              Site settings
+            </Link>
           </>
         )}
         <Link className="button" href="/admin/review">

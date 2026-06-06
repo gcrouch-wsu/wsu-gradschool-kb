@@ -31,6 +31,26 @@ describe("page-document", () => {
     expect(parsed[2]).toMatchObject({ type: "list", ordered: true, items: ["One", "Two"] });
   });
 
+  it("normalizes a legacy warning callout to info (Warning removed)", () => {
+    const html =
+      '<aside class="doc-alert doc-alert--warning" data-block-id="a1" data-variant="warning">Heads up</aside>';
+    const blocks = documentHtmlToBlocks(html);
+    const alert = blocks.find((b) => b.type === "alert");
+    expect(alert).toMatchObject({ type: "alert", variant: "info" });
+  });
+
+  it("preserves an anchored note span through a flow round-trip, hidden from public render", () => {
+    const html =
+      '<p data-block-id="p1">See <span class="doc-note" data-note-id="n1" data-note-body="fix wording">this</span> line</p>';
+    const blocks = documentHtmlToBlocks(html);
+    const para = blocks.find((b) => b.type === "paragraph") as { html?: string } | undefined;
+    // Stored block HTML keeps the note (editor view).
+    expect(para?.html).toContain("doc-note");
+    expect(para?.html).toContain("fix wording");
+    // Re-serializing for the editor still carries it.
+    expect(blocksToDocumentHtml(blocks)).toContain("doc-note");
+  });
+
   it("flattens over-deep card nesting instead of dropping its content (KI-2)", () => {
     const deepParagraph: ContentBlock = {
       blockId: "deep-p",

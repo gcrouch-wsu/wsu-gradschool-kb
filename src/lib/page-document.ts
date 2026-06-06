@@ -133,7 +133,9 @@ function safeImageSrc(raw: string | undefined): string | null {
 }
 
 function inlineFields(node: HTMLElement, listItem = false) {
-  const html = listItem ? sanitizeListItemHtml(node.innerHTML) : sanitizeRichText(node.innerHTML);
+  const html = listItem
+    ? sanitizeListItemHtml(node.innerHTML, { keepNotes: true })
+    : sanitizeRichText(node.innerHTML, { keepNotes: true });
   const text = collapseWhitespace(
     listItem ? parse(html || node.innerHTML).text : richTextToPlainText(html) || node.text,
   );
@@ -275,9 +277,8 @@ function serializeDocumentNode(node: Node): string {
   }
 
   if (tag === "aside" && hasClass(node, "doc-alert")) {
-    const variant = node.getAttribute("data-variant") === "warning" ? "warning" : "info";
-    const inner = sanitizeRichText(node.innerHTML);
-    return `<aside class="doc-alert doc-alert--${variant}" data-block-id="${escapeHtml(blockId)}" data-variant="${variant}">${inner}</aside>`;
+    const inner = sanitizeRichText(node.innerHTML, { keepNotes: true });
+    return `<aside class="doc-alert doc-alert--info" data-block-id="${escapeHtml(blockId)}" data-variant="info">${inner}</aside>`;
   }
 
   if (tag === "aside" && hasClass(node, "doc-editor-note")) {
@@ -310,19 +311,19 @@ function serializeDocumentNode(node: Node): string {
   }
 
   if (tag === "p") {
-    const inner = sanitizeRichText(node.innerHTML);
+    const inner = sanitizeRichText(node.innerHTML, { keepNotes: true });
     return `<p data-block-id="${escapeHtml(blockId)}"${alignStyleAttr(readTextAlign(node))}>${inner || "<br>"}</p>`;
   }
 
   if (tag === "h2" || tag === "h3") {
-    const inner = sanitizeRichText(node.innerHTML);
+    const inner = sanitizeRichText(node.innerHTML, { keepNotes: true });
     return `<${tag} class="anchor-heading" data-block-id="${escapeHtml(blockId)}" id="${escapeHtml(blockId)}"${alignStyleAttr(readTextAlign(node))}>${inner}</${tag}>`;
   }
 
   if (tag === "ul" || tag === "ol") {
     const items = node.querySelectorAll(":scope > li");
     const itemHtml = items
-      .map((li) => `<li>${sanitizeListItemHtml(li.innerHTML) || "<br>"}</li>`)
+      .map((li) => `<li>${sanitizeListItemHtml(li.innerHTML, { keepNotes: true }) || "<br>"}</li>`)
       .join("");
     return `<${tag} data-block-id="${escapeHtml(blockId)}">${itemHtml}</${tag}>`;
   }
@@ -337,7 +338,7 @@ function serializeDocumentNode(node: Node): string {
   if (!text && tag !== "br") {
     return node.childNodes.map(serializeDocumentNode).join("");
   }
-  const inner = tag === "br" ? "<br>" : sanitizeRichText(node.innerHTML || text);
+  const inner = tag === "br" ? "<br>" : sanitizeRichText(node.innerHTML || text, { keepNotes: true });
   return `<p data-block-id="${newBlockId()}">${inner}</p>`;
 }
 
@@ -438,10 +439,11 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
     if (tag === "aside" && hasClass(node, "doc-alert")) {
       const { html: blockHtml, text } = inlineFields(node);
       if (text) {
+        // Warning was removed — all callouts normalize to a single info style.
         blocks.push({
           blockId: blockIdFrom(node),
           type: "alert",
-          variant: node.getAttribute("data-variant") === "warning" ? "warning" : "info",
+          variant: "info",
           text,
           html: blockHtml,
         });

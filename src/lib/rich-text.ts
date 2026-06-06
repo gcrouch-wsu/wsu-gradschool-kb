@@ -330,6 +330,20 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
   }
 
   if (tag === "span") {
+    // Editor note marker (Word-style comment anchored to text). Preserved only when
+    // keepNotes is on (editor storage); stripped to plain text everywhere else
+    // (public render) so note bodies never reach readers.
+    const cls = node.getAttribute("class") ?? "";
+    if (/\bdoc-note\b/.test(cls) || node.getAttribute("data-note-id")) {
+      const inner = serializeChildren(node, mode);
+      if (!preserveNotes) {
+        return inner;
+      }
+      const id = (node.getAttribute("data-note-id") ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
+      const body = escapeHtml(node.getAttribute("data-note-body") ?? "");
+      const idAttr = id ? ` data-note-id="${id}"` : "";
+      return `<span class="doc-note"${idAttr} data-note-body="${body}">${inner}</span>`;
+    }
     const style = safeStyleAttribute(node.getAttribute("style"));
     if (!style) {
       return serializeChildren(node, mode);
@@ -357,21 +371,45 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
  * attribute except a validated `href` on anchors. Larger page structure must
  * stay in the ContentBlock model rather than in this inline HTML.
  */
-export function sanitizeRichText(value: string) {
+/**
+ * When true, `serializeNode` preserves editor-note marker spans. Off by default so
+ * public rendering and plain-text extraction strip notes. Set only inside the
+ * sanitize entry points (synchronous, single-threaded — safe as a module flag).
+ */
+let preserveNotes = false;
+
+export interface SanitizeOptions {
+  /** Preserve editor-note marker spans (`span.doc-note`). Used for editor storage. */
+  keepNotes?: boolean;
+}
+
+export function sanitizeRichText(value: string, opts?: SanitizeOptions) {
   if (!value) {
     return "";
   }
-  const root = parse(value);
-  return root.childNodes.map((child) => serializeNode(child, "inline")).join("");
+  const previous = preserveNotes;
+  preserveNotes = opts?.keepNotes ?? false;
+  try {
+    const root = parse(value);
+    return root.childNodes.map((child) => serializeNode(child, "inline")).join("");
+  } finally {
+    preserveNotes = previous;
+  }
 }
 
 /** Inline formatting plus nested lists inside a list item. */
-export function sanitizeListItemHtml(value: string) {
+export function sanitizeListItemHtml(value: string, opts?: SanitizeOptions) {
   if (!value) {
     return "";
   }
-  const root = parse(value);
-  return root.childNodes.map((child) => serializeNode(child, "list-item")).join("");
+  const previous = preserveNotes;
+  preserveNotes = opts?.keepNotes ?? false;
+  try {
+    const root = parse(value);
+    return root.childNodes.map((child) => serializeNode(child, "list-item")).join("");
+  } finally {
+    preserveNotes = previous;
+  }
 }
 
 export function richTextToPlainText(html: string) {

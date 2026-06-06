@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AltTextDialog } from "@/components/AltTextDialog";
 import { DocumentToolbar } from "@/components/DocumentToolbar";
 import { LinkDialog } from "@/components/LinkDialog";
+import { NoteDialog } from "@/components/NoteDialog";
 import { MediaPicker } from "@/components/MediaPicker";
 import { PageEditorDebugPanel } from "@/components/PageEditorDebugPanel";
 import { TableBlockEditor } from "@/components/TableBlockEditor";
@@ -17,17 +18,22 @@ import {
   applyAltText,
   bindPageEditor,
   commitLink,
+  commitNote,
   handleEditorTabKey,
   handleImageControlClick,
   insertEditorHtml,
+  openNoteEditor,
   registerAltEditor,
   registerFormatIssueReporter,
   registerLinkEditor,
+  registerNoteEditor,
   removeLink,
+  removeNote,
   saveEditorSelection,
   watchEditorSelectionForDebug,
   type AltEditRequest,
   type LinkEditRequest,
+  type NoteEditRequest,
 } from "@/lib/page-editor-format";
 import { textToRichText } from "@/lib/rich-text";
 import type { EditorPalette } from "@/lib/kb-theme";
@@ -54,6 +60,7 @@ export function PageDocumentEditor({
   const [sections, setSections] = useState<EditorSection[]>(initialSections);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [linkRequest, setLinkRequest] = useState<LinkEditRequest | null>(null);
+  const [noteRequest, setNoteRequest] = useState<NoteEditRequest | null>(null);
   const [altRequest, setAltRequest] = useState<AltEditRequest | null>(null);
   const [formatHint, setFormatHint] = useState<string | null>(null);
 
@@ -68,11 +75,13 @@ export function PageDocumentEditor({
   useEffect(() => {
     registerFormatIssueReporter(setFormatHint);
     registerLinkEditor(setLinkRequest);
+    registerNoteEditor(setNoteRequest);
     registerAltEditor(setAltRequest);
     const unwatchSelection = watchEditorSelectionForDebug();
     return () => {
       registerFormatIssueReporter(() => {});
       registerLinkEditor(null);
+      registerNoteEditor(null);
       registerAltEditor(null);
       unwatchSelection();
     };
@@ -106,26 +115,11 @@ export function PageDocumentEditor({
     emitChange(next);
   }
 
-  function handleInsertAlert(variant: "info" | "warning") {
-    const placeholder =
-      variant === "warning"
-        ? "Warning: replace with the caution readers need."
-        : "Info: replace with the note readers should see.";
-    const html = `<aside class="doc-alert doc-alert--${variant}" data-block-id="${newBlockId()}" data-variant="${variant}">${textToRichText(placeholder)}</aside>`;
+  function handleInsertCallout() {
+    const placeholder = "Replace with the note readers should see.";
+    const html = `<aside class="doc-alert doc-alert--info" data-block-id="${newBlockId()}" data-variant="info">${textToRichText(placeholder)}</aside>`;
     if (!insertEditorHtml(html)) {
-      addBlockToFirstFlow({ type: "alert", blockId: newBlockId(), variant, text: placeholder });
-    }
-  }
-
-  function handleInsertEditorNote() {
-    const id = newBlockId();
-    const placeholder = "Note to editors — not shown on the published page.";
-    const html =
-      `<aside class="doc-editor-note" data-block-id="${id}" data-editor-note="true">` +
-      `<span class="doc-editor-note__tag" contenteditable="false">Editor note — not published</span>` +
-      `<span class="doc-editor-note__body">${textToRichText(placeholder)}</span></aside>`;
-    if (!insertEditorHtml(html)) {
-      addBlockToFirstFlow({ type: "editor_note", blockId: id, text: placeholder });
+      addBlockToFirstFlow({ type: "alert", blockId: newBlockId(), variant: "info", text: placeholder });
     }
   }
 
@@ -217,9 +211,9 @@ export function PageDocumentEditor({
       <div className="editor-toolbar-sticky">
         <DocumentToolbar
           editorPalette={editorPalette}
-          onInsertAlert={handleInsertAlert}
+          onInsertCallout={handleInsertCallout}
           onInsertMedia={() => setMediaPickerOpen(true)}
-          onInsertEditorNote={handleInsertEditorNote}
+          onAddNote={() => openNoteEditor()}
           onInsertSectionBreak={handleInsertSectionBreak}
         />
         {formatHint && <p className="alert editor-format-hint">{formatHint}</p>}
@@ -242,6 +236,21 @@ export function PageDocumentEditor({
             setLinkRequest(null);
           }}
           request={linkRequest}
+        />
+      )}
+
+      {noteRequest && (
+        <NoteDialog
+          onClose={() => setNoteRequest(null)}
+          onRemove={() => {
+            if (noteRequest.span) removeNote(noteRequest.span);
+            setNoteRequest(null);
+          }}
+          onSubmit={({ body }) => {
+            commitNote({ body, span: noteRequest.span });
+            setNoteRequest(null);
+          }}
+          request={noteRequest}
         />
       )}
 
@@ -324,6 +333,11 @@ function SectionEditor({
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const lastSyncedHtml = useRef("");
+  // Keep the latest callback in a ref so the surface binds ONCE (stable ref
+  // callback). Re-creating the ref each render detached/re-bound the editor on
+  // every keystroke, which made caret placement and selection unreliable.
+  const onUpdateFlowRef = useRef(onUpdateFlow);
+  onUpdateFlowRef.current = onUpdateFlow;
 
   useEffect(() => {
     if (section.type === "flow") {
@@ -335,13 +349,20 @@ function SectionEditor({
     }
   }, [section, kbSlug]);
 
+  const bindThisSurface = useCallback(() => {
+    const node = surfaceRef.current;
+    if (node) {
+      bindPageEditor(node, () => onUpdateFlowRef.current(node.innerHTML, false));
+    }
+  }, []);
+
   const attachSurface = useCallback((node: HTMLDivElement | null) => {
     surfaceRef.current = node;
     if (node) {
-      bindPageEditor(node, () => onUpdateFlow(node.innerHTML, false));
+      bindPageEditor(node, () => onUpdateFlowRef.current(node.innerHTML, false));
       if (!node.innerHTML.trim()) node.innerHTML = lastSyncedHtml.current;
     }
-  }, [onUpdateFlow]);
+  }, []);
 
   return (
     <article className="block-editor">
@@ -384,6 +405,7 @@ function SectionEditor({
           contentEditable
           onBlur={(e) => onUpdateFlow(e.currentTarget.innerHTML, true)}
           onClick={handleImageControlClick}
+          onFocus={bindThisSurface}
           onInput={(e) => onUpdateFlow(e.currentTarget.innerHTML, false)}
           onKeyDown={handleEditorTabKey}
           onKeyUp={() => saveEditorSelection()}

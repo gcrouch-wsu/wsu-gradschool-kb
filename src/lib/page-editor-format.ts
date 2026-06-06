@@ -271,6 +271,126 @@ export function removeLink(anchor: HTMLAnchorElement): boolean {
   return true;
 }
 
+/* ----------------------------- Editor notes ------------------------------ */
+/* Word-style comments: a note is an inline `span.doc-note` wrapping the selected
+ * text, with its body in `data-note-body`. Visible only to editors (the public
+ * sanitizer strips note spans, keeping the text). Mirrors the link flow. */
+
+/** Context handed to the note dialog when creating or editing a note. */
+export interface NoteEditRequest {
+  body: string;
+  isEdit: boolean;
+  span: HTMLElement | null;
+  hasSelection: boolean;
+}
+
+let noteEditorOpener: ((request: NoteEditRequest) => void) | null = null;
+
+export function registerNoteEditor(open: ((request: NoteEditRequest) => void) | null) {
+  noteEditorOpener = open;
+}
+
+function noteFromSelection(): HTMLElement | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+  let node: Node | null = selection.getRangeAt(0).commonAncestorContainer;
+  while (node) {
+    if (node instanceof HTMLElement && node.classList.contains("doc-note")) {
+      return node;
+    }
+    node = node.parentNode;
+  }
+  return null;
+}
+
+/**
+ * Open the note dialog. On an existing note (clicked or cursor inside) it opens in
+ * edit mode prefilled from that note; otherwise it opens in create mode for the
+ * current text selection.
+ */
+export function openNoteEditor(span?: HTMLElement | null) {
+  saveRichTextSelection();
+  const target = span ?? noteFromSelection();
+  const selectionText = window.getSelection()?.toString() ?? "";
+  const hasSelection = Boolean(target) || selectionText.trim().length > 0;
+  if (!hasSelection) {
+    recordFormat("addNote", false, "no-selection", "Select the text you want to comment on, then add a note.");
+    return;
+  }
+  noteEditorOpener?.({
+    body: target?.getAttribute("data-note-body") ?? "",
+    isEdit: Boolean(target),
+    span: target ?? null,
+    hasSelection,
+  });
+}
+
+function noteId(): string {
+  return `note-${crypto.randomUUID()}`;
+}
+
+/** Apply the note dialog result: edit the note in place, or wrap the selection. */
+export function commitNote(request: { body: string; span: HTMLElement | null }): boolean {
+  const body = request.body.trim();
+  if (!body) {
+    return false;
+  }
+
+  if (request.span) {
+    request.span.setAttribute("data-note-body", body);
+    persistFromAnchor(request.span);
+    recordFormat("editNote", true, "updated");
+    return true;
+  }
+
+  const ok = applyToRichTextSelection(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) {
+      return;
+    }
+    const span = document.createElement("span");
+    span.className = "doc-note";
+    span.setAttribute("data-note-id", noteId());
+    span.setAttribute("data-note-body", body);
+    try {
+      range.surroundContents(span);
+    } catch {
+      // Selection crosses element boundaries: extract + re-insert preserves markup.
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+    }
+  });
+
+  if (!ok) {
+    recordFormat("addNote", false, "no-selection", "Select the text you want to comment on, then add a note.");
+    return false;
+  }
+  notifyMutation();
+  recordFormat("addNote", true, "created");
+  return true;
+}
+
+/** Remove a note, keeping its anchored text. */
+export function removeNote(span: HTMLElement): boolean {
+  const parent = span.parentNode;
+  if (!parent) {
+    return false;
+  }
+  while (span.firstChild) {
+    parent.insertBefore(span.firstChild, span);
+  }
+  parent.removeChild(span);
+  persistFromAnchor(parent as HTMLElement);
+  recordFormat("removeNote", true, "removed");
+  return true;
+}
+
 export function applyBlockTag(tag: "p" | "h2" | "h3"): boolean {
   return applyEditorCommand("formatBlock", tag) || applyEditorCommand("formatBlock", `<${tag}>`);
 }
@@ -397,6 +517,14 @@ export function handleImageControlClick(event: {
   if (link && surface) {
     event.preventDefault();
     openLinkEditor(link);
+    return true;
+  }
+
+  // Clicking a note marker opens the note dialog to edit/remove it.
+  const note = target?.closest?.(".doc-note") as HTMLElement | null;
+  if (note && surface) {
+    event.preventDefault();
+    openNoteEditor(note);
     return true;
   }
 

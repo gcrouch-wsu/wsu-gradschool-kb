@@ -194,43 +194,25 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
             );
           }
           case "alert": {
-            const variantClass = block.variant === "warning" ? "alert--warning" : "alert--info";
+            // Single callout style (Warning was removed; legacy warnings render as info).
             return (
-              <div className={`alert ${variantClass}`} key={block.blockId}>
+              <div className="alert alert--info" key={block.blockId}>
                 <div aria-hidden="true" style={{ marginTop: "0.25rem" }}>
-                  {block.variant === "warning" ? (
-                    <svg
-                      fill="none"
-                      height="20"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                      viewBox="0 0 24 24"
-                      width="20"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path d="m12 9 0 4" />
-                      <path d="m12 17.01 0.01 0" />
-                      <path d="M10.07 3.11c.91-1.48 2.94-1.48 3.86 0l8.13 13.25c.82 1.34-.14 3.06-1.74 3.06H3.68c-1.6 0-2.56-1.72-1.74-3.06l8.13-13.25z" />
-                    </svg>
-                  ) : (
-                    <svg
-                      fill="none"
-                      height="20"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                      viewBox="0 0 24 24"
-                      width="20"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M12 16v-4" />
-                      <path d="M12 8h.01" />
-                    </svg>
-                  )}
+                  <svg
+                    fill="none"
+                    height="20"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                    viewBox="0 0 24 24"
+                    width="20"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" />
+                  </svg>
                 </div>
                 <div>
                   <RichText html={block.html} text={block.text} />

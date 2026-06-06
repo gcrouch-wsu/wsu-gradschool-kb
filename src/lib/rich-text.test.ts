@@ -13,6 +13,38 @@ describe("escapeHtml", () => {
   });
 });
 
+describe("editor-note spans", () => {
+  const noteHtml =
+    'Before <span class="doc-note" data-note-id="note-1" data-note-body="check this">anchored</span> after';
+
+  it("strips note spans by default (public render keeps only the text)", () => {
+    const out = sanitizeRichText(noteHtml);
+    expect(out).toContain("anchored");
+    expect(out).not.toContain("doc-note");
+    expect(out).not.toContain("data-note-body");
+    expect(out).not.toContain("check this");
+  });
+
+  it("preserves note spans (with escaped body) when keepNotes is set", () => {
+    const out = sanitizeRichText(noteHtml, { keepNotes: true });
+    expect(out).toContain('class="doc-note"');
+    expect(out).toContain('data-note-id="note-1"');
+    expect(out).toContain('data-note-body="check this"');
+    expect(out).toContain("anchored");
+  });
+
+  it("strips unsafe characters from the note id", () => {
+    const evil = '<span class="doc-note" data-note-id="bad id 123!@#" data-note-body="ok body">t</span>';
+    const out = sanitizeRichText(evil, { keepNotes: true });
+    expect(out).toContain('data-note-id="badid123"');
+    expect(out).toContain('data-note-body="ok body"');
+  });
+
+  it("keeps note body out of plain text (and therefore search)", () => {
+    expect(richTextToPlainText(noteHtml)).toBe("Before anchored after");
+  });
+});
+
 describe("sanitizeRichText", () => {
   it("returns empty string for empty input", () => {
     expect(sanitizeRichText("")).toBe("");

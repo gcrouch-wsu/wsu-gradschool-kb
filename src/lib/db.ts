@@ -3,6 +3,7 @@ import { seedDataset } from "@/lib/demo-data";
 import { mergeTheme, type KbTheme } from "@/lib/kb-theme";
 import { runMigrations } from "@/lib/migrations";
 import { parseVideoUrl } from "@/lib/video";
+import { DEFAULT_SITE_SETTINGS, normalizeSiteSettings, type SiteSettings } from "@/lib/site-settings";
 import type { Asset, AssetVersion, KbDataset, KbPage, KbRedirect, KnowledgeBase } from "@/lib/types";
 
 function getDatabaseUrl() {
@@ -219,6 +220,42 @@ function mapKb(row: KbRow): KnowledgeBase {
     updatedOn: row.updated_on,
     theme: row.theme ? mergeTheme(row.theme) : undefined,
   };
+}
+
+/** Load owner-editable site settings, falling back to defaults when unset/no DB. */
+export async function loadSiteSettings(): Promise<SiteSettings> {
+  if (!isDatabaseEnabled()) {
+    return DEFAULT_SITE_SETTINGS;
+  }
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT home_eyebrow, home_title, home_intro FROM site_settings WHERE id = 'singleton' LIMIT 1
+  `) as unknown as Array<{ home_eyebrow: string; home_title: string; home_intro: string }>;
+  const row = rows[0];
+  if (!row) {
+    return DEFAULT_SITE_SETTINGS;
+  }
+  return normalizeSiteSettings({
+    homeEyebrow: row.home_eyebrow,
+    homeTitle: row.home_title,
+    homeIntro: row.home_intro,
+  });
+}
+
+/** Upsert the single site-settings row. */
+export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO site_settings (id, home_eyebrow, home_title, home_intro, updated_at)
+    VALUES ('singleton', ${settings.homeEyebrow}, ${settings.homeTitle}, ${settings.homeIntro}, now())
+    ON CONFLICT (id) DO UPDATE SET
+      home_eyebrow = EXCLUDED.home_eyebrow,
+      home_title = EXCLUDED.home_title,
+      home_intro = EXCLUDED.home_intro,
+      updated_at = now()
+  `;
 }
 
 /** Persist a validated theme for a KB. */

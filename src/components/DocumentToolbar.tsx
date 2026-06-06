@@ -15,15 +15,15 @@ import {
 
 export function DocumentToolbar({
   editorPalette,
-  onInsertAlert,
+  onInsertCallout,
   onInsertMedia,
-  onInsertEditorNote,
+  onAddNote,
   onInsertSectionBreak,
 }: {
   editorPalette?: EditorPalette;
   onInsertMedia: () => void;
-  onInsertAlert: (variant: "info" | "warning") => void;
-  onInsertEditorNote: () => void;
+  onInsertCallout: () => void;
+  onAddNote: () => void;
   onInsertSectionBreak: () => void;
 }) {
   const [formatting, setFormatting] = useState<EditorFormatting>({
@@ -143,29 +143,20 @@ export function DocumentToolbar({
         <button
           className={buttonClass}
           onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={() => onInsertAlert("info")}
-          title="Insert an info callout (visible to readers)"
+          onClick={onInsertCallout}
+          title="Insert a callout (visible to readers)"
           type="button"
         >
-          Info
+          Callout
         </button>
         <button
           className={buttonClass}
           onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={() => onInsertAlert("warning")}
-          title="Insert a warning callout (visible to readers)"
+          onClick={onAddNote}
+          title="Comment on the selected text — visible to editors only, never published"
           type="button"
         >
-          Warning
-        </button>
-        <button
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onInsertEditorNote}
-          title="Insert an editor-only note (hidden from the published page)"
-          type="button"
-        >
-          Editor note
+          Note
         </button>
       </div>
     </div>

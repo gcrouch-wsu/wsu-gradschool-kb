@@ -46,15 +46,9 @@ export function saveRichTextSelection() {
 
 export function restoreRichTextSelection(): boolean {
   if (!savedRange || !savedEditable || !document.contains(savedEditable)) {
-    console.warn("restoreRichTextSelection fail: missing state", {
-      hasRange: !!savedRange,
-      hasEditable: !!savedEditable,
-      inDoc: savedEditable ? document.contains(savedEditable) : false,
-    });
     return false;
   }
   if (boundEditorSurface && !boundEditorSurface.contains(savedRange.startContainer)) {
-    console.warn("restoreRichTextSelection fail: range outside bound surface");
     return false;
   }
   const selection = window.getSelection();
@@ -66,8 +60,7 @@ export function restoreRichTextSelection(): boolean {
     selection.removeAllRanges();
     selection.addRange(savedRange);
     return true;
-  } catch (err) {
-    console.warn("restoreRichTextSelection fail: addRange error", err);
+  } catch {
     return false;
   }
 }
