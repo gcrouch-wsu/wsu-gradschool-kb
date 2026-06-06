@@ -1,0 +1,139 @@
+# WSU Graduate School Knowledge Base
+
+Deployable Next.js (16 / React 19 / App Router) platform for public, accessible, multi-KB
+knowledge bases with a focused admin editor. See `project_spec.md` for the full spec and the
+current implementation status.
+
+## Highlights
+
+- **Public KB**: home/article routes, hierarchical sidebar nav, breadcrumbs, and a responsive
+  **3-column docs layout** (nav · article · sticky on-page TOC rail) with depth-controlled TOC.
+- **Rich editor**: paragraphs, headings, lists, info/warning callouts, tables, cards, images,
+  videos, and internal **editor notes**; text/image **alignment**; a **link dialog** (create/edit
+  links, new-tab target); a **media picker** (insert library assets, upload, or embed video);
+  per-image **alt-text** editing with a decorative option.
+- **Managed assets**: stable public URLs, version history with replace/activate, and usage tracking.
+- **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Editor roles, KB scoping,
+  header identity + **Sign out**, and DB-backed **edit locks** to prevent concurrent overwrites.
+- **Search**: Postgres full-text search (tsvector + GIN) with prefix/type-ahead and staff-page
+  visibility pruning.
+- **Governance & A11y**: a publishing gate that blocks inaccessible/incomplete pages (and
+  highlights the offending fields/images), WCAG-minded UI, and an **accessible PDF export**.
+- **Importing**: DOCX staged import with style/image extraction and review.
+
+Test suite: `npm test` (81 tests). Type-check: `npx tsc --noEmit`.
+
+## Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Admin Login
+
+Set these environment variables locally or in Vercel:
+
+```text
+KB_ADMIN_EMAIL=
+KB_ADMIN_PASSWORD=
+KB_ADMIN_SESSION_SECRET=
+```
+
+The app also accepts `BOOTSTRAP_OWNER_EMAIL`, `BOOTSTRAP_OWNER_PASSWORD`, and
+`BOOTSTRAP_OWNER_SESSION_SECRET` as aliases. Blank values are treated as unset.
+
+If unset, development falls back to:
+
+```text
+admin@example.edu / ChangeMe123!
+```
+
+Do not use the fallback credentials in production.
+
+If `vercel env pull` creates blank admin values in `.env.local`, set them locally before starting
+the dev server. For example:
+
+```text
+KB_ADMIN_EMAIL=gcrouch@wsu.edu
+KB_ADMIN_PASSWORD=your-local-admin-password
+KB_ADMIN_SESSION_SECRET=replace-with-a-long-random-secret
+```
+
+## Deployment
+
+The project is a standard Next.js app and can be deployed to Vercel after pushing to GitHub.
+
+```bash
+npm run build
+```
+
+## Content Storage
+
+KB content (knowledge bases, pages, assets) is read through `src/lib/kb-store.ts`, which uses one of two backends:
+
+- **Neon Postgres** when `DATABASE_URL` is set. The schema is created with `CREATE TABLE IF NOT EXISTS` and seeded from `src/lib/demo-data.ts` automatically on first run.
+- **In-memory seed dataset** when `DATABASE_URL` is unset — fine for local development, but not durable.
+
+To use Neon, create a database and set `DATABASE_URL` locally and in Vercel:
+
+```text
+DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
+```
+
+Schema changes are applied automatically on first request via versioned migrations in `src/lib/migrations/` (tracked in `_schema_migrations`). These include asset versions, redirects, staged imports, users / KB assignments, TOC settings, edit-lock columns, and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
+
+## Managed assets
+
+Signed-in admins can manage files at `/admin/assets`:
+
+- Upload PDF/Word/text documents (stored in Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set).
+- Replace a file by uploading a **draft version**, review **where the asset is used**, then **activate** so the public URL (`/kb/{kbSlug}/files/{assetSlug}`) serves the new file without changing the slug.
+- When a **published** page is moved or renamed, an automatic redirect is recorded from the old path to the new one.
+
+## Importing from Word (.docx)
+
+Admins can import Confluence-exported `.docx` files at `/admin/import`. The document is converted to KB content (headings, paragraphs, lists, tables, and supported web images), previewed for review in the browser, and saved as a **draft** page nested under the location you choose.
+
+Embedded images are promoted into managed image assets when the draft is created. If **Vercel Blob** is configured, the image bytes are stored there; otherwise supported images are retained as data-backed managed assets for local development. Non-web image formats (EMF/WMF) are not yet supported.
+
+## Managing Pages
+
+Signed-in admins manage pages at `/admin/pages`: reopen drafts, edit metadata and content,
+move a page under a different parent, and publish. The page-tree editor supports drag reorder,
+re-nesting, inline edit, and publishing drafts directly from the tree.
+
+The document editor is a WYSIWYG surface with a wrapping toolbar:
+
+- **Blocks**: paragraphs, H2/H3 headings, ordered/unordered lists (with Tab/Shift+Tab nesting),
+  info & warning callouts, editable tables, section dividers, cards (reorderable, styled), videos,
+  and **editor notes** (internal only — never published, excluded from search).
+- **Rich text**: fonts, sizes, colors, bold/italic/underline/strike/sub/sup, and **alignment**
+  (left/center/right) for text and images.
+- **Links**: the **Link** button (or clicking an existing link) opens a dialog to set the display
+  text, URL, and *open in new tab* (which adds `rel="noopener noreferrer"`).
+- **Media**: the **Media** button opens a picker to insert images/files from the asset library,
+  upload a new image or document, or embed a YouTube/Vimeo/direct video.
+- **Images**: click an image to reveal inline controls for **alignment**, **resize**, and **Alt**
+  (write a description, mark it decorative, or save the description back to the asset).
+
+**Publishing**: a publish runs an accessibility/governance gate; if it's blocked, the editor
+highlights the specific fields (summary, contact email) and any images missing alt text. *Save &
+publish* / *Save changes* save the current form first (so unsaved edits are validated), an
+**Unsaved changes** indicator is shown, and concurrent edits are guarded by DB-backed edit locks.
+
+Supported DOCX inline formatting is preserved on import and can be edited in the page editor.
+
+## Roles & access
+
+Three roles: **Owner**, **Admin**, **Editor**. Owners/Admins can access all KBs; Editors are
+scoped to their assigned KBs (`kb_user_assignments`). Manage users at `/admin/users` and knowledge
+bases at `/admin/kbs`. Sessions are HMAC-signed, HTTP-only cookies; sign out from the header.
+
+## Reading experience
+
+Public articles use a responsive 3-column layout (navigation · article · sticky "On this page"
+rail) that collapses on tablet/mobile. Tables scroll horizontally on narrow screens. Any article
+can be exported to an **accessible (tagged) PDF** via the browser's print-to-PDF over semantic HTML.

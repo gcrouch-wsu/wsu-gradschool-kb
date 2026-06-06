@@ -1,0 +1,31 @@
+import { NextResponse } from "next/server";
+import { createPage } from "@/lib/kb-store";
+import { requireAdminMutation } from "@/lib/security";
+
+export async function POST(request: Request) {
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) return guard.response;
+
+  const body = await request.json().catch(() => null);
+  if (!body || !body.kbId || !body.title) {
+    return NextResponse.json({ message: "Knowledge base and title are required." }, { status: 400 });
+  }
+
+  try {
+    const page = await createPage({
+      kbId: body.kbId,
+      title: body.title,
+      slug: body.slug,
+      parentPath: body.parentPath,
+      summary: body.summary || "",
+      blocks: [{ blockId: `block-${crypto.randomUUID()}`, type: "paragraph", text: "New page content..." }],
+    });
+
+    return NextResponse.json({ ok: true, pageId: page.id });
+  } catch (error) {
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Failed to create page." },
+      { status: 500 }
+    );
+  }
+}

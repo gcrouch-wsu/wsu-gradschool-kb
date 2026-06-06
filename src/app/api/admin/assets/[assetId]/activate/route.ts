@@ -1,0 +1,42 @@
+import { NextResponse } from "next/server";
+import { activateAssetVersion, getAssetAdminDetail, getKbById } from "@/lib/kb-store";
+import { requireAdminMutation } from "@/lib/security";
+
+export const runtime = "nodejs";
+
+interface ActivateBody {
+  versionId?: unknown;
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ assetId: string }> },
+) {
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const { assetId } = await context.params;
+  const body = (await request.json().catch(() => null)) as ActivateBody | null;
+  const versionId = typeof body?.versionId === "string" ? body.versionId : "";
+  if (!versionId) {
+    return NextResponse.json({ message: "versionId is required." }, { status: 400 });
+  }
+
+  try {
+    const asset = await activateAssetVersion(assetId, versionId);
+    const kb = await getKbById(asset.homeKbId);
+    const detail = await getAssetAdminDetail(assetId);
+    const url = kb && asset.status === "active" ? `/kb/${kb.slug}/files/${asset.slug}` : null;
+    return NextResponse.json({
+      ok: true,
+      asset,
+      url,
+      usages: detail?.usages ?? [],
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not activate version.";
+    return NextResponse.json({ message }, { status: 400 });
+  }
+}
