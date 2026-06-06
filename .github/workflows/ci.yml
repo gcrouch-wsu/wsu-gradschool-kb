@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # HAS_DB is a string "true"/"false" derived from the secret. Secrets cannot be
+    # referenced directly in step `if:` conditions, but a job-level env var can be —
+    # and crucially we do NOT put DATABASE_URL in the job env (that would make the
+    # in-memory `npm test` run see a live database). It is set only on the db step.
+    env:
+      HAS_DB: ${{ secrets.DATABASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run check
+
+      - name: Unit tests (in-memory; KI-1 DB tests self-skip)
+        run: npm test
+
+      - name: Build app for accessibility smoke tests
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Public accessibility smoke tests (axe)
+        run: npm run test:a11y
+
+      # Live-database integration suite (KI-1). Runs only when a DATABASE_URL secret
+      # is configured — point it at a dedicated Neon TEST branch, never production.
+      # Add it under: GitHub repo → Settings → Secrets and variables → Actions.
+      - name: Live-DB integration tests (Neon)
+        if: env.HAS_DB == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run test:db
