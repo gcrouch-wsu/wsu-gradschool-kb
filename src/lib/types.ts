@@ -70,6 +70,8 @@ export interface KbPage {
   relatedAssetIds: string[];
   showToc: boolean;
   tocDepth: number;
+  /** Whether to display the summary as a lead paragraph on the public page. Default true. */
+  showSummary?: boolean;
   lockedBy?: string | null;
   lockedAt?: string | null;
   aliasTargetId?: string | null;

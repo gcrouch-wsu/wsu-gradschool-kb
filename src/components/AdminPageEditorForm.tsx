@@ -35,6 +35,7 @@ export function AdminPageEditorForm({
   const [lastReviewedDate, setLastReviewedDate] = useState(page.lastReviewedDate);
   const [showToc, setShowToc] = useState(page.showToc);
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
+  const [showSummary, setShowSummary] = useState(page.showSummary !== false);
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
   const [busy, setBusy] = useState<EditableStatus | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
@@ -100,6 +101,7 @@ export function AdminPageEditorForm({
     lastReviewedDate,
     showToc,
     tocDepth,
+    showSummary,
     blocks,
   });
   const [savedSnapshot, setSavedSnapshot] = useState(currentSnapshot);
@@ -167,6 +169,7 @@ export function AdminPageEditorForm({
           blocks,
           showToc,
           tocDepth,
+          showSummary,
         }),
       });
       const data = await response.json();
@@ -313,6 +316,10 @@ export function AdminPageEditorForm({
               rows={3}
               value={summary}
             />
+          </label>
+          <label className="checkbox-inline">
+            <input checked={showSummary} onChange={(event) => setShowSummary(event.target.checked)} type="checkbox" />
+            <span>Show the summary as a lead paragraph on the page</span>
           </label>
           <label>
             <span className="meta">Nest under</span>

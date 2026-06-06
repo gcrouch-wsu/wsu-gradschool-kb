@@ -14,7 +14,9 @@ import {
 
 const COLOR_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: string }[] = [
   { key: "ink", label: "Body text", help: "Paragraph and list text" },
-  { key: "heading", label: "Heading text", help: "H1–H3 headings" },
+  { key: "h1", label: "Heading 1", help: "H1 page/section titles" },
+  { key: "h2", label: "Heading 2", help: "H2 section headings" },
+  { key: "h3", label: "Heading 3", help: "H3 sub-headings" },
   { key: "accent", label: "Brand / accent", help: "Links, buttons, highlights" },
   { key: "muted", label: "Muted text", help: "Secondary captions and meta" },
   { key: "paper", label: "Surface", help: "Cards and panels" },
@@ -313,7 +315,9 @@ export function ThemeEditor({
           <strong className="meta">Accessibility (WCAG contrast)</strong>
           <ContrastRow bg={theme.colors.paper} fg={theme.colors.ink} label="Body text on surface" />
           <ContrastRow bg={theme.colors.wash} fg={theme.colors.ink} label="Body text on background" />
-          <ContrastRow bg={theme.colors.wash} fg={theme.colors.heading} label="Heading on background" />
+          <ContrastRow bg={theme.colors.wash} fg={theme.colors.h1} label="H1 on background" />
+          <ContrastRow bg={theme.colors.wash} fg={theme.colors.h2} label="H2 on background" />
+          <ContrastRow bg={theme.colors.wash} fg={theme.colors.h3} label="H3 on background" />
           <ContrastRow bg={theme.colors.paper} fg={theme.colors.muted} label="Muted on surface" />
           <ContrastRow bg={theme.colors.accent} fg="#ffffff" label="Button label on brand" />
           <ContrastRow bg={theme.colors.paper} fg={theme.colors.accent} label="Link on surface" />

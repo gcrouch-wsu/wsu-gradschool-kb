@@ -18,6 +18,7 @@ interface UpdateBody {
   lastReviewedDate?: unknown;
   showToc?: unknown;
   tocDepth?: unknown;
+  showSummary?: unknown;
 }
 
 export async function PATCH(
@@ -43,6 +44,7 @@ export async function PATCH(
   const lastReviewedDate = typeof body.lastReviewedDate === "string" ? body.lastReviewedDate : undefined;
   const showToc = typeof body.showToc === "boolean" ? body.showToc : undefined;
   const tocDepth = typeof body.tocDepth === "number" ? body.tocDepth : undefined;
+  const showSummary = typeof body.showSummary === "boolean" ? body.showSummary : undefined;
   const visibility: PageVisibility = body.visibility === "staff" ? "staff" : "public";
   const status: PageStatus = body.status === "published" ? "published" : "draft";
   const sortOrder = typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : undefined;
@@ -97,6 +99,7 @@ export async function PATCH(
       lastReviewedDate,
       showToc,
       tocDepth,
+      showSummary,
     }, guard.session.email);
     const kb = await getKbById(page.kbId);
     const url = kb ? `/kb/${kb.slug}/${page.path.join("/")}` : null;

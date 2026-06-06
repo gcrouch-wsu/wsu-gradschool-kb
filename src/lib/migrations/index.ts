@@ -384,6 +384,12 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS theme JSONB`;
     },
   },
+  {
+    id: "011_page_show_summary",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS show_summary BOOLEAN NOT NULL DEFAULT TRUE`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

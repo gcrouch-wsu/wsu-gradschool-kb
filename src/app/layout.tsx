@@ -34,7 +34,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </Link>
             <nav className="nav" aria-label="Primary">
               <Link href="/">Knowledge bases</Link>
-              <Link href="/kb/graduate-school">Graduate School</Link>
               <Link href="/admin">Admin</Link>
               {session && (
                 <span className="nav-user" title={`Signed in as ${session.email}`}>
@@ -55,17 +54,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <main id="main">{children}</main>
         <footer className="site-footer">
           <div className="site-footer__inner">
-            <div>
-              <div className="site-footer__brand">Washington State University Knowledge Base</div>
-              <p className="meta">Public procedures, guidance, and managed resources for WSU partners.</p>
-            </div>
-            <nav aria-label="Footer">
-              <Link href="/">Knowledge bases</Link>
-              <Link href="/kb/graduate-school">Graduate School</Link>
-              <Link href="/admin">Admin</Link>
-            </nav>
-          </div>
-          <div className="site-footer__inner" style={{ paddingTop: 0 }}>
             <p className="meta">© {currentYear} Washington State University</p>
           </div>
         </footer>

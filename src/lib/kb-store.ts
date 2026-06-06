@@ -916,6 +916,7 @@ export interface CreatePageInput {
   sortOrder?: number;
   showToc?: boolean;
   tocDepth?: number;
+  showSummary?: boolean;
 }
 
 /**
@@ -991,6 +992,7 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     relatedAssetIds: [],
     showToc: input.showToc ?? true,
     tocDepth: input.tocDepth ?? 3,
+    showSummary: input.showSummary ?? true,
   };
 
   if (isDatabaseEnabled()) {
@@ -1017,6 +1019,7 @@ export interface UpdatePageInput {
   lastReviewedDate?: string;
   showToc?: boolean;
   tocDepth?: number;
+  showSummary?: boolean;
 }
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -1107,6 +1110,7 @@ export async function updatePage(input: UpdatePageInput, editorEmail?: string): 
           blocks: input.blocks,
           showToc: input.showToc ?? page.showToc,
           tocDepth: input.tocDepth ?? page.tocDepth,
+          showSummary: input.showSummary ?? page.showSummary,
         };
       }
       return {

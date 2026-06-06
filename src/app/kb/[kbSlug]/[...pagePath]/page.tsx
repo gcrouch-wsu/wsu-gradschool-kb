@@ -125,7 +125,7 @@ export default async function KbArticlePage({
             </p>
           )}
           <h1>{page.title}</h1>
-          <p className="lead">{page.summary}</p>
+          {page.showSummary !== false && page.summary && <p className="lead">{page.summary}</p>}
           <div className="article-meta-row">
             <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
             <PrintPdfButton />

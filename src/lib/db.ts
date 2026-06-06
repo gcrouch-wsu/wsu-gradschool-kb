@@ -116,13 +116,13 @@ async function seedIfEmpty() {
       INSERT INTO kb_pages (
         id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
         last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
-        show_toc, toc_depth
+        show_toc, toc_depth, show_summary
       ) VALUES (
         ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
         ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
         ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
         ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
-        ${page.showToc ?? true}, ${page.tocDepth ?? 3}
+        ${page.showToc ?? true}, ${page.tocDepth ?? 3}, ${page.showSummary ?? true}
       )
       ON CONFLICT (id) DO NOTHING
     `;
@@ -158,6 +158,7 @@ interface PageRow {
   related_asset_ids: string[];
   show_toc: boolean;
   toc_depth: number;
+  show_summary?: boolean;
   locked_by?: string | null;
   locked_at?: string | null;
 }
@@ -218,6 +219,7 @@ function mapPage(row: PageRow): KbPage {
     relatedAssetIds: row.related_asset_ids ?? [],
     showToc: row.show_toc ?? true,
     tocDepth: row.toc_depth ?? 3,
+    showSummary: row.show_summary ?? true,
     lockedBy: row.locked_by,
     lockedAt: row.locked_at,
   };
@@ -250,13 +252,13 @@ export async function insertPage(page: KbPage): Promise<void> {
     INSERT INTO kb_pages (
       id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
-      show_toc, toc_depth, locked_by, locked_at
+      show_toc, toc_depth, show_summary, locked_by, locked_at
     ) VALUES (
       ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
       ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
       ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
       ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
-      ${page.showToc}, ${page.tocDepth}, ${page.lockedBy ?? null}, ${page.lockedAt ?? null}
+      ${page.showToc}, ${page.tocDepth}, ${page.showSummary ?? true}, ${page.lockedBy ?? null}, ${page.lockedAt ?? null}
     )
   `;
 }
@@ -327,7 +329,8 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
           related_page_ids = ${relatedPageIds},
           related_asset_ids = ${relatedAssetIds},
           show_toc = ${page.showToc},
-          toc_depth = ${page.tocDepth}
+          toc_depth = ${page.tocDepth},
+          show_summary = ${page.showSummary ?? true}
         WHERE id = ${page.id}
           AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
         RETURNING id
@@ -354,7 +357,8 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
           related_page_ids = ${relatedPageIds},
           related_asset_ids = ${relatedAssetIds},
           show_toc = ${page.showToc},
-          toc_depth = ${page.tocDepth}
+          toc_depth = ${page.tocDepth},
+          show_summary = ${page.showSummary ?? true}
         WHERE id = ${page.id}
       `;
     }
