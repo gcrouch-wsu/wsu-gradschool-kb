@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPageTreeManager } from "@/components/AdminPageTreeManager";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
 
 export default async function AdminPagesPage() {
@@ -10,7 +10,8 @@ export default async function AdminPagesPage() {
     redirect("/admin/sign-in?next=/admin/pages");
   }
 
-  const kbs = await getAllKbsForAdmin();
+  // Editors only see KBs they are assigned to; owners/admins see all.
+  const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const groups = await Promise.all(
     kbs.map(async (kb) => ({
       kb,

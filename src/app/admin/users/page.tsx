@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { KnowledgeBase, User } from "@/lib/types";
+import KbAssignmentPicker from "@/components/KbAssignmentPicker";
 
 interface ManagedUser {
   id: string;
@@ -52,10 +53,6 @@ export default function AdminUsersPage() {
   useEffect(() => {
     loadData();
   }, []);
-
-  function toggle(list: string[], setList: (v: string[]) => void, kbId: string, on: boolean) {
-    setList(on ? [...new Set([...list, kbId])] : list.filter((id) => id !== kbId));
-  }
 
   function kbTitle(kbId: string) {
     return kbs.find((kb) => kb.id === kbId)?.title ?? kbId;
@@ -129,27 +126,6 @@ export default function AdminUsersPage() {
     }
   }
 
-  function KbAssignmentPicker({ selected, setSelected }: { selected: string[]; setSelected: (v: string[]) => void }) {
-    return (
-      <fieldset className="fieldset">
-        <legend>Knowledge bases this editor can edit</legend>
-        {kbs.length === 0 && <p className="meta">No knowledge bases yet.</p>}
-        <div className="theme-font-checks">
-          {kbs.map((kb) => (
-            <label className="checkbox-inline" key={kb.id}>
-              <input
-                checked={selected.includes(kb.id)}
-                onChange={(e) => toggle(selected, setSelected, kb.id, e.target.checked)}
-                type="checkbox"
-              />
-              <span>{kb.title}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-    );
-  }
-
   if (loading) return <div className="page-shell"><p>Loading users…</p></div>;
   if (error) return <div className="page-shell"><p className="alert alert--error">{error}</p></div>;
 
@@ -204,7 +180,9 @@ export default function AdminUsersPage() {
               <option value="owner">Owner (full access)</option>
             </select>
           </label>
-          {newRole === "editor" && <KbAssignmentPicker selected={newAssignments} setSelected={setNewAssignments} />}
+          {newRole === "editor" && (
+            <KbAssignmentPicker kbs={kbs} selected={newAssignments} onChange={setNewAssignments} />
+          )}
           <button className="button" type="submit">Create User</button>
         </form>
       )}
@@ -241,18 +219,11 @@ export default function AdminUsersPage() {
                   <td>
                     {isEditing ? (
                       editRole === "editor" ? (
-                        <div className="theme-font-checks">
-                          {kbs.map((kb) => (
-                            <label className="checkbox-inline" key={kb.id}>
-                              <input
-                                checked={editAssignments.includes(kb.id)}
-                                onChange={(e) => toggle(editAssignments, setEditAssignments, kb.id, e.target.checked)}
-                                type="checkbox"
-                              />
-                              <span>{kb.title}</span>
-                            </label>
-                          ))}
-                        </div>
+                        <KbAssignmentPicker
+                          kbs={kbs}
+                          selected={editAssignments}
+                          onChange={setEditAssignments}
+                        />
                       ) : (
                         <span className="meta">All knowledge bases</span>
                       )

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { NextResponse } from "next/server";
 import { getAssetForDelivery, getKbBySlug } from "@/lib/kb-store";
+import { videoDeliveryUrl } from "@/lib/video";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,19 @@ export async function GET(
   const asset = await getAssetForDelivery(kb.id, assetSlug);
   if (!asset) {
     notFound();
+  }
+
+  // Managed videos are external links, not files: the stable URL redirects to the
+  // canonical (https) video rather than streaming the URL text. (KI-2)
+  if (asset.assetType === "video") {
+    const target = videoDeliveryUrl(asset);
+    if (!target) {
+      notFound();
+    }
+    return NextResponse.redirect(target, {
+      status: 307,
+      headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" },
+    });
   }
 
   const etag = `"${asset.versionId}"`;

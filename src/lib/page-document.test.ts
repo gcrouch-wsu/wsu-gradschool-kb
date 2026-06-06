@@ -31,6 +31,26 @@ describe("page-document", () => {
     expect(parsed[2]).toMatchObject({ type: "list", ordered: true, items: ["One", "Two"] });
   });
 
+  it("flattens over-deep card nesting instead of dropping its content (KI-2)", () => {
+    const deepParagraph: ContentBlock = {
+      blockId: "deep-p",
+      type: "paragraph",
+      text: "DEEPMARKER content",
+      html: "DEEPMARKER content",
+    };
+    // Five levels of cards — deeper than MAX_NESTING_DEPTH (3).
+    let nested: ContentBlock = deepParagraph;
+    for (let i = 0; i < 5; i += 1) {
+      nested = { blockId: `card-${i}`, type: "card", background: "paper", blocks: [nested] };
+    }
+
+    const html = blocksToDocumentHtml([nested]);
+    const parsed = documentHtmlToBlocks(html);
+
+    // The deep paragraph must survive (flattened up), not be silently discarded.
+    expect(JSON.stringify(parsed)).toContain("DEEPMARKER");
+  });
+
   it("sanitizes nested inline styles inside paragraphs", () => {
     const html = sanitizePageDocument(
       '<p data-block-id="p1"><span style="color: #981e32">Red</span></p>',

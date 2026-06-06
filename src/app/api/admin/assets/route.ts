@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentAdminSession } from "@/lib/auth";
+import { requireKbAccess } from "@/lib/security";
 import { getAllAssetsForAdmin, getKbById } from "@/lib/kb-store";
 
 /**
@@ -14,7 +15,13 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const kbId = searchParams.get("kbId") ?? undefined;
-  const kb = kbId ? await getKbById(kbId) : null;
+
+  // The library is always browsed per-KB; require an explicit KB and confirm the
+  // caller is assigned to it so editors can't enumerate other KBs' assets.
+  const denied = await requireKbAccess(session, kbId);
+  if (denied) return denied;
+
+  const kb = await getKbById(kbId!);
 
   const assets = await getAllAssetsForAdmin(kbId);
   const items = await Promise.all(

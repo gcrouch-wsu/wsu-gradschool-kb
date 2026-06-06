@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminAssetLibrary, type AdminAssetLibraryRow } from "@/components/AdminAssetLibrary";
 import { AdminAssetUploadForm } from "@/components/AdminAssetUploadForm";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { formatBytes, formatDate } from "@/lib/format";
 import { getAllAssetsForAdmin, getAllKbsForAdmin } from "@/lib/kb-store";
 
@@ -17,7 +17,8 @@ export default async function AdminAssetsPage({
   }
 
   const { kb: kbFilter, status: statusFilter } = await searchParams;
-  const kbs = await getAllKbsForAdmin();
+  // Editors only see KBs they are assigned to; owners/admins see all.
+  const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const defaultKb = kbs.find((kb) => kb.slug === "graduate-school") ?? kbs[0];
 
   if (!kbFilter && defaultKb) {

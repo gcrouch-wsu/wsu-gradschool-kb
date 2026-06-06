@@ -2,6 +2,7 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { seedDataset } from "@/lib/demo-data";
 import { mergeTheme, type KbTheme } from "@/lib/kb-theme";
 import { runMigrations } from "@/lib/migrations";
+import { parseVideoUrl } from "@/lib/video";
 import type { Asset, AssetVersion, KbDataset, KbPage, KbRedirect, KnowledgeBase } from "@/lib/types";
 
 function getDatabaseUrl() {
@@ -39,6 +40,7 @@ export async function ensureSchema() {
       await runMigrations(sql);
       await seedIfEmpty();
       await backfillAssetVersions();
+      await backfillVideoColumns();
     })().catch((error) => {
       schemaPromise = null;
       throw error;
@@ -76,6 +78,29 @@ async function backfillAssetVersions() {
     if (!asset.version_id) {
       await sql`UPDATE kb_assets SET version_id = ${versionId} WHERE id = ${asset.id}`;
     }
+  }
+}
+
+/**
+ * Populate the dedicated video columns for any legacy video assets that predate
+ * migration 012 (their provider/id/url were overloaded into body + a synthetic
+ * mime). Runs after seed so it also covers freshly-seeded rows. Idempotent: only
+ * touches video rows whose `video_url` is not yet set.
+ */
+async function backfillVideoColumns() {
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT id, body FROM kb_assets
+    WHERE asset_type = 'video' AND (video_url IS NULL OR video_url = '')
+  `) as unknown as Array<{ id: string; body: string }>;
+  for (const row of rows) {
+    const url = row.body ?? "";
+    const { provider, embedId } = parseVideoUrl(url);
+    await sql`
+      UPDATE kb_assets
+      SET video_url = ${url}, video_provider = ${provider}, video_external_id = ${embedId ?? null}
+      WHERE id = ${row.id}
+    `;
   }
 }
 
@@ -178,6 +203,10 @@ interface AssetRow {
   updated_display_date: string;
   version_id: string;
   body: string;
+  alt_text?: string | null;
+  video_provider?: string | null;
+  video_external_id?: string | null;
+  video_url?: string | null;
 }
 
 function mapKb(row: KbRow): KnowledgeBase {
@@ -241,6 +270,10 @@ function mapAsset(row: AssetRow): Asset {
     updatedDisplayDate: row.updated_display_date,
     versionId: row.version_id,
     body: row.body,
+    altText: row.alt_text ?? "",
+    videoProvider: (row.video_provider as Asset["videoProvider"]) ?? null,
+    videoExternalId: row.video_external_id ?? null,
+    videoUrl: row.video_url ?? null,
   };
 }
 
@@ -270,12 +303,14 @@ export async function insertAsset(asset: Asset): Promise<void> {
   await sql`
     INSERT INTO kb_assets (
       id, home_kb_id, slug, title, description, asset_type, mime_type, file_size_bytes,
-      status, owner_label, last_reviewed_date, updated_display_date, version_id, body
+      status, owner_label, last_reviewed_date, updated_display_date, version_id, body,
+      alt_text, video_provider, video_external_id, video_url
     ) VALUES (
       ${asset.id}, ${asset.homeKbId}, ${asset.slug}, ${asset.title}, ${asset.description},
       ${asset.assetType}, ${asset.mimeType}, ${asset.fileSizeBytes}, ${asset.status},
       ${asset.ownerLabel}, ${asset.lastReviewedDate}, ${asset.updatedDisplayDate},
-      ${asset.versionId}, ${asset.body}
+      ${asset.versionId}, ${asset.body},
+      ${asset.altText ?? ""}, ${asset.videoProvider ?? null}, ${asset.videoExternalId ?? null}, ${asset.videoUrl ?? null}
     )
   `;
 }
@@ -301,67 +336,92 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
   await ensureSchema();
   const sql = getSql();
 
-  // For robust error handling and to avoid dialect-specific transactional behavior with neon over HTTP,
-  // we execute these sequentially. Moving pages is a rare operation, and single-page saves are 1 query.
-  for (const page of pages) {
+  // All row updates run in ONE Neon transaction so a multi-page move/reorder is
+  // all-or-nothing — it can never half-apply (e.g. re-pathing some descendants
+  // but not others). The neon HTTP driver's `transaction([...])` issues a single
+  // BEGIN/COMMIT and ROLLBACKs if any statement throws.
+  //
+  // When `editorEmail` is supplied (admin mutation paths), every row also enforces
+  // the edit lock. A locked row makes the UPDATE match zero rows, which is NOT an
+  // error on its own — so a data-modifying CTE wraps each update and a trailing
+  // `CASE … THEN 1 / 0` guard raises division_by_zero (SQLSTATE 22012) when no row
+  // was updated, aborting and rolling back the whole batch.
+  const queries = pages.map((page) => {
     const path = page.path.join("/");
     const blocks = JSON.stringify(page.blocks);
     const relatedPageIds = JSON.stringify(page.relatedPageIds);
     const relatedAssetIds = JSON.stringify(page.relatedAssetIds);
 
-    let result;
     if (editorEmail) {
-      result = await sql`
-        UPDATE kb_pages
-        SET
-          slug = ${page.slug},
-          path = ${path},
-          sort_order = ${page.sortOrder},
-          title = ${page.title},
-          summary = ${page.summary},
-          status = ${page.status},
-          visibility = ${page.visibility},
-          owner_label = ${page.ownerLabel},
-          contact_email = ${page.contactEmail},
-          last_reviewed_date = ${page.lastReviewedDate},
-          updated_display_date = ${page.updatedDisplayDate},
-          blocks = ${blocks},
-          related_page_ids = ${relatedPageIds},
-          related_asset_ids = ${relatedAssetIds},
-          show_toc = ${page.showToc},
-          toc_depth = ${page.tocDepth},
-          show_summary = ${page.showSummary ?? true}
-        WHERE id = ${page.id}
-          AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
-        RETURNING id
-      `;
-      if (result.length === 0) {
-        throw new Error("Update failed: this page is locked by another user or your lock has expired.");
-      }
-    } else {
-      await sql`
-        UPDATE kb_pages
-        SET
-          slug = ${page.slug},
-          path = ${path},
-          sort_order = ${page.sortOrder},
-          title = ${page.title},
-          summary = ${page.summary},
-          status = ${page.status},
-          visibility = ${page.visibility},
-          owner_label = ${page.ownerLabel},
-          contact_email = ${page.contactEmail},
-          last_reviewed_date = ${page.lastReviewedDate},
-          updated_display_date = ${page.updatedDisplayDate},
-          blocks = ${blocks},
-          related_page_ids = ${relatedPageIds},
-          related_asset_ids = ${relatedAssetIds},
-          show_toc = ${page.showToc},
-          toc_depth = ${page.tocDepth},
-          show_summary = ${page.showSummary ?? true}
-        WHERE id = ${page.id}
+      return sql`
+        WITH updated AS (
+          UPDATE kb_pages
+          SET
+            slug = ${page.slug},
+            path = ${path},
+            sort_order = ${page.sortOrder},
+            title = ${page.title},
+            summary = ${page.summary},
+            status = ${page.status},
+            visibility = ${page.visibility},
+            owner_label = ${page.ownerLabel},
+            contact_email = ${page.contactEmail},
+            last_reviewed_date = ${page.lastReviewedDate},
+            updated_display_date = ${page.updatedDisplayDate},
+            blocks = ${blocks},
+            related_page_ids = ${relatedPageIds},
+            related_asset_ids = ${relatedAssetIds},
+            show_toc = ${page.showToc},
+            toc_depth = ${page.tocDepth},
+            show_summary = ${page.showSummary ?? true}
+          WHERE id = ${page.id}
+            AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
+          RETURNING id
+        )
+        SELECT CASE WHEN (SELECT count(*) FROM updated) = 0 THEN 1 / 0 ELSE 1 END AS ok
       `;
     }
+
+    return sql`
+      UPDATE kb_pages
+      SET
+        slug = ${page.slug},
+        path = ${path},
+        sort_order = ${page.sortOrder},
+        title = ${page.title},
+        summary = ${page.summary},
+        status = ${page.status},
+        visibility = ${page.visibility},
+        owner_label = ${page.ownerLabel},
+        contact_email = ${page.contactEmail},
+        last_reviewed_date = ${page.lastReviewedDate},
+        updated_display_date = ${page.updatedDisplayDate},
+        blocks = ${blocks},
+        related_page_ids = ${relatedPageIds},
+        related_asset_ids = ${relatedAssetIds},
+        show_toc = ${page.showToc},
+        toc_depth = ${page.tocDepth},
+        show_summary = ${page.showSummary ?? true}
+      WHERE id = ${page.id}
+    `;
+  });
+
+  try {
+    await sql.transaction(queries);
+  } catch (error) {
+    // The CTE guard raises division_by_zero (22012) when a row was locked by
+    // another user (or the writer's lock expired). Surface the friendly message.
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: string }).code === PG_DIVISION_BY_ZERO
+    ) {
+      throw new Error(
+        "Update failed: this page is locked by another user or your lock has expired.",
+      );
+    }
+    throw error;
   }
 }
 
@@ -383,6 +443,26 @@ export async function tryAcquirePageLock(pageId: string, userEmail: string): Pro
     RETURNING locked_by
   `;
   return result.length > 0;
+}
+
+/**
+ * Update ONLY a page's status (and display date). A status flip changes no content
+ * or path, so it touches just those columns — this avoids rewriting the whole row
+ * (which could clobber a concurrent editor's just-saved content) and is why it does
+ * not need the edit lock. See KI-2.
+ */
+export async function updatePageStatusColumn(
+  pageId: string,
+  status: string,
+  updatedDisplayDate: string,
+): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE kb_pages
+    SET status = ${status}, updated_display_date = ${updatedDisplayDate}
+    WHERE id = ${pageId}
+  `;
 }
 
 export async function releasePageLock(pageId: string, userEmail: string): Promise<void> {
@@ -453,7 +533,8 @@ export async function loadDatasetFromDb(): Promise<KbDataset> {
     sql`
       SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
         file_size_bytes, status, owner_label, last_reviewed_date,
-        updated_display_date, version_id, '' AS body
+        updated_display_date, version_id, '' AS body,
+        alt_text, video_provider, video_external_id, video_url
       FROM kb_assets
     `,
   ]);
@@ -550,7 +631,11 @@ export async function updateAssetRecord(asset: Asset): Promise<void> {
       last_reviewed_date = ${asset.lastReviewedDate},
       updated_display_date = ${asset.updatedDisplayDate},
       version_id = ${asset.versionId},
-      body = ${asset.body}
+      body = ${asset.body},
+      alt_text = ${asset.altText ?? ""},
+      video_provider = ${asset.videoProvider ?? null},
+      video_external_id = ${asset.videoExternalId ?? null},
+      video_url = ${asset.videoUrl ?? null}
     WHERE id = ${asset.id}
   `;
 }

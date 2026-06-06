@@ -25,15 +25,16 @@ export async function POST(request: Request) {
       assetType: "video",
       title: body.title,
       description: body.description,
-      body: body.url, // Store raw URL in body for reference
-      mimeType: `video/x-${provider}`, // Use a semantic mime type to hint at provider
+      body: body.url, // Kept for the version row / backward compatibility.
+      mimeType: `video/x-${provider}`,
       originalFilename: `${provider}-link`,
       fileSizeBytes: 0,
+      // Canonical video fields (KI-2): the source of truth for delivery/embedding.
+      videoProvider: provider,
+      videoExternalId: embedId ?? null,
+      videoUrl: body.url,
     });
 
-    // Note: We might want to store embedId in a dedicated column later,
-    // but for now the editor blocks will handle the parsing or we can
-    // return it in the response.
     return NextResponse.json({ ok: true, asset, provider, embedId });
   } catch (error) {
     return NextResponse.json(

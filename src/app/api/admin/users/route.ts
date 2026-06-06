@@ -9,9 +9,11 @@ export async function GET(request: Request) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) return guard.response;
 
-  // We should enforce owner-only or allow admins to list users.
-  // For MVP, admins can list but perhaps only owners can create.
-  // We'll rely on the UI and role checks inside the endpoint.
+  // User management is owner-only — the list exposes the full staff directory,
+  // so non-owners (admins/editors) must not read it.
+  if (guard.session.role !== "owner") {
+    return NextResponse.json({ message: "Only owners can view users." }, { status: 403 });
+  }
 
   if (!isDatabaseEnabled()) {
     return NextResponse.json({ users: [] }); // In-memory doesn't support full user CRUD
