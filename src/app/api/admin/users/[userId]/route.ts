@@ -3,7 +3,7 @@ import { updateUser, deleteUser, replaceUserAssignments } from "@/lib/db-users";
 import { isDatabaseEnabled } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requireAdminMutation } from "@/lib/security";
-import type { UserRole } from "@/lib/types";
+import type { User, UserRole } from "@/lib/types";
 
 export async function PATCH(
   request: Request,
@@ -28,7 +28,7 @@ export async function PATCH(
   }
 
   try {
-    const updates: any = {};
+    const updates: Partial<User> = {};
     if (body.fullName !== undefined) updates.fullName = body.fullName.trim();
     if (body.email !== undefined) updates.email = body.email.trim().toLowerCase();
     if (body.role !== undefined) updates.role = body.role as UserRole;
@@ -37,7 +37,7 @@ export async function PATCH(
     }
 
     if (Object.keys(updates).length > 0) {
-      await updateUser({ id: userId, ...updates, updatedAt: new Date().toISOString() } as any);
+      await updateUser({ id: userId, ...updates, updatedAt: new Date().toISOString() });
     }
 
     if (Array.isArray(body.kbAssignments)) {

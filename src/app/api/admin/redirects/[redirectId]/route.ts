@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { deactivateRedirect, removeRedirect } from "@/lib/kb-store";
-import { requireAdminMutation } from "@/lib/security";
+import { deactivateRedirect, getRedirectById, removeRedirect } from "@/lib/kb-store";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -14,6 +14,15 @@ export async function DELETE(
   }
 
   const { redirectId } = await context.params;
+
+  // Resolve the redirect's KB and confirm the caller is assigned to it before deleting.
+  const redirect = await getRedirectById(redirectId);
+  if (!redirect) {
+    return NextResponse.json({ message: "Redirect not found." }, { status: 404 });
+  }
+  const denied = await requireKbAccess(guard.session, redirect.kbId);
+  if (denied) return denied;
+
   try {
     await removeRedirect(redirectId);
     return NextResponse.json({ ok: true });
@@ -33,6 +42,15 @@ export async function PATCH(
   }
 
   const { redirectId } = await context.params;
+
+  // Resolve the redirect's KB and confirm the caller is assigned to it before updating.
+  const redirect = await getRedirectById(redirectId);
+  if (!redirect) {
+    return NextResponse.json({ message: "Redirect not found." }, { status: 404 });
+  }
+  const denied = await requireKbAccess(guard.session, redirect.kbId);
+  if (denied) return denied;
+
   const body = (await request.json().catch(() => null)) as { status?: unknown } | null;
   if (body?.status === "inactive") {
     try {

@@ -254,7 +254,8 @@ export function PageDocumentEditor({
               fetch(`/api/admin/assets/${altRequest.assetId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ description: alt }),
+                // Save to the dedicated alt-text field, not the human description (KI-2).
+                body: JSON.stringify({ altText: alt }),
               }).catch(() => {});
             }
             setAltRequest(null);

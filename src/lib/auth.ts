@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual, scryptSync, randomBytes } from "node:crypt
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS } from "@/lib/session-constants";
 import type { User, UserRole } from "@/lib/types";
-import { loadUserByEmail, loadUserById, isUserAssignedToKb } from "@/lib/db-users";
+import { loadUserByEmail, loadUserById, isUserAssignedToKb, listUserAssignments } from "@/lib/db-users";
 
 export { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS };
 
@@ -199,4 +199,32 @@ export async function canAccessKb(session: AdminSession, kbId: string): Promise<
     return isUserAssignedToKb(session.userId, kbId);
   }
   return false;
+}
+
+/**
+ * The set of KB ids a session may view in admin list views. Owners/Admins are
+ * KB-wide, so `null` is returned to mean "no restriction". Editors are limited
+ * to their `kb_user_assignments`; any other role sees nothing.
+ */
+export async function accessibleKbIds(session: AdminSession): Promise<string[] | null> {
+  if (session.role === "owner" || session.role === "admin") {
+    return null;
+  }
+  if (session.role === "editor") {
+    return listUserAssignments(session.userId);
+  }
+  return [];
+}
+
+/** Filters a list of KBs down to the ones the session may view. */
+export async function filterKbsForSession<T extends { id: string }>(
+  session: AdminSession,
+  kbs: T[],
+): Promise<T[]> {
+  const allowed = await accessibleKbIds(session);
+  if (allowed === null) {
+    return kbs;
+  }
+  const allowedSet = new Set(allowed);
+  return kbs.filter((kb) => allowedSet.has(kb.id));
 }

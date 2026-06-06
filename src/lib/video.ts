@@ -32,3 +32,29 @@ export function providerFromMime(mimeType: string): VideoProvider {
   const suffix = mimeType.split("/")[1]?.replace(/^x-/, "");
   return suffix === "youtube" || suffix === "vimeo" ? suffix : "direct";
 }
+
+/**
+ * The canonical https URL the stable file route should redirect a managed video
+ * asset to. Built from the dedicated provider/id fields, falling back to the raw
+ * stored URL. Returns null when nothing safe (https) is available.
+ */
+export function videoDeliveryUrl(input: {
+  videoProvider?: VideoProvider | null;
+  videoExternalId?: string | null;
+  videoUrl?: string | null;
+  body?: string | null;
+}): string | null {
+  if (input.videoProvider === "youtube" && input.videoExternalId) {
+    return `https://www.youtube.com/watch?v=${encodeURIComponent(input.videoExternalId)}`;
+  }
+  if (input.videoProvider === "vimeo" && input.videoExternalId) {
+    return `https://vimeo.com/${encodeURIComponent(input.videoExternalId)}`;
+  }
+  const raw = (input.videoUrl || input.body || "").trim();
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}

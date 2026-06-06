@@ -200,6 +200,15 @@ export interface Asset {
   updatedDisplayDate: string;
   versionId: string;
   body: string;
+  /** Default alt text for the asset (set via "save alt to asset"); separate from `description`. */
+  altText?: string | null;
+  /**
+   * Video assets are external links, not binary blobs, so they carry dedicated
+   * fields instead of overloading `body`/`mimeType`. Undefined for non-video assets.
+   */
+  videoProvider?: "youtube" | "vimeo" | "direct" | null;
+  videoExternalId?: string | null;
+  videoUrl?: string | null;
 }
 
 /** Auto-redirect from a former public page path after slug/parent moves. */

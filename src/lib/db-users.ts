@@ -66,17 +66,20 @@ export async function insertUser(user: User): Promise<void> {
   `;
 }
 
-export async function updateUser(user: User): Promise<void> {
+export async function updateUser(user: Partial<User> & { id: string }): Promise<void> {
   await ensureSchema();
   const sql = getSql();
+  // Partial update: COALESCE keeps the existing column value when a field is
+  // not supplied, so callers can update just the role (or just the password)
+  // without nulling out the rest of the row.
   await sql`
     UPDATE users
     SET
-      email = ${user.email},
-      full_name = ${user.fullName},
-      password_hash = ${user.passwordHash},
-      role = ${user.role},
-      updated_at = ${user.updatedAt}
+      email = COALESCE(${user.email ?? null}, email),
+      full_name = COALESCE(${user.fullName ?? null}, full_name),
+      password_hash = COALESCE(${user.passwordHash ?? null}, password_hash),
+      role = COALESCE(${user.role ?? null}, role),
+      updated_at = COALESCE(${user.updatedAt ?? null}, updated_at)
     WHERE id = ${user.id}
   `;
 }

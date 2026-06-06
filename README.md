@@ -21,7 +21,20 @@ current implementation status.
   highlights the offending fields/images), WCAG-minded UI, and an **accessible PDF export**.
 - **Importing**: DOCX staged import with style/image extraction and review.
 
-Test suite: `npm test` (81 tests). Type-check: `npx tsc --noEmit`.
+Test suite: `npm test` (93 in-memory tests). Type-check: `npx tsc --noEmit`.
+
+**Live-database tests:** `npm run test:db` runs the KI-1 integration suite
+(`src/lib/ki1.db.test.ts`) against the real Neon database — edit-lock conflicts, atomic
+multi-row reorder rollback, lock expiry, full-text search safety/recall, the staff-visibility
+prune, editor KB scoping, and the managed-video model. It reads `DATABASE_URL` from `.env.local`;
+the same tests self-skip during the normal `npm test` run when no database is configured. It
+creates data under unique ids and cleans up after itself, so it's safe to run against your dev
+database.
+
+**CI:** `.github/workflows/ci.yml` runs the type-check and unit tests on every push/PR. It also
+runs `npm run test:db` automatically **when a `DATABASE_URL` repository secret is set** — point
+that secret at a dedicated Neon **test** branch (GitHub repo → Settings → Secrets and variables →
+Actions). Without the secret, the live-DB step is skipped and CI still passes.
 
 ## Local Development
 
@@ -129,8 +142,25 @@ Supported DOCX inline formatting is preserved on import and can be edited in the
 ## Roles & access
 
 Three roles: **Owner**, **Admin**, **Editor**. Owners/Admins can access all KBs; Editors are
-scoped to their assigned KBs (`kb_user_assignments`). Manage users at `/admin/users` and knowledge
-bases at `/admin/kbs`. Sessions are HMAC-signed, HTTP-only cookies; sign out from the header.
+scoped to their assigned KBs (`kb_user_assignments`). Sessions are HMAC-signed, HTTP-only cookies;
+sign out from the header.
+
+**User management** (`/admin/users`, owner-only) and **KB management** (`/admin/kbs`, owner-only)
+are gated both in the UI and at the API. When creating or editing an editor, assign knowledge bases
+with a **search + chips** picker (type to filter, click/Enter to add, ✕ or Backspace to remove) that
+scales to many KBs.
+
+**Editor scoping is enforced on both mutations and visibility:**
+
+- *Mutations* (page/asset/import/redirect changes) are guarded by `requireKbAccess` — editors can
+  only modify their assigned KBs.
+- *List views* — the `/admin/pages` and `/admin/assets` screens, and the `GET /api/admin/assets`
+  endpoint, are filtered to the editor's assigned KBs so they can't browse or enumerate others'
+  content. The `GET /api/admin/users` directory is owner-only.
+
+Scoping helpers live in `src/lib/auth.ts` (`canAccessKb`, `accessibleKbIds`, `filterKbsForSession`).
+Because assignments live in Neon (`kb_user_assignments`), the per-editor behavior only takes effect
+when `DATABASE_URL` is set.
 
 ## Reading experience
 

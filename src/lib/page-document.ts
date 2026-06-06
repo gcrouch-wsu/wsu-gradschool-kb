@@ -370,6 +370,12 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
     }
 
     if (tag === "section" && hasClass(node, "doc-card")) {
+      if (depth + 1 > MAX_NESTING_DEPTH) {
+        // Too deep to nest another card. Rather than silently dropping the card's
+        // content, FLATTEN it into the current level so nothing is lost. (KI-2)
+        blocks.push(...documentHtmlToBlocks(node.innerHTML, depth));
+        continue;
+      }
       blocks.push({
         blockId: blockIdFrom(node),
         type: "card",

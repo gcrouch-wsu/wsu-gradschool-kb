@@ -390,6 +390,28 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS show_summary BOOLEAN NOT NULL DEFAULT TRUE`;
     },
   },
+  {
+    id: "012_video_columns",
+    async up(sql) {
+      // Managed videos are external links, not binary blobs. Give them dedicated
+      // columns instead of overloading the asset version `body`/synthetic mime.
+      // Backfill of existing video rows is handled in app code (backfillVideoColumns)
+      // so it also covers freshly-seeded rows, which are inserted after migrations.
+      await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS video_provider TEXT`;
+      await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS video_external_id TEXT`;
+      await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS video_url TEXT`;
+    },
+  },
+  {
+    id: "013_alt_text_and_fts_index",
+    async up(sql) {
+      // Dedicated default alt-text for an asset, so "save alt to asset" no longer
+      // overloads the human-facing `description` (KI-2).
+      await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS alt_text TEXT NOT NULL DEFAULT ''`;
+      // Supports the correlated staff-visibility prune in public FTS as KBs grow (KI-2).
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_pages_staff_prune ON kb_pages(kb_id, visibility, path)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

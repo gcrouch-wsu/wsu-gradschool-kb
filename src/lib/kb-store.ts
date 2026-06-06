@@ -15,6 +15,7 @@ import {
   replaceVersionsForAsset,
   updateAssetRecord,
   updatePages,
+  updatePageStatusColumn,
   getSql,
 } from "@/lib/db";
 import { seedDataset } from "@/lib/demo-data";
@@ -374,6 +375,11 @@ export interface CreateManagedAssetInput {
   assetType: Asset["assetType"];
   title?: string;
   description?: string;
+  // Video assets are external links: these carry the canonical provider/id/url
+  // instead of overloading body/mime (see KI-2).
+  videoProvider?: Asset["videoProvider"];
+  videoExternalId?: string | null;
+  videoUrl?: string | null;
 }
 
 export interface CreateImageAssetInput {
@@ -447,6 +453,9 @@ export async function createManagedAsset(input: CreateManagedAssetInput): Promis
     updatedDisplayDate: today,
     versionId,
     body: input.body,
+    videoProvider: input.videoProvider ?? null,
+    videoExternalId: input.videoExternalId ?? null,
+    videoUrl: input.videoUrl ?? null,
   };
 
   return persistNewAssetWithVersion(asset, version);
@@ -876,6 +885,37 @@ export async function updateAssetDescription(assetId: string, description: strin
   return updated;
 }
 
+/**
+ * Set an asset's default alt text ("save alt to asset"). Stored in its own field
+ * so it never overwrites the human-facing `description` (KI-2).
+ */
+export async function updateAssetAltText(assetId: string, altText: string): Promise<Asset> {
+  const normalizedId = normalizeRecordId(assetId);
+  const dataset = await getDataset();
+  const existing = dataset.assets.find((asset) => asset.id === normalizedId);
+  if (!existing) {
+    throw new Error("Asset not found.");
+  }
+
+  const updated: Asset = {
+    ...existing,
+    altText: altText.trim(),
+    updatedDisplayDate: new Date().toISOString().slice(0, 10),
+  };
+
+  if (isDatabaseEnabled()) {
+    await updateAssetRecord(updated);
+  } else {
+    const list = runtimeAssets();
+    const index = list.findIndex((asset) => asset.id === normalizedId);
+    if (index >= 0) {
+      list[index] = updated;
+    }
+  }
+
+  return updated;
+}
+
 /** All knowledge bases (including drafts) for admin tooling. */
 export async function getAllKbsForAdmin(): Promise<KnowledgeBase[]> {
   const dataset = await getDataset();
@@ -1157,7 +1197,9 @@ export async function updatePageStatus(pageId: string, status: PageStatus): Prom
   };
 
   if (isDatabaseEnabled()) {
-    await updatePages([updated]);
+    // Status-only update: touch just the status column so a publish/unpublish never
+    // rewrites (and risks clobbering) a concurrent editor's content. See KI-2.
+    await updatePageStatusColumn(existing.id, updated.status, updated.updatedDisplayDate);
   } else {
     storeRuntimePage(updated);
   }
@@ -1301,21 +1343,24 @@ export async function upsertManualRedirect(input: CreateRedirectInput): Promise<
   return redirect;
 }
 
-export async function deactivateRedirect(redirectId: string): Promise<void> {
-  const dataset = await getDataset();
-  let redirect: KbRedirect | undefined;
+/** Resolves a redirect (and therefore its owning KB) by id, or null if missing. */
+export async function getRedirectById(redirectId: string): Promise<KbRedirect | null> {
   if (isDatabaseEnabled()) {
-    const kbs = dataset.knowledgeBases;
-    for (const kb of kbs) {
+    const dataset = await getDataset();
+    for (const kb of dataset.knowledgeBases) {
       const rows = await loadRedirectsForKb(kb.id);
-      redirect = rows.find((row) => row.id === redirectId);
-      if (redirect) {
-        break;
+      const found = rows.find((row) => row.id === redirectId);
+      if (found) {
+        return found;
       }
     }
-  } else {
-    redirect = runtimeRedirects().find((row) => row.id === redirectId);
+    return null;
   }
+  return runtimeRedirects().find((row) => row.id === redirectId) ?? null;
+}
+
+export async function deactivateRedirect(redirectId: string): Promise<void> {
+  const redirect = await getRedirectById(redirectId);
   if (!redirect) {
     throw new Error("Redirect not found.");
   }

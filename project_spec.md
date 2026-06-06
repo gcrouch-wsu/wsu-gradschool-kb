@@ -31,8 +31,9 @@ The primary goals are:
 ## Implementation Status (current repository)
 
 The project is in a functional "Pilot Ready" state. The core architecture, high-risk
-technical features, and the multi-user/security build phase are implemented. Remaining
-work is administrative depth (management UIs) and the production verification noted below.
+technical features, and the multi-user/security build phase are implemented, and the
+Neon-only paths are now verified against a live database (KI-1 resolved). Remaining work is
+administrative depth (management UIs), wiring the live-DB suite into CI, and the KI-2 follow-ups.
 
 ### Built and Verified
 * **Framework**: Next.js 16 / React 19 / TypeScript / App Router / Neon Postgres.
@@ -45,11 +46,12 @@ work is administrative depth (management UIs) and the production verification no
 * **Publish workflow**: Publish/Save-changes **saves the current form first** (no stale validation), an **unsaved-changes** indicator, and a confirm before status actions that would ignore in-progress edits.
 * **Editor Fixes**: Resolved font/size controls, cursor jumping, toolbar state highlighting, and toolbar wrapping.
 
-### Built — Pending Live-DB Verification
+### Built — Verified against live Neon
 The following landed in the latest build phases. Logic, type checks, and the in-memory
-test suite (86 tests) pass, but the Neon-only paths have **not** been exercised against a
-live Postgres instance (see *Known Issues & Verification Gaps*).
-* **Auth & Security**: `users` and `kb_user_assignments` tables, HMAC-signed session cookies, and role-based access. **Owners/Admins are KB-wide; Editors are scoped to their assigned KBs and that scope is now enforced** (`requireKbAccess` on every editor-reachable mutation — see KI-3 for the remaining gaps). User management (`/admin/users`, with per-editor KB assignment) and KB management (`/admin/kbs`) screens are present.
+test suite (86 tests) pass, and the Neon-only paths (edit locks, atomic reorder, FTS,
+editor scoping) are now **verified against a live Postgres database** by the
+`DATABASE_URL`-gated suite (`npm run test:db`) — see *KI-1 (Resolved)*.
+* **Auth & Security**: `users` and `kb_user_assignments` tables, HMAC-signed session cookies, and role-based access. **Owners/Admins are KB-wide; Editors are scoped to their assigned KBs, and that scope is enforced on both mutations and list-view visibility** (`requireKbAccess` on every editor-reachable mutation, including the resolve-by-id import-commit and redirect routes; admin list views and the asset-list endpoint filtered via `accessibleKbIds`/`filterKbsForSession`; users list owner-only — KI-3 resolved). User management (`/admin/users`, owner-only, with a **search + chips** per-editor KB-assignment picker) and KB management (`/admin/kbs`) screens are present.
 * **Per-KB theming ("Manage Styles")**: Owner-only screen (`/admin/kbs/[kbId]/styles`) to set colors (body text + separate H1/H2/H3 + accent/surface/etc.), body/heading fonts, a responsive type scale, and the editor's font/size/color palette, with a live preview, WCAG contrast checks, and JSON import/export. Validated tokens (hex/rem/font-keys) are injected as scoped CSS variables — no CSS-injection risk. Theme persistence requires a database; injection works with the default theme without one.
 * **Summary display toggle**: pages can keep a summary (used for search/meta) but optionally hide it as a lead paragraph on the public page (`page.showSummary`).
 * **Video Support**: First-class `video` asset type and editor block; YouTube/Vimeo URL → `embedId`/`provider` parsing; sandboxed, lazy-loaded, `referrerPolicy`-hardened iframes; round-trip serialization.
@@ -62,61 +64,89 @@ live Postgres instance (see *Known Issues & Verification Gaps*).
 ### Partially Built
 * **Multi-KB Support**: Data model, routes, a KB management screen (`/admin/kbs`), and per-KB theming exist; templates/advanced settings are still thin.
 * **Asset Library**: Table view plus a media picker and per-image alt/description editing exist; advanced file management and direct-to-blob large uploads are pending.
-* **Editor KB-scoping**: Mutations are enforced; admin **list** views and a couple of resolve-by-id routes are not yet scoped (see **KI-3**).
 * **TOC polish**: Right-rail TOC is in place; scroll-spy active-section highlighting is a future enhancement.
 
 ---
 
 ## Known Issues & Verification Gaps
 
-### KI-1 — Neon/Postgres paths not verified against a live database (High)
+### KI-1 — Neon/Postgres live-DB verification (Resolved)
 The edit-lock enforcement and Postgres FTS features execute **only** when `DATABASE_URL`
-is set. The development environment has no configured Neon URL and no local Postgres, so
-these paths are proven only by type checks, compiled-query inspection (parameterization
-confirmed, no injection), and the documented behavior of the `@neondatabase/serverless`
-driver — **not** by live execution.
+is set. These paths have now been **verified against a live Neon database** by an automated,
+`DATABASE_URL`-gated integration suite (`src/lib/ki1.db.test.ts`, run with `npm run test:db`).
+The suite self-skips when no database is configured, so the default `npm test` is unaffected.
 
-Specific assumptions still unproven end-to-end:
-1. A data-modifying CTE rolls back when its trailing `CASE … ELSE 1 / 0` guard raises (relied on for atomic lock conflict).
-2. `sql.transaction([...])` issues `ROLLBACK` on any in-transaction error, making multi-row move/reorder batches all-or-nothing.
-3. `NeonDbError.code` surfaces the Postgres SQLSTATE `22012` that the conflict handler keys on.
+> **Atomicity regression found and fixed during verification.** While writing the suite we
+> found that `updatePages` had been refactored into a **non-transactional sequential loop**
+> (the original CTE/transaction machinery was dead code), so a multi-row move/reorder could
+> **half-apply** on a lock conflict — breaking the "atomic rollback" guarantee. `updatePages`
+> now writes the whole batch in a single `sql.transaction([...])`, with a data-modifying CTE
+> whose `CASE … THEN 1 / 0` guard raises `22012` to roll back the batch when any row is locked.
 
-These are standard Postgres / driver semantics and were validated as far as is possible
-without a database, but they must be confirmed before this is considered production-ready.
+The three previously-unproven assumptions are now confirmed by the passing suite:
+1. ✅ A data-modifying CTE rolls back when its trailing `CASE … ELSE 1 / 0` guard raises.
+2. ✅ `sql.transaction([...])` issues `ROLLBACK` on any in-transaction error, making multi-row move/reorder batches all-or-nothing.
+3. ✅ `NeonDbError.code` surfaces the Postgres SQLSTATE `22012` that the conflict handler keys on.
 
-**Recommended verification (do before production):**
-* Provision a throwaway Neon branch, set `DATABASE_URL`, and run the migrations.
-* **Lock conflict / no-clobber:** Open a page in session A (acquires the lock). From session B, `PATCH` the same page → expect a 4xx with *"this page is locked by another user or your lock has expired"*, and confirm the row is unchanged.
-* **Atomic reorder rollback:** With a child page locked by A, have B reorder that subtree → the whole batch must fail with **no** sibling/descendant rows mutated (proves rollback, not partial write).
-* **Lock expiry:** Let A's lock pass its 2-minute TTL without a heartbeat; B should then acquire and save successfully.
-* **FTS safety/quality:** Search punctuation-heavy queries (`C++`, `AT&T`, `i-20`, `20% off`) → results, never a 500. Confirm a term that appears only in a list item or table cell is found. Confirm a published page under a `staff` ancestor never appears in public (non-staff) search results.
-* Add these as an automated integration suite gated on `DATABASE_URL` (skipped when unset) so CI covers them against a Neon test branch.
+**Verified scenarios (all passing against live Neon):**
+* **Lock conflict / no-clobber:** a save by user B against a page locked by user A throws *"this page is locked by another user or your lock has expired"* and the row is unchanged.
+* **Atomic reorder rollback:** a multi-row batch where one page is locked fails with **no** other rows mutated (proves rollback, not partial write).
+* **Lock expiry:** once a lock passes its TTL, another user can acquire it.
+* **FTS safety/quality:** punctuation-heavy queries (`C++`, `AT&T`, `i-20`, `20% off`) return results, never a 500; a term that appears only in a list item is found; a published page under a `staff` ancestor never appears in public (non-staff) search results.
+* **Editor scoping:** an editor's `canAccessKb` is true only for assigned KBs; owners/admins are KB-wide.
 
-### KI-3 — Editor KB-scoping: remaining gaps (Medium)
+**Remaining (CI):** wire `npm run test:db` into CI against a dedicated Neon test branch so these
+checks run automatically on every change (today they are run on demand).
+
+### KI-3 — Editor KB-scoping (Resolved)
 Editor scoping is **enforced on mutations** (page create/edit/status/reorder/lock; asset
-upload/replace/activate/status/description; DOCX import stage + commit; redirect creation)
-via `requireKbAccess`. Owners/Admins are KB-wide. What's **not** yet covered:
-1. **Admin list views are not filtered (visibility, not mutation).** An editor can still *see*
-   pages, assets, and KBs from KBs they aren't assigned to in the admin tables (`/admin/pages`,
-   `/admin/assets`, `/admin/kbs`). They cannot modify them (mutations are blocked), but the
-   lists should be filtered to assigned KBs for editors. Scope the list endpoints/queries.
-2. **Two resolve-by-id routes are unguarded** (lower risk — their creation entry points are
-   guarded): `POST /api/admin/import/staged/[stagedImportId]/commit` and
-   `DELETE /api/admin/redirects/[redirectId]`. Harden by resolving the record's KB and calling
-   `requireKbAccess` before acting.
-3. **Editor self-service of users/KBs is correctly blocked** (owner-only routes), but there is
-   no per-KB "manager/admin" tier — KB-wide Admin is all-or-nothing. Add a scoped admin tier
-   only if needed.
+upload/replace/activate/status/description; DOCX import stage + commit; redirect
+create/update/delete) via `requireKbAccess`. Owners/Admins are KB-wide. All previously-noted
+gaps are now closed:
+1. ✅ **Admin list-view visibility is filtered.** The `/admin/pages` and `/admin/assets`
+   screens run their KB list through `filterKbsForSession`, and `GET /api/admin/assets` calls
+   `requireKbAccess` (an explicit `kbId` is now required), so editors can no longer browse or
+   enumerate content in KBs they aren't assigned to. The `/admin/kbs` list endpoint already
+   403s non-owners/admins. Separately, `GET /api/admin/users` is now **owner-only** (it
+   previously returned the full staff directory to any signed-in session). Scoping helpers
+   (`accessibleKbIds`, `filterKbsForSession`) live in `src/lib/auth.ts`.
+2. ✅ **The two resolve-by-id routes are guarded.**
+   `POST /api/admin/import/staged/[stagedImportId]/commit` resolves the staged import's target
+   KB (via `getStagedImportDetail`) and `DELETE`/`PATCH /api/admin/redirects/[redirectId]`
+   resolve the redirect's KB (via the new `getRedirectById` helper in `kb-store.ts`); each
+   calls `requireKbAccess` before acting and returns 404 when the record doesn't exist.
+3. **Editor self-service of users/KBs is correctly blocked** (owner-only routes). There is
+   still no per-KB "manager/admin" tier — KB-wide Admin is all-or-nothing. Add a scoped admin
+   tier only if needed (not required for pilot).
 
-Enforcement was verified to not block Owners; the per-Editor 403 path depends on the same
-live-DB verification as KI-1 (assignments live in `kb_user_assignments`).
+Enforcement was verified to not block Owners; the per-Editor 403/filtering path depends on the
+same live-DB verification as KI-1 (assignments live in `kb_user_assignments`).
 
-### KI-2 — Recommended follow-ups (Medium / Low)
-* **Video asset model (Medium)**: Video links are stored in the asset `body`/version model designed for binary blobs (`fileSizeBytes: 0`, synthetic mime). The "replace file without breaking link" guarantee doesn't map to external URLs, and the stable file route would stream the URL as text. Give managed video dedicated columns (`provider`, `external_id`) instead of overloading `AssetVersion.body`.
-* **Alt text vs. asset description (Low)**: The "save alt to asset" option writes the image's alt into the asset `description` (no schema change). If alt and the human-facing description need to diverge, add a dedicated `alt_text` column rather than overloading `description`. Alt is otherwise stored per-image on the block, which is correct.
-* **Over-deep nesting is dropped, not flattened (Low)**: Card content beyond `MAX_NESTING_DEPTH = 3` is discarded on save rather than flattened. Prefer flattening or an explicit "nesting too deep" message over silent data loss.
-* **Status/publish toggle bypasses locks (Low)**: `updatePageStatus` intentionally does not enforce the edit lock (a status flip changes no content or path). Revisit if publish-time races become a concern.
-* **FTS visibility subquery scaling (Low)**: The correlated `NOT EXISTS` staff-prune is fine at pilot scale; add an index on `kb_pages(kb_id, visibility, path)` if KBs grow large.
+> **Fixed (assignment regression):** Assigning an editor to a KB previously failed with
+> `null value in column "email"` because `updateUser` issued a full-row UPDATE while the PATCH
+> route sent only changed fields. `updateUser` now does a partial update (`COALESCE` per column),
+> so role/assignment edits no longer null out the rest of the user row.
+
+### KI-2 — Recommended follow-ups (All resolved)
+* ✅ **Video asset model (Medium) — Resolved.** Managed videos now have dedicated `kb_assets`
+  columns — `video_provider`, `video_external_id`, `video_url` (migration `012`, backfilled in
+  app code for legacy rows) — instead of overloading the version `body`/synthetic mime. The
+  stable file route (`/kb/{slug}/files/{assetSlug}`) now **307-redirects** a video to its
+  canonical https URL (`videoDeliveryUrl` in `src/lib/video.ts`) rather than streaming the URL
+  as text. Verified by unit tests (`video.test.ts`) and a live-DB round-trip (`ki1.db.test.ts`).
+* ✅ **Alt text vs. asset description (Low) — Resolved.** Added a dedicated `kb_assets.alt_text`
+  column (migration `013`); "save alt to asset" now writes `altText` via `updateAssetAltText`,
+  so it no longer overloads the human-facing `description`. Verified live (`ki1.db.test.ts`).
+* ✅ **Over-deep nesting (Low) — Resolved.** Card content beyond `MAX_NESTING_DEPTH = 3` is now
+  **flattened up** into the parent level instead of being silently dropped on save
+  (`documentHtmlToBlocks` in `src/lib/page-document.ts`). Verified by `page-document.test.ts`.
+* ✅ **Status/publish toggle (Low) — Resolved.** `updatePageStatus` now updates **only** the
+  `status`/`updated_display_date` columns (`updatePageStatusColumn`) instead of rewriting the
+  whole row, so a publish/unpublish can't clobber a concurrent editor's content — which is why it
+  safely needs no edit lock. Verified live (`ki1.db.test.ts`).
+* ✅ **FTS visibility subquery scaling (Low) — Resolved.** Added index
+  `idx_kb_pages_staff_prune ON kb_pages(kb_id, visibility, path)` (migration `013`) to support the
+  staff-prune correlated subquery as KBs grow.
 
 ---
 
@@ -177,7 +207,7 @@ live-DB verification as KI-1 (assignments live in `kb_user_assignments`).
 * ⬜ Templates and advanced per-KB settings remain thin.
 
 ### Phase 3: Editor Content Evolution — ✅ Implemented
-* ✅ **Video Assets**: Video support in the asset library and a "Video Block" in the editor (with YouTube/Vimeo embed parsing). *See KI-2 re: the asset storage model.*
+* ✅ **Video Assets**: Video support in the asset library and a "Video Block" in the editor (with YouTube/Vimeo embed parsing), backed by dedicated `video_provider`/`video_external_id`/`video_url` columns (KI-2 resolved).
 * ✅ **Card Sections**: Block model refactored to support "Card" containers with reorderable children and style attributes.
 * ✅ **Media picker, link dialog, text/image alignment, alt-text editing, and internal editor notes.**
 * ✅ **Toolbar Polish**: Toolbar wraps correctly; button hover contrast fixed.
@@ -186,10 +216,15 @@ live-DB verification as KI-1 (assignments live in `kb_user_assignments`).
 * ✅ `TableOfContents` and editor metadata support configurable depth (H2 vs H2+H3), recursing into Cards.
 * ✅ Responsive 3-column docs layout with a sticky right-rail TOC.
 
-### Phase 5: Production Hardening — ⬜ Next
-* Resolve **KI-1** (live-DB verification of edit locks + FTS) and stand up the gated integration suite.
-* Close **KI-3** (filter admin list views by editor assignment; guard the two resolve-by-id routes).
-* Address **KI-2** follow-ups (video asset model, nesting-overflow handling).
+### Phase 5: Production Hardening — ✅ Implemented (one external step: add the CI DB secret)
+* ~~Resolve **KI-1**~~ — ✅ done. Live-DB verification of edit locks, atomic reorder, FTS, and
+  editor scoping is implemented as the gated suite `npm run test:db` and passes against Neon.
+  An atomicity regression found during this work was fixed. A GitHub Actions workflow
+  (`.github/workflows/ci.yml`) runs type-check + unit tests on every push/PR and runs the
+  live-DB suite when a `DATABASE_URL` repo secret (a Neon **test** branch) is configured.
+  **Remaining:** add that secret in GitHub repo settings.
+* ~~Close **KI-3**~~ — ✅ done (list-view filtering, owner-only users list, and the two resolve-by-id routes are all guarded).
+* ~~Address **KI-2** follow-ups~~ — ✅ all done (video asset model, alt-text column, card-nesting flatten, status-only update, FTS prune index).
 * Optional polish: TOC scroll-spy, deeper KB templates/settings.
 
 ---
@@ -198,11 +233,10 @@ live-DB verification as KI-1 (assignments live in `kb_user_assignments`).
 
 1.  **Professionalism**: UI matches WSU brand and feels high-end/stable.
 2.  **Accessibility**: WCAG 2.2 AA compliant. No "click here" links or missing alt text.
-3.  **Durability**: Asset replacement never breaks a public link. *(Caveat: does not yet hold for video links — see KI-2.)*
-4.  **Security**: Only authorized editors can modify assigned KBs, and public search never surfaces staff-only pages. *(Editor-scope enforcement on mutations and the staff-visibility prune are implemented; admin **list-view** filtering for editors is still pending (**KI-3**), and the per-editor 403 path plus the FTS prune require the **KI-1** live-DB verification before this criterion is fully met.)*
+3.  **Durability**: Asset replacement never breaks a public link. *(✅ Managed videos now also keep a stable public URL — the file route redirects to the canonical video link; see KI-2.)*
+4.  **Security**: Only authorized editors can modify assigned KBs, and public search never surfaces staff-only pages. *(✅ Met: editor-scope enforcement on mutations, admin **list-view** filtering, the per-editor `canAccessKb` path, and the staff-visibility FTS prune are all implemented and **verified against live Neon** — see KI-1.)*
 5.  **Simplicity**: The system is easier to use and navigate than Confluence.
 
-> **Production-readiness gate:** Criteria 3 and 4 depend on the verification described in
-> *Known Issues & Verification Gaps (KI-1)*. They are considered **met only after** the
-> live-DB lock-conflict, atomic-rollback, and FTS-safety checks pass against a real Neon
-> instance.
+> **Production-readiness gate:** Criterion 4's live-DB checks (lock-conflict, atomic-rollback,
+> FTS-safety, editor scoping) now **pass against a real Neon instance** via `npm run test:db`
+> (KI-1 resolved), so criterion 4 is met. Criterion 3 now holds for managed videos too (KI-2 video model resolved).

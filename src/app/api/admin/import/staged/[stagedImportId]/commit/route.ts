@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { commitStagedImport } from "@/lib/staged-imports";
-import { requireAdminMutation } from "@/lib/security";
+import { commitStagedImport, getStagedImportDetail } from "@/lib/staged-imports";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -14,6 +14,15 @@ export async function POST(
   }
 
   const { stagedImportId } = await context.params;
+
+  // Resolve the staged import's target KB and confirm the caller is assigned to it.
+  const detail = await getStagedImportDetail(stagedImportId);
+  if (!detail) {
+    return NextResponse.json({ message: "Staged import not found." }, { status: 404 });
+  }
+  const denied = await requireKbAccess(guard.session, detail.import.kbId);
+  if (denied) return denied;
+
   try {
     const { page, url } = await commitStagedImport(stagedImportId);
     return NextResponse.json({ ok: true, pageId: page.id, url });
