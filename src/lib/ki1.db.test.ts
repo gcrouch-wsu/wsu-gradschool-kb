@@ -112,6 +112,25 @@ describe.skipIf(!dbEnabled)("KI-1 live-DB integration", () => {
       expect((await readPage(id))?.title).toBe("Original");
     });
 
+    it("lets the lock holder save (no false conflict) and saves when no lock is held", async () => {
+      // Lock held by the same user who saves → must succeed.
+      const heldId = `page-${RUN}-held`;
+      await insertPage(makePage({ id: heldId, slug: "held", path: ["held"], title: "Before" }));
+      expect(await tryAcquirePageLock(heldId, "carol@test.edu")).toBe(true);
+      await expect(
+        updatePages([makePage({ id: heldId, slug: "held", path: ["held"], title: "After" })], "carol@test.edu"),
+      ).resolves.toBeUndefined();
+      expect((await readPage(heldId))?.title).toBe("After");
+
+      // No lock held at all → also succeeds.
+      const freeId = `page-${RUN}-free`;
+      await insertPage(makePage({ id: freeId, slug: "free", path: ["free"], title: "Before" }));
+      await expect(
+        updatePages([makePage({ id: freeId, slug: "free", path: ["free"], title: "After" })], "dave@test.edu"),
+      ).resolves.toBeUndefined();
+      expect((await readPage(freeId))?.title).toBe("After");
+    });
+
     it("rolls back the ENTIRE batch when one page in a multi-row write is locked", async () => {
       // This is the atomicity guarantee: a reorder/move touches many rows, and a
       // lock conflict on any one of them must leave NONE of them changed.

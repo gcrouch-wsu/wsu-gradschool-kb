@@ -415,7 +415,12 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
             AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
           RETURNING id
         )
-        SELECT CASE WHEN (SELECT count(*) FROM updated) = 0 THEN 1 / 0 ELSE 1 END AS ok
+        -- Dividing by the (non-constant) updated row count raises division_by_zero
+        -- (SQLSTATE 22012) when the row was locked, aborting and rolling back the
+        -- batch. A literal "1 / 0" must NOT be used here: Postgres folds constant
+        -- expressions at plan time and would raise it on EVERY save, not just
+        -- conflicts. The subquery count keeps the divisor runtime-evaluated.
+        SELECT 1 / (SELECT count(*) FROM updated)::int AS ok
       `;
     }
 
