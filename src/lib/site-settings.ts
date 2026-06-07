@@ -1,4 +1,4 @@
-import { mergeTheme, type KbTheme } from "./kb-theme";
+import { mergeTheme, SAFE_FONTS, type KbTheme } from "./kb-theme";
 import type { ContentBlock } from "./types";
 
 export interface NavLink {
@@ -10,9 +10,16 @@ export type Alignment = "left" | "center" | "right";
 
 export const ALIGNMENTS: Alignment[] = ["left", "center", "right"];
 
+export const BRAND_TEXT_WEIGHTS = ["", "400", "500", "600", "700", "800", "900"] as const;
+export type BrandTextWeight = (typeof BRAND_TEXT_WEIGHTS)[number];
+
 export interface SiteSettings {
   // Branding
   brandText: string;
+  brandTextColor: string; // hex; "" = inherit default
+  brandTextSize: string; // e.g. "1.1rem" / "20px"; "" = default
+  brandTextWeight: BrandTextWeight; // "" = default
+  brandTextFont: string; // SAFE_FONTS key; "" = inherit
   logoUrl: string;
   logoWidth: number; // px; 0 = natural size
   // Layout / placement
@@ -36,6 +43,10 @@ export interface SiteSettings {
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   brandText: "WSU Knowledge Base",
+  brandTextColor: "",
+  brandTextSize: "",
+  brandTextWeight: "",
+  brandTextFont: "",
   logoUrl: "",
   logoWidth: 0,
   headerAlignment: "left",
@@ -106,6 +117,26 @@ function safeLogoUrl(value: unknown): string {
   return "";
 }
 
+function safeBrandColor(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const raw = value.trim();
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(raw) ? raw.toLowerCase() : "";
+}
+
+function safeBrandSize(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const raw = value.trim();
+  return /^\d+(\.\d+)?(rem|px)$/i.test(raw) ? raw.toLowerCase() : "";
+}
+
+function safeBrandWeight(value: unknown): BrandTextWeight {
+  return BRAND_TEXT_WEIGHTS.includes(value as BrandTextWeight) ? (value as BrandTextWeight) : "";
+}
+
+function safeBrandFont(value: unknown): string {
+  return typeof value === "string" && value in SAFE_FONTS ? value : "";
+}
+
 export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, unknown>>): SiteSettings {
   const pickText = (key: keyof SiteSettings, fallback: string) => {
     const value = input[key];
@@ -132,6 +163,10 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
 
   return {
     brandText: pickText("brandText", DEFAULT_SITE_SETTINGS.brandText),
+    brandTextColor: safeBrandColor(input.brandTextColor),
+    brandTextSize: safeBrandSize(input.brandTextSize),
+    brandTextWeight: safeBrandWeight(input.brandTextWeight),
+    brandTextFont: safeBrandFont(input.brandTextFont),
     logoUrl: safeLogoUrl(input.logoUrl),
     logoWidth: pickNumber("logoWidth", DEFAULT_SITE_SETTINGS.logoWidth),
     headerAlignment: pickAlignment("headerAlignment", DEFAULT_SITE_SETTINGS.headerAlignment),

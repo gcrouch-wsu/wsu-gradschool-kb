@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { loadSiteSettings } from "@/lib/db";
-import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, fontStack, themeToCssVars } from "@/lib/kb-theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,6 +28,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   };
 
   const hasBrand = Boolean(settings.logoUrl || settings.brandText);
+  const brandTextStyle: CSSProperties = {
+    ...(settings.brandTextColor ? { color: settings.brandTextColor } : {}),
+    ...(settings.brandTextSize ? { fontSize: settings.brandTextSize } : {}),
+    ...(settings.brandTextWeight ? { fontWeight: Number(settings.brandTextWeight) } : {}),
+    ...(settings.brandTextFont ? { fontFamily: fontStack(settings.brandTextFont) } : {}),
+  };
   const headerAlignClass =
     settings.headerAlignment === "center"
       ? " is-center"
@@ -54,7 +60,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     style={settings.logoWidth ? { width: `${settings.logoWidth}px`, maxHeight: "none" } : undefined}
                   />
                 )}
-                {settings.brandText && <span className="brand__text">{settings.brandText}</span>}
+                {settings.brandText && (
+                  <span className="brand__text" style={brandTextStyle}>
+                    {settings.brandText}
+                  </span>
+                )}
               </Link>
             )}
             <nav className="nav" aria-label="Primary">

@@ -4,8 +4,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { ThemeEditor } from "@/components/ThemeEditor";
-import { DEFAULT_THEME } from "@/lib/kb-theme";
-import { ALIGNMENTS, type Alignment, type NavLink, type SiteSettings } from "@/lib/site-settings";
+import { DEFAULT_THEME, SAFE_FONTS } from "@/lib/kb-theme";
+import {
+  ALIGNMENTS,
+  BRAND_TEXT_WEIGHTS,
+  type Alignment,
+  type BrandTextWeight,
+  type NavLink,
+  type SiteSettings,
+} from "@/lib/site-settings";
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
@@ -348,6 +355,70 @@ export default function AdminSettingsPage() {
                   onChange={(e) => update("brandText", e.target.value)}
                 />
               </label>
+
+              <div className="field-group">
+                <span className="meta">Brand text style (leave any field at default to inherit)</span>
+                <div className="field-row">
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Color</span>
+                    <div className="theme-color__inputs">
+                      <input
+                        aria-label="Brand text color"
+                        type="color"
+                        value={settings.brandTextColor || "#1d1a1b"}
+                        onChange={(e) => update("brandTextColor", e.target.value)}
+                      />
+                      <input
+                        className="input"
+                        placeholder="Default"
+                        value={settings.brandTextColor}
+                        onChange={(e) => update("brandTextColor", e.target.value)}
+                      />
+                    </div>
+                  </label>
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Size (e.g. 1.1rem or 20px)</span>
+                    <input
+                      className="input"
+                      placeholder="Default"
+                      value={settings.brandTextSize}
+                      onChange={(e) => update("brandTextSize", e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="field-row">
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Weight</span>
+                    <select
+                      className="input"
+                      value={settings.brandTextWeight}
+                      onChange={(e) => update("brandTextWeight", e.target.value as BrandTextWeight)}
+                    >
+                      {BRAND_TEXT_WEIGHTS.map((w) => (
+                        <option key={w || "default"} value={w}>
+                          {w === "" ? "Default" : w}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Font</span>
+                    <select
+                      className="input"
+                      value={settings.brandTextFont}
+                      onChange={(e) => update("brandTextFont", e.target.value)}
+                    >
+                      <option value="">Default</option>
+                      {Object.entries(SAFE_FONTS).map(([key, font]) => (
+                        <option key={key} value={key}>
+                          {font.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
               <label>
                 <span className="meta">Header alignment</span>
                 <select

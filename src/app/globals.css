@@ -780,6 +780,38 @@ p {
   box-shadow: none;
 }
 
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.7rem 1.1rem;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.tab-button:hover {
+  color: var(--ink);
+  background: var(--wash);
+}
+
+.tab-button.is-active {
+  color: var(--wsu-crimson);
+  border-bottom-color: var(--wsu-crimson);
+}
+
 .form {
   display: grid;
   gap: 1.25rem;
