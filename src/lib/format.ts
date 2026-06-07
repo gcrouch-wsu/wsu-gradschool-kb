@@ -6,7 +6,10 @@ export function formatDate(date: string) {
   }).format(new Date(Date.UTC(year, month - 1, day, 19)));
 }
 
-export function formatTimestamp(value: string | Date) {
+export function formatTimestamp(value: string | Date | null | undefined) {
+  if (!value) {
+    return "";
+  }
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "";

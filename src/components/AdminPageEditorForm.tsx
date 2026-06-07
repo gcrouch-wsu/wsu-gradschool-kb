@@ -569,7 +569,7 @@ export function AdminPageEditorForm({
           </label>
           {verifiedAt && (
             <p className="meta" style={{ color: "var(--success)" }}>
-              ✓ Verified on {formatTimestamp(verifiedAt)} by {verifiedBy}
+              ✓ Verified on {formatTimestamp(verifiedAt)}{verifiedBy ? ` by ${verifiedBy}` : ""}
             </p>
           )}
           <div style={{ marginTop: "0.5rem" }}>

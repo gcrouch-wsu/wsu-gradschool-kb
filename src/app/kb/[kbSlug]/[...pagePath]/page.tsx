@@ -83,6 +83,9 @@ export default async function KbArticlePage({
 
   const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
   const themeVars = themeToCssVars(kb.theme ?? DEFAULT_THEME) as CSSProperties;
+  const verifiedLabel = page.verifiedAt
+    ? `Verified${page.verifiedBy ? ` by ${page.verifiedBy}` : ""} on ${formatTimestamp(page.verifiedAt)}`
+    : "";
 
   return (
     <div className="page-shell kb-theme-root" style={themeVars}>
@@ -119,8 +122,8 @@ export default async function KbArticlePage({
             {page.verifiedAt && (
               <span
                 className="badge badge--verified"
-                aria-label={`Verified by ${page.verifiedBy} on ${formatTimestamp(page.verifiedAt)}`}
-                title={`Verified by ${page.verifiedBy} on ${formatTimestamp(page.verifiedAt)}`}
+                aria-label={verifiedLabel}
+                title={verifiedLabel}
               >
                 <span aria-hidden="true">✓</span> Verified
               </span>
