@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, getSql, ensureSchema } from "@/lib/db";
+import { filterKbsForSession } from "@/lib/auth";
 import { requireAdminMutation } from "@/lib/security";
 import { slugify } from "@/lib/slug";
 import type { KnowledgeBase } from "@/lib/types";
@@ -8,10 +9,6 @@ export async function GET(request: Request) {
 
   const guard = await requireAdminMutation(request);
   if (!guard.ok) return guard.response;
-
-  if (guard.session.role !== "owner" && guard.session.role !== "admin") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
 
   if (!isDatabaseEnabled()) {
 
@@ -23,7 +20,7 @@ export async function GET(request: Request) {
 
   try {
     const rows = await sql`SELECT * FROM knowledge_bases ORDER BY title`;
-    const kbs: KnowledgeBase[] = rows.map((row: any) => ({
+    const allKbs: KnowledgeBase[] = rows.map((row: any) => ({
       id: row.id,
       title: row.title,
       slug: row.slug,
@@ -31,6 +28,7 @@ export async function GET(request: Request) {
       status: row.status,
       updatedOn: row.updated_on,
     }));
+    const kbs = await filterKbsForSession(guard.session, allKbs);
     return NextResponse.json({ kbs });
   } catch (error) {
     return NextResponse.json({ message: "Failed to list knowledge bases." }, { status: 500 });

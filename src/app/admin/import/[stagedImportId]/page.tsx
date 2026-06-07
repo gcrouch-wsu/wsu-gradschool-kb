@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminStagedImportReview, type ImportKbOption } from "@/components/AdminStagedImportReview";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { canAccessKb, filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
 import { getStagedImportDetail } from "@/lib/staged-imports";
 
@@ -21,7 +21,11 @@ export default async function AdminStagedImportReviewPage({
     notFound();
   }
 
-  const kbs = await getAllKbsForAdmin();
+  if (!(await canAccessKb(session, detail.import.kbId))) {
+    notFound();
+  }
+
+  const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const kbOptions: ImportKbOption[] = await Promise.all(
     kbs.map(async (kb) => {
       const pages = await getAllPagesForAdmin(kb.id);

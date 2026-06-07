@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminAssetDetailPanel } from "@/components/AdminAssetDetailPanel";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { canAccessKb, getCurrentAdminSession } from "@/lib/auth";
 import { formatBytes, formatDate } from "@/lib/format";
 import { getAssetAdminDetail, getKbById } from "@/lib/kb-store";
 
@@ -18,6 +18,10 @@ export default async function AdminAssetDetailPage({
   const { assetId } = await params;
   const detail = await getAssetAdminDetail(assetId);
   if (!detail) {
+    notFound();
+  }
+
+  if (!(await canAccessKb(session, detail.asset.homeKbId))) {
     notFound();
   }
 

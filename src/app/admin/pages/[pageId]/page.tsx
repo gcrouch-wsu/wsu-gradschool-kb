@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminPageEditorForm } from "@/components/AdminPageEditorForm";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { canAccessKb, getCurrentAdminSession } from "@/lib/auth";
 import { getAllPagesForAdmin, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -26,6 +26,10 @@ export default async function AdminEditPage({
 
   const kb = await getKbById(page.kbId);
   if (!kb) {
+    notFound();
+  }
+
+  if (!(await canAccessKb(session, kb.id))) {
     notFound();
   }
 

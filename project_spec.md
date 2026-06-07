@@ -81,12 +81,15 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 | Site settings | yes | no | no | owner-only |
 | Audit log | yes | yes | no | owner/admin-only |
 
-> ✅ **The matrix is now enforced across these paths (FB-11 implemented).** The previously-unscoped
-> editor-reachable paths were closed: the redirects `GET` and staged-import `GET`/`PATCH`/`DELETE`
-> now call `requireKbAccess` (resolving the import's `kbId` first), and the import / redirects /
-> review admin list pages now filter to the editor's assigned KBs via `accessibleKbIds` /
-> `filterKbsForSession`. When adding a new editor-reachable route, apply the same guard — per-KB
-> enforcement only takes real effect with `DATABASE_URL` set (assignments live in Neon).
+> ✅ **The matrix is enforced across API routes, list views, and detail/edit pages (FB-11 + FB-15).**
+> Closed in two passes: (1) `requireKbAccess` on the redirects `GET` and staged-import
+> `GET`/`PATCH`/`DELETE` (resolving the import's `kbId` first), plus list-view scoping on the import /
+> redirects / review pages; (2) `canAccessKb(...) → notFound()` guards on the detail/edit server
+> components for pages, assets, and staged imports (`src/app/admin/pages/[pageId]/page.tsx`,
+> `src/app/admin/assets/[assetId]/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`).
+> `GET /api/admin/kbs` returns the editor's assigned KBs (FB-16) so page creation works for editors.
+> When adding a new editor-reachable route or page, apply the same guard — per-KB enforcement only
+> takes real effect with `DATABASE_URL` set (assignments live in Neon).
 
 ## 4. Tech stack
 
@@ -270,9 +273,10 @@ in-memory run never sees a database.
   `<iframe>`s; the CSP in `src/proxy.ts` allowlists those hosts. If you add a provider in
   `src/components/PageBlocks.tsx` (or `src/lib/video.ts`), add its host to `frame-src` too, or the
   embed silently fails to load. Do **not** add hosts to `script-src`.
-- **Apply `requireKbAccess` / `accessibleKbIds` on every new editor-reachable route.** Scoping is
-  enforced everywhere today (see §3 matrix), but it is per-route, not global middleware — a new admin
-  API or page is unscoped until you add the guard. Per-KB enforcement is real only with `DATABASE_URL`.
+- **Apply a KB-scope guard on every new editor-reachable route AND page.** Scoping is per-route, not
+  global middleware: API routes use `requireKbAccess`, admin list views use `filterKbsForSession` /
+  `accessibleKbIds`, and detail/edit server components use `canAccessKb(...) → notFound()`. A new admin
+  surface is unscoped until you add one. Per-KB enforcement is real only with `DATABASE_URL`.
 - **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
 
 ---
@@ -568,3 +572,32 @@ Items are ordered by recommended priority.
 - **Touch points:** `project_spec.md`, `src/components/PrintPdfButton.tsx`, print CSS, a11y tests/docs.
 - **Acceptance:** the spec states the exact PDF mechanism and its verification criteria, and (if
   required) a tagged PDF passes a PDF/UA or equivalent check.
+
+---
+
+> Items FB-15–FB-16 were surfaced by a second independent review (Gemini, 2026-06-07), which found
+> that FB-11 had closed the API/list-view gaps but **not** the detail/edit pages. Both are now fixed.
+
+### FB-15 — Scope admin detail/edit pages to assigned KBs
+
+`[AI-AGENT-TASK] id:FB-15  priority:high  area:authz  effort:S  status:done`
+
+- **DONE (2026-06-07):** the detail/edit server components fetched a record by id and rendered it with
+  no KB check, so an editor who knew an id could **view** (and lock) another KB's page/asset/import —
+  though saves were already rejected by the scoped mutation APIs (`requireKbAccess` in
+  `src/app/api/admin/pages/[pageId]/route.ts` etc.). Added `canAccessKb(session, kbId) → notFound()`
+  guards to `src/app/admin/pages/[pageId]/page.tsx`, `src/app/admin/assets/[assetId]/page.tsx`, and
+  `src/app/admin/import/[stagedImportId]/page.tsx` (the import review's KB picker is now filtered with
+  `filterKbsForSession`).
+- **Follow-up (rolls into FB-08):** add live-DB regression tests asserting an editor gets `notFound`
+  on a detail page outside their assigned KBs.
+
+### FB-16 — Let editors list their KBs for page creation
+
+`[AI-AGENT-TASK] id:FB-16  priority:med  area:authz-ux  effort:S  status:done`
+
+- **DONE (2026-06-07):** `GET /api/admin/kbs` previously hard-`403`d non-admins, which left the
+  `admin/pages/new` KB dropdown empty for editors and broke their page-creation workflow (even though
+  the role model grants editors page authoring in assigned KBs). The route now returns
+  `filterKbsForSession(session, allKbs)` — owners/admins still get all KBs, editors get their assigned
+  set. The owner-only KB/user management screens are unaffected (owners are unrestricted).
