@@ -155,7 +155,7 @@ export function AdminPageEditorForm({
           missedHeartbeats.current = 0;
           setLockError(null);
         }
-      } catch (err) {
+      } catch {
         missedHeartbeats.current += 1;
         if (missedHeartbeats.current >= 3) {
           setLockError("Page lock could not be renewed. Check your connection before continuing.");
@@ -165,8 +165,7 @@ export function AdminPageEditorForm({
     }
 
     heartbeatLock();
-    interval = setInterval(heartbeatLock, 60000); 
-
+    interval = setInterval(heartbeatLock, 60000);
     return () => {
       clearInterval(interval);
       fetch(`/api/admin/pages/${page.id}/lock`, { method: "DELETE", keepalive: true }).catch(() => {});
