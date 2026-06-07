@@ -626,6 +626,13 @@ Items are ordered by recommended priority.
   The PDF export now includes essential governance metadata in the print output, and print CSS is
   optimized for article clarity. Precise accessibility is maintained via high-quality print-to-PDF
   over semantic HTML.
+- **Audit hardening (2026-06-07):** the `verified_at` (`TIMESTAMPTZ`) value is now rendered through a
+  single timezone-correct helper, `formatTimestamp` in `src/lib/format.ts`, which formats the instant
+  directly in `America/Los_Angeles`. This replaced an unsafe `verifiedAt.split("T")` (which crashes or
+  prints `Invalid Date` depending on how the Neon driver serializes the column) and unified the three
+  former representations (print block, on-screen badge tooltip, editor confirmation) onto one helper.
+  The verified badge now carries an `aria-label` with the glyph marked `aria-hidden`, and empty
+  governance lines are no longer printed.
 
 ---
 
@@ -689,10 +696,16 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-19  priority:high  area:search  effort:M  status:in-progress`
 
-- **DONE (2026-06-07):** Gap Analysis is implemented. Every search query (and its result count) is now
-  recorded in the audit log. A new "Search Gap Analysis" report in the Admin Audit area identifies
-  zero-result searches, helping Owners proactively address missing content. Vector-based semantic
-  search foundation is laid.
+- **DONE (2026-06-07):** Gap Analysis is implemented. A "Search Gap Analysis" report in the Admin Audit
+  area identifies zero-result searches, helping Owners proactively address missing content. Vector-based
+  semantic search foundation is laid.
+- **Audit hardening (2026-06-07):** the original design logged *every* search to the shared
+  `kb_audit_log` and filtered for zero-result rows in the page after a `LIMIT 200` — so under real
+  traffic the gap report saw mostly successful searches and real admin events were crowded out of the
+  capped audit view. `recordSearchEvent` (`src/lib/audit-log.ts`) now persists **only** zero-result
+  queries, and `listAuditEvents` excludes `entity_type = 'search'` from the default admin audit list
+  (both the SQL and in-memory paths) unless that entity type is explicitly filtered. The in-memory
+  search path now records gaps too, for zero-config parity.
 - **Acceptance:** Owners can identify missing content via the new `/admin/audit/search` dashboard.
 
 ### FB-20 — Content Lifecycle & Staleness Triggers
@@ -703,6 +716,17 @@ Items are ordered by recommended priority.
   Implemented a "Verify now" action in the Page Editor that resets the 6-month review clock. Public
   pages now display a "✓ Verified" trust badge with governance metadata. "Needs Review" badges appear
   automatically in the admin tree for stale content.
+- **Audit hardening (2026-06-07):** the verify API (`src/app/api/admin/pages/[pageId]/verify/route.ts`)
+  now follows the canonical mutation sequence — `requireAdminMutation` (authn/CSRF) **before** the
+  existence/404 check (closing a page-id enumeration oracle), then `getPageByIdForAdmin`, then
+  `requireKbAccess`, then the mutation. The mutation is a unified `verifyPage(page, verifier)` in
+  `src/lib/kb-store.ts` that branches on `isDatabaseEnabled()`: a targeted `updatePageLifecycle` UPDATE
+  for Neon (no longer a full-row `updatePages` rewrite, eliminating a lost-update race and a misleading
+  "page is locked" error) and `storeRuntimePage` for in-memory mode (fixing a hard crash when no
+  `DATABASE_URL` is set). The route passes its already-loaded page into `verifyPage`, so the page is
+  read once. Separately, the editor's "Next review date" field is now parsed by
+  `PATCH /api/admin/pages/[pageId]` and threaded through `updatePage` (it was previously dropped on
+  save); normal saves still preserve `verified_at`/`verified_by` via the existing-record spread.
 
 ### FB-21 — Change Requests / Proposed Edits Workflow
 

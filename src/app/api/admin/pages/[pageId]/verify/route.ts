@@ -23,7 +23,7 @@ export async function POST(
     const accessError = await requireKbAccess(guard.session, page.kbId);
     if (accessError) return accessError;
 
-    const { verifiedAt, verifiedBy, nextReviewDate } = await verifyPage(pageId, guard.email);
+    const { verifiedAt, verifiedBy, nextReviewDate } = await verifyPage(page, guard.email);
 
     await recordAuditEvent({
       session: guard.session,

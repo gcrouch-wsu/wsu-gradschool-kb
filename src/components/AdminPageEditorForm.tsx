@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
+import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
 
@@ -568,7 +569,7 @@ export function AdminPageEditorForm({
           </label>
           {verifiedAt && (
             <p className="meta" style={{ color: "var(--success)" }}>
-              ✓ Verified on {new Date(verifiedAt).toLocaleDateString()} by {verifiedBy}
+              ✓ Verified on {formatTimestamp(verifiedAt)} by {verifiedBy}
             </p>
           )}
           <div style={{ marginTop: "0.5rem" }}>

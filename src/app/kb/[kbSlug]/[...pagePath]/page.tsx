@@ -15,7 +15,7 @@ import {
   getKbBySlug,
   getPageByPath,
 } from "@/lib/kb-store";
-import { formatBytes, formatDate } from "@/lib/format";
+import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
 import type { CSSProperties } from "react";
 
@@ -119,8 +119,8 @@ export default async function KbArticlePage({
             {page.verifiedAt && (
               <span
                 className="badge badge--verified"
-                aria-label={`Verified by ${page.verifiedBy} on ${new Date(page.verifiedAt).toLocaleDateString()}`}
-                title={`Verified by ${page.verifiedBy} on ${new Date(page.verifiedAt).toLocaleDateString()}`}
+                aria-label={`Verified by ${page.verifiedBy} on ${formatTimestamp(page.verifiedAt)}`}
+                title={`Verified by ${page.verifiedBy} on ${formatTimestamp(page.verifiedAt)}`}
               >
                 <span aria-hidden="true">✓</span> Verified
               </span>
@@ -148,7 +148,7 @@ export default async function KbArticlePage({
               <p className="meta"><strong>Contact:</strong> {page.contactEmail}</p>
             )}
             {page.verifiedAt && (
-              <p className="meta"><strong>Verified On:</strong> {formatDate(new Date(page.verifiedAt).toISOString().slice(0, 10))}</p>
+              <p className="meta"><strong>Verified On:</strong> {formatTimestamp(page.verifiedAt)}</p>
             )}
           </div>
 
