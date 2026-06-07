@@ -13,6 +13,7 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState<"general" | "styling">("general");
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -86,155 +87,176 @@ export default function AdminSettingsPage() {
         <Link href="/admin">← Back to admin</Link>
       </p>
       <h1>Site settings</h1>
-      <p className="lead">Control site-wide content, including the home page, headers, and footers.</p>
+      <p className="lead">Control site-wide content and global branding.</p>
 
       {error && <p className="alert alert--error">{error}</p>}
-      {saved && <p className="alert">Saved. The changes will be reflected across the platform.</p>}
+      {saved && <p className="alert alert--success">Saved successfully.</p>}
 
-      {settings && (
+      <div className="admin-tabs" style={{ marginBottom: "2rem" }}>
+        <button
+          className={`tab-button ${activeTab === "general" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("general")}
+        >
+          General Content
+        </button>
+        <button
+          className={`tab-button ${activeTab === "styling" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("styling")}
+        >
+          Global Styling
+        </button>
+      </div>
+
+      {settings && activeTab === "general" && (
         <form className="form" onSubmit={handleSave}>
-          <section className="card" style={{ maxWidth: "48rem", marginBottom: "2rem" }}>
-            <h2>Home Page Hero</h2>
-            <label>
-              <span className="meta">Home eyebrow (small label above the title)</span>
-              <input
-                className="input"
-                value={settings.homeEyebrow}
-                onChange={(e) => update("homeEyebrow", e.target.value)}
-              />
-            </label>
-            <label>
-              <span className="meta">Home title</span>
-              <input
-                className="input"
-                value={settings.homeTitle}
-                onChange={(e) => update("homeTitle", e.target.value)}
-              />
-            </label>
-            <label>
-              <span className="meta">Home intro paragraph</span>
-              <textarea
-                className="input"
-                rows={4}
-                value={settings.homeIntro}
-                onChange={(e) => update("homeIntro", e.target.value)}
-              />
-            </label>
-          </section>
+          <div className="grid grid--two">
+            <section className="card">
+              <h2>Home Page Hero</h2>
+              <p className="meta">The main heading and introduction on the site home page.</p>
+              <label>
+                <span className="meta">Home title</span>
+                <input
+                  className="input"
+                  required
+                  value={settings.homeTitle}
+                  onChange={(e) => update("homeTitle", e.target.value)}
+                />
+              </label>
+              <label>
+                <span className="meta">Home eyebrow</span>
+                <input
+                  className="input"
+                  value={settings.homeEyebrow}
+                  onChange={(e) => update("homeEyebrow", e.target.value)}
+                />
+              </label>
+              <label>
+                <span className="meta">Home intro paragraph</span>
+                <textarea
+                  className="input"
+                  rows={4}
+                  value={settings.homeIntro}
+                  onChange={(e) => update("homeIntro", e.target.value)}
+                />
+              </label>
+            </section>
 
-          <section className="card" style={{ maxWidth: "48rem", marginBottom: "2rem" }}>
-            <h2>Global Header</h2>
-            <div className="field-group">
-              <span className="meta">Header Navigation Links</span>
-              {settings.headerLinks.map((link, i) => (
-                <div key={i} className="field-row">
+            <section className="card">
+              <h2>Site Header</h2>
+              <div className="field-group">
+                <span className="meta">Navigation Links</span>
+                {settings.headerLinks.map((link, i) => (
+                  <div key={i} className="field-row">
+                    <input
+                      className="input"
+                      placeholder="Label"
+                      value={link.label}
+                      onChange={(e) => updateLinks("headerLinks", i, "label", e.target.value)}
+                    />
+                    <input
+                      className="input"
+                      placeholder="URL"
+                      value={link.url}
+                      onChange={(e) => updateLinks("headerLinks", i, "url", e.target.value)}
+                    />
+                    <button type="button" className="button button--ghost" onClick={() => removeLink("headerLinks", i)}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="button button--ghost" onClick={() => addLink("headerLinks")}>
+                  + Add Link
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <section className="card" style={{ marginTop: "2rem" }}>
+            <h2>Site Footer</h2>
+            <div className="grid grid--two">
+              <div>
+                <label>
+                  <span className="meta">Copyright/Brand Text</span>
                   <input
                     className="input"
-                    placeholder="Label"
-                    value={link.label}
-                    onChange={(e) => updateLinks("headerLinks", i, "label", e.target.value)}
+                    value={settings.footerText}
+                    onChange={(e) => update("footerText", e.target.value)}
                   />
+                </label>
+                <label>
+                  <span className="meta">Contact Information</span>
                   <input
                     className="input"
-                    placeholder="URL"
-                    value={link.url}
-                    onChange={(e) => updateLinks("headerLinks", i, "url", e.target.value)}
+                    value={settings.contactInfo}
+                    onChange={(e) => update("contactInfo", e.target.value)}
                   />
-                  <button type="button" className="button button--ghost" onClick={() => removeLink("headerLinks", i)}>
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button type="button" className="button button--ghost" onClick={() => addLink("headerLinks")}>
-                + Add Link
-              </button>
+                </label>
+              </div>
+              <div className="field-group">
+                <span className="meta">Footer Links</span>
+                {settings.footerLinks.map((link, i) => (
+                  <div key={i} className="field-row">
+                    <input
+                      className="input"
+                      placeholder="Label"
+                      value={link.label}
+                      onChange={(e) => updateLinks("footerLinks", i, "label", e.target.value)}
+                    />
+                    <input
+                      className="input"
+                      placeholder="URL"
+                      value={link.url}
+                      onChange={(e) => updateLinks("footerLinks", i, "url", e.target.value)}
+                    />
+                    <button type="button" className="button button--ghost" onClick={() => removeLink("footerLinks", i)}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="button button--ghost" onClick={() => addLink("footerLinks")}>
+                  + Add Link
+                </button>
+              </div>
             </div>
           </section>
 
-          <section className="card" style={{ maxWidth: "48rem", marginBottom: "2rem" }}>
-            <h2>Global Footer</h2>
-            <label>
-              <span className="meta">Footer Copyright/Brand Text</span>
-              <input
-                className="input"
-                value={settings.footerText}
-                onChange={(e) => update("footerText", e.target.value)}
-              />
-            </label>
-            <label>
-              <span className="meta">Contact Information</span>
-              <input
-                className="input"
-                value={settings.contactInfo}
-                onChange={(e) => update("contactInfo", e.target.value)}
-              />
-            </label>
-            <div className="field-group">
-              <span className="meta">Footer Navigation Links</span>
-              {settings.footerLinks.map((link, i) => (
-                <div key={i} className="field-row">
-                  <input
-                    className="input"
-                    placeholder="Label"
-                    value={link.label}
-                    onChange={(e) => updateLinks("footerLinks", i, "label", e.target.value)}
-                  />
-                  <input
-                    className="input"
-                    placeholder="URL"
-                    value={link.url}
-                    onChange={(e) => updateLinks("footerLinks", i, "url", e.target.value)}
-                  />
-                  <button type="button" className="button button--ghost" onClick={() => removeLink("footerLinks", i)}>
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button type="button" className="button button--ghost" onClick={() => addLink("footerLinks")}>
-                + Add Link
-              </button>
-            </div>
-          </section>
-
-          <div className="admin-actions">
+          <div className="admin-actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save all settings"}
+              {saving ? "Saving…" : "Save general settings"}
             </button>
           </div>
         </form>
       )}
 
-      {settings && (
-        <>
-          <hr style={{ margin: "4rem 0", border: "none", borderTop: "1px solid var(--line)" }} />
-
-          <section>
+      {settings && activeTab === "styling" && (
+        <section>
+          <div className="card" style={{ marginBottom: "2rem" }}>
             <h2>Global Default Styling</h2>
             <p className="lead">
               Adjust the default brand colors and fonts for the entire platform. Individual knowledge bases
               inherit these unless they define their own overrides.
             </p>
-            <ThemeEditor
-              dbEnabled={isDatabaseEnabled()}
-              initialTheme={settings.globalTheme || DEFAULT_THEME}
-              kbTitle="Global Default"
-              onSave={async (newTheme) => {
-                const nextSettings = { ...settings, globalTheme: newTheme };
-                const res = await fetch("/api/admin/settings", {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(nextSettings),
-                });
-                if (!res.ok) {
-                  const data = await res.json().catch(() => ({}));
-                  throw new Error(data.message || "Failed to save global theme");
-                }
-                const data = await res.json();
-                setSettings(data.settings);
-              }}
-            />
-          </section>
-        </>
+          </div>
+          <ThemeEditor
+            dbEnabled={isDatabaseEnabled()}
+            initialTheme={settings.globalTheme || DEFAULT_THEME}
+            kbTitle="Global Default"
+            onSave={async (newTheme) => {
+              const nextSettings = { ...settings, globalTheme: newTheme };
+              const res = await fetch("/api/admin/settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(nextSettings),
+              });
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.message || "Failed to save global theme");
+              }
+              const data = await res.json();
+              setSettings(data.settings);
+            }}
+          />
+        </section>
       )}
     </div>
   );
