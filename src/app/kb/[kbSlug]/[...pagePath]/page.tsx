@@ -119,9 +119,10 @@ export default async function KbArticlePage({
             {page.verifiedAt && (
               <span
                 className="badge badge--verified"
+                aria-label={`Verified by ${page.verifiedBy} on ${new Date(page.verifiedAt).toLocaleDateString()}`}
                 title={`Verified by ${page.verifiedBy} on ${new Date(page.verifiedAt).toLocaleDateString()}`}
               >
-                ✓ Verified
+                <span aria-hidden="true">✓</span> Verified
               </span>
             )}
           </p>
@@ -140,10 +141,14 @@ export default async function KbArticlePage({
           </div>
 
           <div className="print-only" style={{ marginBottom: "2rem", borderBottom: "1px solid var(--line)", paddingBottom: "1rem" }}>
-            <p className="meta"><strong>Responsible Office:</strong> {page.ownerLabel}</p>
-            <p className="meta"><strong>Contact:</strong> {page.contactEmail}</p>
+            {page.ownerLabel && (
+              <p className="meta"><strong>Responsible Office:</strong> {page.ownerLabel}</p>
+            )}
+            {page.contactEmail && (
+              <p className="meta"><strong>Contact:</strong> {page.contactEmail}</p>
+            )}
             {page.verifiedAt && (
-              <p className="meta"><strong>Verified On:</strong> {formatDate(page.verifiedAt.split("T")[0])}</p>
+              <p className="meta"><strong>Verified On:</strong> {formatDate(new Date(page.verifiedAt).toISOString().slice(0, 10))}</p>
             )}
           </div>
 

@@ -798,7 +798,9 @@ export async function searchKb(
   }
 
   scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
-  return scored.map((entry) => entry.result);
+  const memoryResults = scored.map((entry) => entry.result);
+  recordSearchEvent({ query, kbId, resultCount: memoryResults.length }).catch(() => {});
+  return memoryResults;
 }
 
 export async function getAdminCounts() {
@@ -1067,6 +1069,7 @@ export interface UpdatePageInput {
   showToc?: boolean;
   tocDepth?: number;
   showSummary?: boolean;
+  nextReviewDate?: string | null;
 }
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -1154,6 +1157,7 @@ export async function updatePage(input: UpdatePageInput, editorEmail?: string): 
           showToc: input.showToc ?? page.showToc,
           tocDepth: input.tocDepth ?? page.tocDepth,
           showSummary: input.showSummary ?? page.showSummary,
+          nextReviewDate: input.nextReviewDate ?? page.nextReviewDate,
         };
       }
       return {

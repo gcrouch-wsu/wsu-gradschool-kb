@@ -74,6 +74,9 @@ export async function recordSearchEvent(input: {
   kbId?: string | null;
   resultCount: number;
 }): Promise<void> {
+  if (input.resultCount > 0) {
+    return;
+  }
   const entry: AuditLogEntry = {
     id: `search-${crypto.randomUUID()}`,
     actorEmail: "public-user",
@@ -145,6 +148,7 @@ function matchesMemoryFilter(entry: AuditLogEntry, filter: AuditFilter) {
     const haystack = `${entry.actorEmail} ${entry.action} ${entry.entityType} ${entry.entityLabel}`.toLowerCase();
     if (!haystack.includes(q)) return false;
   }
+  if (!filter.entityType && entry.entityType === "search") return false;
   if (filter.action && entry.action !== filter.action) return false;
   if (filter.entityType && entry.entityType !== filter.entityType) return false;
   if (filter.kbId && entry.kbId !== filter.kbId) return false;
@@ -170,6 +174,7 @@ export async function listAuditEvents(filter: AuditFilter = {}): Promise<AuditLo
       entity_type ILIKE '%' || ${q} || '%' OR
       entity_label ILIKE '%' || ${q} || '%'
     ))
+      AND (${filter.entityType || null}::text IS NOT NULL OR entity_type <> 'search')
       AND (${filter.action || null}::text IS NULL OR action = ${filter.action || null})
       AND (${filter.entityType || null}::text IS NULL OR entity_type = ${filter.entityType || null})
       AND (${filter.kbId || null}::text IS NULL OR kb_id = ${filter.kbId || null})

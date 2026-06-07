@@ -462,6 +462,22 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
   }
 }
 
+export async function updatePageLifecycle(
+  pageId: string,
+  fields: { verifiedAt?: string | null; verifiedBy?: string | null; nextReviewDate?: string | null },
+): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE kb_pages
+    SET
+      verified_at = ${fields.verifiedAt ?? null},
+      verified_by = ${fields.verifiedBy ?? null},
+      next_review_date = ${fields.nextReviewDate ?? null}
+    WHERE id = ${pageId}
+  `;
+}
+
 export async function tryAcquirePageLock(pageId: string, userEmail: string): Promise<boolean> {
   await ensureSchema();
   const sql = getSql();
