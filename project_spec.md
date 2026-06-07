@@ -46,7 +46,8 @@ Concretely, the platform must:
 
 **In scope (built):** public multi-KB reading experience; a custom block/rich-text editor; managed
 assets with versioning and stable URLs; Postgres full-text search; Owner/Admin/Editor auth with
-per-KB scoping; per-KB theming and owner-level site settings; DOCX staged import; automatic
+per-KB scoping; per-KB theming, a global default theme, and owner-level site settings (home content,
+branding/logo, and layout); DOCX staged import; automatic
 redirects; DB-backed edit locks; a publish-time accessibility/governance gate; an audit log; and
 print-to-PDF export (browser print over semantic HTML — see §9 for the exact mechanism).
 
@@ -209,11 +210,23 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
   is atomic; a lock conflict on any row aborts and rolls back the batch. Status-only changes use
   `updatePageStatusColumn` (no lock, no full-row rewrite). **See the §8 gotcha about the abort guard.**
 
-### Site settings (`src/lib/db.ts` `loadSiteSettings`/`saveSiteSettings`, `/admin/settings`)
-- Owner-editable, single-row `site_settings` table read by the public shell. Covers the home hero
-  copy (eyebrow/title/intro), global **header links**, **footer text + links**, and platform
-  **contact info**. Falls back to defaults when unset or no DB. The Settings screen is owner-only,
-  gated in the UI and at the API.
+### Site settings (`src/lib/db.ts` `loadSiteSettings`/`saveSiteSettings`, `src/lib/site-settings.ts`, `/admin/settings`)
+- Owner-editable, single-row `site_settings` table read by the public shell (`layout.tsx` + home
+  `page.tsx`). The owner-only Settings screen is organized into tabs:
+  - **General Header/Footer** — home hero copy (eyebrow/title/intro), global **header links**,
+    **footer text + links**, and platform **contact info**.
+  - **Logo & Layout** — a site **logo** (uploaded to Vercel Blob via `POST /api/admin/settings/logo`,
+    base64 data-URL fallback when Blob is unconfigured) with width control; **brand text** plus its
+    own style (color / size / weight / font); and **placement** controls — header alignment, home-hero
+    alignment, and max content width.
+  - **Home Page Content** — a rich **content-block** editor for the home page and a **KB-list** toggle
+    + heading.
+  - **Global Styling** — a **global default theme** (`globalTheme`: colors, fonts, type scale, editor
+    palette) that individual KBs inherit unless they define their own; edited with the shared
+    `ThemeEditor`.
+- All values are validated/clamped in `normalizeSiteSettings`; blank fields are blank-safe (the public
+  shell omits empty elements and collapses an empty hero rather than rendering stray chrome). Falls
+  back to defaults when unset or no DB. Owner-only in the UI and at the API (`GET`/`PUT`).
 
 ### Audit log (`src/lib/audit-log.ts`, `/admin/audit`)
 - Owner/Admin-only global audit page with filters (search, action, entity type, KB, date range). It
@@ -244,8 +257,11 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `018_rate_limits`** (adds `kb_rate_limits`, used by the shared DB-backed
-  login/search rate limiter when `DATABASE_URL` is set).
+  backfills. **Current head: `023_brand_text_style`.** Migrations after `018_rate_limits` add content
+  lifecycle columns (`019`: `next_review_date` / `verified_at` / `verified_by`), the global default
+  site theme (`020`), home content blocks + KB-list controls (`021`), branding/logo + layout columns
+  (`022`: `brand_text`, `logo_url`, `logo_width`, `header_alignment`, `hero_alignment`,
+  `content_width`), and brand-text style columns (`023`: color/size/weight/font).
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`.
@@ -335,7 +351,10 @@ manual redirect persistence, and the single-active-version DB invariant.
 - Postgres FTS with staff-visibility prune and punctuation safety.
 - Auth (HMAC cookies), Owner/Admin/Editor roles; per-KB editor scoping enforced on all editor-reachable
   list views and mutations (pages, assets, imports, redirects, review); owner-only user management.
-- Per-KB theming ("Manage Styles"); owner Site Settings (hero + header/footer/contact).
+- Per-KB theming ("Manage Styles") and a **global default theme**; owner Site Settings — home hero +
+  rich content blocks, KB-list section, header/footer links, contact, a site **logo + branding**
+  (brand text with color/size/weight/font), and **layout** (header/hero alignment, content width),
+  all blank-safe.
 - DOCX staged import; auto-redirects.
 - Edit locks with atomic multi-row writes; print-to-PDF export; publishing gate.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
