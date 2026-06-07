@@ -231,6 +231,20 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     footer_text: string;
     footer_links: any;
     contact_info: string;
+    global_theme?: any;
+    home_blocks: any;
+    show_kb_list: boolean;
+    kb_list_title: string;
+    brand_text?: string;
+    brand_text_color?: string;
+    brand_text_size?: string;
+    brand_text_weight?: string;
+    brand_text_font?: string;
+    logo_url?: string;
+    logo_width?: number;
+    header_alignment?: string;
+    hero_alignment?: string;
+    content_width?: number;
   }>;
   const row = rows[0];
   if (!row) {
@@ -244,6 +258,20 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     footerText: row.footer_text,
     footerLinks: row.footer_links,
     contactInfo: row.contact_info,
+    globalTheme: row.global_theme,
+    homeBlocks: row.home_blocks,
+    showKbList: row.show_kb_list,
+    kbListTitle: row.kb_list_title,
+    brandText: row.brand_text,
+    brandTextColor: row.brand_text_color,
+    brandTextSize: row.brand_text_size,
+    brandTextWeight: row.brand_text_weight,
+    brandTextFont: row.brand_text_font,
+    logoUrl: row.logo_url,
+    logoWidth: row.logo_width,
+    headerAlignment: row.header_alignment,
+    heroAlignment: row.hero_alignment,
+    contentWidth: row.content_width,
   });
 }
 
@@ -254,11 +282,19 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
     INSERT INTO site_settings (
       id, home_eyebrow, home_title, home_intro,
       header_links, footer_text, footer_links, contact_info,
+      global_theme, home_blocks, show_kb_list, kb_list_title,
+      brand_text, brand_text_color, brand_text_size, brand_text_weight, brand_text_font,
+      logo_url, logo_width, header_alignment, hero_alignment, content_width,
       updated_at
     )
     VALUES (
       'singleton', ${settings.homeEyebrow}, ${settings.homeTitle}, ${settings.homeIntro},
       ${JSON.stringify(settings.headerLinks)}, ${settings.footerText}, ${JSON.stringify(settings.footerLinks)}, ${settings.contactInfo},
+      ${settings.globalTheme ? JSON.stringify(settings.globalTheme) : null},
+      ${JSON.stringify(settings.homeBlocks)}, ${settings.showKbList}, ${settings.kbListTitle},
+      ${settings.brandText}, ${settings.brandTextColor}, ${settings.brandTextSize}, ${settings.brandTextWeight}, ${settings.brandTextFont},
+      ${settings.logoUrl}, ${settings.logoWidth},
+      ${settings.headerAlignment}, ${settings.heroAlignment}, ${settings.contentWidth},
       now()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -269,6 +305,20 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       footer_text = EXCLUDED.footer_text,
       footer_links = EXCLUDED.footer_links,
       contact_info = EXCLUDED.contact_info,
+      global_theme = EXCLUDED.global_theme,
+      home_blocks = EXCLUDED.home_blocks,
+      show_kb_list = EXCLUDED.show_kb_list,
+      kb_list_title = EXCLUDED.kb_list_title,
+      brand_text = EXCLUDED.brand_text,
+      brand_text_color = EXCLUDED.brand_text_color,
+      brand_text_size = EXCLUDED.brand_text_size,
+      brand_text_weight = EXCLUDED.brand_text_weight,
+      brand_text_font = EXCLUDED.brand_text_font,
+      logo_url = EXCLUDED.logo_url,
+      logo_width = EXCLUDED.logo_width,
+      header_alignment = EXCLUDED.header_alignment,
+      hero_alignment = EXCLUDED.hero_alignment,
+      content_width = EXCLUDED.content_width,
       updated_at = now()
   `;
 }

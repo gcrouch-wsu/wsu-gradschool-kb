@@ -16,7 +16,8 @@ import {
   getPageByPath,
 } from "@/lib/kb-store";
 import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
-import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
+import { loadSiteSettings } from "@/lib/db";
 import type { CSSProperties } from "react";
 
 export async function generateMetadata({
@@ -68,6 +69,7 @@ export default async function KbArticlePage({
     notFound();
   }
 
+  const settings = await loadSiteSettings();
   const tree = await buildPageTree(kb.id, isStaff);
   const breadcrumbs = await getBreadcrumbs(kb.id, page.path, isStaff);
   const currentPath = page.path.join("/");
@@ -82,9 +84,13 @@ export default async function KbArticlePage({
   );
 
   const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
-  const themeVars = themeToCssVars(kb.theme ?? DEFAULT_THEME) as CSSProperties;
+  
+  const baseTheme = settings.globalTheme || DEFAULT_THEME;
+  const effectiveTheme = kb.theme ? mergeTheme(kb.theme, baseTheme) : baseTheme;
+  const themeVars = themeToCssVars(effectiveTheme) as CSSProperties;
+  
   const verifiedLabel = page.verifiedAt
-    ? `Verified${page.verifiedBy ? ` by ${page.verifiedBy}` : ""} on ${formatTimestamp(page.verifiedAt)}`
+    ? `Verified${page.verifiedBy ? ` by ${page.verifiedBy}` : ""} on ${formatTimestamp(page.verifiedAt)}`       
     : "";
 
   return (
@@ -188,5 +194,3 @@ export default async function KbArticlePage({
     </div>
   );
 }
-
-

@@ -528,6 +528,40 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS verified_by TEXT`;
     },
   },
+  {
+    id: "020_site_settings_global_theme",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS global_theme JSONB`;
+    },
+  },
+  {
+    id: "021_site_settings_home_blocks",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS home_blocks JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS show_kb_list BOOLEAN NOT NULL DEFAULT TRUE`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title TEXT NOT NULL DEFAULT 'Published knowledge bases'`;
+    },
+  },
+  {
+    id: "022_site_branding_layout",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS brand_text TEXT NOT NULL DEFAULT 'WSU Knowledge Base'`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS logo_width INTEGER NOT NULL DEFAULT 0`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS header_alignment TEXT NOT NULL DEFAULT 'left'`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS hero_alignment TEXT NOT NULL DEFAULT 'left'`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS content_width INTEGER NOT NULL DEFAULT 0`;
+    },
+  },
+  {
+    id: "023_brand_text_style",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS brand_text_color TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS brand_text_size TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS brand_text_weight TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS brand_text_font TEXT NOT NULL DEFAULT ''`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

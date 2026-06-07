@@ -112,7 +112,7 @@ textarea:focus-visible,
 
 .site-header__inner,
 .page-shell {
-  width: min(1320px, calc(100% - 2rem));
+  width: min(var(--content-width, 1320px), calc(100% - 2rem));
   margin: 0 auto;
 }
 
@@ -142,6 +142,51 @@ textarea:focus-visible,
   border-radius: 2px;
   background: var(--wsu-crimson);
   display: inline-block;
+}
+
+/* When a custom logo is set, drop the default crimson brand mark. */
+.brand--has-logo::before {
+  display: none;
+}
+
+.brand__logo {
+  display: block;
+  height: auto;
+  max-height: 48px;
+  width: auto;
+}
+
+.brand__text {
+  display: inline-block;
+}
+
+/* Header placement */
+.site-header__inner.is-center {
+  justify-content: center;
+}
+
+.site-header__inner.is-right {
+  justify-content: flex-end;
+}
+
+/* Hero text placement */
+.hero.is-center {
+  text-align: center;
+}
+
+.hero.is-center h1,
+.hero.is-center .lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero.is-right {
+  text-align: right;
+}
+
+.hero.is-right h1,
+.hero.is-right .lead {
+  margin-left: auto;
 }
 
 .nav {
@@ -733,6 +778,38 @@ p {
   cursor: not-allowed;
   opacity: 0.55;
   box-shadow: none;
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.7rem 1.1rem;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.tab-button:hover {
+  color: var(--ink);
+  background: var(--wash);
+}
+
+.tab-button.is-active {
+  color: var(--wsu-crimson);
+  border-bottom-color: var(--wsu-crimson);
 }
 
 .form {
