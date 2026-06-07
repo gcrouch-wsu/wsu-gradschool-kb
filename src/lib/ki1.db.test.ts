@@ -6,9 +6,7 @@ import {
   getPageByPath,
   searchKb,
   verifyPage,
-  getAllKbsForAdmin,
 } from "./kb-store";
-import { slugify } from "./slug";
 
 describe("KI-1 live-DB integration", () => {
   const dbEnabled = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim());
@@ -68,7 +66,12 @@ describe("KI-1 live-DB integration", () => {
 
       // Test 3: Reload and check
       const reloaded = await getPageByPath(kb.id, page.path, true);
-      expect(reloaded?.verifiedAt).toBe(verifiedAt);
+      
+      // Neon driver returns TIMESTAMPTZ as Date objects, while in-memory/JSON returns strings.
+      // Normalize both to ISO strings for comparison.
+      const actual = new Date(reloaded?.verifiedAt || "").toISOString();
+      const expected = new Date(verifiedAt).toISOString();
+      expect(actual).toBe(expected);
       expect(reloaded?.verifiedBy).toBe(verifier);
 
     } finally {

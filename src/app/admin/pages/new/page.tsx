@@ -28,7 +28,7 @@ export default function NewPageScreen() {
         if (!kbId && data.kbs.length > 0) {
           setKbId(data.kbs[0].id);
         }
-      } catch (err) {
+      } catch {
         setError("Error loading KBs");
       } finally {
         setLoading(false);
@@ -51,7 +51,7 @@ export default function NewPageScreen() {
       if (!res.ok) throw new Error(data.message || "Failed to create page");
 
       router.push(`/admin/pages/${data.pageId}`);
-    } catch (err) {
+    } catch {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(false);
@@ -101,3 +101,4 @@ export default function NewPageScreen() {
     </div>
   );
 }
+

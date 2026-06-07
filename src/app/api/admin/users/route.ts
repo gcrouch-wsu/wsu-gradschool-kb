@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const users = await listUsers();
 
     const safeUsers = await Promise.all(
-      users.map(async ({ passwordHash, ...user }) => ({
+      users.map(async ({ _passwordHash, ...user }) => ({
         ...user,
         kbAssignments: user.role === "editor" ? await listUserAssignments(user.id) : [],
       })),
@@ -55,14 +55,14 @@ export async function POST(request: Request) {
   const role: UserRole = ["owner", "admin", "editor"].includes(body.role) ? body.role : "editor";
 
   try {
-    const passwordHash = await hashPassword(body.password);
+    const _passwordHash = await hashPassword(body.password);
     const userId = `user-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     await insertUser({
       id: userId,
       email: body.email.trim().toLowerCase(),
       fullName: body.fullName?.trim() || "",
-      passwordHash,
+      _passwordHash,
       role,
       createdAt: now,
       updatedAt: now,
@@ -81,3 +81,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

@@ -139,8 +139,6 @@ export function AdminPageEditorForm({
   const missedHeartbeats = useRef(0);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-
     async function heartbeatLock() {
       try {
         const res = await fetch(`/api/admin/pages/${page.id}/lock`, { method: "POST" });
@@ -149,7 +147,6 @@ export function AdminPageEditorForm({
           missedHeartbeats.current += 1;
           if (missedHeartbeats.current >= 3) {
             setLockError(data.message || "Page is locked by another user.");
-            clearInterval(interval);
           }
         } else {
           missedHeartbeats.current = 0;
@@ -159,13 +156,13 @@ export function AdminPageEditorForm({
         missedHeartbeats.current += 1;
         if (missedHeartbeats.current >= 3) {
           setLockError("Page lock could not be renewed. Check your connection before continuing.");
-          clearInterval(interval);
         }
       }
     }
 
     heartbeatLock();
-    interval = setInterval(heartbeatLock, 60000);
+    const interval = setInterval(heartbeatLock, 60000);
+
     return () => {
       clearInterval(interval);
       fetch(`/api/admin/pages/${page.id}/lock`, { method: "DELETE", keepalive: true }).catch(() => {});
