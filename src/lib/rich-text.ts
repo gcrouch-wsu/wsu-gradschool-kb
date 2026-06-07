@@ -16,10 +16,9 @@ const ALLOWED_TAGS = new Set([
   "u",
 ]);
 const SAFE_URL_PATTERN = /^(https?:|mailto:|\/|#)/i;
-// Tags whose entire contents must be discarded, not unwrapped.
+
 const DROP_CONTENT_TAGS = new Set(["script", "style", "template", "noscript", "iframe", "object", "embed"]);
 
-/** Allowed `font-family` values for toolbar + sanitizer (must match exactly after normalize). */
 export const RICH_TEXT_FONT_FAMILIES = [
   { label: "Default", value: "" },
   { label: "Arial", value: "Arial, Helvetica, sans-serif" },
@@ -43,9 +42,6 @@ export const RICH_TEXT_COLORS = [
   { label: "Black", value: "#000000" },
 ] as const;
 
-// Font families are restricted to the legacy toolbar stacks plus the curated,
-// injection-safe stacks any KB theme can use. Sizes and colors are validated by
-// range/format instead of an exact allowlist, so themed values round-trip safely.
 const ALLOWED_FONT_FAMILY = new Set<string>([
   ...RICH_TEXT_FONT_FAMILIES.map((item) => item.value).filter((value) => value.length > 0),
   ...Object.values(SAFE_FONTS).map((font) => font.stack),
@@ -159,8 +155,6 @@ function rgbToHex(r: number, g: number, b: number): string {
 function normalizeColor(value: string): string | null {
   const normalized = normalizeWhitespace(value).toLowerCase();
 
-  // Any well-formed hex / rgb() color is accepted (colors carry no XSS risk);
-  // everything is normalized to a #rrggbb hex for stable storage.
   const rgb = normalized.match(
     /^rgba?\(\s*(\d{1,3})\s*(?:,\s*|\s+)(\d{1,3})\s*(?:,\s*|\s+)(\d{1,3})(?:\s*(?:,|\/)\s*[\d.]+%?)?\s*\)$/,
   );
@@ -180,7 +174,6 @@ function normalizeColor(value: string): string | null {
     : `#${hex[1]}`;
 }
 
-/** Normalize inline style text (hex colors, allowed fonts/sizes) for storage and display. */
 export function canonicalInlineStyle(raw: string | undefined): string | null {
   return safeStyleAttribute(raw);
 }
@@ -284,7 +277,7 @@ function serializeListElement(node: HTMLElement, tag: "ul" | "ol", mode: RichTex
 
 function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
   if (!isElement(node)) {
-    // Text node: re-escape the decoded text so no markup can survive.
+
     return escapeHtml(node.text ?? "");
   }
 
@@ -321,7 +314,7 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
   }
 
   if (!tagAllowed(tag, mode)) {
-    // Unwrap disallowed tags: keep their (sanitized) text content, drop the tag.
+
     return serializeChildren(node, mode);
   }
 
@@ -330,9 +323,7 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
   }
 
   if (tag === "span") {
-    // Editor note marker (Word-style comment anchored to text). Preserved only when
-    // keepNotes is on (editor storage); stripped to plain text everywhere else
-    // (public render) so note bodies never reach readers.
+
     const cls = node.getAttribute("class") ?? "";
     if (/\bdoc-note\b/.test(cls) || node.getAttribute("data-note-id")) {
       const inner = serializeChildren(node, mode);
@@ -366,21 +357,10 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
   return `<${tag}>${serializeChildren(node, mode)}</${tag}>`;
 }
 
-/**
- * Sanitizer for admin-authored inline rich text. Parses the input into a DOM and
- * rebuilds it from an allowlist of inline formatting tags, dropping every
- * attribute except a validated `href` on anchors. Larger page structure must
- * stay in the ContentBlock model rather than in this inline HTML.
- */
-/**
- * When true, `serializeNode` preserves editor-note marker spans. Off by default so
- * public rendering and plain-text extraction strip notes. Set only inside the
- * sanitize entry points (synchronous, single-threaded — safe as a module flag).
- */
 let preserveNotes = false;
 
 export interface SanitizeOptions {
-  /** Preserve editor-note marker spans (`span.doc-note`). Used for editor storage. */
+
   keepNotes?: boolean;
 }
 
@@ -398,7 +378,6 @@ export function sanitizeRichText(value: string, opts?: SanitizeOptions) {
   }
 }
 
-/** Inline formatting plus nested lists inside a list item. */
 export function sanitizeListItemHtml(value: string, opts?: SanitizeOptions) {
   if (!value) {
     return "";

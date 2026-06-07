@@ -1,38 +1,31 @@
-/**
- * Per-KB theming ("Manage Styles"). A theme is a small, validated set of design
- * tokens stored on the knowledge base. Values are strictly sanitized (hex colors,
- * rem sizes, and font *keys* mapped to known-safe stacks) so they can be injected
- * as CSS custom properties without any CSS-injection risk.
- */
-
 export interface ThemeColors {
-  ink: string; // body text
-  h1: string; // heading level 1
-  h2: string; // heading level 2
-  h3: string; // heading level 3
-  accent: string; // brand / links / buttons
-  muted: string; // secondary text
-  line: string; // borders
-  paper: string; // surfaces / cards
-  wash: string; // page background
-  infoBoxBg: string; // background for reader-visible info boxes
-  infoBoxBorder: string; // border for info boxes
-  infoBoxInk: string; // text color for info boxes
-  procedureBg: string; // background for procedure sections
-  procedureBorder: string; // border/line for procedure sections
-  procedureInk: string; // text/header color for procedure sections
+  ink: string; 
+  h1: string; 
+  h2: string; 
+  h3: string; 
+  accent: string; 
+  muted: string; 
+  line: string; 
+  paper: string; 
+  wash: string; 
+  infoBoxBg: string; 
+  infoBoxBorder: string; 
+  infoBoxInk: string; 
+  procedureBg: string; 
+  procedureBorder: string; 
+  procedureInk: string; 
 }
 
 export interface ThemeFonts {
-  body: string; // font key (see SAFE_FONTS)
-  heading: string; // font key
+  body: string; 
+  heading: string; 
 }
 
 export interface ThemeScale {
-  base: string; // body size, rem
-  h1: string; // rem (used as the upper bound of a responsive clamp)
-  h2: string; // rem
-  h3: string; // rem
+  base: string; 
+  h1: string; 
+  h2: string; 
+  h3: string; 
 }
 
 export interface ThemeOption {
@@ -41,9 +34,9 @@ export interface ThemeOption {
 }
 
 export interface ThemeEditorAllowlist {
-  fonts: ThemeOption[]; // value = font key ("" = default)
-  sizes: ThemeOption[]; // value = rem ("" = default)
-  colors: ThemeOption[]; // value = hex ("" = default)
+  fonts: ThemeOption[]; 
+  sizes: ThemeOption[]; 
+  colors: ThemeOption[]; 
 }
 
 export interface KbTheme {
@@ -53,7 +46,6 @@ export interface KbTheme {
   editor: ThemeEditorAllowlist;
 }
 
-/** Curated, injection-safe font stacks. Themes reference these by key only. */
 export const SAFE_FONTS: Record<string, { label: string; stack: string }> = {
   system: {
     label: "System sans",
@@ -124,7 +116,7 @@ function safeHex(value: unknown, fallback: string): string {
     return fallback;
   }
   const hex = value.trim().toLowerCase().replace("#", "");
-  // Expand #abc → #aabbcc so values are valid for <input type="color">.
+
   const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
   return `#${full}`;
 }
@@ -157,7 +149,6 @@ function safeOptions(value: unknown, kind: "font" | "size" | "color", fallback: 
   return cleaned.length > 0 ? cleaned.slice(0, 12) : fallback;
 }
 
-/** Validate + complete a (possibly partial / untrusted) theme against the defaults. */
 export function mergeTheme(input: unknown): KbTheme {
   const t = (input ?? {}) as Partial<KbTheme>;
   const c = (t.colors ?? {}) as Partial<ThemeColors>;
@@ -227,7 +218,6 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * channelLum(r) + 0.7152 * channelLum(g) + 0.0722 * channelLum(b);
 }
 
-/** WCAG contrast ratio (1–21) between two hex colors. */
 export function contrastRatio(a: string, b: string): number {
   const la = relativeLuminance(a);
   const lb = relativeLuminance(b);
@@ -244,9 +234,8 @@ export function contrastRating(ratio: number): ContrastRating {
   return "Fail";
 }
 
-/** Editor toolbar options derived from a theme. Font values are resolved to safe stacks. */
 export interface EditorPalette {
-  fonts: ThemeOption[]; // value = font stack ("" = default)
+  fonts: ThemeOption[]; 
   sizes: ThemeOption[];
   colors: ThemeOption[];
 }
@@ -263,7 +252,6 @@ export function themeToEditorPalette(theme: KbTheme): EditorPalette {
   };
 }
 
-/** Map a validated theme to CSS custom properties (safe to inject as inline style). */
 export function themeToCssVars(theme: KbTheme): Record<string, string> {
   return {
     "--ink": theme.colors.ink,

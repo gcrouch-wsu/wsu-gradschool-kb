@@ -3,10 +3,6 @@ import { getCurrentAdminSession } from "@/lib/auth";
 import { requireKbAccess } from "@/lib/security";
 import { getAllAssetsForAdmin, getKbById } from "@/lib/kb-store";
 
-/**
- * List active, reusable library assets for the media picker. Scoped to a KB and
- * limited to images and documents (videos are embedded by URL via the picker).
- */
 export async function GET(request: Request) {
   const session = await getCurrentAdminSession();
   if (!session) {
@@ -16,8 +12,6 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const kbId = searchParams.get("kbId") ?? undefined;
 
-  // The library is always browsed per-KB; require an explicit KB and confirm the
-  // caller is assigned to it so editors can't enumerate other KBs' assets.
   const denied = await requireKbAccess(session, kbId);
   if (denied) return denied;
 

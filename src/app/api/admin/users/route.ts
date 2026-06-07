@@ -9,19 +9,17 @@ export async function GET(request: Request) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) return guard.response;
 
-  // User management is owner-only — the list exposes the full staff directory,
-  // so non-owners (admins/editors) must not read it.
   if (guard.session.role !== "owner") {
     return NextResponse.json({ message: "Only owners can view users." }, { status: 403 });
   }
 
   if (!isDatabaseEnabled()) {
-    return NextResponse.json({ users: [] }); // In-memory doesn't support full user CRUD
+    return NextResponse.json({ users: [] }); 
   }
 
   try {
     const users = await listUsers();
-    // Scrub password hashes and attach each editor's KB assignments.
+
     const safeUsers = await Promise.all(
       users.map(async ({ passwordHash, ...user }) => ({
         ...user,
@@ -38,7 +36,6 @@ export async function POST(request: Request) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) return guard.response;
 
-  // Only Owners can create users.
   const adminSession = guard.session;
   if (adminSession.role !== "owner") {
     return NextResponse.json({ message: "Only owners can create users." }, { status: 403 });
@@ -69,7 +66,6 @@ export async function POST(request: Request) {
       updatedAt: now,
     });
 
-    // Add KB assignments
     if (Array.isArray(body.kbAssignments)) {
       await replaceUserAssignments(userId, body.kbAssignments);
     }
@@ -82,4 +78,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

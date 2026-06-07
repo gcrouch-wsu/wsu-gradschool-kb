@@ -227,11 +227,6 @@ export const pages: KbPage[] = [
   },
 ];
 
-/**
- * Seed dataset used to (a) bootstrap an empty Neon database on first run and
- * (b) serve as the in-memory fallback when DATABASE_URL is not configured.
- * All query/visibility/tree logic lives in `kb-store.ts`.
- */
 export const seedDataset: KbDataset = {
   knowledgeBases,
   pages,

@@ -1,5 +1,3 @@
-/** Page document editor toolbar — uses rich-text-selection (same pattern as RichTextEditable). */
-
 import { isPageEditorDebugEnabled, publishPageEditorDebug } from "@/lib/page-editor-debug";
 import {
   indentListItem,
@@ -159,14 +157,6 @@ export function applyEditorCommand(command: string, value?: string): boolean {
   return true;
 }
 
-/**
- * Wrap the current selection in a link. When `newTab` is true the created
- * anchor(s) get target="_blank" plus rel="noopener noreferrer" (the rel is also
- * re-enforced by the sanitizer on save, but we set it live for defense-in-depth).
- * Target is applied by intersecting the post-createLink selection with surface
- * anchors, so it lands only on the link(s) just created — not unrelated links.
- */
-/** Context handed to the link dialog when creating or editing a link. */
 export interface LinkEditRequest {
   url: string;
   text: string;
@@ -177,7 +167,6 @@ export interface LinkEditRequest {
 
 let linkEditorOpener: ((request: LinkEditRequest) => void) | null = null;
 
-/** The editor surface registers a function that opens its link dialog. */
 export function registerLinkEditor(open: ((request: LinkEditRequest) => void) | null) {
   linkEditorOpener = open;
 }
@@ -197,11 +186,6 @@ function anchorFromSelection(): HTMLAnchorElement | null {
   return null;
 }
 
-/**
- * Open the link dialog. With an explicit `anchor` (clicked link) or a cursor
- * inside a link, it opens in edit mode prefilled from that link; otherwise it
- * opens in create mode seeded with the selected text.
- */
 export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
   saveRichTextSelection();
   const target = anchor ?? anchorFromSelection();
@@ -221,7 +205,6 @@ function persistFromAnchor(anchor: HTMLElement) {
   notifyMutation();
 }
 
-/** Apply the link dialog result: edit the anchor in place, or create a new link. */
 export function commitLink(request: {
   url: string;
   text: string;
@@ -250,7 +233,6 @@ export function commitLink(request: {
     return true;
   }
 
-  // Create: insert an anchor over the saved selection (replacing selected text).
   const label = escapeHtml(text || url);
   const targetAttr = request.newTab ? ' target="_blank"' : "";
   const relAttr = request.newTab ? ' rel="noopener noreferrer"' : "";
@@ -265,7 +247,6 @@ export function commitLink(request: {
   return true;
 }
 
-/** Remove a link, keeping its text. */
 export function removeLink(anchor: HTMLAnchorElement): boolean {
   const parent = anchor.parentNode;
   if (!parent) {
@@ -280,12 +261,6 @@ export function removeLink(anchor: HTMLAnchorElement): boolean {
   return true;
 }
 
-/* ----------------------------- Editor notes ------------------------------ */
-/* Word-style comments: a note is an inline `span.doc-note` wrapping the selected
- * text, with its body in `data-note-body`. Visible only to editors (the public
- * sanitizer strips note spans, keeping the text). Mirrors the link flow. */
-
-/** Context handed to the note dialog when creating or editing a note. */
 export interface NoteEditRequest {
   body: string;
   isEdit: boolean;
@@ -315,11 +290,6 @@ function noteFromSelection(): HTMLElement | null {
   return null;
 }
 
-/**
- * Open the note dialog. On an existing note (clicked or cursor inside) it opens in
- * edit mode prefilled from that note; otherwise it opens in create mode for the
- * current text selection.
- */
 export function openNoteEditor(span?: HTMLElement | null) {
   saveRichTextSelection();
   const target = span ?? noteFromSelection();
@@ -352,7 +322,6 @@ function noteId(): string {
   return `note-${crypto.randomUUID()}`;
 }
 
-/** Apply the note dialog result: edit the note in place, or wrap the selection. */
 export function commitNote(request: { body: string; span: HTMLElement | null }): boolean {
   const body = request.body.trim();
   if (!body) {
@@ -392,7 +361,7 @@ export function commitNote(request: { body: string; span: HTMLElement | null }):
     try {
       range.surroundContents(span);
     } catch {
-      // Selection crosses element boundaries: extract + re-insert preserves markup.
+
       span.appendChild(range.extractContents());
       range.insertNode(span);
     }
@@ -408,7 +377,6 @@ export function commitNote(request: { body: string; span: HTMLElement | null }):
   return true;
 }
 
-/** Remove a note, keeping its anchored text. */
 export function removeNote(span: HTMLElement): boolean {
   const parent = span.parentNode;
   if (!parent) {
@@ -427,7 +395,6 @@ export function applyBlockTag(tag: "p" | "h2" | "h3"): boolean {
   return applyEditorCommand("formatBlock", tag) || applyEditorCommand("formatBlock", `<${tag}>`);
 }
 
-/** Flush-left / center / flush-right the text block containing the selection. */
 export function applyAlign(align: "left" | "center" | "right"): boolean {
   const command = align === "center" ? "justifyCenter" : align === "right" ? "justifyRight" : "justifyLeft";
   return applyEditorCommand(command);
@@ -455,7 +422,6 @@ function styleImageFigure(figure: HTMLElement) {
   figure.style.margin = imageMargin(align);
 }
 
-/** Context handed to the alt-text dialog for an image figure. */
 export interface AltEditRequest {
   alt: string;
   caption: string;
@@ -466,7 +432,6 @@ export interface AltEditRequest {
 
 let altEditorOpener: ((request: AltEditRequest) => void) | null = null;
 
-/** The editor surface registers a function that opens its alt-text dialog. */
 export function registerAltEditor(open: ((request: AltEditRequest) => void) | null) {
   altEditorOpener = open;
 }
@@ -482,7 +447,6 @@ function openAltEditor(figure: HTMLElement) {
   });
 }
 
-/** Apply alt text / decorative state to a figure and persist (dispatches input). */
 export function applyAltText(figure: HTMLElement, alt: string, decorative: boolean, captionText = ""): boolean {
   const value = alt.trim();
   const img = figure.querySelector("img");
@@ -517,7 +481,6 @@ export function applyAltText(figure: HTMLElement, alt: string, decorative: boole
   return true;
 }
 
-/** Flag every image still missing alt text (used after a blocked publish). Returns the count. */
 export function markMissingAltImages(): number {
   let count = 0;
   document.querySelectorAll<HTMLElement>(".wysiwyg-surface figure.doc-image").forEach((figure) => {
@@ -532,14 +495,6 @@ export function markMissingAltImages(): number {
   return count;
 }
 
-/**
- * Delegated click handler for image figures inside an editor surface. Two jobs:
- *   1. Selection — clicking an image marks it `is-selected` (and deselects others)
- *      so its control strip reveals; clicking elsewhere clears the selection.
- *   2. Controls — clicking an align/resize button mutates the figure's
- *      `data-align` / `data-width` and dispatches `input` so the change persists.
- * Returns true only when a control button fired.
- */
 export function handleImageControlClick(event: {
   target: EventTarget | null;
   preventDefault: () => void;
@@ -547,7 +502,6 @@ export function handleImageControlClick(event: {
   const target = event.target as HTMLElement | null;
   const surface = target?.closest?.(".wysiwyg-surface") as HTMLElement | null;
 
-  // Clicking an existing link opens the link dialog to edit its URL/target.
   const link = target?.closest?.("a") as HTMLAnchorElement | null;
   if (link && surface) {
     event.preventDefault();
@@ -555,7 +509,6 @@ export function handleImageControlClick(event: {
     return true;
   }
 
-  // Clicking a note marker opens the note dialog to edit/remove it.
   const note = target?.closest?.(".doc-note") as HTMLElement | null;
   if (note && surface) {
     event.preventDefault();
@@ -565,7 +518,6 @@ export function handleImageControlClick(event: {
 
   const figure = target?.closest?.("figure.doc-image") as HTMLElement | null;
 
-  // Reveal-on-click: keep at most one figure selected within this surface.
   if (surface) {
     surface.querySelectorAll("figure.doc-image.is-selected").forEach((el) => {
       if (el !== figure) el.classList.remove("is-selected");
@@ -623,7 +575,6 @@ export function applyList(command: "insertUnorderedList" | "insertOrderedList"):
 
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
 
-/** Highlight vague or empty links in the editor after readiness/publish checks. */
 export function markProblemLinks(): number {
   let count = 0;
   document.querySelectorAll<HTMLAnchorElement>(".wysiwyg-surface a").forEach((anchor) => {
@@ -777,5 +728,4 @@ export function queryEditorFormatting(): EditorFormatting {
   };
 }
 
-/** Re-export for toolbar option lookup (avoids broken &lt;option value&gt; with commas/quotes). */
 export { RICH_TEXT_FONT_FAMILIES, RICH_TEXT_FONT_SIZES };

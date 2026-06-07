@@ -9,7 +9,6 @@ import {
 } from "@/lib/kb-store";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
-/** Update editable asset metadata: the human `description` and/or default `altText`. */
 export async function PATCH(request: Request, context: { params: Promise<{ assetId: string }> }) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) {
@@ -28,7 +27,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ asset
     | null;
 
   try {
-    // "Save alt to asset" sends altText; it is stored separately from description.
+
     if (body && typeof body.altText === "string") {
       const asset = await updateAssetAltText(assetId, body.altText);
       await recordAuditEvent({

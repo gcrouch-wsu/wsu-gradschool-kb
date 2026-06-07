@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isSameOrigin } from "@/lib/origin";
 
-// Build a minimal Request-like object. We avoid constructing a real Request so the
-// runtime's forbidden-header guard does not strip Host/Referer during the test.
 function req(headers: Record<string, string>): Request {
   const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
   return {

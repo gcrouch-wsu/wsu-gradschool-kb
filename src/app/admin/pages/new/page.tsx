@@ -49,7 +49,7 @@ export default function NewPageScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to create page");
-      
+
       router.push(`/admin/pages/${data.pageId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
@@ -68,7 +68,7 @@ export default function NewPageScreen() {
 
       <form className="form card" onSubmit={handleSubmit}>
         {error && <p className="alert alert--error">{error}</p>}
-        
+
         <label>
           <span className="meta">Knowledge Base</span>
           <select className="input" required value={kbId} onChange={e => setKbId(e.target.value)}>

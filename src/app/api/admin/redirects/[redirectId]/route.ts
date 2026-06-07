@@ -15,7 +15,6 @@ export async function DELETE(
 
   const { redirectId } = await context.params;
 
-  // Resolve the redirect's KB and confirm the caller is assigned to it before deleting.
   const redirect = await getRedirectById(redirectId);
   if (!redirect) {
     return NextResponse.json({ message: "Redirect not found." }, { status: 404 });
@@ -43,7 +42,6 @@ export async function PATCH(
 
   const { redirectId } = await context.params;
 
-  // Resolve the redirect's KB and confirm the caller is assigned to it before updating.
   const redirect = await getRedirectById(redirectId);
   if (!redirect) {
     return NextResponse.json({ message: "Redirect not found." }, { status: 404 });

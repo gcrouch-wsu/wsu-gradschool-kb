@@ -17,7 +17,7 @@ export default async function AdminAssetsPage({
   }
 
   const { kb: kbFilter, status: statusFilter } = await searchParams;
-  // Editors only see KBs they are assigned to; owners/admins see all.
+
   const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const defaultKb = kbs.find((kb) => kb.slug === "graduate-school") ?? kbs[0];
 

@@ -89,7 +89,7 @@ export function PageDocumentEditor({
 
   function insertBlockFromPicker(block: ContentBlock) {
     if (block.type === "image") {
-      // Images flow inline with the text; insert at the cursor when possible.
+
       const html = blocksToDocumentHtml([block], kbSlug);
       if (!insertEditorHtml(html)) {
         addBlockToFirstFlow(block);
@@ -290,7 +290,7 @@ export function PageDocumentEditor({
               fetch(`/api/admin/assets/${altRequest.assetId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                // Save to the dedicated alt-text field, not the human description (KI-2).
+
                 body: JSON.stringify({ altText: alt }),
               }).catch(() => {});
             }
@@ -352,9 +352,7 @@ function SectionEditor({
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const lastSyncedHtml = useRef("");
-  // Keep the latest callback in a ref so the surface binds ONCE (stable ref
-  // callback). Re-creating the ref each render detached/re-bound the editor on
-  // every keystroke, which made caret placement and selection unreliable.
+
   const onUpdateFlowRef = useRef(onUpdateFlow);
   onUpdateFlowRef.current = onUpdateFlow;
 

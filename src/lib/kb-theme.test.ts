@@ -21,12 +21,12 @@ describe("kb-theme", () => {
       fonts: { body: "Comic Sans'; }", heading: "georgia" },
       scale: { h1: "999px; evil", h2: "2rem" },
     });
-    // Injection attempts are dropped → defaults; valid values are kept.
+
     expect(t.colors.ink).toBe(DEFAULT_THEME.colors.ink);
-    expect(t.colors.accent).toBe("#aabbcc"); // #abc expanded
+    expect(t.colors.accent).toBe("#aabbcc");
     expect(t.colors.paper).toBe(DEFAULT_THEME.colors.paper);
-    expect(t.fonts.body).toBe("system"); // unknown font key → default
-    expect(t.fonts.heading).toBe("georgia"); // known key kept
+    expect(t.fonts.body).toBe("system");
+    expect(t.fonts.heading).toBe("georgia");
     expect(t.scale.h1).toBe(DEFAULT_THEME.scale.h1);
     expect(t.scale.h2).toBe("2rem");
   });

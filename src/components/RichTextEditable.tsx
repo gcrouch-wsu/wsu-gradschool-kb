@@ -29,8 +29,7 @@ export function RichTextEditable({
     if (!surface) {
       return;
     }
-    // Skip overwrite if we are currently editing (has focus).
-    // The surface will be synced on blur.
+
     if (document.activeElement === surface) {
       return;
     }

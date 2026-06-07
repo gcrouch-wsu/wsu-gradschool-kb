@@ -79,8 +79,6 @@ export function ThemeEditor({
   const previewVars = useMemo(() => themeToCssVars(theme), [theme]);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Apply the theme variables to the preview imperatively so every change is
-  // reflected reliably (and clear any stale custom properties).
   useEffect(() => {
     const el = previewRef.current;
     if (!el) return;

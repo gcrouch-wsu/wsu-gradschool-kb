@@ -5,8 +5,7 @@ import { slugify } from "@/lib/slug";
 import type { KnowledgeBase } from "@/lib/types";
 
 export async function GET(request: Request) {
-  // Only owners/admins should view all KBs in the admin area, but we can relax 
-  // this for MVP if we want editors to see the list. For now, owner only.
+
   const guard = await requireAdminMutation(request);
   if (!guard.ok) return guard.response;
 
@@ -15,7 +14,7 @@ export async function GET(request: Request) {
   }
 
   if (!isDatabaseEnabled()) {
-    // In-memory fallback
+
     return NextResponse.json({ kbs: [] });
   }
 
@@ -57,12 +56,12 @@ export async function POST(request: Request) {
 
   const title = body.title.trim();
   let slug = body.slug?.trim() ? slugify(body.slug) : slugify(title);
-  
+
   await ensureSchema();
   const sql = getSql();
 
   try {
-    // Ensure slug uniqueness
+
     const existing = await sql`SELECT slug FROM knowledge_bases WHERE slug = ${slug}`;
     if (existing.length > 0) {
       slug = `${slug}-${crypto.randomUUID().split("-")[0]}`;

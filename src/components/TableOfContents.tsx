@@ -44,7 +44,6 @@ function buildToc(blocks: ContentBlock[], maxDepth: number): TocNode[] {
   return nodes;
 }
 
-/** True when the page has at least one heading within the chosen depth (i.e. a TOC would render). */
 export function hasTocEntries(blocks: ContentBlock[], tocDepth = 3): boolean {
   return buildToc(blocks, tocDepth).length >= 1;
 }
@@ -62,9 +61,7 @@ export function TableOfContents({
     return null;
   }
   const toc = buildToc(blocks, tocDepth);
-  // Show whenever the editor enabled the TOC and the page has at least one
-  // heading within the chosen depth. (Previously hidden unless 2+ headings,
-  // which silently dropped a single-H2 outline.)
+
   if (toc.length < 1) {
     return null;
   }

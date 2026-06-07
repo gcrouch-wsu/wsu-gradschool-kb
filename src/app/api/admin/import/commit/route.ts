@@ -15,7 +15,6 @@ interface CommitBody {
   blocks?: unknown;
 }
 
-/** Legacy one-step commit (prefer staged import workflow). */
 export async function POST(request: Request) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) {

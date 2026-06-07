@@ -15,7 +15,6 @@ export async function POST(
 
   const { stagedImportId } = await context.params;
 
-  // Resolve the staged import's target KB and confirm the caller is assigned to it.
   const detail = await getStagedImportDetail(stagedImportId);
   if (!detail) {
     return NextResponse.json({ message: "Staged import not found." }, { status: 404 });

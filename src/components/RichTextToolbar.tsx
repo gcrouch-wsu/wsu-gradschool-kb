@@ -19,7 +19,7 @@ import {
 } from "@/lib/page-editor-format";
 
 export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalette }) {
-  // The KB theme's palette drives the dropdowns; fall back to the built-in defaults.
+
   const fonts = editorPalette?.fonts ?? RICH_TEXT_FONT_FAMILIES;
   const sizes = editorPalette?.sizes ?? RICH_TEXT_FONT_SIZES;
   const colors = editorPalette?.colors ?? RICH_TEXT_COLORS;

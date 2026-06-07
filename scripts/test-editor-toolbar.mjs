@@ -1,7 +1,3 @@
-/**
- * Manual smoke test for the page document toolbar (run with dev server on :3000).
- * Usage: node scripts/test-editor-toolbar.mjs
- */
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright";

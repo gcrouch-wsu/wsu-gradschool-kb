@@ -3,7 +3,6 @@ import { isDatabaseEnabled, updateKbTheme } from "@/lib/db";
 import { mergeTheme } from "@/lib/kb-theme";
 import { requireAdminMutation } from "@/lib/security";
 
-/** Save a KB's "Manage Styles" theme. Owner-only; the theme is validated/sanitized. */
 export async function PATCH(request: Request, context: { params: Promise<{ kbId: string }> }) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) {
@@ -22,7 +21,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ kbId:
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
   }
 
-  // mergeTheme validates and completes the (untrusted) theme before it is stored.
   const theme = mergeTheme(body.theme ?? body);
   try {
     await updateKbTheme(kbId, theme);

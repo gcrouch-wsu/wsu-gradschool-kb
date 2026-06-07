@@ -29,11 +29,11 @@ export async function PATCH(
 
   try {
     const updates: any = { updated_on: new Date().toISOString().slice(0, 10) };
-    
+
     if (body.title !== undefined) updates.title = body.title.trim();
     if (body.description !== undefined) updates.description = body.description.trim();
     if (body.status !== undefined) updates.status = body.status === "published" ? "published" : "draft";
-    
+
     if (body.slug !== undefined) {
       let slug = slugify(body.slug);
       const existing = await sql`SELECT slug FROM knowledge_bases WHERE slug = ${slug} AND id != ${kbId}`;
@@ -43,7 +43,7 @@ export async function PATCH(
       updates.slug = slug;
     }
 
-    if (Object.keys(updates).length > 1) { // > 1 because updated_on is always there
+    if (Object.keys(updates).length > 1) { 
         if (updates.title) await sql`UPDATE knowledge_bases SET title = ${updates.title} WHERE id = ${kbId}`;
         if (updates.description !== undefined) await sql`UPDATE knowledge_bases SET description = ${updates.description} WHERE id = ${kbId}`;
         if (updates.status) await sql`UPDATE knowledge_bases SET status = ${updates.status} WHERE id = ${kbId}`;

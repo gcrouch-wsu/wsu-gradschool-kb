@@ -209,7 +209,7 @@ export function MediaPicker({
                     type="button"
                   >
                     {asset.assetType === "image" && asset.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
+
                       <img alt="" className="media-picker__thumb" loading="lazy" src={asset.url} />
                     ) : (
                       <span className="media-picker__thumb media-picker__thumb--file" aria-hidden="true">

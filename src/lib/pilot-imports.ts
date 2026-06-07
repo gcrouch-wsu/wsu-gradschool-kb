@@ -1,4 +1,3 @@
-/** Suggested pilot pages for Graduate School KB migration (project_spec.md §31). */
 export const PILOT_IMPORT_TARGETS = [
   {
     title: "Graduate Program Handbooks",

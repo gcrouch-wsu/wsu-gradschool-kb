@@ -11,7 +11,7 @@ export function AdminAssetUploadForm({
 }: {
   kbs: { id: string; title: string }[];
   defaultKbId?: string;
-  /** When set, uploads are fixed to this KB (library is per-KB). */
+
   lockKbId?: string;
 }) {
   const [kbId, setKbId] = useState(lockKbId ?? defaultKbId ?? kbs[0]?.id ?? "");
@@ -61,7 +61,7 @@ export function AdminAssetUploadForm({
         const assetId = data.asset?.id;
         setCreatedUrl(assetId ? `/admin/assets/${assetId}` : data.url ?? null);
       } else {
-        // Video link creation
+
         const response = await fetch("/api/admin/assets/videos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

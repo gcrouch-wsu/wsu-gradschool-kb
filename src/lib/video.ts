@@ -5,10 +5,6 @@ export interface ParsedVideo {
   embedId?: string;
 }
 
-/**
- * Parse a pasted video URL into a provider + embed id. YouTube and Vimeo are
- * recognized; anything else is treated as a direct (self-hosted) URL.
- */
 export function parseVideoUrl(url: string): ParsedVideo {
   const trimmed = url.trim();
 
@@ -27,17 +23,11 @@ export function parseVideoUrl(url: string): ParsedVideo {
   return { provider: "direct" };
 }
 
-/** Provider implied by a managed video asset's synthetic mime type (video/x-<provider>). */
 export function providerFromMime(mimeType: string): VideoProvider {
   const suffix = mimeType.split("/")[1]?.replace(/^x-/, "");
   return suffix === "youtube" || suffix === "vimeo" ? suffix : "direct";
 }
 
-/**
- * The canonical https URL the stable file route should redirect a managed video
- * asset to. Built from the dedicated provider/id fields, falling back to the raw
- * stored URL. Returns null when nothing safe (https) is available.
- */
 export function videoDeliveryUrl(input: {
   videoProvider?: VideoProvider | null;
   videoExternalId?: string | null;

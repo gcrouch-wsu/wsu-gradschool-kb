@@ -4,18 +4,13 @@ import { richTextToPlainText, sanitizeRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 
 export interface ParsedDocx {
-  /** Derived from the first H1 in the document, if present. */
+
   title: string | null;
   blocks: ContentBlock[];
-  /** Human-readable notes about anything skipped or transformed during import. */
+
   messages: string[];
 }
 
-/**
- * Uploads an image extracted from the document and returns its public URL, or
- * null when the image type is unsupported. Provided by the caller (Vercel Blob)
- * so this module stays free of storage concerns.
- */
 export type ImageUploader = (data: Buffer, contentType: string) => Promise<string | null>;
 
 export interface ConvertOptions {
@@ -32,7 +27,7 @@ const DATA_URI_IMAGE_TYPES = new Set([
 ]);
 
 function isElement(node: Node): node is HTMLElement {
-  // node-html-parser element nodes expose a tagName; text/comment nodes do not.
+
   return (node as HTMLElement).tagName !== undefined && (node as HTMLElement).tagName !== null;
 }
 
@@ -48,13 +43,6 @@ function inlineText(node: HTMLElement) {
   return collapseWhitespace(richTextToPlainText(inlineHtml(node)) || node.text);
 }
 
-/**
- * Convert a .docx file (typically a Confluence export) into the KB's
- * ContentBlock model. Headings are preserved so they can drive both the
- * on-page table of contents and the nested site navigation. When an
- * `uploadImage` handler is supplied, embedded images are uploaded and emitted
- * as image blocks; otherwise they are skipped and reported.
- */
 export async function convertDocxToBlocks(
   buffer: Buffer,
   options: ConvertOptions = {},
@@ -64,9 +52,6 @@ export async function convertDocxToBlocks(
   let inlinedImages = 0;
   let skippedImages = 0;
 
-  // When a handler is provided, upload each image during conversion and inline
-  // its public URL as the <img src>. If object storage is unavailable, preserve
-  // web-renderable images as data URIs so imported screenshots are not stripped.
   const convertImage = mammoth.images.imgElement(async (image) => {
     const normalizedType = image.contentType.toLowerCase();
     const altText = (image as { altText?: string }).altText ?? "";
@@ -86,8 +71,7 @@ export async function convertDocxToBlocks(
             return { src: url, alt: altText };
           }
         } catch {
-          // Fall back to a data URI below so a temporary Blob outage does not
-          // silently strip all screenshots from the imported draft.
+
         }
       }
       inlinedImages += 1;
@@ -98,8 +82,6 @@ export async function convertDocxToBlocks(
     }
   });
 
-  // NOTE: mammoth's signature is convertToHtml(input, options) — image/style
-  // options MUST go in the second argument or they are silently ignored.
   const { value: html, messages: mammothMessages } = await mammoth.convertToHtml(
     { buffer },
     { convertImage },
@@ -140,7 +122,7 @@ export async function convertDocxToBlocks(
       if (!text) {
         continue;
       }
-      // The first H1 becomes the page title rather than an in-body heading.
+
       if (tag === "h1" && title === null) {
         title = text;
         continue;
@@ -221,7 +203,6 @@ export async function convertDocxToBlocks(
       continue;
     }
 
-    // Fallback: capture any other text-bearing block as a paragraph.
     extractImages(node);
     const html = inlineHtml(node);
     const text = inlineText(node);
@@ -251,8 +232,7 @@ export async function convertDocxToBlocks(
     );
   }
   for (const message of mammothMessages) {
-    // "Unrecognised ... style" warnings are noise from Word/Confluence style IDs
-    // (they don't affect the extracted text), so they are not surfaced to editors.
+
     if (message.type === "warning" && !/^Unrecognised (paragraph|run|table) style/i.test(message.message)) {
       messages.push(message.message);
     }

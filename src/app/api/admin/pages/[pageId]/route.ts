@@ -40,7 +40,6 @@ export async function PATCH(
 
   const { pageId } = await context.params;
 
-  // Editors may only modify pages in a KB they are assigned to.
   const existingPage = await getPageByIdForAdmin(pageId);
   const denied = await requireKbAccess(guard.session, existingPage?.kbId);
   if (denied) {
@@ -76,8 +75,6 @@ export async function PATCH(
     return NextResponse.json({ message: "A page must have at least one content block." }, { status: 400 });
   }
 
-  // Publishing runs the accessibility + governance gate before any write so a page
-  // that fails the checks is never made public (project_spec.md §17).
   if (status === "published") {
     const issues = await validatePageForPublish(
       {

@@ -6,7 +6,6 @@ import { loadUserByEmail, loadUserById, isUserAssignedToKb, listUserAssignments 
 
 export { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS };
 
-// Absolute session lifetime, enforced inside the signed token.
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 
 export interface AdminSession {
@@ -51,7 +50,7 @@ function getBootstrapPassword() {
 function getSessionSecret() {
   const email = getBootstrapEmail();
   const password = getBootstrapPassword();
-  
+
   return (
     readEnv("BOOTSTRAP_OWNER_SESSION_SECRET") ||
     readEnv("KB_ADMIN_SESSION_SECRET") ||
@@ -97,7 +96,7 @@ export function verifyPassword(password: string, stored: string) {
 }
 
 export async function validateAdminCredentials(email: string, password: string): Promise<AdminSession | null> {
-  // Check bootstrap owner
+
   const bootstrapEmail = getBootstrapEmail();
   const bootstrapPassword = getBootstrapPassword();
 
@@ -117,7 +116,6 @@ export async function validateAdminCredentials(email: string, password: string):
     };
   }
 
-  // Check database users
   const user = await loadUserByEmail(email);
   if (user && verifyPassword(password, user.passwordHash)) {
     return {
@@ -154,15 +152,13 @@ export async function readAdminSessionToken(token: string | undefined): Promise<
       return null;
     }
 
-    // Validation version for managed users
     if (session.source === "managed") {
       const user = await loadUserById(session.userId);
       if (!user || user.updatedAt !== session.version) {
         return null;
       }
     } else {
-      // For bootstrap owner, we could check if bootstrap credentials changed, 
-      // but usually they don't change without a restart.
+
     }
 
     return session;
@@ -186,11 +182,6 @@ export function getAdminCookieOptions(maxAge = IDLE_TTL_SECONDS) {
   };
 }
 
-/**
- * Validates if the current session has access to a specific KB.
- * Owners and Admins have access to all KBs.
- * Editors must be assigned to the KB in kb_user_assignments.
- */
 export async function canAccessKb(session: AdminSession, kbId: string): Promise<boolean> {
   if (session.role === "owner" || session.role === "admin") {
     return true;
@@ -201,11 +192,6 @@ export async function canAccessKb(session: AdminSession, kbId: string): Promise<
   return false;
 }
 
-/**
- * The set of KB ids a session may view in admin list views. Owners/Admins are
- * KB-wide, so `null` is returned to mean "no restriction". Editors are limited
- * to their `kb_user_assignments`; any other role sees nothing.
- */
 export async function accessibleKbIds(session: AdminSession): Promise<string[] | null> {
   if (session.role === "owner" || session.role === "admin") {
     return null;
@@ -216,7 +202,6 @@ export async function accessibleKbIds(session: AdminSession): Promise<string[] |
   return [];
 }
 
-/** Filters a list of KBs down to the ones the session may view. */
 export async function filterKbsForSession<T extends { id: string }>(
   session: AdminSession,
   kbs: T[],

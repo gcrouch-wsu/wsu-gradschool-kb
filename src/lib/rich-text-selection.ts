@@ -1,5 +1,3 @@
-/** Selection + formatting for contenteditable surfaces (page editor, table cells). */
-
 let savedRange: Range | null = null;
 let savedEditable: HTMLElement | null = null;
 let boundEditorSurface: HTMLElement | null = null;

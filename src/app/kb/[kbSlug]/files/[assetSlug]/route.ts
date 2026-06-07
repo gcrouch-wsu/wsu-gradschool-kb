@@ -29,11 +29,6 @@ function dataUriToResponseBody(dataUri: string) {
   };
 }
 
-/**
- * Stable public URLs for managed assets. Blob-backed bodies redirect to Vercel
- * Blob (trusted host only) so the browser loads the file directly. Data URIs and
- * inline text are served from this route.
- */
 function isTrustedAssetUrl(value: string): boolean {
   let url: URL;
   try {
@@ -66,8 +61,6 @@ export async function GET(
     notFound();
   }
 
-  // Managed videos are external links, not files: the stable URL redirects to the
-  // canonical (https) video rather than streaming the URL text. (KI-2)
   if (asset.assetType === "video") {
     const target = videoDeliveryUrl(asset);
     if (!target) {
@@ -106,7 +99,7 @@ export async function GET(
     if (!isTrustedAssetUrl(asset.body)) {
       notFound();
     }
-    // Redirect so the browser loads Blob storage directly (avoids serverless fetch failures).
+
     return NextResponse.redirect(asset.body, { status: 307, headers });
   }
 

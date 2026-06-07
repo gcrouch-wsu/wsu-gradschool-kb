@@ -147,11 +147,10 @@ const migrations: Migration[] = [
   {
     id: "004_enhanced_features",
     async up(sql) {
-      // TOC settings for pages
+
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS show_toc BOOLEAN NOT NULL DEFAULT TRUE`;
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS toc_depth INTEGER NOT NULL DEFAULT 3`;
 
-      // User management (project_spec.md §5 Phase 1)
       await sql`
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
@@ -183,11 +182,10 @@ const migrations: Migration[] = [
   {
     id: "006_fts_search",
     async up(sql) {
-      // Add tsvector columns
+
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS search_vector tsvector`;
       await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS search_vector tsvector`;
 
-      // Backfill and create triggers for pages
       await sql`
         UPDATE kb_pages
         SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
@@ -211,7 +209,6 @@ const migrations: Migration[] = [
         ON kb_pages FOR EACH ROW EXECUTE FUNCTION kb_pages_search_trigger()
       `;
 
-      // Backfill and create triggers for assets
       await sql`
         UPDATE kb_assets
         SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
@@ -235,7 +232,6 @@ const migrations: Migration[] = [
         ON kb_assets FOR EACH ROW EXECUTE FUNCTION kb_assets_search_trigger()
       `;
 
-      // Create GIN indices for fast search
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_pages_search ON kb_pages USING GIN(search_vector)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_assets_search ON kb_assets USING GIN(search_vector)`;
     },
@@ -243,12 +239,9 @@ const migrations: Migration[] = [
   {
     id: "007_hardening",
     async up(sql) {
-      // 1. Hardening Edit Locks
-      // Convert locked_at to timestamptz for atomic server-side expiry checks
+
       await sql`ALTER TABLE kb_pages ALTER COLUMN locked_at TYPE TIMESTAMPTZ USING NULLIF(locked_at, '')::TIMESTAMPTZ`;
 
-      // 2. Improving Search Quality (De-noising FTS)
-      // Create a function to extract plain text from our blocks JSONB structure
       await sql`
         CREATE OR REPLACE FUNCTION kb_extract_blocks_text(blocks jsonb) RETURNS text AS $$
         declare
@@ -266,13 +259,11 @@ const migrations: Migration[] = [
             if block->>'caption' is not null then
               result := result || ' ' || (block->>'caption');
             end if;
-            -- List items: ["first", "second", ...]
             if jsonb_typeof(block->'items') = 'array' then
               result := result || ' ' || coalesce(
                 (select string_agg(item_text, ' ')
                    from jsonb_array_elements_text(block->'items') as items_t(item_text)), '');
             end if;
-            -- Table rows: array of arrays of cell strings
             if jsonb_typeof(block->'rows') = 'array' then
               result := result || ' ' || coalesce(
                 (select string_agg(cell, ' ')
@@ -281,7 +272,6 @@ const migrations: Migration[] = [
                           where jsonb_typeof(row_el) = 'array') rows_only,
                         jsonb_array_elements_text(rows_only.row_el) as c(cell)), '');
             end if;
-            -- Recurse into cards
             if block->>'type' = 'card' and jsonb_typeof(block->'blocks') = 'array' then
               result := result || ' ' || kb_extract_blocks_text(block->'blocks');
             end if;
@@ -291,7 +281,6 @@ const migrations: Migration[] = [
         $$ LANGUAGE plpgsql IMMUTABLE;
       `;
 
-      // Update the page search trigger to use the new extraction function
       await sql`
         CREATE OR REPLACE FUNCTION kb_pages_search_trigger() RETURNS trigger AS $$
         begin
@@ -304,7 +293,6 @@ const migrations: Migration[] = [
         $$ LANGUAGE plpgsql;
       `;
 
-      // Re-index all pages with clean text
       await sql`
         UPDATE kb_pages
         SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
@@ -323,7 +311,7 @@ const migrations: Migration[] = [
   {
     id: "009_editor_note_search",
     async up(sql) {
-      // Keep list/table/caption recall + card recursion in the search extractor.
+
       await sql`
         CREATE OR REPLACE FUNCTION kb_extract_blocks_text(blocks jsonb) RETURNS text AS $$
         declare
@@ -374,7 +362,7 @@ const migrations: Migration[] = [
   {
     id: "010_kb_theme",
     async up(sql) {
-      // Per-KB "Manage Styles" theme (colors, fonts, type scale, editor allowlists).
+
       await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS theme JSONB`;
     },
   },
@@ -387,10 +375,7 @@ const migrations: Migration[] = [
   {
     id: "012_video_columns",
     async up(sql) {
-      // Managed videos are external links, not binary blobs. Give them dedicated
-      // columns instead of overloading the asset version `body`/synthetic mime.
-      // Backfill of existing video rows is handled in app code (backfillVideoColumns)
-      // so it also covers freshly-seeded rows, which are inserted after migrations.
+
       await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS video_provider TEXT`;
       await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS video_external_id TEXT`;
       await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS video_url TEXT`;
@@ -399,17 +384,16 @@ const migrations: Migration[] = [
   {
     id: "013_alt_text_and_fts_index",
     async up(sql) {
-      // Dedicated default alt-text for an asset, so "save alt to asset" no longer
-      // overloads the human-facing `description` (KI-2).
+
       await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS alt_text TEXT NOT NULL DEFAULT ''`;
-      // Supports the correlated staff-visibility prune in public FTS as KBs grow (KI-2).
+
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_pages_staff_prune ON kb_pages(kb_id, visibility, path)`;
     },
   },
   {
     id: "014_site_settings",
     async up(sql) {
-      // Single-row, owner-editable platform settings (currently the home hero copy).
+
       await sql`
         CREATE TABLE IF NOT EXISTS site_settings (
           id TEXT PRIMARY KEY DEFAULT 'singleton',

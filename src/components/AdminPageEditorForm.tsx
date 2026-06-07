@@ -130,13 +130,13 @@ export function AdminPageEditorForm({
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [savedStatus, setSavedStatus] = useState<PageStatus>(page.status);
   const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
-  
+
   const [lockError, setLockError] = useState<string | null>(null);
   const missedHeartbeats = useRef(0);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    
+
     async function heartbeatLock() {
       try {
         const res = await fetch(`/api/admin/pages/${page.id}/lock`, { method: "POST" });
@@ -161,7 +161,7 @@ export function AdminPageEditorForm({
     }
 
     heartbeatLock();
-    interval = setInterval(heartbeatLock, 60000); // Heartbeat every 60s
+    interval = setInterval(heartbeatLock, 60000); 
 
     return () => {
       clearInterval(interval);
@@ -171,8 +171,6 @@ export function AdminPageEditorForm({
 
   const previewUrl = useMemo(() => savedUrl ?? `/kb/${kb.slug}/${page.path.join("/")}`, [kb.slug, page.path, savedUrl]);
 
-  // Map blocking publish issues onto the specific fields they reference so the
-  // editor can highlight what needs fixing.
   const summaryError = issues.some((issue) => issue.toLowerCase().includes("summary"));
   const contactError = issues.some((issue) => issue.toLowerCase().includes("contact email"));
   const altError = issues.some((issue) => issue.toLowerCase().includes("alt text"));
@@ -183,8 +181,6 @@ export function AdminPageEditorForm({
     }
   }, [altError, issues]);
 
-  // Track unsaved changes so Publish can save first and the UI can warn before
-  // status actions that ignore the in-progress form.
   const currentSnapshot = JSON.stringify({
     title,
     slug,
@@ -398,7 +394,7 @@ export function AdminPageEditorForm({
           You cannot save changes to this page until the lock expires.
         </div>
       )}
-      
+
       <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
         {error && <p className="error">{error}</p>}
         {issues.length > 0 && (

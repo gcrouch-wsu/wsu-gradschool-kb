@@ -1,12 +1,5 @@
 import type { AssetUsage, AssetVersion, KbPage } from "@/lib/types";
 
-/**
- * Pure asset-lifecycle logic: version creation, activation/replacement, restore,
- * and usage extraction. Kept free of storage/Next concerns so the invariants are
- * unit-testable. Persistence (an asset_versions table) and the file-manager UI
- * build on top of these. See project_spec.md §10/§11.
- */
-
 export interface NewVersionInput {
   body: string;
   mimeType: string;
@@ -25,26 +18,18 @@ export function nextVersionNumber(versions: AssetVersion[]): number {
   return versions.reduce((max, version) => Math.max(max, version.versionNumber), 0) + 1;
 }
 
-/** The single current/public version, or null if none is active. */
 export function currentActiveVersion(versions: AssetVersion[]): AssetVersion | null {
   return versions.find((version) => version.status === "active") ?? null;
 }
 
-/** Invariant: an active asset must have exactly one active version. */
 export function hasSingleActiveVersion(versions: AssetVersion[]): boolean {
   return versions.filter((version) => version.status === "active").length === 1;
 }
 
-/** Spec invariant: at most one draft replacement may be open for activation. */
 export function openDraftCount(versions: AssetVersion[]): number {
   return versions.filter((version) => version.status === "draft").length;
 }
 
-/**
- * Create a new draft version. Does not change the current active version; the
- * draft becomes public only when explicitly activated. Throws if a draft
- * replacement is already open (project_spec.md §10 asset-version invariants).
- */
 export function createDraftVersion(
   assetId: string,
   versions: AssetVersion[],
@@ -70,12 +55,6 @@ export function createDraftVersion(
   };
 }
 
-/**
- * Activate a version. The previously active version transitions to `replaced` in
- * the same operation, guaranteeing exactly one active version and keeping the
- * stable public URL pointed at the current file. Archived versions must be
- * restored as a draft first.
- */
 export function activateVersion(versions: AssetVersion[], versionId: string): AssetVersion[] {
   const target = versions.find((version) => version.id === versionId);
   if (!target) {
@@ -95,11 +74,6 @@ export function activateVersion(versions: AssetVersion[], versionId: string): As
   });
 }
 
-/**
- * Restore an older version by cloning it into a new draft (republish/activation
- * stays intentional and uses the normal replacement review). Returns the version
- * list with the new draft appended; the current active version is unchanged.
- */
 export function restoreVersionAsDraft(
   versions: AssetVersion[],
   versionId: string,
@@ -123,11 +97,6 @@ export function restoreVersionAsDraft(
   return [...versions, draft];
 }
 
-/**
- * Extract every usage of an asset across the given pages, for impact review
- * before replacing or archiving (project_spec.md §10/§11). Covers inline image
- * blocks, inline file links, and page "related files" references.
- */
 export function extractAssetUsages(pages: KbPage[], assetId: string): AssetUsage[] {
   const usages: AssetUsage[] = [];
   for (const page of pages) {

@@ -10,7 +10,6 @@ export default async function AdminPagesPage() {
     redirect("/admin/sign-in?next=/admin/pages");
   }
 
-  // Editors only see KBs they are assigned to; owners/admins see all.
   const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const groups = await Promise.all(
     kbs.map(async (kb) => ({

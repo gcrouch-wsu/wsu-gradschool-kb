@@ -26,11 +26,11 @@ export async function POST(request: Request) {
       assetType: "video",
       title: body.title,
       description: body.description,
-      body: body.url, // Kept for the version row / backward compatibility.
+      body: body.url, 
       mimeType: `video/x-${provider}`,
       originalFilename: `${provider}-link`,
       fileSizeBytes: 0,
-      // Canonical video fields (KI-2): the source of truth for delivery/embedding.
+
       videoProvider: provider,
       videoExternalId: embedId ?? null,
       videoUrl: body.url,

@@ -5,7 +5,6 @@ import { getCurrentAdminSession } from "@/lib/auth";
 import { getAssetById, getKbById, getKbBySlug, searchKb } from "@/lib/kb-store";
 import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 
-// Public search is rate-limited per client to reduce abuse (project_spec.md §4/§20).
 const SEARCH_LIMIT = 30;
 const SEARCH_WINDOW_SECONDS = 60;
 
@@ -25,7 +24,6 @@ export default async function SearchPage({
 
   const isStaff = Boolean(await getCurrentAdminSession());
 
-  // Only count requests that actually run a query against the limit.
   let rateLimited = false;
   if (q.trim()) {
     const clientKey = clientKeyFromHeaders(await headers());

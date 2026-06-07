@@ -215,7 +215,7 @@ export function AdminPageTreeManager({
         const data = await response.json();
         throw new Error(data.message || "Could not delete page.");
       }
-      
+
       setPages((current) => current.filter((page) => page.id !== pageId));
       setMessage("Page deleted.");
     } catch (caught) {

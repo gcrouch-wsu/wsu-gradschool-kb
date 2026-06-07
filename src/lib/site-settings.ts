@@ -1,5 +1,3 @@
-/** Platform-level site settings (owner-editable). */
-
 export interface NavLink {
   label: string;
   url: string;
@@ -15,7 +13,6 @@ export interface SiteSettings {
   contactInfo: string;
 }
 
-/** Fallback used before anything is saved and whenever no database is configured. */
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   homeEyebrow: "WSU Knowledge Base",
   homeTitle: "Washington State University knowledge bases",
@@ -55,7 +52,6 @@ function normalizeLinks(raw: unknown): NavLink[] {
     }));
 }
 
-/** Coerce arbitrary input into valid SiteSettings, trimming and length-capping each field. */
 export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, unknown>>): SiteSettings {
   const pickText = (key: keyof SiteSettings, fallback: string) => {
     const value = input[key];

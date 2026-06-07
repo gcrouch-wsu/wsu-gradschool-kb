@@ -5,9 +5,6 @@ export function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID().replaceAll("-", "");
   const isProduction = process.env.NODE_ENV === "production";
 
-  // Next.js emits inline bootstrap/RSC-payload scripts that must be allowed via a
-  // per-request nonce. 'strict-dynamic' lets those nonce'd scripts load the rest of
-  // the chunk graph. Development additionally needs 'unsafe-eval' for React Refresh.
   const scriptSrc = isProduction
     ? `'self' 'nonce-${nonce}' 'strict-dynamic'`
     : `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`;
@@ -32,10 +29,6 @@ export function proxy(request: NextRequest) {
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("content-security-policy", csp);
 
-  // Slide the idle-timeout window forward on each authenticated navigation by
-  // re-setting the existing session cookie with a fresh max-age. The cookie value
-  // is opaque here (it is verified in Node route handlers / server components);
-  // this only refreshes the browser-side idle expiry.
   const session = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
   if (session) {
     response.cookies.set({

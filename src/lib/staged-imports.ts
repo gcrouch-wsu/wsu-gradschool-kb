@@ -15,7 +15,7 @@ import type {
 
 const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const MACRO_EXTENSIONS = [".docm", ".dotm", ".dot"];
-/** Matches managed document upload limit; Vercel request body may still cap lower on some plans. */
+
 export const STAGED_IMPORT_MAX_BYTES = 25 * 1024 * 1024;
 
 const globalRuntime = globalThis as unknown as {

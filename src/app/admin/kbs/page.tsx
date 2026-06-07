@@ -8,12 +8,12 @@ export default function AdminKbsPage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newSlug, setNewSlug] = useState("");
-  
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<KnowledgeBase>>({});
 
@@ -23,10 +23,7 @@ export default function AdminKbsPage() {
 
   async function loadData() {
     try {
-      // We can use the existing /admin/session or create a specific GET /admin/kbs if we need more than what's returned globally.
-      // For now, let's assume we fetch it from a hypothetical GET route, or we can use a server action. 
-      // Actually, we don't have a GET /api/admin/kbs route yet. Let's create one or just use the UI.
-      // We will need a GET route to list all KBs (including drafts).
+
       const res = await fetch("/api/admin/kbs");
       if (!res.ok) throw new Error("Failed to load KBs");
       const data = await res.json();
@@ -47,7 +44,7 @@ export default function AdminKbsPage() {
         body: JSON.stringify({ title: newTitle, description: newDescription, slug: newSlug, status: "draft" }),
       });
       if (!res.ok) throw new Error("Failed to create KB");
-      
+
       await loadData();
       setIsCreating(false);
       setNewTitle("");
@@ -66,7 +63,7 @@ export default function AdminKbsPage() {
         body: JSON.stringify(editData),
       });
       if (!res.ok) throw new Error("Failed to update KB");
-      
+
       await loadData();
       setEditingId(null);
       setEditData({});

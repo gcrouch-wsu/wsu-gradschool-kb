@@ -10,8 +10,6 @@ export const metadata: Metadata = {
     "Washington State University knowledge base platform. Browse published knowledge bases, including the Graduate School knowledge base.",
 };
 
-// The per-request CSP nonce (set in src/proxy.ts) can only be attached to inline
-// scripts during request-time rendering, so the app must not be statically prerendered.
 export const dynamic = "force-dynamic";
 
 function roleLabel(role: string) {

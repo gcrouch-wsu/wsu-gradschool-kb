@@ -1,12 +1,3 @@
-/**
- * Minimal in-memory fixed-window rate limiter.
- *
- * State lives on globalThis so it survives module reloads within a server
- * process. This is the documented MVP approach (project_spec.md §4/§20). Note the
- * limitation: on serverless/Fluid Compute each instance keeps its own counters,
- * so limits are per-instance rather than global. A shared store (e.g. Upstash
- * Redis) should replace this before relying on it as a hard security control.
- */
 interface Bucket {
   count: number;
   resetAt: number;
@@ -51,7 +42,6 @@ export function rateLimit(key: string, limit: number, windowSeconds: number): Ra
   return { allowed: true, remaining: limit - existing.count, retryAfterSeconds: 0 };
 }
 
-/** Best-effort client key derived from forwarding headers. */
 export function clientKeyFromHeaders(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {

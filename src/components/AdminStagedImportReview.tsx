@@ -367,7 +367,7 @@ export function AdminStagedImportReview({
             <h3>Thumbnails</h3>
             <div className="import-thumbs">
               {imageUrls.map((url, index) => (
-                // eslint-disable-next-line @next/next/no-img-element
+
                 <img alt="" key={`${url}-${index}`} src={url} />
               ))}
             </div>

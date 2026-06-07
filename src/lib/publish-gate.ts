@@ -1,8 +1,6 @@
 import { parse } from "node-html-parser";
 import type { ContentBlock } from "@/lib/types";
 
-// Vague link text blocked at publish time (project_spec.md §17). In the MVP this
-// list is config-managed here rather than per-KB template-editable.
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -36,12 +34,6 @@ function collectHtml(block: ContentBlock): string[] {
   }
 }
 
-/**
- * Runs the accessibility + governance publish gate described in project_spec.md
- * §17. Returns a list of human-readable blocking issues; an empty list means the
- * page may be published. Because editors publish directly (no approval workflow),
- * this gate is the primary quality control and these are treated as blockers.
- */
 export async function validatePageForPublish(
   page: PublishablePage,
   resolveAssetStatus: AssetStatusResolver,
@@ -64,7 +56,6 @@ export async function validatePageForPublish(
     issues.push("Page is missing a last reviewed date.");
   }
 
-  // Heading hierarchy: a sub-heading (H3) must not appear before its section (H2).
   let seenLevel2 = false;
   let skippedHeading = false;
   for (const block of page.blocks) {

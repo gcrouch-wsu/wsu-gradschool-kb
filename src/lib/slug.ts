@@ -9,11 +9,6 @@ export function slugify(input: string): string {
   );
 }
 
-/**
- * Slugs that would collide with application routes. Blocked at every page path
- * level and (for the KB-level set) as a top-level KB slug. See project_spec.md
- * §7 "Slug and Route Rules".
- */
 export const RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set([
   "files",
   "search",
@@ -43,10 +38,6 @@ export function isReservedPageSlug(slug: string): boolean {
   return RESERVED_PAGE_SLUGS.has(slug.toLowerCase());
 }
 
-/**
- * Throws a clear, user-facing error when a page slug would shadow an application
- * route. Call before persisting a created/updated page.
- */
 export function assertPageSlugAllowed(slug: string): void {
   if (isReservedPageSlug(slug)) {
     throw new Error(

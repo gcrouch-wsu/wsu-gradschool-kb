@@ -43,11 +43,11 @@ describe("videoDeliveryUrl", () => {
     expect(
       videoDeliveryUrl({ videoProvider: "direct", videoUrl: "https://media.wsu.edu/intro.mp4" }),
     ).toBe("https://media.wsu.edu/intro.mp4");
-    // Provider known but id missing → use the URL.
+
     expect(
       videoDeliveryUrl({ videoProvider: "youtube", videoUrl: "https://youtu.be/abc" }),
     ).toBe("https://youtu.be/abc");
-    // Legacy body fallback.
+
     expect(videoDeliveryUrl({ body: "https://media.wsu.edu/old.mp4" })).toBe(
       "https://media.wsu.edu/old.mp4",
     );

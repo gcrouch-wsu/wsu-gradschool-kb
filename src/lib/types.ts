@@ -4,12 +4,6 @@ export type AssetStatus = "draft" | "active" | "archived";
 export type AssetType = "document" | "image" | "video";
 export type AssetVersionStatus = "draft" | "active" | "replaced" | "archived";
 
-/**
- * One stored file behind an asset. The asset's stable public URL always resolves
- * to its single `active` version; replacing an asset adds a new version and
- * demotes the prior active one to `replaced` (retained for admin rollback only).
- * See project_spec.md §10 "Asset Version".
- */
 export interface AssetVersion {
   id: string;
   assetId: string;
@@ -27,7 +21,6 @@ export interface AssetVersion {
 
 export type AssetUsageType = "inline_image" | "inline_link" | "related";
 
-/** Where a single asset is used, for impact review before replace/archive. */
 export interface AssetUsage {
   assetId: string;
   pageId: string;
@@ -45,7 +38,7 @@ export interface KnowledgeBase {
   description: string;
   status: KbStatus;
   updatedOn: string;
-  /** Per-KB "Manage Styles" theme. Undefined falls back to the platform default. */
+
   theme?: import("@/lib/kb-theme").KbTheme;
 }
 
@@ -70,7 +63,7 @@ export interface KbPage {
   relatedAssetIds: string[];
   showToc: boolean;
   tocDepth: number;
-  /** Whether to display the summary as a lead paragraph on the public page. Default true. */
+
   showSummary?: boolean;
   lockedBy?: string | null;
   lockedAt?: string | null;
@@ -90,7 +83,6 @@ export interface KbDataset {
   assets: Asset[];
 }
 
-/** Horizontal alignment for text blocks and images. Omitted = default (left). */
 export type TextAlign = "left" | "center" | "right";
 
 export type ContentBlock =
@@ -104,7 +96,7 @@ export type ContentBlock =
       assetId?: string;
       url?: string;
       alt?: string;
-      /** Marked decorative: rendered with empty alt and exempt from the alt-text publish gate. */
+
       decorative?: boolean;
       widthPercent?: number;
       align?: TextAlign;
@@ -149,7 +141,6 @@ export type StagedImportStatus = "uploaded" | "parsed" | "needs_review" | "faile
 export type StagedImportSourceType = "docx";
 export type StagedImportMediaReviewStatus = "pending" | "approved" | "rejected";
 
-/** DOCX import held for review before becoming a draft page (project_spec.md §12). */
 export interface StagedImport {
   id: string;
   kbId: string;
@@ -170,7 +161,6 @@ export interface StagedImport {
   updatedAt: string;
 }
 
-/** Embedded image extracted during DOCX staging for alt/title review before commit. */
 export interface StagedImportMedia {
   id: string;
   stagedImportId: string;
@@ -207,18 +197,14 @@ export interface Asset {
   updatedDisplayDate: string;
   versionId: string;
   body: string;
-  /** Default alt text for the asset (set via "save alt to asset"); separate from `description`. */
+
   altText?: string | null;
-  /**
-   * Video assets are external links, not binary blobs, so they carry dedicated
-   * fields instead of overloading `body`/`mimeType`. Undefined for non-video assets.
-   */
+
   videoProvider?: "youtube" | "vimeo" | "direct" | null;
   videoExternalId?: string | null;
   videoUrl?: string | null;
 }
 
-/** Auto-redirect from a former public page path after slug/parent moves. */
 export interface KbRedirect {
   id: string;
   kbId: string;

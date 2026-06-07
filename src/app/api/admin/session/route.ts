@@ -8,7 +8,6 @@ import {
 import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 import { isSameOrigin } from "@/lib/security";
 
-// Login attempts allowed per client+account before a temporary lockout.
 const LOGIN_LIMIT = 10;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
 
@@ -31,7 +30,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Email and password are required." }, { status: 400 });
   }
 
-  // Rate-limit by client key + account so failed attempts cannot be brute-forced.
   const clientKey = clientKeyFromHeaders(request.headers);
   const limit = rateLimit(`login:${clientKey}:${email.toLowerCase()}`, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS);
   if (!limit.allowed) {

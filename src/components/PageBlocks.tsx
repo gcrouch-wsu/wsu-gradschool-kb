@@ -4,7 +4,6 @@ import { formatBytes } from "@/lib/format";
 import { sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 
-/** @internal Exhaustiveness check. */
 function assertNever(x: never): never {
   throw new Error(`Unhandled content block type: ${JSON.stringify(x)}`);
 }
@@ -141,7 +140,7 @@ async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "ima
   }
 
   const widthPercent = Math.min(100, Math.max(25, block.widthPercent ?? 100));
-  // Only set the horizontal margins so the stylesheet's vertical spacing is kept.
+
   const horizontalMargin =
     block.align === "center"
       ? { marginLeft: "auto", marginRight: "auto" }
@@ -153,7 +152,7 @@ async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "ima
       className={`content-image content-image--align-${block.align ?? "left"}`}
       style={{ maxWidth: `${widthPercent}%`, ...horizontalMargin }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+
       <img alt={block.decorative ? "" : block.alt ?? ""} loading="lazy" src={src} />
       {block.caption && <figcaption>{block.caption}</figcaption>}
     </figure>

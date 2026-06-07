@@ -1,7 +1,5 @@
 import type { ContentBlock } from "@/lib/types";
 
-/** Nested list indent/outdent without execCommand (which breaks in block editors). */
-
 function closestListItem(node: Node): HTMLLIElement | null {
   let current: Node | null = node;
   while (current) {
@@ -128,7 +126,6 @@ export type EditorSection =
   | { type: "video"; block: Extract<ContentBlock, { type: "video" }> }
   | { type: "section_divider"; block: Extract<ContentBlock, { type: "section_divider" }> };
 
-/** Group continuous flow blocks into a single section for the editor surface. */
 export function blocksToSections(blocks: ContentBlock[]): EditorSection[] {
   const sections: EditorSection[] = [];
   let currentFlow: ContentBlock[] = [];

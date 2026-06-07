@@ -9,18 +9,9 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-/**
- * Accessibility plumbing shared by the editor's modal dialogs:
- *  - moves focus into the dialog on open (preferring a `data-autofocus` element),
- *  - traps Tab focus within the dialog,
- *  - closes on Escape,
- *  - restores focus to the trigger element when the dialog unmounts.
- * Attach the returned ref to the dialog container (give it `tabIndex={-1}`).
- */
 export function useModalA11y<T extends HTMLElement = HTMLDivElement>(onClose: () => void) {
   const ref = useRef<T>(null);
-  // Keep the latest onClose without re-running the setup effect every render
-  // (which would otherwise re-trigger focus handling and bounce focus).
+
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -65,8 +56,7 @@ export function useModalA11y<T extends HTMLElement = HTMLDivElement>(onClose: ()
       document.removeEventListener("keydown", onKey);
       previouslyFocused?.focus?.();
     };
-    // Set up once on open; onClose is read through a ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   return ref;

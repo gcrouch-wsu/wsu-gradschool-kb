@@ -9,10 +9,6 @@ interface HomeKb extends KnowledgeBase {
   isDraft: boolean;
 }
 
-/**
- * The home list shows published KBs to everyone. A signed-in editor additionally
- * sees the KBs they are assigned to (including drafts), surfaced with a badge.
- */
 async function getHomeKbs(): Promise<HomeKb[]> {
   const published = await getPublishedKbs();
   const list: HomeKb[] = published.map((kb) => ({ ...kb, isDraft: false }));

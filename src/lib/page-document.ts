@@ -21,7 +21,6 @@ function clampWidth(value: number | undefined): number {
   return Math.min(IMAGE_MAX_WIDTH, Math.max(IMAGE_MIN_WIDTH, Math.round(value as number)));
 }
 
-/** Read a normalized alignment from a block element's `text-align` style or `align` attribute. */
 function readTextAlign(node: HTMLElement): TextAlign | undefined {
   const styleMatch = (node.getAttribute("style") ?? "").match(/text-align\s*:\s*(left|right|center)/i);
   const raw = (styleMatch?.[1] ?? node.getAttribute("align") ?? "").toLowerCase();
@@ -33,12 +32,10 @@ function normalizeAlign(raw: string | undefined | null): TextAlign | undefined {
   return value === "center" || value === "right" || value === "left" ? (value as TextAlign) : undefined;
 }
 
-/** Inline `text-align` style attribute for text blocks. Left is the default, so it is omitted. */
 function alignStyleAttr(align: TextAlign | undefined): string {
   return align && align !== "left" ? ` style="text-align: ${align}"` : "";
 }
 
-/** Block-level margin that positions a max-width figure flush-left, centered, or flush-right. */
 function imageMargin(align: TextAlign | undefined): string {
   if (align === "center") {
     return "0 auto";
@@ -49,7 +46,6 @@ function imageMargin(align: TextAlign | undefined): string {
   return "0 auto 0 0";
 }
 
-/** Editor-only control strip (alt + align + resize) injected into image figures. Stripped on save. */
 function imageControlsHtml(): string {
   return (
     `<div class="doc-image__controls" contenteditable="false">` +
@@ -79,7 +75,6 @@ function imageEditorCaption(caption: string, alt: string, decorative: boolean): 
   return `<figcaption class="doc-image__caption doc-image__caption--missing" contenteditable="true" data-img-caption="true" data-placeholder="Optional visible caption">No alt text - use the Alt button to add a description</figcaption>`;
 }
 
-/** Render an image figure for the editor surface (with controls + alt-aware caption). */
 function imageFigureHtml(input: {
   blockId: string;
   src: string;
@@ -103,7 +98,6 @@ function imageFigureHtml(input: {
   );
 }
 
-/** @internal Exhaustiveness check for switch/if unions. */
 function assertNever(x: never): never {
   throw new Error(`Unhandled content block type: ${JSON.stringify(x)}`);
 }
@@ -286,16 +280,14 @@ function serializeDocumentNode(node: Node): string {
     const caption = /\bdoc-image__caption--(missing|decorative|placeholder)\b/.test(captionClass)
       ? ""
       : collapseWhitespace(captionNode?.text ?? "");
-    // Alt is the source of truth on the <img>; caption is separate optional
-    // visible text and must not be read back into alt.
+
     const alt = decorative ? "" : escapeHtml(collapseWhitespace(img?.getAttribute("alt") ?? ""));
     const assetAttr = assetId ? ` data-asset-id="${escapeHtml(assetId)}"` : "";
     const decoAttr = decorative ? ` data-decorative="true"` : "";
     const captionHtml = caption
       ? `<figcaption class="doc-image__caption" data-img-caption="true">${escapeHtml(caption)}</figcaption>`
       : "";
-    // Normalized (clean) form: data attributes only. The editor chrome (control
-    // strip + inline alignment style) is re-applied by blockToHtml on mount.
+
     return (
       `<figure class="doc-image" contenteditable="false" data-block-id="${escapeHtml(blockId)}" data-width="${width}" data-align="${align}"${assetAttr}${decoAttr}>` +
       `<img alt="${alt}" src="${escapeHtml(src)}" />` +
@@ -309,7 +301,7 @@ function serializeDocumentNode(node: Node): string {
   }
 
   if (tag === "table" && hasClass(node, "doc-table")) {
-    // Preserve table as is, it's handled by documentHtmlToBlocks later
+
     return node.outerHTML;
   }
 
@@ -355,7 +347,6 @@ function serializeDocumentNode(node: Node): string {
     return inner;
   }
 
-  // Browser paste or legacy markup: wrap stray text in a paragraph.
   const text = collapseWhitespace(node.text ?? "");
   if (!text && tag !== "br") {
     return node.childNodes.map(serializeDocumentNode).join("");
@@ -376,7 +367,7 @@ const MAX_NESTING_DEPTH = 3;
 
 export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
   if (depth > MAX_NESTING_DEPTH) {
-    return []; // Prevent infinite recursion
+    return []; 
   }
 
   const clean = sanitizePageDocument(html);
@@ -394,8 +385,7 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
 
     if (tag === "section" && hasClass(node, "doc-card")) {
       if (depth + 1 > MAX_NESTING_DEPTH) {
-        // Too deep to nest another card. Rather than silently dropping the card's
-        // content, FLATTEN it into the current level so nothing is lost. (KI-2)
+
         blocks.push(...documentHtmlToBlocks(node.innerHTML, depth));
         continue;
       }
@@ -476,7 +466,7 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
     if (tag === "aside" && hasClass(node, "doc-alert")) {
       const { html: blockHtml, text } = inlineFields(node);
       if (text) {
-        // Warning was removed — all info boxes normalize to a single info style.
+
         blocks.push({
           blockId: blockIdFrom(node),
           type: "alert",
@@ -498,7 +488,7 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
       const assetId = node.getAttribute("data-asset-id") ?? undefined;
       const url = safeImageSrc(img?.getAttribute("src") ?? undefined) ?? undefined;
       const decorative = node.getAttribute("data-decorative") === "true";
-      // Read alt only from the <img>, never the figcaption (which is editor chrome).
+
       const alt = decorative ? "" : collapseWhitespace(img?.getAttribute("alt") ?? "");
       const captionNode = node.querySelector("figcaption[data-img-caption], figcaption.doc-image__caption, figcaption");
       const captionClass = captionNode?.getAttribute("class") ?? "";

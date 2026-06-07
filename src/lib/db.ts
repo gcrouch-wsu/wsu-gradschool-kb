@@ -10,7 +10,6 @@ function getDatabaseUrl() {
   return process.env.DATABASE_URL?.trim() || null;
 }
 
-/** True when DATABASE_URL is set. Otherwise the app uses the in-memory seed dataset. */
 export function isDatabaseEnabled() {
   return Boolean(getDatabaseUrl());
 }
@@ -19,7 +18,6 @@ const globalForDb = globalThis as unknown as {
   __kbSql?: NeonQueryFunction<false, false>;
 };
 
-/** @internal Used by db-staged-imports persistence helpers. */
 export function getSql() {
   const url = getDatabaseUrl();
   if (!url) {
@@ -33,7 +31,6 @@ export function getSql() {
 
 let schemaPromise: Promise<void> | null = null;
 
-/** @internal Used by db-staged-imports persistence helpers. */
 export async function ensureSchema() {
   if (!schemaPromise) {
     schemaPromise = (async () => {
@@ -50,7 +47,6 @@ export async function ensureSchema() {
   await schemaPromise;
 }
 
-/** Ensure every asset has at least one active version row (runs after seed). */
 async function backfillAssetVersions() {
   const sql = getSql();
   const assets = (await sql`
@@ -82,12 +78,6 @@ async function backfillAssetVersions() {
   }
 }
 
-/**
- * Populate the dedicated video columns for any legacy video assets that predate
- * migration 012 (their provider/id/url were overloaded into body + a synthetic
- * mime). Runs after seed so it also covers freshly-seeded rows. Idempotent: only
- * touches video rows whose `video_url` is not yet set.
- */
 async function backfillVideoColumns() {
   const sql = getSql();
   const rows = (await sql`
@@ -222,7 +212,6 @@ function mapKb(row: KbRow): KnowledgeBase {
   };
 }
 
-/** Load owner-editable site settings, falling back to defaults when unset/no DB. */
 export async function loadSiteSettings(): Promise<SiteSettings> {
   if (!isDatabaseEnabled()) {
     return DEFAULT_SITE_SETTINGS;
@@ -255,7 +244,6 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
   });
 }
 
-/** Upsert the single site-settings row. */
 export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
   await ensureSchema();
   const sql = getSql();
@@ -282,7 +270,6 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
   `;
 }
 
-/** Persist a validated theme for a KB. */
 export async function updateKbTheme(kbId: string, theme: KbTheme): Promise<void> {
   await ensureSchema();
   const sql = getSql();
@@ -338,7 +325,6 @@ function mapAsset(row: AssetRow): Asset {
   };
 }
 
-/** Insert a single page into Neon (schema is ensured first). */
 export async function insertPage(page: KbPage): Promise<void> {
   await ensureSchema();
   const sql = getSql();
@@ -357,7 +343,6 @@ export async function insertPage(page: KbPage): Promise<void> {
   `;
 }
 
-/** Insert a managed asset into Neon. */
 export async function insertAsset(asset: Asset): Promise<void> {
   await ensureSchema();
   const sql = getSql();
@@ -376,20 +361,8 @@ export async function insertAsset(asset: Asset): Promise<void> {
   `;
 }
 
-/** SQLSTATE for division_by_zero, used as the in-SQL "lock conflict" abort signal. */
 const PG_DIVISION_BY_ZERO = "22012";
 
-/**
- * Update existing pages in Neon. Used for single edits and for move/reorder
- * cascades that touch many rows at once.
- *
- * All rows are written in a single transaction so the batch is atomic: a page
- * move or tree reorder can never half-apply. When `editorEmail` is supplied
- * (admin mutation paths), every row additionally enforces the edit lock — the
- * writer must own the lock, or it must be free or expired. If any row fails that
- * check, an in-SQL guard divides by zero (SQLSTATE 22012) to abort and roll back
- * the whole transaction, and we surface a lock-conflict error.
- */
 export async function updatePages(pages: KbPage[], editorEmail?: string): Promise<void> {
   if (pages.length === 0) {
     return;
@@ -397,16 +370,6 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
   await ensureSchema();
   const sql = getSql();
 
-  // All row updates run in ONE Neon transaction so a multi-page move/reorder is
-  // all-or-nothing — it can never half-apply (e.g. re-pathing some descendants
-  // but not others). The neon HTTP driver's `transaction([...])` issues a single
-  // BEGIN/COMMIT and ROLLBACKs if any statement throws.
-  //
-  // When `editorEmail` is supplied (admin mutation paths), every row also enforces
-  // the edit lock. A locked row makes the UPDATE match zero rows, which is NOT an
-  // error on its own — so a data-modifying CTE wraps each update and a trailing
-  // `CASE … THEN 1 / 0` guard raises division_by_zero (SQLSTATE 22012) when no row
-  // was updated, aborting and rolling back the whole batch.
   const queries = pages.map((page) => {
     const path = page.path.join("/");
     const blocks = JSON.stringify(page.blocks);
@@ -439,11 +402,6 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
             AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
           RETURNING id
         )
-        -- Dividing by the (non-constant) updated row count raises division_by_zero
-        -- (SQLSTATE 22012) when the row was locked, aborting and rolling back the
-        -- batch. A literal "1 / 0" must NOT be used here: Postgres folds constant
-        -- expressions at plan time and would raise it on EVERY save, not just
-        -- conflicts. The subquery count keeps the divisor runtime-evaluated.
         SELECT 1 / (SELECT count(*) FROM updated)::int AS ok
       `;
     }
@@ -475,8 +433,7 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
   try {
     await sql.transaction(queries);
   } catch (error) {
-    // The CTE guard raises division_by_zero (22012) when a row was locked by
-    // another user (or the writer's lock expired). Surface the friendly message.
+
     if (
       error &&
       typeof error === "object" &&
@@ -491,14 +448,10 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
   }
 }
 
-/** 
- * Atomic lock acquisition. 
- * Returns true if lock was acquired or renewed, false if held by someone else.
- */
 export async function tryAcquirePageLock(pageId: string, userEmail: string): Promise<boolean> {
   await ensureSchema();
   const sql = getSql();
-  // Lock expires in 5 minutes. Heartbeat should be every 1 minute with client-side retry grace.
+
   const result = await sql`
     UPDATE kb_pages
     SET
@@ -511,12 +464,6 @@ export async function tryAcquirePageLock(pageId: string, userEmail: string): Pro
   return result.length > 0;
 }
 
-/**
- * Update ONLY a page's status (and display date). A status flip changes no content
- * or path, so it touches just those columns — this avoids rewriting the whole row
- * (which could clobber a concurrent editor's just-saved content) and is why it does
- * not need the edit lock. See KI-2.
- */
 export async function updatePageStatusColumn(
   pageId: string,
   status: string,
@@ -559,7 +506,7 @@ export async function deleteAsset(assetId: string): Promise<void> {
 export async function deleteKb(kbId: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  // Cleanup everything tied to this KB
+
   await sql`DELETE FROM kb_pages WHERE kb_id = ${kbId}`;
   await sql`DELETE FROM kb_asset_versions WHERE asset_id IN (SELECT id FROM kb_assets WHERE home_kb_id = ${kbId})`;
   await sql`DELETE FROM kb_assets WHERE home_kb_id = ${kbId}`;
@@ -568,15 +515,6 @@ export async function deleteKb(kbId: string): Promise<void> {
   await sql`DELETE FROM knowledge_bases WHERE id = ${kbId}`;
 }
 
-/**
- * Load the full dataset from Neon (schema is created and seeded on first call).
- *
- * The `body` column is intentionally NOT selected here. Asset bodies can be large
- * (e.g. base64 image data), and this dataset is read on every public page render
- * for metadata, navigation, and search. Bodies are streamed on demand by the
- * stable file route via `loadAssetForDelivery`. Listed assets carry an empty body.
- */
-/** Load one page by primary key (admin editor, APIs). */
 export async function loadPageById(pageId: string): Promise<KbPage | null> {
   await ensureSchema();
   const sql = getSql();
@@ -608,10 +546,6 @@ export async function loadDatasetFromDb(): Promise<KbDataset> {
   };
 }
 
-/**
- * Load a single active asset including its `body` for the stable file route.
- * Returns null when no matching active asset exists.
- */
 interface VersionRow {
   id: string;
   asset_id: string;

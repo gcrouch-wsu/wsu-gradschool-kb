@@ -42,7 +42,6 @@ export async function PATCH(
     );
   }
 
-  // Publishing from the tree runs the same gate against the page's stored content.
   if (status === "published") {
     const existing = await getPageByIdForAdmin(pageId);
     if (!existing) {

@@ -28,7 +28,7 @@ export async function POST(
     if (!ok) {
       return NextResponse.json(
         { message: "This page is currently being edited by another user." },
-        { status: 409 } // Conflict
+        { status: 409 } 
       );
     }
 

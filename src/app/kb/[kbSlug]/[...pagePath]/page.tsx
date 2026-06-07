@@ -34,7 +34,7 @@ export async function generateMetadata({
   if (!page) {
     return {};
   }
-  // Drives the browser tab, the saved-PDF document title, and link previews.
+
   return {
     title: `${page.title} · ${kb.title}`,
     description: page.summary || undefined,
@@ -163,4 +163,3 @@ export default async function KbArticlePage({
     </div>
   );
 }
-

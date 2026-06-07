@@ -43,12 +43,6 @@ import type {
   PageVisibility,
 } from "@/lib/types";
 
-/**
- * Pages created at runtime when no database is configured. Stored on globalThis
- * so they are shared across route bundles within a single server process (each
- * Next.js route is its own module instance). This makes the no-DB fallback
- * usable for local development; production should set DATABASE_URL (Neon).
- */
 const globalForRuntime = globalThis as unknown as {
   __kbRuntimeAssets?: Asset[];
   __kbRuntimePages?: KbPage[];
@@ -130,7 +124,6 @@ function deletedPageIds(): Set<string> {
   return globalForRuntime.__kbDeletedPageIds;
 }
 
-/** Merge in-memory pages/assets created on this instance into a DB-backed dataset. */
 function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
   const extraPages = runtimePages();
   const extraAssets = runtimeAssets();
@@ -157,10 +150,6 @@ function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
   };
 }
 
-/**
- * Single source of truth for reading KB content. Uses Neon when DATABASE_URL is
- * configured, otherwise the in-memory seed dataset. Cached per request render.
- */
 const getDataset = cache(async (): Promise<KbDataset> => {
   if (isDatabaseEnabled()) {
     return mergeRuntimeIntoDataset(await loadDatasetFromDb());
@@ -215,7 +204,7 @@ function orderPagesForTree(pages: KbPage[]) {
 }
 
 function isStaffOnly(pages: KbPage[], page: KbPage) {
-  // A page is staff-only if it, or any ancestor in its path, is marked "staff".
+
   return pages.some(
     (candidate) =>
       candidate.kbId === page.kbId &&
@@ -229,11 +218,6 @@ function publishedPages(dataset: KbDataset, kbId: string) {
   return dataset.pages.filter((page) => page.kbId === kbId && page.status === "published");
 }
 
-/**
- * Pages a viewer may see. Public visitors get published, public pages only.
- * Staff (signed-in admins) additionally see drafts and staff-only pages so they
- * can preview imported content before publishing.
- */
 function visiblePages(dataset: KbDataset, kbId: string, includeStaff: boolean) {
   if (includeStaff) {
     return dataset.pages.filter(
@@ -349,32 +333,21 @@ export async function getAssetById(assetId: string): Promise<Asset | null> {
   return dataset.assets.find((asset) => asset.id === assetId && asset.status === "active") ?? null;
 }
 
-/** Status of an asset by id (any status), or null if it does not exist. */
 export async function getAssetStatusById(assetId: string): Promise<string | null> {
   const dataset = await getDataset();
   return dataset.assets.find((asset) => asset.id === assetId)?.status ?? null;
 }
 
-/** Home KB of an asset (any status), for KB-scope checks. Null if not found. */
 export async function getAssetHomeKbId(assetId: string): Promise<string | null> {
   const dataset = await getDataset();
   return dataset.assets.find((asset) => asset.id === normalizeRecordId(assetId))?.homeKbId ?? null;
 }
 
-/**
- * Every place an asset is used across pages, for impact review before replacing
- * or archiving it (project_spec.md §11). Reads current page content.
- */
 export async function getAssetUsages(assetId: string): Promise<AssetUsage[]> {
   const dataset = await getDataset();
   return extractAssetUsages(dataset.pages, assetId);
 }
 
-/**
- * Resolve an active asset including its `body` for the stable file route. Unlike
- * `getAssetBySlug`, this loads the (potentially large) body, so it must only be
- * used by the streaming delivery route — not by list/render paths.
- */
 export async function getAssetForDelivery(homeKbId: string, slug: string): Promise<Asset | null> {
   if (isDatabaseEnabled()) {
     const fromDb = await loadAssetForDelivery(homeKbId, slug);
@@ -406,8 +379,7 @@ export interface CreateManagedAssetInput {
   assetType: Asset["assetType"];
   title?: string;
   description?: string;
-  // Video assets are external links: these carry the canonical provider/id/url
-  // instead of overloading body/mime (see KI-2).
+
   videoProvider?: Asset["videoProvider"];
   videoExternalId?: string | null;
   videoUrl?: string | null;
@@ -675,10 +647,6 @@ function pageBodyText(page: KbPage): string {
     .join(" ");
 }
 
-/**
- * Score a field match. Exact equality and prefix matches rank above a plain
- * substring hit so the most relevant results surface first (project_spec.md §14).
- */
 function fieldScore(field: string, query: string, weights: { exact: number; prefix: number; includes: number }) {
   const value = field.trim().toLowerCase();
   if (!value) {
@@ -701,11 +669,6 @@ interface ScoredResult {
   score: number;
 }
 
-/**
- * KB-scoped search with simple relevance ranking. Until Postgres FTS + aliases
- * land (project_spec.md §14), this ranks current titles highest, then summaries,
- * then body and asset metadata. Results are deduped by record and sorted by score.
- */
 export async function searchKb(
   kbId: string | undefined,
   query: string,
@@ -718,10 +681,7 @@ export async function searchKb(
 
   if (isDatabaseEnabled()) {
     const sql = getSql();
-    
-    // 1. Safe Tokenization for FTS: prevent syntax errors from characters like &, |, :, !
-    // We reduce each token to alphanumerics and drop empties. The last token gets :*
-    // for robust type-ahead behavior.
+
     const safeTokens = normalized
       .split(/\s+/)
       .map((t) => t.replace(/[^a-z0-9]/gi, ""))
@@ -734,13 +694,10 @@ export async function searchKb(
     if (!searchTokens) return [];
 
     const statusFilter = includeStaff ? sql`IN ('published', 'draft')` : sql`= 'published'`;
-    
-    // Global search or scoped
+
     const kbFilterPages = kbId ? sql`AND kb_id = ${kbId}` : sql``;
     const kbFilterAssets = kbId ? sql`AND home_kb_id = ${kbId}` : sql``;
 
-    // Visibility filter: Public users should not see pages where they or any ancestor is 'staff'
-    // We use a trailing slash check to ensure slug boundaries (e.g. /admin vs /administration)
     const visibilityFilter = includeStaff 
       ? sql`` 
       : sql`AND visibility = 'public' AND NOT EXISTS (
@@ -750,8 +707,6 @@ export async function searchKb(
             AND (kb_pages.path = p2.path OR kb_pages.path LIKE p2.path || '/%')
         )`;
 
-    // FTS query for pages: OR the prefix query with the natural websearch query
-    // and take the greatest rank. We bias pages by 1.2x.
     const pageRows = await sql`
       SELECT id, title, summary, path, kb_id,
              (GREATEST(
@@ -768,7 +723,6 @@ export async function searchKb(
       LIMIT 20
     `;
 
-    // FTS query for assets
     const assetRows = await sql`
       SELECT id, title, description as summary, slug, home_kb_id as kb_id,
              GREATEST(
@@ -785,16 +739,14 @@ export async function searchKb(
     `;
 
     const scored: ScoredResult[] = [];
-    
-    // For global search, we need to prefix the result with the KB it belongs to
-    // or just return the standard result. The UI handles routing.
+
     for (const row of pageRows) {
       scored.push({
         score: row.rank as number,
         result: { type: "page", id: row.id as string, title: row.title as string, summary: row.summary as string, path: (row.path as string).split("/"), kbId: row.kb_id as string },
       });
     }
-    
+
     for (const row of assetRows) {
       scored.push({
         score: row.rank as number,
@@ -806,7 +758,6 @@ export async function searchKb(
     return scored.map((entry) => entry.result);
   }
 
-  // Fallback to in-memory ranking
   const dataset = await getDataset();
   const scored: ScoredResult[] = [];
 
@@ -847,7 +798,6 @@ export async function searchKb(
   return scored.map((entry) => entry.result);
 }
 
-/** Admin dashboard counts (published pages / active assets across all KBs). */
 export async function getAdminCounts() {
   const dataset = await getDataset();
   return {
@@ -888,7 +838,6 @@ export async function updateAssetStatus(assetId: string, status: Asset["status"]
   return updated;
 }
 
-/** Update an asset's human description (e.g. saving an image's alt text centrally). */
 export async function updateAssetDescription(assetId: string, description: string): Promise<Asset> {
   const normalizedId = normalizeRecordId(assetId);
   const dataset = await getDataset();
@@ -916,10 +865,6 @@ export async function updateAssetDescription(assetId: string, description: strin
   return updated;
 }
 
-/**
- * Set an asset's default alt text ("save alt to asset"). Stored in its own field
- * so it never overwrites the human-facing `description` (KI-2).
- */
 export async function updateAssetAltText(assetId: string, altText: string): Promise<Asset> {
   const normalizedId = normalizeRecordId(assetId);
   const dataset = await getDataset();
@@ -976,13 +921,11 @@ export async function permanentlyDeleteAsset(assetId: string): Promise<void> {
   deletedAssetIds().add(normalizedId);
 }
 
-/** All knowledge bases (including drafts) for admin tooling. */
 export async function getAllKbsForAdmin(): Promise<KnowledgeBase[]> {
   const dataset = await getDataset();
   return [...dataset.knowledgeBases].sort((a, b) => a.title.localeCompare(b.title));
 }
 
-/** All pages for a KB (any status) for admin parent-selection. */
 export async function getAllPagesForAdmin(kbId: string): Promise<KbPage[]> {
   const dataset = await getDataset();
   return orderPagesForTree(dataset.pages.filter((page) => page.kbId === kbId));
@@ -1025,11 +968,6 @@ export interface CreatePageInput {
   showSummary?: boolean;
 }
 
-/**
- * Create a new page and persist it (Neon when configured, otherwise the
- * in-memory dataset). The slug is made unique among its siblings so the page
- * slots cleanly into the nested site navigation under the chosen parent.
- */
 export async function createPage(input: CreatePageInput): Promise<KbPage> {
   const dataset = await getDataset();
 
@@ -1142,10 +1080,6 @@ function storeRuntimePage(page: KbPage) {
   }
 }
 
-/**
- * Update a page, optionally moving it under a new parent. Moving a page cascades
- * path changes to descendants so the public tree remains connected.
- */
 export async function updatePage(input: UpdatePageInput, editorEmail?: string): Promise<KbPage> {
   const dataset = await getDataset();
   const existing = dataset.pages.find((page) => page.id === input.pageId);
@@ -1226,10 +1160,7 @@ export async function updatePage(input: UpdatePageInput, editorEmail?: string): 
     });
 
   if (isDatabaseEnabled()) {
-    // Pass editorEmail so the DB write enforces the edit lock: the row is only
-    // updated when the lock is free, owned by this editor, or expired. A dropped
-    // or expired lock makes updatePages throw rather than silently overwrite a
-    // concurrent editor's changes.
+
     await updatePages(changedPages, editorEmail);
   } else {
     changedPages.forEach(storeRuntimePage);
@@ -1257,8 +1188,7 @@ export async function updatePageStatus(pageId: string, status: PageStatus): Prom
   };
 
   if (isDatabaseEnabled()) {
-    // Status-only update: touch just the status column so a publish/unpublish never
-    // rewrites (and risks clobbering) a concurrent editor's content. See KI-2.
+
     await updatePageStatusColumn(existing.id, updated.status, updated.updatedDisplayDate);
   } else {
     storeRuntimePage(updated);
@@ -1273,10 +1203,6 @@ export interface PageLayoutItem {
   sortOrder: number;
 }
 
-/**
- * Reorder and re-nest a set of pages. Each changed root page cascades path
- * changes to descendants. This powers the admin page-tree drag/drop manager.
- */
 export async function updatePageLayout(
   kbId: string,
   items: PageLayoutItem[],
@@ -1333,9 +1259,7 @@ export async function updatePageLayout(
   }
 
   if (isDatabaseEnabled()) {
-    // Enforce edit locks: a reorder re-paths pages, so refuse to move any page
-    // another editor currently holds a lock on (their unexpired lock fails the
-    // WHERE clause and updatePages throws). Pages with no active lock pass freely.
+
     await updatePages(changed, editorEmail);
   } else {
     changed.forEach(storeRuntimePage);
@@ -1403,7 +1327,6 @@ export async function upsertManualRedirect(input: CreateRedirectInput): Promise<
   return redirect;
 }
 
-/** Resolves a redirect (and therefore its owning KB) by id, or null if missing. */
 export async function getRedirectById(redirectId: string): Promise<KbRedirect | null> {
   if (isDatabaseEnabled()) {
     const dataset = await getDataset();

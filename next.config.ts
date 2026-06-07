@@ -10,8 +10,7 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   async headers() {
-    // Content-Security-Policy is set per-request in src/proxy.ts so Next.js can
-    // attach a unique nonce to its inline bootstrap/hydration scripts.
+
     return [
       {
         source: "/(.*)",

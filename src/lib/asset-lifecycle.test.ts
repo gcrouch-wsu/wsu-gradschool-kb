@@ -78,7 +78,7 @@ describe("createDraftVersion", () => {
     }, "2026-06-03");
     expect(draft.status).toBe("draft");
     expect(draft.versionNumber).toBe(2);
-    // original list is untouched (pure)
+
     expect(currentActiveVersion(versions)?.id).toBe("a");
   });
 

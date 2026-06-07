@@ -43,9 +43,6 @@ export interface CommitDraftPageInput {
   blocks: ContentBlock[];
 }
 
-/**
- * Apply staged media review: drop rejected images, merge alt text from review rows.
- */
 export function applyStagedMediaToBlocks(
   blocks: ContentBlock[],
   media: StagedImportMedia[],

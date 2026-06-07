@@ -5,9 +5,9 @@ import { requireAdminMutation } from "@/lib/security";
 
 export const runtime = "nodejs";
 
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB (legacy parse route)
+const MAX_BYTES = 25 * 1024 * 1024; 
 const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-// Macro-enabled Office formats are rejected (project_spec.md §20).
+
 const MACRO_EXTENSIONS = [".docm", ".dotm", ".dot"];
 
 export async function POST(request: Request) {

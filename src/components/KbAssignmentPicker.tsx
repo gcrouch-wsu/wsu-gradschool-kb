@@ -10,10 +10,6 @@ interface KbAssignmentPickerProps {
   legend?: string;
 }
 
-/**
- * Search + chips multi-select for assigning an editor to knowledge bases.
- * Scales to many KBs: type to filter, click/Enter to add, ✕ or Backspace to remove.
- */
 export default function KbAssignmentPicker({
   kbs,
   selected,
@@ -41,12 +37,10 @@ export default function KbAssignmentPicker({
     );
   }, [kbs, selected, query]);
 
-  // Keep the active option index in range as the filtered list changes.
   useEffect(() => {
     setActiveIndex((i) => Math.min(Math.max(i, 0), Math.max(matches.length - 1, 0)));
   }, [matches.length]);
 
-  // Close the dropdown on outside click.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
@@ -147,7 +141,7 @@ export default function KbAssignmentPicker({
                       aria-selected={index === activeIndex}
                       className={`kb-picker__option ${index === activeIndex ? "is-active" : ""}`}
                       onMouseEnter={() => setActiveIndex(index)}
-                      // onMouseDown (not onClick) so it fires before the input blur closes the menu.
+
                       onMouseDown={(e) => {
                         e.preventDefault();
                         add(kb.id);

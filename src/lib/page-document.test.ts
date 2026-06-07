@@ -37,10 +37,10 @@ describe("page-document", () => {
       '<p data-block-id="p1">See <span class="doc-note" data-note-id="n1" data-note-body="fix wording">this</span> line</p>';
     const blocks = documentHtmlToBlocks(html);
     const para = blocks.find((b) => b.type === "paragraph") as { html?: string } | undefined;
-    // Stored block HTML keeps the note (editor view).
+
     expect(para?.html).toContain("doc-note");
     expect(para?.html).toContain("fix wording");
-    // Re-serializing for the editor still carries it.
+
     expect(blocksToDocumentHtml(blocks)).toContain("doc-note");
   });
 
@@ -61,7 +61,7 @@ describe("page-document", () => {
       text: "DEEPMARKER content",
       html: "DEEPMARKER content",
     };
-    // Five levels of cards — deeper than MAX_NESTING_DEPTH (3).
+
     let nested: ContentBlock = deepParagraph;
     for (let i = 0; i < 5; i += 1) {
       nested = { blockId: `card-${i}`, type: "card", background: "paper", blocks: [nested] };
@@ -70,7 +70,6 @@ describe("page-document", () => {
     const html = blocksToDocumentHtml([nested]);
     const parsed = documentHtmlToBlocks(html);
 
-    // The deep paragraph must survive (flattened up), not be silently discarded.
     expect(JSON.stringify(parsed)).toContain("DEEPMARKER");
   });
 
@@ -134,7 +133,7 @@ describe("page-document", () => {
     const parsed = documentHtmlToBlocks(html);
     expect(parsed[0]).toMatchObject({ type: "paragraph", align: "center" });
     expect(parsed[1]).toMatchObject({ type: "heading", align: "right" });
-    // A block with no alignment stays undefined (default left), not "left".
+
     expect((parsed[2] as { align?: string }).align).toBeUndefined();
   });
 
@@ -161,12 +160,12 @@ describe("page-document", () => {
       caption: "Graduate School building exterior",
     });
     expect(parsed[1]).toMatchObject({ type: "image", decorative: true });
-    // A decorative image carries no alt text.
+
     expect((parsed[1] as { alt?: string }).alt).toBeUndefined();
   });
 
   it("does not read the figcaption placeholder back into alt", () => {
-    // An image with no alt must round-trip to no alt (the caption is chrome).
+
     const html = blocksToDocumentHtml([
       { blockId: "i1", type: "image", url: "/kb/x/files/a", widthPercent: 100 },
     ]);
@@ -227,7 +226,7 @@ describe("page-document", () => {
   });
 
   it("strips editor-only image control chrome on serialize", () => {
-    // Controls injected for editing must never survive into stored blocks.
+
     const html = blocksToDocumentHtml([
       { blockId: "img1", type: "image", url: "/kb/x/files/photo", alt: "A", widthPercent: 100, align: "center" },
     ]);
@@ -263,7 +262,7 @@ describe("page-document", () => {
       { blockId: "h1", type: "heading", level: 2, text: "Section" },
     ];
     const sections = blocksToSections(blocks);
-    expect(sections).toHaveLength(3); // flow, table, flow
+    expect(sections).toHaveLength(3); 
     expect(sections[0].type).toBe("flow");
     expect(sections[1].type).toBe("table");
     expect(sections[2].type).toBe("flow");
