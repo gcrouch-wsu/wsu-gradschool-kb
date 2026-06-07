@@ -25,8 +25,12 @@ current implementation status.
   WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over
   semantic HTML.
 - **Importing**: DOCX staged import with style/image extraction and review.
+- **Site customization**: owner-level Site Settings for the home page (hero, rich content blocks,
+  KB-list section), a site **logo** (upload + width/placement), header/footer links, **brand text**
+  with font/size/color/weight, header/hero alignment, content width, and a **global default theme**
+  (colors/fonts/type scale) that KBs inherit. Blank fields render blank-safe (no empty chrome).
 
-Test suite: `npm test` (102 in-memory tests) and `npm run test:a11y` (public-page axe smoke
+Test suite: `npm test` (108 in-memory tests) and `npm run test:a11y` (public-page axe smoke
 tests). Type-check: `npm run check`.
 
 **Live-database tests:** `npm run test:db` runs the KI-1 integration suite
