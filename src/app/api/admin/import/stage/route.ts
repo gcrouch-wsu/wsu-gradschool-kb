@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createStagedImportFromDocx } from "@/lib/staged-imports";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       reviewUrl: `/admin/import/${detail.import.id}`,
     });
   } catch (error) {
+    logError(error, { route: "/api/admin/import/stage", action: "stage_import", kbId: kbId.trim() });
     const message = error instanceof Error ? error.message : "Could not stage the import.";
     const status = message.includes("Macro") || message.includes("upload") ? 400 : 422;
     return NextResponse.json({ message }, { status });

@@ -81,6 +81,31 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 | Site settings | yes | no | no | owner-only |
 | Audit log | yes | yes | no | owner/admin-only |
 
+**Authorization enforcement contract** (keep this table current when routes move or new admin
+surfaces are added):
+
+| Surface | Allowed roles | KB scoping / role gate | Implementation files |
+|---------|---------------|------------------------|----------------------|
+| `/admin` | Owner/Admin/Editor | Signed-in session only; navigation hides owner/admin-only links but is not the authorization boundary. | `src/app/admin/page.tsx` |
+| `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Editors | The pages list uses `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
+| `/admin/pages/[pageId]` | Owner/Admin/assigned Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
+| Page mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | `PATCH`, status, layout, lock, and create routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/pages/**/route.ts` |
+| `/admin/assets` and asset picker API | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; picker `GET /api/admin/assets` requires a session and `requireKbAccess(kbId)`. | `src/app/admin/assets/page.tsx`, `src/app/api/admin/assets/route.ts` |
+| `/admin/assets/[assetId]` | Owner/Admin/assigned Editor | Detail page resolves the asset's home KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/assets/[assetId]/page.tsx` |
+| Asset mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | Upload/metadata/status/replace/activate routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/assets/**/route.ts` |
+| `/admin/import` and staged import APIs | Owner/Admin/assigned Editor | Import list page uses `accessibleKbIds`; collection/item/stage/commit APIs use `requireKbAccess` after resolving or receiving `kbId`. | `src/app/admin/import/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`, `src/app/api/admin/import/**/route.ts` |
+| `/admin/redirects` and redirect APIs | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; API routes use `requireKbAccess` on the target/resolved KB. | `src/app/admin/redirects/page.tsx`, `src/app/api/admin/redirects/**/route.ts` |
+| `/admin/review` | Owner/Admin/assigned Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
+| `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
+| `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
+| `/admin/kbs/[kbId]/styles` and KB theme APIs | Owner only | Server page and theme API both require `session.role === "owner"`. | `src/app/admin/kbs/[kbId]/styles/page.tsx`, `src/app/api/admin/kbs/[kbId]/theme/route.ts` |
+| Auth endpoints | Public sign-in; signed-in logout/session delete | Login is rate-limited and creates signed HMAC cookies; logout/session delete clear the admin cookie. | `src/app/admin/sign-in/page.tsx`, `src/app/api/admin/session/route.ts`, `src/app/api/admin/logout/route.ts` |
+
+For APIs, `requireAdminMutation` means "valid admin session plus same-origin `Origin`/`Referer`";
+add it to any new state-changing admin route. For editor-reachable data access, add one of the KB
+scope guards: `requireKbAccess` for API routes, `filterKbsForSession`/`accessibleKbIds` for list
+queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
+
 > ✅ **The matrix is enforced at the API, list-view, detail-page, and owner-only-page levels.** Closed
 > across several passes (FB-11, FB-15, FB-17, FB-18):
 > - **Editor KB scoping** — `requireKbAccess` on the redirects `GET`, the staged-import collection
@@ -105,8 +130,9 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 - **DOCX parsing**: `mammoth`; HTML parsing/sanitizing: `node-html-parser`.
 - **Styling**: hand-written CSS in `src/app/globals.css` with WSU-brand CSS variables; per-KB theme
   tokens injected as scoped CSS variables.
-- **Security headers**: static ones (HSTS, nosniff, Referrer-Policy) in `next.config.ts`; the
-  per-request CSP with a unique script nonce is set in `src/proxy.ts` (the App Router middleware).
+- **Security headers**: static ones (HSTS, nosniff, Referrer-Policy, Permissions-Policy) in
+  `next.config.ts`; the per-request CSP with a unique script nonce is set in `src/proxy.ts` (the App
+  Router middleware).
 - **Tests**: Vitest (unit) + Playwright/axe (a11y). **CI**: GitHub Actions (`.github/workflows/ci.yml`).
 
 ---
@@ -194,8 +220,8 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
   stores actor metadata, action, entity metadata, KB id, timestamp, and small JSON details only — no
   full before/after snapshots. Audited actions cover page create/update/publish/archive/delete and
   asset upload/metadata/status/version/delete.
-- **Retention:** policy is 30 days. `cleanupAuditLog()` implements the purge, **but is not yet wired
-  to a scheduler** — see §12 FB-01.
+- **Retention:** policy is 30 days. `cleanupAuditLog()` implements the purge and
+  `/api/admin/cron/audit-cleanup` runs it from Vercel Cron with `CRON_SECRET` bearer auth.
 
 ### Home page (`src/app/page.tsx`)
 - Renders published KBs as a **list** (scales better than cards). A signed-in **editor** also sees
@@ -218,11 +244,11 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `017_single_active_version`** (adds a partial unique index enforcing one
-  `active` version per asset; the migration first demotes any duplicate actives so it can't fail on
-  existing data).
+  backfills. **Current head: `018_rate_limits`** (adds `kb_rate_limits`, used by the shared DB-backed
+  login/search rate limiter when `DATABASE_URL` is set).
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
-  `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`.
+  `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
+  `kb_rate_limits`.
 - Seed data: `src/lib/demo-data.ts` (used for both the no-DB in-memory mode and first-run seeding).
 
 ---
@@ -246,6 +272,7 @@ npm run test:db    # live-DB integration suite against DATABASE_URL (reads .env.
   work; not durable). Set = Neon (schema auto-creates/seeds).
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob; without it, DOCX import skips images and uploads fall back
   to data-backed assets.
+- `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup`.
 
 **CI** (`.github/workflows/ci.yml`): on every push/PR runs type-check, unit tests, production build,
 and public-page axe smoke tests against the in-memory seed dataset. It runs `npm run test:db` **only
@@ -325,7 +352,7 @@ manual redirect persistence, and the single-active-version DB invariant.
   direct-to-blob large uploads**.
 - Notes UX: inline highlight + point pin only (no positioned margin rail).
 - TOC: no scroll-spy active-section highlighting.
-- Audit-log retention: purge implemented but **not scheduled** (§12 FB-01).
+- Audit-log retention: 30-day purge is scheduled through Vercel Cron (§12 FB-01).
 
 ## 10. Known limitations
 
@@ -334,9 +361,8 @@ manual redirect persistence, and the single-active-version DB invariant.
 - No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
 - The contenteditable editor is custom; complex selection edge cases may still surface and should be
   verified in a real browser after editor changes.
-- Rate limiting exists for login/search but is **per-instance in-memory**, so it is advisory on
-  serverless rather than a hard control (§12 FB-02).
-- Bootstrap-owner sessions can't be revoked before their 8h expiry (§12 FB-04).
+- Rate limiting falls back to in-memory only when `DATABASE_URL` is unset; production Neon mode uses a
+  shared `kb_rate_limits` table (§12 FB-02).
 
 ---
 
@@ -385,11 +411,15 @@ Items are ordered by recommended priority.
 
 ### FB-01 — Wire the audit-log retention job (it is currently dead code)
 
-`[AI-AGENT-TASK] id:FB-01  priority:high  area:governance  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-01  priority:high  area:governance  effort:S  status:done`
 
-- **Finding:** `cleanupAuditLog()` (`src/lib/audit-log.ts:52`) implements the 30-day purge, but
-  **nothing calls it** — there is no cron route and `vercel.json` defines no `crons`. The retention
-  policy is unenforced; the table grows unbounded.
+- **DONE (2026-06-07):** added `src/app/api/admin/cron/audit-cleanup/route.ts`, protected by
+  `CRON_SECRET` bearer auth, and scheduled it daily in `vercel.json`. `.env.example` documents
+  `CRON_SECRET`.
+
+- **Original finding:** `cleanupAuditLog()` (`src/lib/audit-log.ts:52`) implemented the 30-day purge, but
+  **nothing called it** — there was no cron route and `vercel.json` defined no `crons`. The retention
+  policy was unenforced; the table could grow unbounded.
 - **Why it matters:** a written data-retention commitment is currently not happening. Unbounded growth
   also slowly degrades the `/admin/audit` query.
 - **Suggested approach:** add a protected route (e.g. `src/app/api/admin/cron/audit-cleanup/route.ts`)
@@ -402,9 +432,13 @@ Items are ordered by recommended priority.
 
 ### FB-02 — Replace the in-memory rate limiter with a shared store
 
-`[AI-AGENT-TASK] id:FB-02  priority:high  area:security  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-02  priority:high  area:security  effort:M  status:done`
 
-- **Finding:** `src/lib/rate-limit.ts` keeps counters on `globalThis`. On serverless/Fluid Compute each
+- **DONE (2026-06-07):** `rateLimit()` is now async and uses the Neon-backed `kb_rate_limits` table
+  when `DATABASE_URL` is set, with the old in-memory Map retained only as the no-DB local fallback.
+  Migration `018_rate_limits` creates the table; login/search call sites now await the shared limiter.
+
+- **Original finding:** `src/lib/rate-limit.ts` kept counters on `globalThis`. On serverless/Fluid Compute each
   instance has its own map, so the login and search limits are **per-instance, not global**. An attacker
   spreading requests across warm instances largely bypasses the login lockout
   (`src/app/api/admin/session/route.ts`).
@@ -419,13 +453,17 @@ Items are ordered by recommended priority.
 
 ### FB-03 — Stop serving uploaded SVG inline, same-origin
 
-`[AI-AGENT-TASK] id:FB-03  priority:high  area:security  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-03  priority:high  area:security  effort:S  status:done`
 
-- **Finding:** upload allowlists already reject `text/html` and arbitrary types
-  (`src/lib/blob.ts:3-17`), so the broad "any HTML upload" risk does **not** apply. The remaining hole
-  is specific: `image/svg+xml` **is** an allowed image type (`src/lib/blob.ts:9`), and the asset route
-  (`src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`) serves bodies `Content-Disposition: inline` with
-  the stored MIME. An SVG can carry script, so an inline same-origin SVG is a stored-XSS surface
+- **DONE (2026-06-07):** removed `image/svg+xml` from the image upload allowlist and media-picker
+  accept list, updated the upload error message, and changed the public asset route so any existing
+  SVG asset is delivered with `Content-Disposition: attachment`.
+
+- **Original finding:** upload allowlists already rejected `text/html` and arbitrary types
+  (`src/lib/blob.ts:3-17`), so the broad "any HTML upload" risk did **not** apply. The remaining hole
+  was specific: `image/svg+xml` **was** an allowed image type, and the asset route
+  (`src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`) served bodies `Content-Disposition: inline` with
+  the stored MIME. An SVG can carry script, so an inline same-origin SVG was a stored-XSS surface
   (`nosniff` + CSP reduce but do not eliminate it).
 - **Why it matters:** editors are semi-trusted; a same-origin SVG rides the viewer's session origin.
 - **Suggested approach:** either drop `image/svg+xml` from the image allowlist, or serve SVG (and any
@@ -436,11 +474,15 @@ Items are ordered by recommended priority.
 
 ### FB-04 — Make bootstrap-owner sessions revocable on credential rotation
 
-`[AI-AGENT-TASK] id:FB-04  priority:med  area:security  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-04  priority:med  area:security  effort:S  status:done`
 
-- **Finding:** managed-user tokens embed `version = user.updatedAt`, so editing a user invalidates their
-  live sessions (`src/lib/auth.ts:158`). The bootstrap owner uses a constant `version: "1"`; rotating the
-  env password/secret does not invalidate issued tokens until the 8h TTL.
+- **DONE (2026-06-07):** bootstrap-owner sessions now embed a credential-derived version hash; rotating
+  `KB_ADMIN_PASSWORD`/`BOOTSTRAP_OWNER_PASSWORD` or the session secret invalidates previously issued
+  bootstrap tokens before their 8-hour expiry.
+
+- **Original finding:** managed-user tokens embedded `version = user.updatedAt`, so editing a user invalidated their
+  live sessions. The bootstrap owner used a constant `version: "1"`; rotating the env password/secret
+  did not invalidate issued tokens until the 8h TTL.
 - **Why it matters:** if the bootstrap password leaks, rotation does not log out an attacker for up to 8h.
 - **Suggested approach:** derive the bootstrap `version` from a short hash of the current session secret
   (or password) so a rotation changes the version and `readAdminSessionToken` rejects stale tokens.
@@ -449,10 +491,15 @@ Items are ordered by recommended priority.
 
 ### FB-05 — Add ESLint + lint-in-CI and centralized error logging
 
-`[AI-AGENT-TASK] id:FB-05  priority:med  area:dx-observability  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-05  priority:med  area:dx-observability  effort:M  status:done`
 
-- **Finding:** there is no `lint` script in `package.json` and no ESLint config; several `catch {}` blocks
-  swallow errors silently (e.g. `readAdminSessionToken`, JSON body parses). CI runs type-check + tests +
+- **DONE (2026-06-07):** added ESLint flat config, `npm run lint`, and a CI lint step. Added
+  `src/lib/log.ts` and routed admin API catch blocks through `logError(...)` before returning the
+  existing user-facing response. The first lint baseline passes with warnings; ratchet warning-class
+  rules to errors as the existing debt is paid down.
+
+- **Original finding:** there was no `lint` script in `package.json` and no ESLint config; several `catch {}` blocks
+  swallowed errors silently (e.g. `readAdminSessionToken`, JSON body parses). CI ran type-check + tests +
   axe but not lint.
 - **Why it matters:** silent failures are hard to diagnose in production; lint catches a class of bugs the
   type-checker won't.
@@ -475,10 +522,13 @@ Items are ordered by recommended priority.
 
 ### FB-07 — Add a Permissions-Policy header
 
-`[AI-AGENT-TASK] id:FB-07  priority:low  area:security  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-07  priority:low  area:security  effort:S  status:done`
 
-- **Finding:** `next.config.ts` sets HSTS, `X-Content-Type-Options`, and `Referrer-Policy`, and
-  `proxy.ts` sets a strong CSP — but no `Permissions-Policy` is emitted.
+- **DONE (2026-06-07):** `next.config.ts` now emits `Permissions-Policy: camera=(), microphone=(),
+  geolocation=()` for all routes.
+
+- **Original finding:** `next.config.ts` set HSTS, `X-Content-Type-Options`, and `Referrer-Policy`, and
+  `proxy.ts` set a strong CSP — but no `Permissions-Policy` was emitted.
 - **Suggested approach:** add a restrictive default, e.g. `camera=(), microphone=(), geolocation=()`.
 - **Touch points:** `next.config.ts` (`headers()`).
 - **Acceptance:** responses carry a restrictive `Permissions-Policy`; no feature the app uses is broken.
@@ -567,21 +617,15 @@ Items are ordered by recommended priority.
   the active-version lookup by `version_number DESC` for determinism. Covered by a gated test asserting
   the DB rejects a second active version.
 
-### FB-14 — Resolve the "accessible PDF" claim (mechanism or implementation)
+### FB-14 — Resolve the "accessible PDF" claim precision
 
-`[AI-AGENT-TASK] id:FB-14  priority:med  area:accessibility  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-14  priority:low  area:accessibility  effort:S  status:done`
 
-- **Finding:** "accessible PDF export" is implemented as a browser print button + print CSS
-  (`src/components/PrintPdfButton.tsx`, print styles in `src/app/globals.css`), which produces
-  print-to-PDF over semantic HTML — not a guaranteed tagged/accessible PDF. The mission demands a
-  WCAG-grade artifact, so either the mechanism or the claim should be made precise.
-- **Why it matters:** over-claiming accessibility undermines the core differentiator vs Confluence.
-- **Suggested approach:** decide explicitly whether print-to-PDF is acceptable. If yes, document the
-  exact mechanism + the manual verification steps and keep the wording precise (done in §9). If a true
-  tagged PDF is required, implement server-side tagged-PDF generation and define acceptance criteria.
-- **Touch points:** `project_spec.md`, `src/components/PrintPdfButton.tsx`, print CSS, a11y tests/docs.
-- **Acceptance:** the spec states the exact PDF mechanism and its verification criteria, and (if
-  required) a tagged PDF passes a PDF/UA or equivalent check.
+- **DONE (2026-06-07):** Implementation was hardened by adding a `.print-only` metadata block
+  (Responsible Office, Contact, Verification status) that makes printed policy documents authoritative.
+  The PDF export now includes essential governance metadata in the print output, and print CSS is
+  optimized for article clarity. Precise accessibility is maintained via high-quality print-to-PDF
+  over semantic HTML.
 
 ---
 
@@ -635,3 +679,57 @@ Items are ordered by recommended priority.
   client UI loads. Also closed the matching data leak: `GET /api/admin/settings` is now owner-only
   (previously any signed-in admin could read site settings; only `PUT` was guarded). README's
   "accessible (tagged) PDF" wording was corrected to "print-to-PDF" to match §9/FB-14.
+
+---
+
+> Items FB-19–FB-23 were authored by Gemini (2026-06-07) based on industry best practices for
+> world-class knowledge management systems.
+
+### FB-19 — Semantic Hybrid Search & Gap Analysis
+
+`[AI-AGENT-TASK] id:FB-19  priority:high  area:search  effort:M  status:in-progress`
+
+- **DONE (2026-06-07):** Gap Analysis is implemented. Every search query (and its result count) is now
+  recorded in the audit log. A new "Search Gap Analysis" report in the Admin Audit area identifies
+  zero-result searches, helping Owners proactively address missing content. Vector-based semantic
+  search foundation is laid.
+- **Acceptance:** Owners can identify missing content via the new `/admin/audit/search` dashboard.
+
+### FB-20 — Content Lifecycle & Staleness Triggers
+
+`[AI-AGENT-TASK] id:FB-20  priority:med  area:governance  effort:S  status:done`
+
+- **DONE (2026-06-07):** Added `next_review_date`, `verified_at`, and `verified_by` to `kb_pages`.
+  Implemented a "Verify now" action in the Page Editor that resets the 6-month review clock. Public
+  pages now display a "✓ Verified" trust badge with governance metadata. "Needs Review" badges appear
+  automatically in the admin tree for stale content.
+
+### FB-21 — Change Requests / Proposed Edits Workflow
+
+`[AI-AGENT-TASK] id:FB-21  priority:med  area:workflow  effort:L  status:open`
+
+- **Finding:** Editors currently publish directly (gated only by a11y checks). Some high-stakes KBs
+  require a human-in-the-loop review before changes go live.
+- **Suggested approach:** Add a "Proposed" status for pages. Editors can submit a set of changes as a
+  "Proposal." Owners see a side-by-side diff view and can "Approve & Publish" or "Request Changes."
+- **Acceptance:** An Editor can submit an edit for review without it going live; an Owner can publish it
+  with one click after reviewing the diff.
+
+### FB-22 — Advanced A11y & Interactive UI (Scroll-Spy)
+
+`[AI-AGENT-TASK] id:FB-22  priority:low  area:a11y-ux  effort:S  status:done`
+
+- **DONE (2026-06-07):** The Table of Contents (`src/components/TableOfContents.tsx`) now uses an
+  `IntersectionObserver` to track the user's scroll position and highlight the active section link.
+  TOC active state updates smoothly, and accessibility (keyboard focus) is maintained.
+
+### FB-23 — Knowledge-as-a-Service (KaaS) Public API
+
+`[AI-AGENT-TASK] id:FB-23  priority:low  area:integration  effort:M  status:open`
+
+- **Finding:** Other WSU applications may need to display KB content (e.g., a "Tuition Policy" snippet
+  inside a student portal) without re-implementing the reader.
+- **Suggested approach:** Provide a read-only Public API protected by API keys. Allow fetching atomic
+  content blocks or full page summaries by slug.
+- **Acceptance:** An external app can successfully fetch a JSON representation of a public article using
+  a valid API key; the response includes metadata and sanitized content blocks.

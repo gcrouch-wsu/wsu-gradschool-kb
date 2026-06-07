@@ -8,6 +8,7 @@ import {
   permanentlyDeletePage,
   updatePage,
 } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageStatus, PageVisibility } from "@/lib/types";
@@ -127,6 +128,7 @@ export async function PATCH(
     const url = kb ? `/kb/${kb.slug}/${page.path.join("/")}` : null;
     return NextResponse.json({ ok: true, pageId: page.id, status: page.status, url });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]", action: "update_page", pageId });
     const message = error instanceof Error ? error.message : "Could not update the page.";
     return NextResponse.json({ message }, { status: 400 });
   }
@@ -185,6 +187,7 @@ export async function DELETE(
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]", action: "delete_page", pageId });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Could not delete page." },
       { status: 500 },

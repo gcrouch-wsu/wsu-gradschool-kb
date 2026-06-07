@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { tryAcquirePageLock, releasePageLock, isDatabaseEnabled } from "@/lib/db";
 import { getPageByIdForAdmin } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export async function POST(
@@ -34,6 +35,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]/lock", action: "acquire_page_lock", pageId });
     return NextResponse.json({ message: "Failed to acquire lock." }, { status: 500 });
   }
 }
@@ -55,6 +57,7 @@ export async function DELETE(
     await releasePageLock(pageId, guard.session.email);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]/lock", action: "release_page_lock", pageId });
     return NextResponse.json({ message: "Failed to release lock." }, { status: 500 });
   }
 }

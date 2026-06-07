@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { isBlobEnabled, isSupportedImageType, uploadImportImage } from "@/lib/blob";
 import { createImageAsset, getKbById } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     return denied;
   }
   if (!isSupportedImageType(file.type)) {
-    return NextResponse.json({ message: "Use a PNG, JPG, GIF, WebP, or SVG image." }, { status: 400 });
+    return NextResponse.json({ message: "Use a PNG, JPG, GIF, or WebP image." }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ message: "Image is larger than 10 MB." }, { status: 400 });
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
       url,
     });
   } catch (error) {
+    logError(error, { route: "/api/admin/assets/images", action: "upload_image", kbId });
     const message = error instanceof Error ? error.message : "Could not upload image.";
     return NextResponse.json({ message }, { status: 400 });
   }

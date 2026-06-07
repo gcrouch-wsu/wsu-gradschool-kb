@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { getAssetAdminDetail, getKbById, updateAssetStatus } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { AssetStatus } from "@/lib/types";
 
@@ -56,6 +57,7 @@ export async function PATCH(
       kb && asset.status === "active" ? `/kb/${kb.slug}/files/${asset.slug}` : null;
     return NextResponse.json({ ok: true, assetId: asset.id, status: asset.status, url });
   } catch (error) {
+    logError(error, { route: "/api/admin/assets/[assetId]/status", action: "update_asset_status", assetId });
     const message = error instanceof Error ? error.message : "Could not update asset status.";
     return NextResponse.json({ message }, { status: 400 });
   }

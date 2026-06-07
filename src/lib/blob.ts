@@ -6,7 +6,6 @@ const SUPPORTED_IMAGE_TYPES: Record<string, string> = {
   "image/jpg": "jpg",
   "image/gif": "gif",
   "image/webp": "webp",
-  "image/svg+xml": "svg",
 };
 
 const SUPPORTED_DOCUMENT_TYPES: Record<string, string> = {

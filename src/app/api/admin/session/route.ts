@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   const clientKey = clientKeyFromHeaders(request.headers);
-  const limit = rateLimit(`login:${clientKey}:${email.toLowerCase()}`, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS);
+  const limit = await rateLimit(`login:${clientKey}:${email.toLowerCase()}`, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS);
   if (!limit.allowed) {
     return NextResponse.json(
       { message: "Too many sign-in attempts. Please wait a few minutes and try again." },

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { updatePageLayout } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 interface LayoutBody {
@@ -45,6 +46,7 @@ export async function PATCH(request: Request) {
     await updatePageLayout(kbId, items, guard.session.email);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/layout", action: "update_page_layout", kbId });
     const message = error instanceof Error ? error.message : "Could not update page tree.";
     return NextResponse.json({ message }, { status: 400 });
   }

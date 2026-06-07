@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { getAssetStatusById, getKbById, getPageByIdForAdmin, updatePageStatus } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { PageStatus } from "@/lib/types";
@@ -79,6 +80,7 @@ export async function PATCH(
     const url = kb ? `/kb/${kb.slug}/${page.path.join("/")}` : null;
     return NextResponse.json({ ok: true, pageId: page.id, status: page.status, url });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]/status", action: "update_page_status", pageId, status });
     const message = error instanceof Error ? error.message : "Could not update page status.";
     return NextResponse.json({ message }, { status: 400 });
   }

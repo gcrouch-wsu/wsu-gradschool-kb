@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deactivateRedirect, getRedirectById, removeRedirect } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -26,6 +27,7 @@ export async function DELETE(
     await removeRedirect(redirectId);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/redirects/[redirectId]", action: "delete_redirect", redirectId });
     const message = error instanceof Error ? error.message : "Could not delete redirect.";
     return NextResponse.json({ message }, { status: 400 });
   }
@@ -55,6 +57,7 @@ export async function PATCH(
       await deactivateRedirect(redirectId);
       return NextResponse.json({ ok: true });
     } catch (error) {
+      logError(error, { route: "/api/admin/redirects/[redirectId]", action: "deactivate_redirect", redirectId });
       const message = error instanceof Error ? error.message : "Could not update redirect.";
       return NextResponse.json({ message }, { status: 400 });
     }

@@ -123,6 +123,9 @@ export function AdminPageEditorForm({
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
+  const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
+  const [verifiedAt, setVerifiedAt] = useState(page.verifiedAt);
+  const [verifiedBy, setVerifiedBy] = useState(page.verifiedBy);
   const [busy, setBusy] = useState<EditableStatus | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -269,6 +272,28 @@ export function AdminPageEditorForm({
     }
   }
 
+  async function verifyPage() {
+    if (lockError) return;
+    setLifecycleBusy(true);
+    setError(null);
+    setLifecycleMessage(null);
+    try {
+      const response = await fetch(`/api/admin/pages/${page.id}/verify`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "Could not verify page.");
+      }
+      setVerifiedAt(data.verifiedAt);
+      setVerifiedBy(data.verifiedBy);
+      setNextReviewDate(data.nextReviewDate);
+      setLifecycleMessage("Page verified and review clock reset (6 months).");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not verify page.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
   async function submit(status: EditableStatus) {
     if (lockError) return;
     setBusy(status);
@@ -294,6 +319,7 @@ export function AdminPageEditorForm({
           showToc,
           tocDepth,
           showSummary,
+          nextReviewDate,
         }),
       });
       const data = await response.json();
@@ -531,6 +557,30 @@ export function AdminPageEditorForm({
               value={lastReviewedDate}
             />
           </label>
+          <label>
+            <span className="meta">Next review date</span>
+            <input
+              className="input"
+              onChange={(event) => setNextReviewDate(event.target.value)}
+              type="date"
+              value={nextReviewDate || ""}
+            />
+          </label>
+          {verifiedAt && (
+            <p className="meta" style={{ color: "var(--success)" }}>
+              ✓ Verified on {new Date(verifiedAt).toLocaleDateString()} by {verifiedBy}
+            </p>
+          )}
+          <div style={{ marginTop: "0.5rem" }}>
+            <button
+              className="button button--small button--ghost"
+              disabled={lifecycleBusy || isLocked}
+              onClick={verifyPage}
+              type="button"
+            >
+              {lifecycleBusy ? "Verifying..." : "Verify now (resets 6-month clock)"}
+            </button>
+          </div>
         </fieldset>
 
         <fieldset className="fieldset editor-content" disabled={isLocked}>

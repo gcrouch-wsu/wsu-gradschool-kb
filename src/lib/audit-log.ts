@@ -69,6 +69,43 @@ export async function cleanupAuditLog(): Promise<number> {
   return result.length;
 }
 
+export async function recordSearchEvent(input: {
+  query: string;
+  kbId?: string | null;
+  resultCount: number;
+}): Promise<void> {
+  const entry: AuditLogEntry = {
+    id: `search-${crypto.randomUUID()}`,
+    actorEmail: "public-user",
+    actorRole: "editor",
+    action: "search",
+    entityType: "search",
+    entityId: "search-query",
+    entityLabel: input.query,
+    kbId: input.kbId ?? null,
+    details: { resultCount: input.resultCount },
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!isDatabaseEnabled()) {
+    memoryAuditLog.unshift(entry);
+    return;
+  }
+
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO kb_audit_log (
+      id, actor_email, actor_role, action, entity_type, entity_id,
+      entity_label, kb_id, details, created_at
+    ) VALUES (
+      ${entry.id}, ${entry.actorEmail}, ${entry.actorRole}, ${entry.action},
+      ${entry.entityType}, ${entry.entityId}, ${entry.entityLabel}, ${entry.kbId ?? null},
+      ${JSON.stringify(entry.details)}, ${entry.createdAt}
+    )
+  `;
+}
+
 export async function recordAuditEvent(input: AuditInput): Promise<void> {
   const entry: AuditLogEntry = {
     id: `audit-${crypto.randomUUID()}`,

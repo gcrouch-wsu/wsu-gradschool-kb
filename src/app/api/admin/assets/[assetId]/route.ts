@@ -7,6 +7,7 @@ import {
   updateAssetAltText,
   updateAssetDescription,
 } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export async function PATCH(request: Request, context: { params: Promise<{ assetId: string }> }) {
@@ -56,6 +57,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ asset
     }
     return NextResponse.json({ message: "A description or altText is required." }, { status: 400 });
   } catch (error) {
+    logError(error, { route: "/api/admin/assets/[assetId]", action: "update_asset", assetId });
     const message = error instanceof Error ? error.message : "Could not update the asset.";
     return NextResponse.json({ message }, { status: 400 });
   }

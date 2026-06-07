@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRedirectsForAdmin, upsertManualRedirect } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
     const redirect = await upsertManualRedirect({ kbId, fromPath, toPath, reason });
     return NextResponse.json({ ok: true, redirect });
   } catch (error) {
+    logError(error, { route: "/api/admin/redirects", action: "create_redirect", kbId });
     const message = error instanceof Error ? error.message : "Could not save redirect.";
     return NextResponse.json({ message }, { status: 400 });
   }

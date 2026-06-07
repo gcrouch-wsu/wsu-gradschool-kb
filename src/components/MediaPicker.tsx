@@ -231,7 +231,7 @@ export function MediaPicker({
               <label className="button button--ghost">
                 {busy ? "Uploading…" : "Choose an image"}
                 <input
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
                   disabled={busy}
                   hidden
                   onChange={(e) => {

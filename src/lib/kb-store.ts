@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { recordSearchEvent } from "./audit-log";
 import {
   insertAsset,
   insertAssetVersion,
@@ -755,7 +756,9 @@ export async function searchKb(
     }
 
     scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
-    return scored.map((entry) => entry.result);
+    const results = scored.map((entry) => entry.result);
+    recordSearchEvent({ query, kbId, resultCount: results.length }).catch(() => {});
+    return results;
   }
 
   const dataset = await getDataset();

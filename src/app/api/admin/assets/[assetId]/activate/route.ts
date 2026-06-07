@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { activateAssetVersion, getAssetAdminDetail, getAssetHomeKbId, getKbById } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -52,6 +53,7 @@ export async function POST(
       usages: detail?.usages ?? [],
     });
   } catch (error) {
+    logError(error, { route: "/api/admin/assets/[assetId]/activate", action: "activate_asset_version", assetId, versionId });
     const message = error instanceof Error ? error.message : "Could not activate version.";
     return NextResponse.json({ message }, { status: 400 });
   }

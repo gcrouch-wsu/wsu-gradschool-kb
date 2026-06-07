@@ -6,27 +6,27 @@ function uniqueKey(label: string) {
 }
 
 describe("rateLimit", () => {
-  it("allows requests up to the limit, then blocks", () => {
+  it("allows requests up to the limit, then blocks", async () => {
     const key = uniqueKey("burst");
-    expect(rateLimit(key, 2, 60).allowed).toBe(true);
-    expect(rateLimit(key, 2, 60).allowed).toBe(true);
-    const blocked = rateLimit(key, 2, 60);
+    expect((await rateLimit(key, 2, 60)).allowed).toBe(true);
+    expect((await rateLimit(key, 2, 60)).allowed).toBe(true);
+    const blocked = await rateLimit(key, 2, 60);
     expect(blocked.allowed).toBe(false);
     expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
   });
 
-  it("reports remaining budget", () => {
+  it("reports remaining budget", async () => {
     const key = uniqueKey("remaining");
-    expect(rateLimit(key, 3, 60).remaining).toBe(2);
-    expect(rateLimit(key, 3, 60).remaining).toBe(1);
+    expect((await rateLimit(key, 3, 60)).remaining).toBe(2);
+    expect((await rateLimit(key, 3, 60)).remaining).toBe(1);
   });
 
-  it("isolates separate keys", () => {
+  it("isolates separate keys", async () => {
     const a = uniqueKey("a");
     const b = uniqueKey("b");
-    rateLimit(a, 1, 60);
-    expect(rateLimit(a, 1, 60).allowed).toBe(false);
-    expect(rateLimit(b, 1, 60).allowed).toBe(true);
+    await rateLimit(a, 1, 60);
+    expect((await rateLimit(a, 1, 60)).allowed).toBe(false);
+    expect((await rateLimit(b, 1, 60)).allowed).toBe(true);
   });
 });
 

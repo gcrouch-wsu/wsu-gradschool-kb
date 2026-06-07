@@ -116,6 +116,14 @@ export default async function KbArticlePage({
             Article
             {page.status === "draft" && <span className="badge badge--draft"> Draft</span>}
             {page.visibility === "staff" && <span className="badge badge--staff"> Staff only</span>}
+            {page.verifiedAt && (
+              <span
+                className="badge badge--verified"
+                title={`Verified by ${page.verifiedBy} on ${new Date(page.verifiedAt).toLocaleDateString()}`}
+              >
+                ✓ Verified
+              </span>
+            )}
           </p>
           {isStaff && (
             <p className="admin-inline-actions">
@@ -130,6 +138,15 @@ export default async function KbArticlePage({
             <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
             <PrintPdfButton />
           </div>
+
+          <div className="print-only" style={{ marginBottom: "2rem", borderBottom: "1px solid var(--line)", paddingBottom: "1rem" }}>
+            <p className="meta"><strong>Responsible Office:</strong> {page.ownerLabel}</p>
+            <p className="meta"><strong>Contact:</strong> {page.contactEmail}</p>
+            {page.verifiedAt && (
+              <p className="meta"><strong>Verified On:</strong> {formatDate(page.verifiedAt.split("T")[0])}</p>
+            )}
+          </div>
+
           <PageBlocks blocks={page.blocks} />
 
           {relatedFiles.length > 0 && (
