@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { commitImportWithImagePromotion } from "@/lib/import-commit";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageVisibility } from "@/lib/types";
 
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ ok: true, pageId: page.id, url });
   } catch (error) {
+    logError(error, { route: "/api/admin/import/commit", action: "commit_legacy_import", kbId });
     const message = error instanceof Error ? error.message : "Could not create the page.";
     return NextResponse.json({ message }, { status: 400 });
   }

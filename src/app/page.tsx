@@ -3,6 +3,7 @@ import { getAllKbsForAdmin, getPublishedKbs } from "@/lib/kb-store";
 import { loadSiteSettings } from "@/lib/db";
 import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
+import { DEFAULT_SITE_SETTINGS } from "@/lib/site-settings";
 import type { KnowledgeBase } from "@/lib/types";
 
 interface HomeKb extends KnowledgeBase {
@@ -32,6 +33,7 @@ async function getHomeKbs(): Promise<HomeKb[]> {
 
 export default async function HomePage() {
   const [settings, kbs] = await Promise.all([loadSiteSettings(), getHomeKbs()]);
+  const homeTitle = settings.homeTitle || DEFAULT_SITE_SETTINGS.homeTitle;
 
   return (
     <>
@@ -39,7 +41,7 @@ export default async function HomePage() {
         <div className="site-header__inner">
           <div>
             {settings.homeEyebrow && <p className="eyebrow">{settings.homeEyebrow}</p>}
-            {settings.homeTitle && <h1>{settings.homeTitle}</h1>}
+            <h1>{homeTitle}</h1>
             {settings.homeIntro && <p className="lead">{settings.homeIntro}</p>}
           </div>
         </div>

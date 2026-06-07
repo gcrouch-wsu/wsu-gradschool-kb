@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { isBlobEnabled, isSupportedDocumentType, uploadAssetBlob } from "@/lib/blob";
 import { createManagedAsset, getKbById } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
     const url = kb ? `/kb/${kb.slug}/files/${asset.slug}` : null;
     return NextResponse.json({ ok: true, asset, url });
   } catch (error) {
+    logError(error, { route: "/api/admin/assets/documents", action: "upload_document", kbId });
     const message = error instanceof Error ? error.message : "Could not upload document.";
     return NextResponse.json({ message }, { status: 400 });
   }

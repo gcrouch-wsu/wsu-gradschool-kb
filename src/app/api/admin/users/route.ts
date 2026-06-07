@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { insertUser, listUserAssignments, listUsers, replaceUserAssignments } from "@/lib/db-users";
 import { isDatabaseEnabled } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import type { UserRole } from "@/lib/types";
 
@@ -21,13 +22,14 @@ export async function GET(request: Request) {
     const users = await listUsers();
 
     const safeUsers = await Promise.all(
-      users.map(async ({ passwordHash, ...user }) => ({
+      users.map(async ({ passwordHash: _unused, ...user }) => ({
         ...user,
         kbAssignments: user.role === "editor" ? await listUserAssignments(user.id) : [],
       })),
     );
     return NextResponse.json({ users: safeUsers });
   } catch (error) {
+    logError(error, { route: "/api/admin/users", action: "list_users" });
     return NextResponse.json({ message: "Failed to list users." }, { status: 500 });
   }
 }
@@ -72,9 +74,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, userId });
   } catch (error) {
+    logError(error, { route: "/api/admin/users", action: "create_user" });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to create user." },
       { status: 500 },
     );
   }
 }
+

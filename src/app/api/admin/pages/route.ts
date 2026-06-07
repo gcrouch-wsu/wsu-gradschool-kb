@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { createPage } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export async function POST(request: Request) {
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, pageId: page.id });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages", action: "create_page", kbId: body.kbId });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to create page." },
       { status: 500 }

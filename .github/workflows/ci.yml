@@ -27,6 +27,9 @@ jobs:
       - name: Type-check
         run: npm run check
 
+      - name: Lint
+        run: npm run lint
+
       - name: Unit tests (in-memory; KI-1 DB tests self-skip)
         run: npm test
 

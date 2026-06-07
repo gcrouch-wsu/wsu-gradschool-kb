@@ -8,6 +8,7 @@ import {
   permanentlyDeletePage,
   updatePage,
 } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageStatus, PageVisibility } from "@/lib/types";
@@ -27,6 +28,7 @@ interface UpdateBody {
   showToc?: unknown;
   tocDepth?: unknown;
   showSummary?: unknown;
+  nextReviewDate?: unknown;
 }
 
 export async function PATCH(
@@ -60,6 +62,7 @@ export async function PATCH(
   const showToc = typeof body.showToc === "boolean" ? body.showToc : undefined;
   const tocDepth = typeof body.tocDepth === "number" ? body.tocDepth : undefined;
   const showSummary = typeof body.showSummary === "boolean" ? body.showSummary : undefined;
+  const nextReviewDate = typeof body.nextReviewDate === "string" ? body.nextReviewDate : undefined;
   const visibility: PageVisibility = body.visibility === "staff" ? "staff" : "public";
   const status: PageStatus = body.status === "published" ? "published" : "draft";
   const sortOrder = typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : undefined;
@@ -113,6 +116,7 @@ export async function PATCH(
       showToc,
       tocDepth,
       showSummary,
+      nextReviewDate,
     }, guard.session.email);
     await recordAuditEvent({
       session: guard.session,
@@ -127,6 +131,7 @@ export async function PATCH(
     const url = kb ? `/kb/${kb.slug}/${page.path.join("/")}` : null;
     return NextResponse.json({ ok: true, pageId: page.id, status: page.status, url });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]", action: "update_page", pageId });
     const message = error instanceof Error ? error.message : "Could not update the page.";
     return NextResponse.json({ message }, { status: 400 });
   }
@@ -185,6 +190,7 @@ export async function DELETE(
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]", action: "delete_page", pageId });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Could not delete page." },
       { status: 500 },

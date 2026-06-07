@@ -15,7 +15,7 @@ import {
   getKbBySlug,
   getPageByPath,
 } from "@/lib/kb-store";
-import { formatBytes, formatDate } from "@/lib/format";
+import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
 import type { CSSProperties } from "react";
 
@@ -83,6 +83,9 @@ export default async function KbArticlePage({
 
   const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
   const themeVars = themeToCssVars(kb.theme ?? DEFAULT_THEME) as CSSProperties;
+  const verifiedLabel = page.verifiedAt
+    ? `Verified${page.verifiedBy ? ` by ${page.verifiedBy}` : ""} on ${formatTimestamp(page.verifiedAt)}`
+    : "";
 
   return (
     <div className="page-shell kb-theme-root" style={themeVars}>
@@ -116,6 +119,15 @@ export default async function KbArticlePage({
             Article
             {page.status === "draft" && <span className="badge badge--draft"> Draft</span>}
             {page.visibility === "staff" && <span className="badge badge--staff"> Staff only</span>}
+            {page.verifiedAt && (
+              <span
+                className="badge badge--verified"
+                aria-label={verifiedLabel}
+                title={verifiedLabel}
+              >
+                <span aria-hidden="true">✓</span> Verified
+              </span>
+            )}
           </p>
           {isStaff && (
             <p className="admin-inline-actions">
@@ -130,6 +142,19 @@ export default async function KbArticlePage({
             <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
             <PrintPdfButton />
           </div>
+
+          <div className="print-only" style={{ marginBottom: "2rem", borderBottom: "1px solid var(--line)", paddingBottom: "1rem" }}>
+            {page.ownerLabel && (
+              <p className="meta"><strong>Responsible Office:</strong> {page.ownerLabel}</p>
+            )}
+            {page.contactEmail && (
+              <p className="meta"><strong>Contact:</strong> {page.contactEmail}</p>
+            )}
+            {page.verifiedAt && (
+              <p className="meta"><strong>Verified On:</strong> {formatTimestamp(page.verifiedAt)}</p>
+            )}
+          </div>
+
           <PageBlocks blocks={page.blocks} />
 
           {relatedFiles.length > 0 && (
@@ -163,3 +188,5 @@ export default async function KbArticlePage({
     </div>
   );
 }
+
+

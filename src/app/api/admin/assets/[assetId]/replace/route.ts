@@ -7,6 +7,7 @@ import {
   uploadAssetBlob,
 } from "@/lib/blob";
 import { addDraftReplacementVersion, getAssetAdminDetail } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -84,6 +85,7 @@ export async function POST(
       message: "Draft replacement uploaded. Activate it when ready.",
     });
   } catch (error) {
+    logError(error, { route: "/api/admin/assets/[assetId]/replace", action: "upload_asset_replacement", assetId });
     const message = error instanceof Error ? error.message : "Could not upload replacement.";
     return NextResponse.json({ message }, { status: 400 });
   }

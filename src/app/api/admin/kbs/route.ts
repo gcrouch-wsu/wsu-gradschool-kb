@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, getSql, ensureSchema } from "@/lib/db";
 import { filterKbsForSession } from "@/lib/auth";
+import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import { slugify } from "@/lib/slug";
 import type { KnowledgeBase } from "@/lib/types";
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
     const kbs = await filterKbsForSession(guard.session, allKbs);
     return NextResponse.json({ kbs });
   } catch (error) {
+    logError(error, { route: "/api/admin/kbs", action: "list_kbs" });
     return NextResponse.json({ message: "Failed to list knowledge bases." }, { status: 500 });
   }
 }
@@ -81,6 +83,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, kb });
   } catch (error) {
+    logError(error, { route: "/api/admin/kbs", action: "create_kb" });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to create knowledge base." },
       { status: 500 }

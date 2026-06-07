@@ -11,6 +11,7 @@ function fileExtension(mimeType: string) {
   if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
   if (normalized.includes("gif")) return "gif";
   if (normalized.includes("webp")) return "webp";
+  if (normalized.includes("svg")) return "svg";
   if (normalized.includes("pdf")) return "pdf";
   if (normalized.includes("wordprocessingml")) return "docx";
   if (normalized.includes("msword")) return "doc";
@@ -74,9 +75,10 @@ export async function GET(
 
   const etag = `"${asset.versionId}"`;
   const extension = fileExtension(asset.mimeType);
+  const disposition = asset.mimeType.toLowerCase().includes("svg") ? "attachment" : "inline";
   const headers = {
     "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
-    "Content-Disposition": `inline; filename="${asset.slug}.${extension}"`,
+    "Content-Disposition": `${disposition}; filename="${asset.slug}.${extension}"`,
     "Content-Type": asset.mimeType,
     ETag: etag,
     "X-Content-Type-Options": "nosniff",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, getSql, ensureSchema, deleteKb } from "@/lib/db";
+import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import { slugify } from "@/lib/slug";
 
@@ -53,6 +54,7 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/kbs/[kbId]", action: "update_kb", kbId });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to update knowledge base." },
       { status: 500 }
@@ -77,6 +79,7 @@ export async function DELETE(
     await deleteKb(kbId);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/kbs/[kbId]", action: "delete_kb", kbId });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to delete knowledge base." },
       { status: 500 }

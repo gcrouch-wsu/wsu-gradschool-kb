@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, updateKbTheme } from "@/lib/db";
 import { mergeTheme } from "@/lib/kb-theme";
+import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 
 export async function PATCH(request: Request, context: { params: Promise<{ kbId: string }> }) {
@@ -26,6 +27,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ kbId:
     await updateKbTheme(kbId, theme);
     return NextResponse.json({ ok: true, theme });
   } catch (error) {
+    logError(error, { route: "/api/admin/kbs/[kbId]/theme", action: "update_kb_theme", kbId });
     const message = error instanceof Error ? error.message : "Could not save styles.";
     return NextResponse.json({ message }, { status: 500 });
   }

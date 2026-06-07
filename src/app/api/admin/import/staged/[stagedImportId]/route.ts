@@ -4,6 +4,7 @@ import {
   getStagedImportDetail,
   updateStagedImport,
 } from "@/lib/staged-imports";
+import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageVisibility } from "@/lib/types";
 
@@ -91,6 +92,7 @@ export async function PATCH(
     });
     return NextResponse.json({ ok: true, ...detail });
   } catch (error) {
+    logError(error, { route: "/api/admin/import/staged/[stagedImportId]", action: "update_staged_import", stagedImportId });
     const message = error instanceof Error ? error.message : "Could not update staged import.";
     return NextResponse.json({ message }, { status: 400 });
   }
@@ -119,6 +121,7 @@ export async function DELETE(
     await discardStagedImport(stagedImportId);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/import/staged/[stagedImportId]", action: "delete_staged_import", stagedImportId });
     const message = error instanceof Error ? error.message : "Could not delete staged import.";
     return NextResponse.json({ message }, { status: 400 });
   }

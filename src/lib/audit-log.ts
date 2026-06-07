@@ -69,6 +69,46 @@ export async function cleanupAuditLog(): Promise<number> {
   return result.length;
 }
 
+export async function recordSearchEvent(input: {
+  query: string;
+  kbId?: string | null;
+  resultCount: number;
+}): Promise<void> {
+  if (input.resultCount > 0) {
+    return;
+  }
+  const entry: AuditLogEntry = {
+    id: `search-${crypto.randomUUID()}`,
+    actorEmail: "public-user",
+    actorRole: "editor",
+    action: "search",
+    entityType: "search",
+    entityId: "search-query",
+    entityLabel: input.query,
+    kbId: input.kbId ?? null,
+    details: { resultCount: input.resultCount },
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!isDatabaseEnabled()) {
+    memoryAuditLog.unshift(entry);
+    return;
+  }
+
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO kb_audit_log (
+      id, actor_email, actor_role, action, entity_type, entity_id,
+      entity_label, kb_id, details, created_at
+    ) VALUES (
+      ${entry.id}, ${entry.actorEmail}, ${entry.actorRole}, ${entry.action},
+      ${entry.entityType}, ${entry.entityId}, ${entry.entityLabel}, ${entry.kbId ?? null},
+      ${JSON.stringify(entry.details)}, ${entry.createdAt}
+    )
+  `;
+}
+
 export async function recordAuditEvent(input: AuditInput): Promise<void> {
   const entry: AuditLogEntry = {
     id: `audit-${crypto.randomUUID()}`,
@@ -108,6 +148,7 @@ function matchesMemoryFilter(entry: AuditLogEntry, filter: AuditFilter) {
     const haystack = `${entry.actorEmail} ${entry.action} ${entry.entityType} ${entry.entityLabel}`.toLowerCase();
     if (!haystack.includes(q)) return false;
   }
+  if (!filter.entityType && entry.entityType === "search") return false;
   if (filter.action && entry.action !== filter.action) return false;
   if (filter.entityType && entry.entityType !== filter.entityType) return false;
   if (filter.kbId && entry.kbId !== filter.kbId) return false;
@@ -133,6 +174,7 @@ export async function listAuditEvents(filter: AuditFilter = {}): Promise<AuditLo
       entity_type ILIKE '%' || ${q} || '%' OR
       entity_label ILIKE '%' || ${q} || '%'
     ))
+      AND (${filter.entityType || null}::text IS NOT NULL OR entity_type <> 'search')
       AND (${filter.action || null}::text IS NULL OR action = ${filter.action || null})
       AND (${filter.entityType || null}::text IS NULL OR entity_type = ${filter.entityType || null})
       AND (${filter.kbId || null}::text IS NULL OR kb_id = ${filter.kbId || null})

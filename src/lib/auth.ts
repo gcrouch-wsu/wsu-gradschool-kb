@@ -71,6 +71,10 @@ function sign(value: string) {
   return createHmac("sha256", getSessionSecret()).update(value).digest("base64url");
 }
 
+function bootstrapVersion(email: string, password: string) {
+  return sign(`bootstrap:${email.toLowerCase()}:${password}`).slice(0, 32);
+}
+
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
@@ -112,7 +116,7 @@ export async function validateAdminCredentials(email: string, password: string):
       role: "owner",
       source: "env",
       expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000,
-      version: "1",
+      version: bootstrapVersion(bootstrapEmail, bootstrapPassword),
     };
   }
 
@@ -158,7 +162,15 @@ export async function readAdminSessionToken(token: string | undefined): Promise<
         return null;
       }
     } else {
-
+      const bootstrapEmail = getBootstrapEmail();
+      const bootstrapPassword = getBootstrapPassword();
+      if (
+        !bootstrapEmail ||
+        !bootstrapPassword ||
+        session.version !== bootstrapVersion(bootstrapEmail, bootstrapPassword)
+      ) {
+        return null;
+      }
     }
 
     return session;

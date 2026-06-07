@@ -506,6 +506,28 @@ const migrations: Migration[] = [
       `;
     },
   },
+  {
+    id: "018_rate_limits",
+    async up(sql) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kb_rate_limits (
+          bucket_key TEXT PRIMARY KEY,
+          count INTEGER NOT NULL DEFAULT 0,
+          reset_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_rate_limits_reset ON kb_rate_limits(reset_at)`;
+    },
+  },
+  {
+    id: "019_content_lifecycle",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS next_review_date TEXT`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS verified_by TEXT`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

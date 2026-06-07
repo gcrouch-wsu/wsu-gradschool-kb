@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { recordSearchEvent } from "./audit-log";
 import {
   insertAsset,
   insertAssetVersion,
@@ -19,6 +20,7 @@ import {
   updateAssetRecord,
   updatePages,
   updatePageStatusColumn,
+  updatePageLifecycle,
 } from "@/lib/db";
 import { seedDataset } from "@/lib/demo-data";
 import {
@@ -755,7 +757,9 @@ export async function searchKb(
     }
 
     scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
-    return scored.map((entry) => entry.result);
+    const results = scored.map((entry) => entry.result);
+    recordSearchEvent({ query, kbId, resultCount: results.length }).catch(() => {});
+    return results;
   }
 
   const dataset = await getDataset();
@@ -795,7 +799,9 @@ export async function searchKb(
   }
 
   scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
-  return scored.map((entry) => entry.result);
+  const memoryResults = scored.map((entry) => entry.result);
+  recordSearchEvent({ query, kbId, resultCount: memoryResults.length }).catch(() => {});
+  return memoryResults;
 }
 
 export async function getAdminCounts() {
@@ -1064,6 +1070,7 @@ export interface UpdatePageInput {
   showToc?: boolean;
   tocDepth?: number;
   showSummary?: boolean;
+  nextReviewDate?: string | null;
 }
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -1151,6 +1158,7 @@ export async function updatePage(input: UpdatePageInput, editorEmail?: string): 
           showToc: input.showToc ?? page.showToc,
           tocDepth: input.tocDepth ?? page.tocDepth,
           showSummary: input.showSummary ?? page.showSummary,
+          nextReviewDate: input.nextReviewDate ?? page.nextReviewDate,
         };
       }
       return {
@@ -1266,6 +1274,27 @@ export async function updatePageLayout(
   }
 
   await recordPublishedPathRedirects(kbId, pathBefore, changed);
+}
+
+export async function verifyPage(
+  page: KbPage,
+  verifier: string,
+): Promise<{ verifiedAt: string; verifiedBy: string; nextReviewDate: string }> {
+  const now = new Date();
+  const nextReview = new Date();
+  nextReview.setMonth(now.getMonth() + 6);
+
+  const verifiedAt = now.toISOString();
+  const verifiedBy = verifier;
+  const nextReviewDate = nextReview.toISOString().split("T")[0];
+
+  if (isDatabaseEnabled()) {
+    await updatePageLifecycle(page.id, { verifiedAt, verifiedBy, nextReviewDate });
+  } else {
+    storeRuntimePage({ ...page, verifiedAt, verifiedBy, nextReviewDate });
+  }
+
+  return { verifiedAt, verifiedBy, nextReviewDate };
 }
 
 function normalizeRedirectPath(path: string) {

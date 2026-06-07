@@ -193,3 +193,4 @@ Public articles use a responsive 3-column layout (navigation · article · stick
 rail) that collapses on tablet/mobile. Tables scroll horizontally on narrow screens. Any article
 can be exported via the browser's **print-to-PDF** over semantic, print-styled HTML. (This relies on
 the browser's print engine; it is not a server-side tagged/PDF-UA generator — see `project_spec.md` FB-14.)
+ 

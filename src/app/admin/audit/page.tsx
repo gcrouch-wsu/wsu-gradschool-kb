@@ -98,6 +98,12 @@ export default async function AdminAuditPage({
         </div>
       </form>
 
+      <div className="admin-actions">
+        <Link className="button button--ghost" href="/admin/audit/search">
+          View Search Gaps
+        </Link>
+      </div>
+
       <div className="table-wrap">
         <table className="admin-table">
           <thead>

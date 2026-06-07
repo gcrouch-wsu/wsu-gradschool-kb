@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import type { ContentBlock } from "@/lib/types";
 
 interface TocNode {
@@ -57,6 +60,41 @@ export function TableOfContents({
   showToc?: boolean;
   tocDepth?: number;
 }) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showToc) return;
+
+    const headingIds = extractHeadings(blocks)
+      .filter((h) => h.level <= tocDepth)
+      .map((h) => h.id);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the topmost visible heading
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        
+        if (visible.length > 0) {
+          setActiveId(visible[0].target.id);
+        }
+      },
+      {
+        // rootMargin accounts for the sticky header and gives some buffer
+        rootMargin: "-100px 0px -40% 0px",
+        threshold: 0,
+      }
+    );
+
+    headingIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [blocks, showToc, tocDepth]);
+
   if (!showToc) {
     return null;
   }
@@ -72,12 +110,22 @@ export function TableOfContents({
       <ol>
         {toc.map((node) => (
           <li key={node.id}>
-            <a href={`#${node.id}`}>{node.text}</a>
+            <a 
+              href={`#${node.id}`} 
+              className={activeId === node.id ? "is-active" : ""}
+            >
+              {node.text}
+            </a>
             {node.children.length > 0 && (
               <ol>
                 {node.children.map((child) => (
                   <li key={child.id}>
-                    <a href={`#${child.id}`}>{child.text}</a>
+                    <a 
+                      href={`#${child.id}`}
+                      className={activeId === child.id ? "is-active" : ""}
+                    >
+                      {child.text}
+                    </a>
                   </li>
                 ))}
               </ol>

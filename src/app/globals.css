@@ -801,6 +801,20 @@ p {
   color: #555;
 }
 
+.badge--warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge--verified {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.print-only {
+  display: none;
+}
+
 .button--ghost {
   background: transparent;
   border: 1.5px solid var(--line-strong);
@@ -1088,11 +1102,16 @@ p {
   color: var(--ink);
   font-weight: 500;
   font-size: 0.95rem;
-  transition: color 0.15s ease;
+  transition: color 0.15s ease, border-left-color 0.15s ease;
 }
 
-.toc a:hover {
+.toc a:hover,
+.toc a.is-active {
   color: var(--wsu-crimson);
+}
+
+.toc a.is-active {
+  font-weight: 700;
 }
 
 .import-grid {
@@ -2847,6 +2866,10 @@ article li > ol {
   .editor-toolbar-sticky,
   .print-hide {
     display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
   }
 
   body {

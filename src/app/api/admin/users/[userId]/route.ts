@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { updateUser, deleteUser, replaceUserAssignments } from "@/lib/db-users";
 import { isDatabaseEnabled } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import type { User, UserRole } from "@/lib/types";
 
@@ -46,6 +47,7 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/users/[userId]", action: "update_user", userId });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to update user." },
       { status: 500 }
@@ -75,6 +77,7 @@ export async function DELETE(
     await deleteUser(userId);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logError(error, { route: "/api/admin/users/[userId]", action: "delete_user", userId });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to delete user." },
       { status: 500 }

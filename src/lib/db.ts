@@ -177,6 +177,9 @@ interface PageRow {
   show_summary?: boolean;
   locked_by?: string | null;
   locked_at?: string | null;
+  next_review_date?: string | null;
+  verified_at?: string | null;
+  verified_by?: string | null;
 }
 
 interface AssetRow {
@@ -299,6 +302,9 @@ function mapPage(row: PageRow): KbPage {
     showSummary: row.show_summary ?? true,
     lockedBy: row.locked_by,
     lockedAt: row.locked_at,
+    nextReviewDate: row.next_review_date,
+    verifiedAt: row.verified_at,
+    verifiedBy: row.verified_by,
   };
 }
 
@@ -332,13 +338,15 @@ export async function insertPage(page: KbPage): Promise<void> {
     INSERT INTO kb_pages (
       id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
-      show_toc, toc_depth, show_summary, locked_by, locked_at
+      show_toc, toc_depth, show_summary, locked_by, locked_at,
+      next_review_date, verified_at, verified_by
     ) VALUES (
       ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
       ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
       ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
       ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
-      ${page.showToc}, ${page.tocDepth}, ${page.showSummary ?? true}, ${page.lockedBy ?? null}, ${page.lockedAt ?? null}
+      ${page.showToc}, ${page.tocDepth}, ${page.showSummary ?? true}, ${page.lockedBy ?? null}, ${page.lockedAt ?? null},
+      ${page.nextReviewDate ?? null}, ${page.verifiedAt ?? null}, ${page.verifiedBy ?? null}
     )
   `;
 }
@@ -397,7 +405,10 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
             related_asset_ids = ${relatedAssetIds},
             show_toc = ${page.showToc},
             toc_depth = ${page.tocDepth},
-            show_summary = ${page.showSummary ?? true}
+            show_summary = ${page.showSummary ?? true},
+            next_review_date = ${page.nextReviewDate ?? null},
+            verified_at = ${page.verifiedAt ?? null},
+            verified_by = ${page.verifiedBy ?? null}
           WHERE id = ${page.id}
             AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
           RETURNING id
@@ -425,7 +436,10 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
         related_asset_ids = ${relatedAssetIds},
         show_toc = ${page.showToc},
         toc_depth = ${page.tocDepth},
-        show_summary = ${page.showSummary ?? true}
+        show_summary = ${page.showSummary ?? true},
+        next_review_date = ${page.nextReviewDate ?? null},
+        verified_at = ${page.verifiedAt ?? null},
+        verified_by = ${page.verifiedBy ?? null}
       WHERE id = ${page.id}
     `;
   });
@@ -446,6 +460,22 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
     }
     throw error;
   }
+}
+
+export async function updatePageLifecycle(
+  pageId: string,
+  fields: { verifiedAt?: string | null; verifiedBy?: string | null; nextReviewDate?: string | null },
+): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE kb_pages
+    SET
+      verified_at = ${fields.verifiedAt ?? null},
+      verified_by = ${fields.verifiedBy ?? null},
+      next_review_date = ${fields.nextReviewDate ?? null}
+    WHERE id = ${pageId}
+  `;
 }
 
 export async function tryAcquirePageLock(pageId: string, userEmail: string): Promise<boolean> {

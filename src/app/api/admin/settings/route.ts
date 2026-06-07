@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, loadSiteSettings, saveSiteSettings } from "@/lib/db";
+import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import { normalizeSiteSettings } from "@/lib/site-settings";
 
@@ -39,6 +40,7 @@ export async function PUT(request: Request) {
     revalidatePath("/", "layout");
     return NextResponse.json({ ok: true, settings });
   } catch (error) {
+    logError(error, { route: "/api/admin/settings", action: "save_site_settings" });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Failed to save site settings." },
       { status: 500 },

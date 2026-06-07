@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
+import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
 
@@ -123,6 +124,9 @@ export function AdminPageEditorForm({
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
+  const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
+  const [verifiedAt, setVerifiedAt] = useState(page.verifiedAt);
+  const [verifiedBy, setVerifiedBy] = useState(page.verifiedBy);
   const [busy, setBusy] = useState<EditableStatus | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,8 +139,6 @@ export function AdminPageEditorForm({
   const missedHeartbeats = useRef(0);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-
     async function heartbeatLock() {
       try {
         const res = await fetch(`/api/admin/pages/${page.id}/lock`, { method: "POST" });
@@ -145,23 +147,21 @@ export function AdminPageEditorForm({
           missedHeartbeats.current += 1;
           if (missedHeartbeats.current >= 3) {
             setLockError(data.message || "Page is locked by another user.");
-            clearInterval(interval);
           }
         } else {
           missedHeartbeats.current = 0;
           setLockError(null);
         }
-      } catch (err) {
+      } catch {
         missedHeartbeats.current += 1;
         if (missedHeartbeats.current >= 3) {
           setLockError("Page lock could not be renewed. Check your connection before continuing.");
-          clearInterval(interval);
         }
       }
     }
 
     heartbeatLock();
-    interval = setInterval(heartbeatLock, 60000); 
+    const interval = setInterval(heartbeatLock, 60000);
 
     return () => {
       clearInterval(interval);
@@ -269,6 +269,28 @@ export function AdminPageEditorForm({
     }
   }
 
+  async function verifyPage() {
+    if (lockError) return;
+    setLifecycleBusy(true);
+    setError(null);
+    setLifecycleMessage(null);
+    try {
+      const response = await fetch(`/api/admin/pages/${page.id}/verify`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "Could not verify page.");
+      }
+      setVerifiedAt(data.verifiedAt);
+      setVerifiedBy(data.verifiedBy);
+      setNextReviewDate(data.nextReviewDate);
+      setLifecycleMessage("Page verified and review clock reset (6 months).");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not verify page.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
   async function submit(status: EditableStatus) {
     if (lockError) return;
     setBusy(status);
@@ -294,6 +316,7 @@ export function AdminPageEditorForm({
           showToc,
           tocDepth,
           showSummary,
+          nextReviewDate,
         }),
       });
       const data = await response.json();
@@ -531,6 +554,30 @@ export function AdminPageEditorForm({
               value={lastReviewedDate}
             />
           </label>
+          <label>
+            <span className="meta">Next review date</span>
+            <input
+              className="input"
+              onChange={(event) => setNextReviewDate(event.target.value)}
+              type="date"
+              value={nextReviewDate || ""}
+            />
+          </label>
+          {verifiedAt && (
+            <p className="meta" style={{ color: "var(--success)" }}>
+              ✓ Verified on {formatTimestamp(verifiedAt)}{verifiedBy ? ` by ${verifiedBy}` : ""}
+            </p>
+          )}
+          <div style={{ marginTop: "0.5rem" }}>
+            <button
+              className="button button--small button--ghost"
+              disabled={lifecycleBusy || isLocked}
+              onClick={verifyPage}
+              type="button"
+            >
+              {lifecycleBusy ? "Verifying..." : "Verify now (resets 6-month clock)"}
+            </button>
+          </div>
         </fieldset>
 
         <fieldset className="fieldset editor-content" disabled={isLocked}>

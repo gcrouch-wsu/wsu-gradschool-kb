@@ -68,6 +68,10 @@ export interface KbPage {
   lockedBy?: string | null;
   lockedAt?: string | null;
   aliasTargetId?: string | null;
+
+  nextReviewDate?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: string | null;
 }
 
 export type PageMoveTarget = { kbId: string; parentPath: string[] };
@@ -232,7 +236,7 @@ export interface KbUserAssignment {
   userId: string;
 }
 
-export type AuditEntityType = "page" | "asset" | "kb" | "import" | "redirect" | "user" | "settings";
+export type AuditEntityType = "page" | "asset" | "kb" | "import" | "redirect" | "user" | "settings" | "search";
 
 export interface AuditLogEntry {
   id: string;

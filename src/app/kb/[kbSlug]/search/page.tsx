@@ -27,7 +27,7 @@ export default async function SearchPage({
   let rateLimited = false;
   if (q.trim()) {
     const clientKey = clientKeyFromHeaders(await headers());
-    rateLimited = !rateLimit(`search:${clientKey}`, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS).allowed;
+    rateLimited = !(await rateLimit(`search:${clientKey}`, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS)).allowed;
   }
 
   const results = rateLimited ? [] : await searchKb(kb.id, q, isStaff);

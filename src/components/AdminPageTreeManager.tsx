@@ -6,7 +6,7 @@ import type { KbPage, KnowledgeBase, PageStatus } from "@/lib/types";
 
 type PageItem = Pick<
   KbPage,
-  "id" | "path" | "sortOrder" | "status" | "title" | "updatedDisplayDate" | "visibility"
+  "id" | "path" | "sortOrder" | "status" | "title" | "updatedDisplayDate" | "visibility" | "nextReviewDate"
 >;
 
 function pathKey(path: string[]) {
@@ -277,6 +277,9 @@ export function AdminPageTreeManager({
                   {page.status === "draft" && <span className="badge badge--draft"> Draft</span>}
                   {page.status === "archived" && <span className="badge badge--archived"> Archived</span>}
                   {page.visibility === "staff" && <span className="badge badge--staff"> Staff</span>}
+                  {page.nextReviewDate && new Date(page.nextReviewDate) <= new Date() && (
+                    <span className="badge badge--warning"> Needs Review</span>
+                  )}
                   <div className="meta">
                     /{page.path.join("/")} · Updated {page.updatedDisplayDate} ·{" "}
                     {page.visibility === "staff" ? "Staff only" : "Public"}
