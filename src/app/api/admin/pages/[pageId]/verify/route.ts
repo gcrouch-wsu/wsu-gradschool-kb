@@ -8,9 +8,10 @@ export const runtime = "nodejs";
 
 export async function POST(
   request: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
-  const page = await getPageByIdForAdmin(params.pageId);
+  const { pageId } = await params;
+  const page = await getPageByIdForAdmin(pageId);
   if (!page) {
     return NextResponse.json({ message: "Page not found." }, { status: 404 });
   }
