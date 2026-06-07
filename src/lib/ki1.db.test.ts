@@ -1,18 +1,14 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import {
-  activateVersion,
-  createDraftVersion,
-  currentActiveVersion,
-} from "./asset-lifecycle";
-import { getSql, isDatabaseEnabled, ensureSchema } from "./db";
+import { getSql, ensureSchema } from "./db";
 import {
   createPage,
   getKbBySlug,
   getPageByPath,
   searchKb,
   verifyPage,
+  getAllKbsForAdmin,
 } from "./kb-store";
-import type { KbPage } from "./types";
+import { slugify } from "./slug";
 
 describe("KI-1 live-DB integration", () => {
   const dbEnabled = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim());
@@ -32,8 +28,24 @@ describe("KI-1 live-DB integration", () => {
   });
 
   it("can perform a full lifecycle with verify and search", async () => {
-    const kb = await getKbBySlug("grad-school");
-    if (!kb) throw new Error("Seed KB missing");
+    const sql = getSql();
+    
+    // 1. Get or create a KB for testing
+    let kb = await getKbBySlug("grad-school");
+    let isTempKb = false;
+
+    if (!kb) {
+      // If seed data is missing, create a temp KB to allow the test to proceed
+      const testId = `test-kb-${crypto.randomUUID()}`;
+      await sql`
+        INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
+        VALUES (${testId}, 'test-kb', 'Test KB', 'Temp KB for CI', 'published', now())
+      `;
+      kb = await getKbBySlug("test-kb");
+      isTempKb = true;
+    }
+
+    if (!kb) throw new Error("Could not find or create a test KB");
 
     const page = await createPage({
       kbId: kb.id,
@@ -60,9 +72,12 @@ describe("KI-1 live-DB integration", () => {
       expect(reloaded?.verifiedBy).toBe(verifier);
 
     } finally {
-      // Cleanup is handled by the test runner usually, but we should be clean
-      const sql = getSql();
+      // Cleanup page
       await sql`DELETE FROM kb_pages WHERE id = ${page.id}`;
+      // Cleanup temp KB if we created it
+      if (isTempKb) {
+        await sql`DELETE FROM knowledge_bases WHERE id = ${kb.id}`;
+      }
     }
   });
 });
