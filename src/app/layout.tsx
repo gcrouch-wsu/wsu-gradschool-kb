@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { loadSiteSettings } from "@/lib/db";
+import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,8 +21,11 @@ function roleLabel(role: string) {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [session, settings] = await Promise.all([getCurrentAdminSession(), loadSiteSettings()]);
 
+  const globalTheme = settings.globalTheme || DEFAULT_THEME;
+  const themeVars = themeToCssVars(globalTheme) as CSSProperties;
+
   return (
-    <html lang="en">
+    <html className="kb-theme-root" lang="en" style={themeVars}>
       <body>
         <a className="skip-link" href="#main">
           Skip to content

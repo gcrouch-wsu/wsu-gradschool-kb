@@ -59,15 +59,15 @@ function ContrastRow({ label, fg, bg, large }: { label: string; fg: string; bg: 
 }
 
 export function ThemeEditor({
-  kbId,
   kbTitle,
   initialTheme,
   dbEnabled,
+  onSave,
 }: {
-  kbId: string;
   kbTitle: string;
   initialTheme: KbTheme;
   dbEnabled: boolean;
+  onSave: (theme: KbTheme) => Promise<void>;
 }) {
   const [theme, setTheme] = useState<KbTheme>(initialTheme);
   const [saving, setSaving] = useState(false);
@@ -126,15 +126,8 @@ export function ThemeEditor({
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`/api/admin/kbs/${kbId}/theme`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? "Could not save styles.");
-      setTheme(data.theme as KbTheme);
-      setMessage("Styles saved. Public pages for this KB now use them.");
+      await onSave(theme);
+      setMessage("Styles saved.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save styles.");
     } finally {

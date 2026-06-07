@@ -1,3 +1,5 @@
+import { mergeTheme, type KbTheme } from "./kb-theme";
+
 export interface NavLink {
   label: string;
   url: string;
@@ -11,6 +13,7 @@ export interface SiteSettings {
   footerText: string;
   footerLinks: NavLink[];
   contactInfo: string;
+  globalTheme: KbTheme | null;
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -25,6 +28,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     { label: "Graduate School", url: "https://gradschool.wsu.edu" },
   ],
   contactInfo: "Contact us: gradschool@wsu.edu",
+  globalTheme: null,
 };
 
 const MAX_LENGTHS: Record<string, number> = {
@@ -68,5 +72,6 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
     footerText: pickText("footerText", DEFAULT_SITE_SETTINGS.footerText),
     footerLinks: normalizeLinks(input.footerLinks),
     contactInfo: pickText("contactInfo", DEFAULT_SITE_SETTINGS.contactInfo),
+    globalTheme: input.globalTheme ? mergeTheme(input.globalTheme) : null,
   };
 }

@@ -27,7 +27,7 @@ export default async function AdminPagesPage() {
         under the correct parent in the KB tree.
       </p>
       <p className="meta">
-        <Link href="/admin">Back to admin</Link>
+        <Link href="/admin">← Back to admin</Link>
       </p>
 
       <div className="admin-actions">

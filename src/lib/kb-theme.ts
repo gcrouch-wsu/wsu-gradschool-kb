@@ -149,7 +149,7 @@ function safeOptions(value: unknown, kind: "font" | "size" | "color", fallback: 
   return cleaned.length > 0 ? cleaned.slice(0, 12) : fallback;
 }
 
-export function mergeTheme(input: unknown): KbTheme {
+export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbTheme {
   const t = (input ?? {}) as Partial<KbTheme>;
   const c = (t.colors ?? {}) as Partial<ThemeColors>;
   const f = (t.fonts ?? {}) as Partial<ThemeFonts>;
@@ -157,36 +157,36 @@ export function mergeTheme(input: unknown): KbTheme {
   const e = (t.editor ?? {}) as Partial<ThemeEditorAllowlist>;
   return {
     colors: {
-      ink: safeHex(c.ink, DEFAULT_THEME.colors.ink),
-      h1: safeHex(c.h1, DEFAULT_THEME.colors.h1),
-      h2: safeHex(c.h2, DEFAULT_THEME.colors.h2),
-      h3: safeHex(c.h3, DEFAULT_THEME.colors.h3),
-      accent: safeHex(c.accent, DEFAULT_THEME.colors.accent),
-      muted: safeHex(c.muted, DEFAULT_THEME.colors.muted),
-      line: safeHex(c.line, DEFAULT_THEME.colors.line),
-      paper: safeHex(c.paper, DEFAULT_THEME.colors.paper),
-      wash: safeHex(c.wash, DEFAULT_THEME.colors.wash),
-      infoBoxBg: safeHex(c.infoBoxBg, DEFAULT_THEME.colors.infoBoxBg),
-      infoBoxBorder: safeHex(c.infoBoxBorder, DEFAULT_THEME.colors.infoBoxBorder),
-      infoBoxInk: safeHex(c.infoBoxInk, DEFAULT_THEME.colors.infoBoxInk),
-      procedureBg: safeHex(c.procedureBg, DEFAULT_THEME.colors.procedureBg),
-      procedureBorder: safeHex(c.procedureBorder, DEFAULT_THEME.colors.procedureBorder),
-      procedureInk: safeHex(c.procedureInk, DEFAULT_THEME.colors.procedureInk),
+      ink: safeHex(c.ink, base.colors.ink),
+      h1: safeHex(c.h1, base.colors.h1),
+      h2: safeHex(c.h2, base.colors.h2),
+      h3: safeHex(c.h3, base.colors.h3),
+      accent: safeHex(c.accent, base.colors.accent),
+      muted: safeHex(c.muted, base.colors.muted),
+      line: safeHex(c.line, base.colors.line),
+      paper: safeHex(c.paper, base.colors.paper),
+      wash: safeHex(c.wash, base.colors.wash),
+      infoBoxBg: safeHex(c.infoBoxBg, base.colors.infoBoxBg),
+      infoBoxBorder: safeHex(c.infoBoxBorder, base.colors.infoBoxBorder),
+      infoBoxInk: safeHex(c.infoBoxInk, base.colors.infoBoxInk),
+      procedureBg: safeHex(c.procedureBg, base.colors.procedureBg),
+      procedureBorder: safeHex(c.procedureBorder, base.colors.procedureBorder),
+      procedureInk: safeHex(c.procedureInk, base.colors.procedureInk),
     },
     fonts: {
-      body: safeFontKey(f.body, DEFAULT_THEME.fonts.body),
-      heading: safeFontKey(f.heading, DEFAULT_THEME.fonts.heading),
+      body: safeFontKey(f.body, base.fonts.body),
+      heading: safeFontKey(f.heading, base.fonts.heading),
     },
     scale: {
-      base: safeRem(s.base, DEFAULT_THEME.scale.base),
-      h1: safeRem(s.h1, DEFAULT_THEME.scale.h1),
-      h2: safeRem(s.h2, DEFAULT_THEME.scale.h2),
-      h3: safeRem(s.h3, DEFAULT_THEME.scale.h3),
+      base: safeRem(s.base, base.scale.base),
+      h1: safeRem(s.h1, base.scale.h1),
+      h2: safeRem(s.h2, base.scale.h2),
+      h3: safeRem(s.h3, base.scale.h3),
     },
     editor: {
-      fonts: safeOptions(e.fonts, "font", DEFAULT_THEME.editor.fonts),
-      sizes: safeOptions(e.sizes, "size", DEFAULT_THEME.editor.sizes),
-      colors: safeOptions(e.colors, "color", DEFAULT_THEME.editor.colors),
+      fonts: safeOptions(e.fonts, "font", base.editor.fonts),
+      sizes: safeOptions(e.sizes, "size", base.editor.sizes),
+      colors: safeOptions(e.colors, "color", base.editor.colors),
     },
   };
 }

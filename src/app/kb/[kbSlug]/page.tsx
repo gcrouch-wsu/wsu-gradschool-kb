@@ -5,7 +5,8 @@ import { PageTree } from "@/components/PageTree";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { buildPageTree, getKbBySlug } from "@/lib/kb-store";
 import { formatDate } from "@/lib/format";
-import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
+import { loadSiteSettings } from "@/lib/db";
 
 export default async function KbHomePage({ params }: { params: Promise<{ kbSlug: string }> }) {
   const { kbSlug } = await params;
@@ -15,9 +16,13 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
   }
 
   const isStaff = Boolean(await getCurrentAdminSession());
+  const settings = await loadSiteSettings();
   const tree = await buildPageTree(kb.id, isStaff);
   const topLevel = tree.map((node) => node.page);
-  const themeVars = themeToCssVars(kb.theme ?? DEFAULT_THEME) as CSSProperties;
+
+  const baseTheme = settings.globalTheme || DEFAULT_THEME;
+  const effectiveTheme = kb.theme ? mergeTheme(kb.theme, baseTheme) : baseTheme;
+  const themeVars = themeToCssVars(effectiveTheme) as CSSProperties;
 
   return (
     <div className="kb-theme-root" style={themeVars}>

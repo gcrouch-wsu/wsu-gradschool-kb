@@ -37,8 +37,8 @@ export default async function AdminAuditPage({
       <p className="eyebrow">Admin</p>
       <h1>Audit log</h1>
       <p className="lead">Recent administrative actions. Entries store metadata and small details, not full content snapshots.</p>
-      <p>
-        <Link href="/admin">Back to admin</Link>
+      <p className="meta">
+        <Link href="/admin">← Back to admin</Link>
       </p>
 
       <form className="form card audit-filter" method="get">

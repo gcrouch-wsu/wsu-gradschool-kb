@@ -231,6 +231,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     footer_text: string;
     footer_links: any;
     contact_info: string;
+    global_theme?: any;
   }>;
   const row = rows[0];
   if (!row) {
@@ -244,6 +245,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     footerText: row.footer_text,
     footerLinks: row.footer_links,
     contactInfo: row.contact_info,
+    globalTheme: row.global_theme,
   });
 }
 
@@ -254,11 +256,12 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
     INSERT INTO site_settings (
       id, home_eyebrow, home_title, home_intro,
       header_links, footer_text, footer_links, contact_info,
-      updated_at
+      global_theme, updated_at
     )
     VALUES (
       'singleton', ${settings.homeEyebrow}, ${settings.homeTitle}, ${settings.homeIntro},
       ${JSON.stringify(settings.headerLinks)}, ${settings.footerText}, ${JSON.stringify(settings.footerLinks)}, ${settings.contactInfo},
+      ${settings.globalTheme ? JSON.stringify(settings.globalTheme) : null},
       now()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -269,6 +272,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       footer_text = EXCLUDED.footer_text,
       footer_links = EXCLUDED.footer_links,
       contact_info = EXCLUDED.contact_info,
+      global_theme = EXCLUDED.global_theme,
       updated_at = now()
   `;
 }

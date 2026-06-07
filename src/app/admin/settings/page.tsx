@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ThemeEditor } from "@/components/ThemeEditor";
+import { isDatabaseEnabled } from "@/lib/db";
+import { DEFAULT_THEME } from "@/lib/kb-theme";
 import type { NavLink, SiteSettings } from "@/lib/site-settings";
 
 export default function AdminSettingsPage() {
@@ -199,6 +202,39 @@ export default function AdminSettingsPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {settings && (
+        <>
+          <hr style={{ margin: "4rem 0", border: "none", borderTop: "1px solid var(--line)" }} />
+
+          <section>
+            <h2>Global Default Styling</h2>
+            <p className="lead">
+              Adjust the default brand colors and fonts for the entire platform. Individual knowledge bases
+              inherit these unless they define their own overrides.
+            </p>
+            <ThemeEditor
+              dbEnabled={isDatabaseEnabled()}
+              initialTheme={settings.globalTheme || DEFAULT_THEME}
+              kbTitle="Global Default"
+              onSave={async (newTheme) => {
+                const nextSettings = { ...settings, globalTheme: newTheme };
+                const res = await fetch("/api/admin/settings", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(nextSettings),
+                });
+                if (!res.ok) {
+                  const data = await res.json().catch(() => ({}));
+                  throw new Error(data.message || "Failed to save global theme");
+                }
+                const data = await res.json();
+                setSettings(data.settings);
+              }}
+            />
+          </section>
+        </>
       )}
     </div>
   );

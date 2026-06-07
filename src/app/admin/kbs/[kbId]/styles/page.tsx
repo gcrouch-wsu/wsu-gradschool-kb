@@ -44,7 +44,22 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
         Adjust the brand colors, fonts, and type scale for this knowledge base. Changes apply to every public
         page in <code>/kb/{kb.slug}</code> once saved.
       </p>
-      <ThemeEditor dbEnabled={isDatabaseEnabled()} initialTheme={theme} kbId={kb.id} kbTitle={kb.title} />
+      <ThemeEditor
+        dbEnabled={isDatabaseEnabled()}
+        initialTheme={theme}
+        kbTitle={kb.title}
+        onSave={async (newTheme) => {
+          const res = await fetch(`/api/admin/kbs/${kb.id}/theme`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ theme: newTheme }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.message || "Failed to save styles");
+          }
+        }}
+      />
     </div>
   );
 }

@@ -93,6 +93,9 @@ export default function AdminKbsPage() {
 
   return (
     <div className="page-shell">
+      <p className="meta">
+        <Link href="/admin">← Back to admin</Link>
+      </p>
       <div className="admin-actions">
         <h1>Knowledge Base Management</h1>
         <button className="button" onClick={() => setIsCreating(!isCreating)}>

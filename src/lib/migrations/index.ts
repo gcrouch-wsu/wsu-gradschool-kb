@@ -528,6 +528,12 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS verified_by TEXT`;
     },
   },
+  {
+    id: "020_site_settings_global_theme",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS global_theme JSONB`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {
