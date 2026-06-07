@@ -22,7 +22,18 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const [session, settings] = await Promise.all([getCurrentAdminSession(), loadSiteSettings()]);
 
   const globalTheme = settings.globalTheme || DEFAULT_THEME;
-  const themeVars = themeToCssVars(globalTheme) as CSSProperties;
+  const themeVars: CSSProperties = {
+    ...(themeToCssVars(globalTheme) as CSSProperties),
+    ...(settings.contentWidth ? { "--content-width": `${settings.contentWidth}px` } : {}),
+  };
+
+  const hasBrand = Boolean(settings.logoUrl || settings.brandText);
+  const headerAlignClass =
+    settings.headerAlignment === "center"
+      ? " is-center"
+      : settings.headerAlignment === "right"
+        ? " is-right"
+        : "";
 
   return (
     <html className="kb-theme-root" lang="en" style={themeVars}>
@@ -31,10 +42,21 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           Skip to content
         </a>
         <header className="site-header">
-          <div className="site-header__inner">
-            <Link className="brand" href="/">
-              WSU Knowledge Base
-            </Link>
+          <div className={`site-header__inner${headerAlignClass}`}>
+            {hasBrand && (
+              <Link className={`brand${settings.logoUrl ? " brand--has-logo" : ""}`} href="/">
+                {settings.logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt={settings.brandText || "Home"}
+                    className="brand__logo"
+                    src={settings.logoUrl}
+                    style={settings.logoWidth ? { width: `${settings.logoWidth}px`, maxHeight: "none" } : undefined}
+                  />
+                )}
+                {settings.brandText && <span className="brand__text">{settings.brandText}</span>}
+              </Link>
+            )}
             <nav className="nav" aria-label="Primary">
               <Link href="/">Knowledge bases</Link>
               {settings.headerLinks.map((link, i) => (
@@ -63,7 +85,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <footer className="site-footer">
           <div className="site-footer__inner">
             <div className="footer-brand">
-              <p className="meta">{settings.footerText}</p>
+              {settings.footerText && <p className="meta">{settings.footerText}</p>}
               {settings.contactInfo && <p className="meta">{settings.contactInfo}</p>}
             </div>
             {settings.footerLinks.length > 0 && (

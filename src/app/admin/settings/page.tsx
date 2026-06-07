@@ -4,10 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { ThemeEditor } from "@/components/ThemeEditor";
-import { isDatabaseEnabled } from "@/lib/db";
 import { DEFAULT_THEME } from "@/lib/kb-theme";
-import type { NavLink, SiteSettings } from "@/lib/site-settings";
-import type { ContentBlock } from "@/lib/types";
+import { ALIGNMENTS, type Alignment, type NavLink, type SiteSettings } from "@/lib/site-settings";
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
@@ -15,15 +13,39 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "home" | "styling">("general");
+  const [dbEnabled, setDbEnabled] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"general" | "branding" | "home" | "styling">("general");
 
   useEffect(() => {
     fetch("/api/admin/settings")
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Failed to load settings"))))
-      .then((data) => setSettings(data.settings))
+      .then((data) => {
+        setSettings(data.settings);
+        setDbEnabled(Boolean(data.dbEnabled));
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Error loading settings"))
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleLogoUpload(file: File) {
+    setLogoUploading(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/admin/settings/logo", { method: "POST", body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to upload logo");
+      }
+      update("logoUrl", data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error uploading logo");
+    } finally {
+      setLogoUploading(false);
+    }
+  }
 
   function update(field: keyof SiteSettings, value: any) {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
@@ -100,6 +122,12 @@ export default function AdminSettingsPage() {
           onClick={() => setActiveTab("general")}
         >
           General Header/Footer
+        </button>
+        <button
+          className={`tab-button ${activeTab === "branding" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("branding")}
+        >
+          Logo &amp; Layout
         </button>
         <button
           className={`tab-button ${activeTab === "home" ? "is-active" : ""}`}
@@ -236,6 +264,140 @@ export default function AdminSettingsPage() {
         </form>
       )}
 
+      {settings && activeTab === "branding" && (
+        <form className="form" onSubmit={handleSave}>
+          <div className="grid grid--two">
+            <section className="card">
+              <h2>Site Logo</h2>
+              <p className="meta">
+                Shown at the top-left of every page. Leave it empty to show only the brand text.
+              </p>
+
+              {settings.logoUrl ? (
+                <div className="field-group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt="Current logo preview"
+                    src={settings.logoUrl}
+                    style={{
+                      maxWidth: "100%",
+                      width: settings.logoWidth ? `${settings.logoWidth}px` : "auto",
+                      height: "auto",
+                      background: "var(--wash)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "0.5rem",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="button button--ghost button--small"
+                    onClick={() => update("logoUrl", "")}
+                  >
+                    Remove logo
+                  </button>
+                </div>
+              ) : (
+                <p className="meta">No logo set.</p>
+              )}
+
+              <label>
+                <span className="meta">Upload an image (PNG, JPG, GIF, WebP — max 5 MB)</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  disabled={logoUploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleLogoUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {logoUploading && <p className="meta">Uploading…</p>}
+
+              <label>
+                <span className="meta">…or paste an image URL</span>
+                <input
+                  className="input"
+                  placeholder="https://…"
+                  value={settings.logoUrl}
+                  onChange={(e) => update("logoUrl", e.target.value)}
+                />
+              </label>
+
+              <label>
+                <span className="meta">Logo width in pixels (leave 0 for natural size)</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  max={600}
+                  value={settings.logoWidth || ""}
+                  onChange={(e) => update("logoWidth", Number(e.target.value) || 0)}
+                />
+              </label>
+            </section>
+
+            <section className="card">
+              <h2>Brand &amp; Layout</h2>
+              <label>
+                <span className="meta">Brand text (next to the logo — leave blank to hide)</span>
+                <input
+                  className="input"
+                  value={settings.brandText}
+                  onChange={(e) => update("brandText", e.target.value)}
+                />
+              </label>
+              <label>
+                <span className="meta">Header alignment</span>
+                <select
+                  className="input"
+                  value={settings.headerAlignment}
+                  onChange={(e) => update("headerAlignment", e.target.value as Alignment)}
+                >
+                  {ALIGNMENTS.map((a) => (
+                    <option key={a} value={a}>
+                      {a.charAt(0).toUpperCase() + a.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="meta">Home hero text alignment</span>
+                <select
+                  className="input"
+                  value={settings.heroAlignment}
+                  onChange={(e) => update("heroAlignment", e.target.value as Alignment)}
+                >
+                  {ALIGNMENTS.map((a) => (
+                    <option key={a} value={a}>
+                      {a.charAt(0).toUpperCase() + a.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="meta">Max content width in pixels (leave 0 for default 1320)</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  max={2400}
+                  value={settings.contentWidth || ""}
+                  onChange={(e) => update("contentWidth", Number(e.target.value) || 0)}
+                />
+              </label>
+            </section>
+          </div>
+
+          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+            <button className="button" type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save logo & layout"}
+            </button>
+          </div>
+        </form>
+      )}
+
       {settings && activeTab === "home" && (
         <form className="form" onSubmit={handleSave}>
           <section className="card" style={{ marginBottom: "2rem" }}>
@@ -290,7 +452,7 @@ export default function AdminSettingsPage() {
             </p>
           </div>
           <ThemeEditor
-            dbEnabled={isDatabaseEnabled()}
+            dbEnabled={dbEnabled}
             initialTheme={settings.globalTheme || DEFAULT_THEME}
             kbTitle="Global Default"
             onSave={async (newTheme) => {

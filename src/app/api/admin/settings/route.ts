@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   }
 
   const settings = await loadSiteSettings();
-  return NextResponse.json({ settings });
+  return NextResponse.json({ settings, dbEnabled: isDatabaseEnabled() });
 }
 
 export async function PUT(request: Request) {

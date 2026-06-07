@@ -5,7 +5,6 @@ import { getCurrentAdminSession } from "@/lib/auth";
 import { getPublishedKbs } from "@/lib/kb-store";
 import { loadSiteSettings } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { DEFAULT_SITE_SETTINGS } from "@/lib/site-settings";
 import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
 import type { KnowledgeBase } from "@/lib/types";
 import type { CSSProperties } from "react";
@@ -45,17 +44,26 @@ async function getHomeKbs(): Promise<HomeKb[]> {
 
 export default async function HomePage() {
   const [settings, kbs] = await Promise.all([loadSiteSettings(), getHomeKbs()]);
-  const homeTitle = settings.homeTitle || DEFAULT_SITE_SETTINGS.homeTitle;
 
-  const themeVars = themeToCssVars(settings.globalTheme || DEFAULT_THEME) as CSSProperties;
+  const themeVars: CSSProperties = {
+    ...(themeToCssVars(settings.globalTheme || DEFAULT_THEME) as CSSProperties),
+    ...(settings.contentWidth ? { "--content-width": `${settings.contentWidth}px` } : {}),
+  };
+
+  const heroAlignClass =
+    settings.heroAlignment === "center"
+      ? " is-center"
+      : settings.heroAlignment === "right"
+        ? " is-right"
+        : "";
 
   return (
     <div className="kb-theme-root" style={themeVars}>
-      <section className="hero">
+      <section className={`hero${heroAlignClass}`}>
         <div className="site-header__inner">
           <div>
             {settings.homeEyebrow && <p className="eyebrow">{settings.homeEyebrow}</p>}
-            <h1>{homeTitle}</h1>
+            {settings.homeTitle && <h1>{settings.homeTitle}</h1>}
             {settings.homeIntro && <p className="lead">{settings.homeIntro}</p>}
           </div>
         </div>

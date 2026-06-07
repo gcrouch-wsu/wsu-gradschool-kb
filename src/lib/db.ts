@@ -235,6 +235,12 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     home_blocks: any;
     show_kb_list: boolean;
     kb_list_title: string;
+    brand_text?: string;
+    logo_url?: string;
+    logo_width?: number;
+    header_alignment?: string;
+    hero_alignment?: string;
+    content_width?: number;
   }>;
   const row = rows[0];
   if (!row) {
@@ -252,6 +258,12 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     homeBlocks: row.home_blocks,
     showKbList: row.show_kb_list,
     kbListTitle: row.kb_list_title,
+    brandText: row.brand_text,
+    logoUrl: row.logo_url,
+    logoWidth: row.logo_width,
+    headerAlignment: row.header_alignment,
+    heroAlignment: row.hero_alignment,
+    contentWidth: row.content_width,
   });
 }
 
@@ -263,6 +275,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       id, home_eyebrow, home_title, home_intro,
       header_links, footer_text, footer_links, contact_info,
       global_theme, home_blocks, show_kb_list, kb_list_title,
+      brand_text, logo_url, logo_width, header_alignment, hero_alignment, content_width,
       updated_at
     )
     VALUES (
@@ -270,6 +283,8 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       ${JSON.stringify(settings.headerLinks)}, ${settings.footerText}, ${JSON.stringify(settings.footerLinks)}, ${settings.contactInfo},
       ${settings.globalTheme ? JSON.stringify(settings.globalTheme) : null},
       ${JSON.stringify(settings.homeBlocks)}, ${settings.showKbList}, ${settings.kbListTitle},
+      ${settings.brandText}, ${settings.logoUrl}, ${settings.logoWidth},
+      ${settings.headerAlignment}, ${settings.heroAlignment}, ${settings.contentWidth},
       now()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -284,6 +299,12 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       home_blocks = EXCLUDED.home_blocks,
       show_kb_list = EXCLUDED.show_kb_list,
       kb_list_title = EXCLUDED.kb_list_title,
+      brand_text = EXCLUDED.brand_text,
+      logo_url = EXCLUDED.logo_url,
+      logo_width = EXCLUDED.logo_width,
+      header_alignment = EXCLUDED.header_alignment,
+      hero_alignment = EXCLUDED.hero_alignment,
+      content_width = EXCLUDED.content_width,
       updated_at = now()
   `;
 }

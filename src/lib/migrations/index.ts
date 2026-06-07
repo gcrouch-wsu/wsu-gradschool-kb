@@ -542,6 +542,17 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title TEXT NOT NULL DEFAULT 'Published knowledge bases'`;
     },
   },
+  {
+    id: "022_site_branding_layout",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS brand_text TEXT NOT NULL DEFAULT 'WSU Knowledge Base'`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS logo_width INTEGER NOT NULL DEFAULT 0`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS header_alignment TEXT NOT NULL DEFAULT 'left'`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS hero_alignment TEXT NOT NULL DEFAULT 'left'`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS content_width INTEGER NOT NULL DEFAULT 0`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {
