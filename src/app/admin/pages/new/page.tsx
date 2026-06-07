@@ -51,8 +51,8 @@ export default function NewPageScreen() {
       if (!res.ok) throw new Error(data.message || "Failed to create page");
 
       router.push(`/admin/pages/${data.pageId}`);
-    } catch {
-      setError(err instanceof Error ? err.message : "Action failed");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Action failed");
     } finally {
       setBusy(false);
     }
