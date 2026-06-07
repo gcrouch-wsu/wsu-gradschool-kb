@@ -1,0 +1,213 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { KnowledgeBase } from "@/lib/types";
+import Link from "next/link";
+
+export default function AdminKbsPage() {
+  const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<Partial<KnowledgeBase>>({});
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+
+      const res = await fetch("/api/admin/kbs");
+      if (!res.ok) throw new Error("Failed to load KBs");
+      const data = await res.json();
+      setKbs(data.kbs);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error loading KBs");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/admin/kbs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle, description: newDescription, slug: newSlug, status: "draft" }),
+      });
+      if (!res.ok) throw new Error("Failed to create KB");
+
+      await loadData();
+      setIsCreating(false);
+      setNewTitle("");
+      setNewDescription("");
+      setNewSlug("");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error creating KB");
+    }
+  }
+
+  async function handleUpdate(kbId: string) {
+    try {
+      const res = await fetch(`/api/admin/kbs/${kbId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editData),
+      });
+      if (!res.ok) throw new Error("Failed to update KB");
+
+      await loadData();
+      setEditingId(null);
+      setEditData({});
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error updating KB");
+    }
+  }
+
+  async function handleDelete(kbId: string, title: string) {
+    const confirmation = prompt(`Are you sure you want to delete "${title}"? This cannot be undone. All pages and assets within this KB will be permanently removed. To confirm, type "DELETE" below.`);
+    if (confirmation !== "DELETE") return;
+
+    try {
+      const res = await fetch(`/api/admin/kbs/${kbId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to delete KB");
+      }
+      await loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error deleting KB");
+    }
+  }
+
+  if (loading) return <div className="page-shell"><p>Loading knowledge bases...</p></div>;
+  if (error) return <div className="page-shell"><p className="alert alert--error">{error}</p></div>;
+
+  return (
+    <div className="page-shell">
+      <p className="meta">
+        <Link href="/admin">← Back to admin</Link>
+      </p>
+      <div className="admin-actions">
+        <h1>Knowledge Base Management</h1>
+        <button className="button" onClick={() => setIsCreating(!isCreating)}>
+          {isCreating ? "Cancel" : "Create KB"}
+        </button>
+      </div>
+
+      {isCreating && (
+        <form className="form card" onSubmit={handleCreate} style={{ marginBottom: "2rem" }}>
+          <h2>New Knowledge Base</h2>
+          <label>
+            <span className="meta">Title</span>
+            <input className="input" required value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+          </label>
+          <label>
+            <span className="meta">URL Slug (optional)</span>
+            <input className="input" value={newSlug} onChange={e => setNewSlug(e.target.value)} placeholder="e.g. graduate-school" />
+          </label>
+          <label>
+            <span className="meta">Description</span>
+            <textarea className="input" rows={3} value={newDescription} onChange={e => setNewDescription(e.target.value)} />
+          </label>
+          <button className="button" type="submit">Create KB</button>
+        </form>
+      )}
+
+      <div className="table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Title & Slug</th>
+              <th>Status</th>
+              <th>Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {kbs.map(kb => {
+              const isEditing = editingId === kb.id;
+              return (
+                <tr key={kb.id}>
+                  <td>
+                    {isEditing ? (
+                      <div style={{ display: "grid", gap: "0.5rem" }}>
+                        <input 
+                          className="input" 
+                          value={editData.title ?? kb.title} 
+                          onChange={e => setEditData({...editData, title: e.target.value})} 
+                        />
+                        <input 
+                          className="input" 
+                          value={editData.slug ?? kb.slug} 
+                          onChange={e => setEditData({...editData, slug: e.target.value})} 
+                        />
+                        <textarea 
+                          className="input" 
+                          value={editData.description ?? kb.description} 
+                          onChange={e => setEditData({...editData, description: e.target.value})} 
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <strong>{kb.title}</strong>
+                        <div className="meta">/{kb.slug}</div>
+                        <div className="meta" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>{kb.description}</div>
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    {isEditing ? (
+                      <select 
+                        className="input" 
+                        value={editData.status ?? kb.status}
+                        onChange={e => setEditData({...editData, status: e.target.value as any})}
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                      </select>
+                    ) : (
+                      <span className={`badge ${kb.status === 'published' ? 'badge--section' : 'badge--draft'}`}>
+                        {kb.status}
+                      </span>
+                    )}
+                  </td>
+                  <td>{kb.updatedOn}</td>
+                  <td>
+                    {isEditing ? (
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button className="button button--small" onClick={() => handleUpdate(kb.id)}>Save</button>
+                        <button className="button button--small button--ghost" onClick={() => { setEditingId(null); setEditData({}); }}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button className="button button--small button--ghost" onClick={() => { setEditingId(kb.id); setEditData({}); }}>Edit</button>
+                        <Link className="button button--small button--ghost" href={`/admin/pages?kb=${kb.id}`}>Pages</Link>
+                        <Link className="button button--small button--ghost" href={`/admin/kbs/${kb.id}/styles`}>Styles</Link>
+                        <button 
+                          className="button button--small button--ghost" 
+                          style={{ color: "var(--wsu-crimson)" }} 
+                          onClick={() => handleDelete(kb.id, kb.title)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

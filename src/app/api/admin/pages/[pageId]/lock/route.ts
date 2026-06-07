@@ -1,0 +1,63 @@
+import { NextResponse } from "next/server";
+import { tryAcquirePageLock, releasePageLock, isDatabaseEnabled } from "@/lib/db";
+import { getPageByIdForAdmin } from "@/lib/kb-store";
+import { logError } from "@/lib/log";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ pageId: string }> }
+) {
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) return guard.response;
+
+  if (!isDatabaseEnabled()) {
+    return NextResponse.json({ ok: true, message: "In-memory locks not supported." });
+  }
+
+  const { pageId } = await context.params;
+  const userEmail = guard.session.email;
+
+  const lockPage = await getPageByIdForAdmin(pageId);
+  const denied = await requireKbAccess(guard.session, lockPage?.kbId);
+  if (denied) {
+    return denied;
+  }
+
+  try {
+    const ok = await tryAcquirePageLock(pageId, userEmail);
+    if (!ok) {
+      return NextResponse.json(
+        { message: "This page is currently being edited by another user." },
+        { status: 409 } 
+      );
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]/lock", action: "acquire_page_lock", pageId });
+    return NextResponse.json({ message: "Failed to acquire lock." }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ pageId: string }> }
+) {
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) return guard.response;
+
+  if (!isDatabaseEnabled()) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const { pageId } = await context.params;
+
+  try {
+    await releasePageLock(pageId, guard.session.email);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    logError(error, { route: "/api/admin/pages/[pageId]/lock", action: "release_page_lock", pageId });
+    return NextResponse.json({ message: "Failed to release lock." }, { status: 500 });
+  }
+}

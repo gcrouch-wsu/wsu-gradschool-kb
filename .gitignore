@@ -1,0 +1,20 @@
+.next/
+node_modules/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env*.local
+*.tsbuildinfo
+vercel.json.local
+.next-dev.log
+
+# Internal planning / source content (not part of the deployable app)
+.claude/
+*.doc
+*.doc.docx
+
+.vercel
+.env*
