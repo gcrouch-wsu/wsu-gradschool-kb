@@ -20,6 +20,7 @@ import {
   updateAssetRecord,
   updatePages,
   updatePageStatusColumn,
+  updatePageLifecycle,
 } from "@/lib/db";
 import { seedDataset } from "@/lib/demo-data";
 import {
@@ -1273,6 +1274,39 @@ export async function updatePageLayout(
   }
 
   await recordPublishedPathRedirects(kbId, pathBefore, changed);
+}
+
+export async function verifyPage(
+  pageId: string,
+  verifier: string,
+): Promise<{ verifiedAt: string; verifiedBy: string; nextReviewDate: string }> {
+  const normalizedId = normalizeRecordId(pageId);
+  const page = await getPageByIdForAdmin(normalizedId);
+  if (!page) {
+    throw new Error("Page not found.");
+  }
+
+  const now = new Date();
+  const nextReview = new Date();
+  nextReview.setMonth(now.getMonth() + 6);
+
+  const verifiedAt = now.toISOString();
+  const verifiedBy = verifier;
+  const nextReviewDate = nextReview.toISOString().split("T")[0];
+
+  if (isDatabaseEnabled()) {
+    await updatePageLifecycle(normalizedId, { verifiedAt, verifiedBy, nextReviewDate });
+  } else {
+    const updated: KbPage = {
+      ...page,
+      verifiedAt,
+      verifiedBy,
+      nextReviewDate,
+    };
+    storeRuntimePage(updated);
+  }
+
+  return { verifiedAt, verifiedBy, nextReviewDate };
 }
 
 function normalizeRedirectPath(path: string) {
