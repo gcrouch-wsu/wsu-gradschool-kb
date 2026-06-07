@@ -8,6 +8,10 @@ export async function GET(request: Request) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) return guard.response;
 
+  if (guard.session.role !== "owner") {
+    return NextResponse.json({ message: "Only owners can view site settings." }, { status: 403 });
+  }
+
   const settings = await loadSiteSettings();
   return NextResponse.json({ settings });
 }

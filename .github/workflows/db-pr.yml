@@ -19,14 +19,17 @@ jobs:
     env:
       HAS_NEON: ${{ secrets.NEON_API_KEY != '' && secrets.NEON_PROJECT_ID != '' }}
     steps:
-      - uses: actions/checkout@v5
+      - if: env.HAS_NEON == 'true'
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
+      - if: env.HAS_NEON == 'true'
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
 
-      - run: npm ci
+      - if: env.HAS_NEON == 'true'
+        run: npm ci
 
       - name: Create ephemeral Neon branch
         id: neon

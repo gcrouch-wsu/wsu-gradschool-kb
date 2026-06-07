@@ -22,7 +22,8 @@ current implementation status.
   visibility pruning.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
-  WCAG-minded UI, automated public-page axe smoke tests in CI, and an **accessible PDF export**.
+  WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over
+  semantic HTML.
 - **Importing**: DOCX staged import with style/image extraction and review.
 
 Test suite: `npm test` (102 in-memory tests) and `npm run test:a11y` (public-page axe smoke
@@ -190,4 +191,5 @@ when `DATABASE_URL` is set.
 
 Public articles use a responsive 3-column layout (navigation · article · sticky "On this page"
 rail) that collapses on tablet/mobile. Tables scroll horizontally on narrow screens. Any article
-can be exported to an **accessible (tagged) PDF** via the browser's print-to-PDF over semantic HTML.
+can be exported via the browser's **print-to-PDF** over semantic, print-styled HTML. (This relies on
+the browser's print engine; it is not a server-side tagged/PDF-UA generator — see `project_spec.md` FB-14.)

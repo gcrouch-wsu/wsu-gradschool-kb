@@ -81,15 +81,20 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 | Site settings | yes | no | no | owner-only |
 | Audit log | yes | yes | no | owner/admin-only |
 
-> ✅ **The matrix is enforced across API routes, list views, and detail/edit pages (FB-11 + FB-15).**
-> Closed in two passes: (1) `requireKbAccess` on the redirects `GET` and staged-import
-> `GET`/`PATCH`/`DELETE` (resolving the import's `kbId` first), plus list-view scoping on the import /
-> redirects / review pages; (2) `canAccessKb(...) → notFound()` guards on the detail/edit server
-> components for pages, assets, and staged imports (`src/app/admin/pages/[pageId]/page.tsx`,
-> `src/app/admin/assets/[assetId]/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`).
-> `GET /api/admin/kbs` returns the editor's assigned KBs (FB-16) so page creation works for editors.
-> When adding a new editor-reachable route or page, apply the same guard — per-KB enforcement only
-> takes real effect with `DATABASE_URL` set (assignments live in Neon).
+> ✅ **The matrix is enforced at the API, list-view, detail-page, and owner-only-page levels.** Closed
+> across several passes (FB-11, FB-15, FB-17, FB-18):
+> - **Editor KB scoping** — `requireKbAccess` on the redirects `GET`, the staged-import collection
+>   `GET` *and* item `GET`/`PATCH`/`DELETE` (resolving `kbId` first); list/detail views scoped via
+>   `accessibleKbIds` / `filterKbsForSession` / `canAccessKb(...) → notFound()`. `GET /api/admin/kbs`
+>   returns the editor's assigned KBs (FB-16) so page creation works.
+> - **Owner-only screens** — `/admin/settings`, `/admin/kbs`, `/admin/users` are guarded by a segment
+>   `layout.tsx` server component that redirects non-owners *before* the client UI loads; their write
+>   APIs were already owner-only, and `GET /api/admin/settings` is now owner-only too.
+>
+> When adding a new editor-reachable route or page, apply the same guard (API: `requireKbAccess`;
+> list: `filterKbsForSession`; detail page: `canAccessKb → notFound`; owner-only segment: a guarding
+> `layout.tsx`). Per-KB enforcement only takes real effect with `DATABASE_URL` set (assignments live in
+> Neon).
 
 ## 4. Tech stack
 
@@ -605,4 +610,28 @@ Items are ordered by recommended priority.
   `admin/pages/new` KB dropdown empty for editors and broke their page-creation workflow (even though
   the role model grants editors page authoring in assigned KBs). The route now returns
   `filterKbsForSession(session, allKbs)` — owners/admins still get all KBs, editors get their assigned
-  set. The owner-only KB/user management screens are unaffected (owners are unrestricted).
+  set. Because this makes the route editor-reachable, the owner-only **`/admin/kbs` management screen**
+  is now guarded server-side by a segment `layout.tsx` (FB-18) so editors are redirected before its
+  create/edit/delete UI renders; the KB write APIs were already owner-only.
+
+### FB-17 — Scope the staged-import collection API
+
+`[AI-AGENT-TASK] id:FB-17  priority:high  area:authz  effort:S  status:done`
+
+- **DONE (2026-06-07):** `GET /api/admin/import/staged` previously returned
+  `listStagedImportsForAdmin(kb)` with no scope check, so any editor could enumerate every KB's staged
+  imports. It now requires `requireKbAccess` when a `kb` query is supplied, and otherwise filters the
+  result by `accessibleKbIds(session)` (`src/app/api/admin/import/staged/route.ts`). Owners/admins are
+  unrestricted.
+
+### FB-18 — Server-guard the owner-only admin screens
+
+`[AI-AGENT-TASK] id:FB-18  priority:med  area:authz-ux  effort:S  status:done`
+
+- **DONE (2026-06-07):** `/admin/settings`, `/admin/kbs`, and `/admin/users` were client pages with no
+  server role guard — they rendered owner-only controls to any signed-in user (writes were API-blocked,
+  but the UI was misleading). Added a segment `layout.tsx` to each folder
+  (`src/app/admin/{settings,kbs,users}/layout.tsx`) that redirects non-owners to `/admin` before the
+  client UI loads. Also closed the matching data leak: `GET /api/admin/settings` is now owner-only
+  (previously any signed-in admin could read site settings; only `PUT` was guarded). README's
+  "accessible (tagged) PDF" wording was corrected to "print-to-PDF" to match §9/FB-14.
