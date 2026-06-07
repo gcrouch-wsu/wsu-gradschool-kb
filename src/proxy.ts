@@ -16,6 +16,7 @@ export function proxy(request: NextRequest) {
     "img-src 'self' data: https://*.public.blob.vercel-storage.com",
     "font-src 'self'",
     "connect-src 'self'",
+    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

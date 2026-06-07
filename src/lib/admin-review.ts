@@ -43,8 +43,12 @@ export interface AdminReviewDashboard {
   stagedImports: Awaited<ReturnType<typeof listStagedImportsForAdmin>>;
 }
 
-export async function getAdminReviewDashboard(): Promise<AdminReviewDashboard> {
-  const kbs = await getAllKbsForAdmin();
+export async function getAdminReviewDashboard(
+  allowedKbIds: string[] | null = null,
+): Promise<AdminReviewDashboard> {
+  const allowed = allowedKbIds === null ? null : new Set(allowedKbIds);
+  const allKbs = await getAllKbsForAdmin();
+  const kbs = allowed === null ? allKbs : allKbs.filter((kb) => allowed.has(kb.id));
   const kbById = new Map(kbs.map((kb) => [kb.id, kb]));
 
   const allPages: KbPage[] = [];
@@ -121,7 +125,8 @@ export async function getAdminReviewDashboard(): Promise<AdminReviewDashboard> {
     }
   }
 
-  const assets = await getAllAssetsForAdmin();
+  const allAssets = await getAllAssetsForAdmin();
+  const assets = allowed === null ? allAssets : allAssets.filter((asset) => allowed.has(asset.homeKbId));
   const unusedAssets: ReviewUnusedAsset[] = [];
   for (const asset of assets) {
     if (asset.status !== "active") {
@@ -139,7 +144,9 @@ export async function getAdminReviewDashboard(): Promise<AdminReviewDashboard> {
     }
   }
 
-  const stagedImports = await listStagedImportsForAdmin();
+  const allStagedImports = await listStagedImportsForAdmin();
+  const stagedImports =
+    allowed === null ? allStagedImports : allStagedImports.filter((row) => allowed.has(row.kbId));
 
   return {
     draftPagesReady,

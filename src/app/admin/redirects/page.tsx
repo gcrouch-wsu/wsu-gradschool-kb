@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminRedirectsManager } from "@/components/AdminRedirectsManager";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { getAllKbsForAdmin, getRedirectsForAdmin } from "@/lib/kb-store";
 
 export default async function AdminRedirectsPage({
@@ -15,7 +15,7 @@ export default async function AdminRedirectsPage({
   }
 
   const { kb: kbFilter } = await searchParams;
-  const kbs = await getAllKbsForAdmin();
+  const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const activeKb = kbs.find((kb) => kb.id === kbFilter) ?? kbs[0];
   const redirects = activeKb ? await getRedirectsForAdmin(activeKb.id) : [];
 

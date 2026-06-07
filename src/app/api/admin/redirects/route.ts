@@ -15,6 +15,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "kbId is required." }, { status: 400 });
   }
 
+  const denied = await requireKbAccess(guard.session, kbId);
+  if (denied) {
+    return denied;
+  }
+
   const redirects = await getRedirectsForAdmin(kbId);
   return NextResponse.json({ ok: true, redirects });
 }

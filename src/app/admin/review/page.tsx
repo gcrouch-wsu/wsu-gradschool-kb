@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
 import { getAdminReviewDashboard } from "@/lib/admin-review";
 
 export default async function AdminReviewPage() {
@@ -9,7 +9,7 @@ export default async function AdminReviewPage() {
     redirect("/admin/sign-in?next=/admin/review");
   }
 
-  const review = await getAdminReviewDashboard();
+  const review = await getAdminReviewDashboard(await accessibleKbIds(session));
 
   return (
     <div className="page-shell">

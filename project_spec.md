@@ -24,14 +24,17 @@ git, not here.
 **Replace public Confluence with a much better, fully accessible KB app.** Confluence is the baseline
 to beat on every axis — readability, navigation, search, page polish, file handling, and especially
 accessibility. The platform serves multiple public KBs from a single deployment, governed by a small
-editorial team, with accessibility treated as a first-class, non-negotiable requirement (the target
-is WCAG 2.1 AA, enforced by a publish-time gate and automated axe checks — see §5/§7).
+editorial team, with accessibility treated as a first-class, non-negotiable requirement. The target
+is **WCAG 2.1 AA**, enforced today by a publish-time accessibility/governance gate plus automated axe
+**smoke** tests on public routes (see §5/§7). Note the honest status: this is gate + smoke coverage,
+**not yet a full WCAG audit** (§10) — agents should not assume every page is fully certified.
 
 Concretely, the platform must:
 
 1. Provide cleaner, more polished, more navigable public KB front-ends than Confluence.
-2. Be **fully accessible**: semantic markup, keyboard operability, sufficient contrast, alt text, and
-   correct heading/landmark structure — verified, not assumed.
+2. Be **accessible by construction**: semantic markup, keyboard operability, sufficient contrast, alt
+   text, and correct heading/landmark structure — checked at publish time and by axe smoke tests
+   (full WCAG audit coverage is still a goal, not a completed state).
 3. Serve multiple public KBs from one deployment.
 4. Treat images/documents/video as first-class **managed assets**, not loose attachments.
 5. Replace an asset's file without breaking its public link.
@@ -45,7 +48,7 @@ Concretely, the platform must:
 assets with versioning and stable URLs; Postgres full-text search; Owner/Admin/Editor auth with
 per-KB scoping; per-KB theming and owner-level site settings; DOCX staged import; automatic
 redirects; DB-backed edit locks; a publish-time accessibility/governance gate; an audit log; and
-accessible PDF export.
+print-to-PDF export (browser print over semantic HTML — see §9 for the exact mechanism).
 
 **Out of scope (intentionally, for now):** an approval/review *workflow* (editors publish directly,
 gated by the publish checks); a per-KB "manager" role tier; a public account system (the public is
@@ -62,8 +65,28 @@ with locks, not CRDTs).
 - **Editor** — scoped to assigned KBs only (`kb_user_assignments`).
 
 Role checks: `requireAdminMutation` (valid session + same-origin request) plus per-route role/scope
-checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsForSession` in
-`src/lib/auth.ts`, applied to **both** mutations (`requireKbAccess`) and admin list views.
+checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsForSession` /
+`requireKbAccess` in `src/lib/auth.ts` + `src/lib/security.ts`.
+
+**Intended authorization matrix** (Owner/Admin are KB-wide; Editor is limited to assigned KBs):
+
+| Area | Owner | Admin | Editor | Scope mechanism |
+|------|-------|-------|--------|-----------------|
+| Pages list/edit/publish | all | all | assigned | `filterKbsForSession` + `requireKbAccess` |
+| Assets list/edit | all | all | assigned | `filterKbsForSession` + `requireKbAccess` |
+| Imports (list/detail/edit/delete) | all | all | assigned | `requireKbAccess` |
+| Redirects (read/create/delete) | all | all | assigned | `requireKbAccess` |
+| Review dashboard | all | all | assigned | `filterKbsForSession` |
+| Users / KB management | yes | no | no | owner-only |
+| Site settings | yes | no | no | owner-only |
+| Audit log | yes | yes | no | owner/admin-only |
+
+> ✅ **The matrix is now enforced across these paths (FB-11 implemented).** The previously-unscoped
+> editor-reachable paths were closed: the redirects `GET` and staged-import `GET`/`PATCH`/`DELETE`
+> now call `requireKbAccess` (resolving the import's `kbId` first), and the import / redirects /
+> review admin list pages now filter to the editor's assigned KBs via `accessibleKbIds` /
+> `filterKbsForSession`. When adding a new editor-reachable route, apply the same guard — per-KB
+> enforcement only takes real effect with `DATABASE_URL` set (assignments live in Neon).
 
 ## 4. Tech stack
 
@@ -90,8 +113,10 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 - **Serialization** (`src/lib/page-document.ts`): `blocksToDocumentHtml` (blocks → editor HTML) and
   `documentHtmlToBlocks` (editor HTML → blocks). Inline rich text is sanitized by
   `src/lib/rich-text.ts` (allowlist *rebuild* — the input is parsed and re-emitted from an allowlist
-  of inline tags, dropping every attribute except a validated `href`). The public renderer uses the
-  same sanitizer.
+  of inline tags, dropping disallowed attributes). It is not "href-only": anchors keep a validated
+  `href` plus an optional `target="_blank"` with a forced `rel="noopener noreferrer"`, and spans keep
+  a re-validated inline `style` limited to font-family/size/color. The public renderer uses the same
+  sanitizer.
 
 ### Editor (`src/components/PageDocumentEditor.tsx`)
 - The editor groups blocks into **sections**; a run of inline blocks renders as one
@@ -127,7 +152,9 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
   page references them. Editors can archive but not permanently delete.
 - **Video** assets are external links with dedicated columns (`video_provider`, `video_external_id`,
   `video_url`); the file route 307-redirects to the canonical URL (`videoDeliveryUrl` in
-  `src/lib/video.ts`) rather than streaming bytes.
+  `src/lib/video.ts`) rather than streaming bytes. The *public page* `video` block renders a
+  YouTube/Vimeo `<iframe>` embed (`src/components/PageBlocks.tsx`); the CSP `frame-src` explicitly
+  allows `youtube.com` / `youtube-nocookie.com` / `player.vimeo.com` so these embeds load (FB-12).
 - Image **alt text** has its own `alt_text` column (separate from the human `description`); the media
   picker pre-fills inserted library images from it. Visible captions are stored separately from alt.
 
@@ -239,6 +266,13 @@ in-memory run never sees a database.
 - **CSP is per-request in `src/proxy.ts`, not `next.config.ts`** — Next emits inline bootstrap
   scripts that need a per-request nonce + `strict-dynamic`. Don't move CSP to static headers, and
   don't add inline `<script>` without the nonce.
+- **CSP `frame-src` must list every embeddable video host.** Public video blocks render YouTube/Vimeo
+  `<iframe>`s; the CSP in `src/proxy.ts` allowlists those hosts. If you add a provider in
+  `src/components/PageBlocks.tsx` (or `src/lib/video.ts`), add its host to `frame-src` too, or the
+  embed silently fails to load. Do **not** add hosts to `script-src`.
+- **Apply `requireKbAccess` / `accessibleKbIds` on every new editor-reachable route.** Scoping is
+  enforced everywhere today (see §3 matrix), but it is per-route, not global middleware — a new admin
+  API or page is unscoped until you add the guard. Per-KB enforcement is real only with `DATABASE_URL`.
 - **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
 
 ---
@@ -250,15 +284,23 @@ in-memory run never sees a database.
 - Block editor (rich text, alignment, links, media picker, cards, tables, video, info boxes,
   procedure sections, selected-text notes, cursor-position note pins, separate captions/alt text,
   continued numbering controls).
-- Managed assets with stable links + versions; managed video model; per-image alt text.
+- Managed assets with stable links + versions; managed video model + public YouTube/Vimeo embeds
+  (CSP `frame-src` allowlisted); per-image alt text.
 - Postgres FTS with staff-visibility prune and punctuation safety.
-- Auth (HMAC cookies), Owner/Admin/Editor roles, per-KB editor scoping on mutations **and** list
-  views; owner-only user management with a search+chips KB-assignment picker.
+- Auth (HMAC cookies), Owner/Admin/Editor roles; per-KB editor scoping enforced on all editor-reachable
+  list views and mutations (pages, assets, imports, redirects, review); owner-only user management.
 - Per-KB theming ("Manage Styles"); owner Site Settings (hero + header/footer/contact).
 - DOCX staged import; auto-redirects.
-- Edit locks with atomic multi-row writes; accessible PDF export; publishing gate.
+- Edit locks with atomic multi-row writes; print-to-PDF export; publishing gate.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
 - CI (type-check + unit + build + public axe smoke always; live-DB when the secret is configured).
+
+**Built but with known caveats (verify before relying on):**
+- **"Accessible PDF"**: this is the browser's *print-to-PDF* over semantic HTML (`PrintPdfButton` +
+  print CSS), which yields a clean, structured print — **not** a server-side tagged-PDF generator (FB-14).
+- **Accessibility**: enforced by the publish gate + axe **smoke** tests, not a full WCAG 2.1 AA audit.
+- **Asset version replacement** is multi-statement, not transactional; the single-active-version rule
+  is app-enforced, not a DB constraint (FB-13).
 
 **Thin / partial:**
 - KB management: create/edit + theming exist; **templates and advanced per-KB settings** are thin.
@@ -270,12 +312,16 @@ in-memory run never sees a database.
 
 ## 10. Known limitations
 
+- **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Public table
+  cells also lack `scope` attributes today.
 - No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
 - The contenteditable editor is custom; complex selection edge cases may still surface and should be
   verified in a real browser after editor changes.
 - Rate limiting exists for login/search but is **per-instance in-memory**, so it is advisory on
   serverless rather than a hard control (§12 FB-02).
 - Bootstrap-owner sessions can't be revoked before their 8h expiry (§12 FB-04).
+- Asset version replacement is multi-statement, not a single transaction, and the single-active-version
+  rule is enforced in app code only (no DB constraint) — §12 FB-13.
 
 ---
 
@@ -356,22 +402,22 @@ Items are ordered by recommended priority.
 - **Acceptance:** two simulated instances share one counter; login lockout holds across them; existing
   unit tests still pass against the in-memory fallback.
 
-### FB-03 — Harden managed-document delivery against in-origin HTML execution
+### FB-03 — Stop serving uploaded SVG inline, same-origin
 
 `[AI-AGENT-TASK] id:FB-03  priority:high  area:security  effort:S  status:open`
 
-- **Finding:** the asset route (`src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`) serves bodies with
-  `Content-Disposition: inline` and echoes the stored, uploader-supplied `mime_type` into `Content-Type`.
-  `X-Content-Type-Options: nosniff` and the per-request CSP mitigate the obvious script case, but serving
-  arbitrary uploaded bytes **inline, same-origin** is a classic stored-XSS surface (e.g. an SVG or
-  `text/html` upload).
-- **Why it matters:** editors are semi-trusted, and same-origin HTML/SVG can carry script or phishing
-  chrome that rides the user's session origin.
-- **Suggested approach:** (a) validate/normalize `mime_type` on upload against an allowlist; (b) serve
-  anything outside a small inline-safe set (`application/pdf`, raster images) as
-  `Content-Disposition: attachment`; (c) reject `image/svg+xml` or serve it as attachment.
-- **Touch points:** file route, `src/components/AdminAssetUploadForm.tsx` + the asset upload API, `src/lib/asset-lifecycle.ts`.
-- **Acceptance:** an uploaded `text/html`/SVG asset downloads rather than renders; PDFs/images still preview inline.
+- **Finding:** upload allowlists already reject `text/html` and arbitrary types
+  (`src/lib/blob.ts:3-17`), so the broad "any HTML upload" risk does **not** apply. The remaining hole
+  is specific: `image/svg+xml` **is** an allowed image type (`src/lib/blob.ts:9`), and the asset route
+  (`src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`) serves bodies `Content-Disposition: inline` with
+  the stored MIME. An SVG can carry script, so an inline same-origin SVG is a stored-XSS surface
+  (`nosniff` + CSP reduce but do not eliminate it).
+- **Why it matters:** editors are semi-trusted; a same-origin SVG rides the viewer's session origin.
+- **Suggested approach:** either drop `image/svg+xml` from the image allowlist, or serve SVG (and any
+  non-`application/pdf`/non-raster type) with `Content-Disposition: attachment`. Optionally sanitize
+  SVG on upload.
+- **Touch points:** `src/lib/blob.ts`, the file delivery route, asset upload APIs (`src/app/api/admin/assets/images/route.ts`).
+- **Acceptance:** an uploaded SVG downloads rather than renders inline; PDFs/raster images still preview inline.
 
 ### FB-04 — Make bootstrap-owner sessions revocable on credential rotation
 
@@ -401,19 +447,16 @@ Items are ordered by recommended priority.
 - **Touch points:** `package.json`, new ESLint config, `src/lib/*` catch sites, CI workflow.
 - **Acceptance:** `npm run lint` passes in CI; previously-silent error paths emit structured logs.
 
-### FB-06 — Fix the stale FTS docstring and confirm weight tuning
+### FB-06 — Stale FTS docstring (RESOLVED) / monitor search weights
 
-`[AI-AGENT-TASK] id:FB-06  priority:low  area:search  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-06  priority:low  area:search  effort:S  status:done`
 
-- **Finding:** the `tsvector` triggers do keep both tables fresh (`tsvectorupdate` /
-  `tsvectorupdate_assets`), so search maintenance is sound — but the `searchKb` docstring
-  (`src/lib/kb-store.ts:704`) still says *"Until Postgres FTS + aliases land,"* which is no longer true
-  and will mislead future agents.
-- **Why it matters:** a wrong comment in the search entrypoint causes mis-modeling of the system.
-- **Suggested approach:** correct the docstring to describe the shipped FTS. Separately, monitor and tune
-  the `setweight` weights (A=title, B=summary/description, C=body) as content grows.
-- **Touch points:** `src/lib/kb-store.ts`, optionally `src/lib/migrations/index.ts`.
-- **Acceptance:** the docstring reflects the shipped FTS; no behavior change required.
+- **Resolved:** this item originally flagged a misleading `searchKb` docstring. That docstring no
+  longer exists — it was removed in the repo-wide comment strip (the source tree is now comment-free,
+  §intro). The `tsvector` triggers keep both tables fresh, so search maintenance is sound.
+- **Remaining (optional, low priority):** monitor and tune the `setweight` weights (A=title,
+  B=summary/description, C=body) in `src/lib/migrations/index.ts` as content volume grows. No code
+  change is required today; kept here as a watch-item.
 
 ### FB-07 — Add a Permissions-Policy header
 
@@ -427,10 +470,12 @@ Items are ordered by recommended priority.
 
 ### FB-08 — Per-PR ephemeral DB tests and broader gated coverage
 
-`[AI-AGENT-TASK] id:FB-08  priority:low  area:ci  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-08  priority:med  area:ci  effort:M  status:open`
 
-- **Finding:** the live-DB suite runs only against one shared `DATABASE_URL` secret. The publish gate,
-  import-commit, and redirect-creation paths have limited integration coverage.
+- **Finding:** the live-DB suite self-skips locally and only runs in CI when a single shared
+  `DATABASE_URL` secret is set, so DB-backed behavior (locks, FTS, scoping) often isn't exercised on a
+  given PR. The publish gate, import-commit, and redirect-creation paths have limited integration
+  coverage. (Medium, not low: this is the safety net for the authz/data-integrity fixes in FB-11/FB-13.)
 - **Suggested approach:** create an ephemeral Neon branch per PR (Neon GitHub integration) and point
   `test:db` at it; add integration cases for the publish gate, DOCX import commit, and redirect creation.
 - **Touch points:** `.github/workflows/ci.yml`, `src/lib/ki1.db.test.ts`.
@@ -447,7 +492,10 @@ Items are ordered by recommended priority.
   so the `ContentBlock` model and sanitizer stay the source of truth. Add the positioned margin/comment
   rail, comment threads, and resolve as a follow-on.
 - **Touch points:** `src/components/PageDocumentEditor.tsx`, `src/lib/page-document.ts`, `src/lib/page-editor-format.ts`.
-- **Acceptance:** selection/caret edge cases are eliminated in a real browser; block round-trip is unchanged.
+- **Acceptance:** (1) the existing `page-document.test.ts` round-trip suite passes unchanged against
+  the new surface; (2) a documented manual checklist of selection/caret cases (multi-block select,
+  paste-with-formatting, list Tab/Shift-Tab nesting, note insert at boundary, undo after format) passes
+  in Chrome + Firefox; (3) no regression in the publish gate or sanitizer output for identical input.
 
 ### FB-10 — Public reading-experience polish
 
@@ -457,3 +505,66 @@ Items are ordered by recommended priority.
   home search/filter + pagination as KB count grows; **card title H2/H3 level selector** for outline accuracy.
 - **Touch points:** `src/components/TableOfContents.tsx`, `src/app/page.tsx`, `src/components/PageBlocks.tsx`, card editor.
 - **Acceptance:** each sub-item ships behind its own small PR with an axe smoke check.
+
+---
+
+> Items FB-11–FB-14 were added after an independent code review (Codex, 2026-06-07) cross-checked the
+> spec against the source. They are verified against current code (file:line cited).
+
+### FB-11 — Close the editor KB-scoping gaps (authorization)
+
+`[AI-AGENT-TASK] id:FB-11  priority:high  area:authz  effort:M  status:done`
+
+- **DONE (2026-06-07):** the cross-tenant gaps are closed. `requireKbAccess` was added to the redirects
+  `GET` (`src/app/api/admin/redirects/route.ts`) and the staged-import `GET`/`PATCH`/`DELETE`
+  (`src/app/api/admin/import/staged/[stagedImportId]/route.ts`, resolving the import's `kbId` first via
+  `getStagedImportDetail`). The import / redirects / review admin pages now filter to the editor's
+  assigned KBs (`accessibleKbIds` / `filterKbsForSession`), and `getAdminReviewDashboard` accepts an
+  `allowedKbIds` argument that scopes its pages, assets, and staged imports
+  (`src/lib/admin-review.ts`).
+- **Follow-up (rolls into FB-08):** add live-DB regression tests asserting an editor assigned to KB A is
+  denied on KB B for each path. Editor scoping is only exercised with `DATABASE_URL` set, so this needs
+  the gated suite (`src/lib/ki1.db.test.ts`), not the in-memory run.
+
+### FB-12 — Allow video embeds under CSP (`frame-src`)
+
+`[AI-AGENT-TASK] id:FB-12  priority:high  area:security-csp  effort:S  status:done`
+
+- **DONE (2026-06-07):** `src/proxy.ts` now sets
+  `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com`,
+  so the public YouTube/Vimeo `<iframe>` embeds load while `script-src` is unchanged. Covered by
+  `src/proxy.test.ts` (asserts the video hosts are in `frame-src`, absent from `script-src`, and the
+  baseline lockdown directives remain). Add a future provider's host here whenever
+  `src/components/PageBlocks.tsx` gains one.
+
+### FB-13 — Make asset version replacement transactional + enforce single active version in DB
+
+`[AI-AGENT-TASK] id:FB-13  priority:med  area:data-integrity  effort:M  status:open`
+
+- **Finding:** `replaceVersionsForAsset` (`src/lib/db.ts`) deletes all versions then re-inserts them one
+  at a time, **not** in a transaction; a mid-loop failure can corrupt version history and break the
+  stable public link. The "exactly one active version" rule lives in app code
+  (`src/lib/asset-lifecycle.ts`) with no DB constraint, and `loadAssetForDelivery` selects the active
+  version with `LIMIT 1` and no ordering.
+- **Why it matters:** stable, never-broken asset links are a core product promise (§1).
+- **Suggested approach:** wrap version replace/delete in `sql.transaction(...)`; add a partial unique
+  index enforcing one `active` (and at most one open `draft`) version per asset; make the delivery
+  query deterministic.
+- **Touch points:** `src/lib/db.ts`, `src/lib/migrations/index.ts` (new migration), `src/lib/ki1.db.test.ts`.
+- **Acceptance:** a simulated insert failure leaves prior versions intact; the DB rejects a second active version.
+
+### FB-14 — Resolve the "accessible PDF" claim (mechanism or implementation)
+
+`[AI-AGENT-TASK] id:FB-14  priority:med  area:accessibility  effort:M  status:open`
+
+- **Finding:** "accessible PDF export" is implemented as a browser print button + print CSS
+  (`src/components/PrintPdfButton.tsx`, print styles in `src/app/globals.css`), which produces
+  print-to-PDF over semantic HTML — not a guaranteed tagged/accessible PDF. The mission demands a
+  WCAG-grade artifact, so either the mechanism or the claim should be made precise.
+- **Why it matters:** over-claiming accessibility undermines the core differentiator vs Confluence.
+- **Suggested approach:** decide explicitly whether print-to-PDF is acceptable. If yes, document the
+  exact mechanism + the manual verification steps and keep the wording precise (done in §9). If a true
+  tagged PDF is required, implement server-side tagged-PDF generation and define acceptance criteria.
+- **Touch points:** `project_spec.md`, `src/components/PrintPdfButton.tsx`, print CSS, a11y tests/docs.
+- **Acceptance:** the spec states the exact PDF mechanism and its verification criteria, and (if
+  required) a tagged PDF passes a PDF/UA or equivalent check.

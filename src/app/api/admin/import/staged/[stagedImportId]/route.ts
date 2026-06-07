@@ -4,7 +4,7 @@ import {
   getStagedImportDetail,
   updateStagedImport,
 } from "@/lib/staged-imports";
-import { requireAdminMutation } from "@/lib/security";
+import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageVisibility } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -33,6 +33,10 @@ export async function GET(
   if (!detail) {
     return NextResponse.json({ message: "Staged import not found." }, { status: 404 });
   }
+  const denied = await requireKbAccess(guard.session, detail.import.kbId);
+  if (denied) {
+    return denied;
+  }
   return NextResponse.json({ ok: true, ...detail });
 }
 
@@ -46,6 +50,15 @@ export async function PATCH(
   }
 
   const { stagedImportId } = await context.params;
+  const existing = await getStagedImportDetail(stagedImportId);
+  if (!existing) {
+    return NextResponse.json({ message: "Staged import not found." }, { status: 404 });
+  }
+  const denied = await requireKbAccess(guard.session, existing.import.kbId);
+  if (denied) {
+    return denied;
+  }
+
   const body = (await request.json().catch(() => null)) as PatchBody | null;
   if (!body) {
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
@@ -93,6 +106,15 @@ export async function DELETE(
   }
 
   const { stagedImportId } = await context.params;
+  const existing = await getStagedImportDetail(stagedImportId);
+  if (!existing) {
+    return NextResponse.json({ message: "Staged import not found." }, { status: 404 });
+  }
+  const denied = await requireKbAccess(guard.session, existing.import.kbId);
+  if (denied) {
+    return denied;
+  }
+
   try {
     await discardStagedImport(stagedImportId);
     return NextResponse.json({ ok: true });
