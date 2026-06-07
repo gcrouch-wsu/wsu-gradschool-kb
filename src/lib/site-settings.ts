@@ -1,4 +1,5 @@
 import { mergeTheme, type KbTheme } from "./kb-theme";
+import type { ContentBlock } from "./types";
 
 export interface NavLink {
   label: string;
@@ -9,6 +10,9 @@ export interface SiteSettings {
   homeEyebrow: string;
   homeTitle: string;
   homeIntro: string;
+  homeBlocks: ContentBlock[];
+  showKbList: boolean;
+  kbListTitle: string;
   headerLinks: NavLink[];
   footerText: string;
   footerLinks: NavLink[];
@@ -21,6 +25,9 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   homeTitle: "Washington State University knowledge bases",
   homeIntro:
     "A single platform for Washington State University's public knowledge bases. Each knowledge base — including the Graduate School's — has its own home, navigation, search, and stable managed asset links.",
+  homeBlocks: [],
+  showKbList: true,
+  kbListTitle: "Published knowledge bases",
   headerLinks: [],
   footerText: "© Washington State University Graduate School",
   footerLinks: [
@@ -73,5 +80,8 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
     footerLinks: normalizeLinks(input.footerLinks),
     contactInfo: pickText("contactInfo", DEFAULT_SITE_SETTINGS.contactInfo),
     globalTheme: input.globalTheme ? mergeTheme(input.globalTheme) : null,
+    homeBlocks: Array.isArray(input.homeBlocks) ? (input.homeBlocks as ContentBlock[]) : DEFAULT_SITE_SETTINGS.homeBlocks,
+    showKbList: typeof input.showKbList === "boolean" ? input.showKbList : DEFAULT_SITE_SETTINGS.showKbList,
+    kbListTitle: pickText("kbListTitle", DEFAULT_SITE_SETTINGS.kbListTitle),
   };
 }

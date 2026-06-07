@@ -232,6 +232,9 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     footer_links: any;
     contact_info: string;
     global_theme?: any;
+    home_blocks: any;
+    show_kb_list: boolean;
+    kb_list_title: string;
   }>;
   const row = rows[0];
   if (!row) {
@@ -246,6 +249,9 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     footerLinks: row.footer_links,
     contactInfo: row.contact_info,
     globalTheme: row.global_theme,
+    homeBlocks: row.home_blocks,
+    showKbList: row.show_kb_list,
+    kbListTitle: row.kb_list_title,
   });
 }
 
@@ -256,12 +262,14 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
     INSERT INTO site_settings (
       id, home_eyebrow, home_title, home_intro,
       header_links, footer_text, footer_links, contact_info,
-      global_theme, updated_at
+      global_theme, home_blocks, show_kb_list, kb_list_title,
+      updated_at
     )
     VALUES (
       'singleton', ${settings.homeEyebrow}, ${settings.homeTitle}, ${settings.homeIntro},
       ${JSON.stringify(settings.headerLinks)}, ${settings.footerText}, ${JSON.stringify(settings.footerLinks)}, ${settings.contactInfo},
       ${settings.globalTheme ? JSON.stringify(settings.globalTheme) : null},
+      ${JSON.stringify(settings.homeBlocks)}, ${settings.showKbList}, ${settings.kbListTitle},
       now()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -273,6 +281,9 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       footer_links = EXCLUDED.footer_links,
       contact_info = EXCLUDED.contact_info,
       global_theme = EXCLUDED.global_theme,
+      home_blocks = EXCLUDED.home_blocks,
+      show_kb_list = EXCLUDED.show_kb_list,
+      kb_list_title = EXCLUDED.kb_list_title,
       updated_at = now()
   `;
 }

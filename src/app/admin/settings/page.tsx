@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { ThemeEditor } from "@/components/ThemeEditor";
 import { isDatabaseEnabled } from "@/lib/db";
 import { DEFAULT_THEME } from "@/lib/kb-theme";
 import type { NavLink, SiteSettings } from "@/lib/site-settings";
+import type { ContentBlock } from "@/lib/types";
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
@@ -13,7 +15,7 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "styling">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "home" | "styling">("general");
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -23,7 +25,7 @@ export default function AdminSettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  function update(field: keyof SiteSettings, value: string) {
+  function update(field: keyof SiteSettings, value: any) {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
     setSaved(false);
   }
@@ -97,7 +99,13 @@ export default function AdminSettingsPage() {
           className={`tab-button ${activeTab === "general" ? "is-active" : ""}`}
           onClick={() => setActiveTab("general")}
         >
-          General Content
+          General Header/Footer
+        </button>
+        <button
+          className={`tab-button ${activeTab === "home" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("home")}
+        >
+          Home Page Content
         </button>
         <button
           className={`tab-button ${activeTab === "styling" ? "is-active" : ""}`}
@@ -223,6 +231,50 @@ export default function AdminSettingsPage() {
           <div className="admin-actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save general settings"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {settings && activeTab === "home" && (
+        <form className="form" onSubmit={handleSave}>
+          <section className="card" style={{ marginBottom: "2rem" }}>
+            <h2>Home Page Rich Content</h2>
+            <p className="lead">
+              Use the block editor to add custom content below the hero section.
+            </p>
+            <PageDocumentEditor
+              blocks={settings.homeBlocks}
+              kbId="global"
+              kbSlug="global"
+              onChange={(blocks) => update("homeBlocks", blocks)}
+            />
+          </section>
+
+          <section className="card">
+            <h2>Knowledge Base List Section</h2>
+            <p className="meta">Control how the list of published knowledge bases appears.</p>
+            <label className="checkbox-inline" style={{ marginBottom: "1rem" }}>
+              <input
+                type="checkbox"
+                checked={settings.showKbList}
+                onChange={(e) => update("showKbList", e.target.checked)}
+              />
+              <span>Show the list of published knowledge bases</span>
+            </label>
+            <label>
+              <span className="meta">Section Heading</span>
+              <input
+                className="input"
+                value={settings.kbListTitle}
+                onChange={(e) => update("kbListTitle", e.target.value)}
+              />
+            </label>
+          </section>
+
+          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+            <button className="button" type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save home page content"}
             </button>
           </div>
         </form>

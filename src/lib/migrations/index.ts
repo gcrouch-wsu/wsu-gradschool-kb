@@ -534,6 +534,14 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS global_theme JSONB`;
     },
   },
+  {
+    id: "021_site_settings_home_blocks",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS home_blocks JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS show_kb_list BOOLEAN NOT NULL DEFAULT TRUE`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title TEXT NOT NULL DEFAULT 'Published knowledge bases'`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {
