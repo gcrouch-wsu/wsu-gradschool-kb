@@ -94,9 +94,13 @@ function safeLogoUrl(value: unknown): string {
   if (typeof value !== "string") return "";
   const raw = value.trim();
   if (!raw) return "";
-  if (raw.length > 5000) return "";
+  const isDataUrl = /^data:image\//i.test(raw);
+  // Plain URLs/paths stay short; inline base64 data URLs (Blob-less fallback) may be large —
+  // allow up to ~8M chars, which covers the 5 MB upload limit after base64 expansion.
+  const maxLen = isDataUrl ? 8_000_000 : 5000;
+  if (raw.length > maxLen) return "";
   // Allow absolute https/http URLs, root-relative paths, and inline data images only.
-  if (/^https?:\/\//i.test(raw) || raw.startsWith("/") || /^data:image\//i.test(raw)) {
+  if (/^https?:\/\//i.test(raw) || raw.startsWith("/") || isDataUrl) {
     return raw;
   }
   return "";

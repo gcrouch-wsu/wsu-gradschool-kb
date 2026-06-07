@@ -57,23 +57,27 @@ export default async function HomePage() {
         ? " is-right"
         : "";
 
+  const hasHero = Boolean(settings.homeEyebrow || settings.homeTitle || settings.homeIntro);
+
   return (
     <div className="kb-theme-root" style={themeVars}>
-      <section className={`hero${heroAlignClass}`}>
-        <div className="site-header__inner">
-          <div>
-            {settings.homeEyebrow && <p className="eyebrow">{settings.homeEyebrow}</p>}
-            {settings.homeTitle && <h1>{settings.homeTitle}</h1>}
-            {settings.homeIntro && <p className="lead">{settings.homeIntro}</p>}
+      {hasHero && (
+        <section className={`hero${heroAlignClass}`}>
+          <div className="site-header__inner">
+            <div>
+              {settings.homeEyebrow && <p className="eyebrow">{settings.homeEyebrow}</p>}
+              {settings.homeTitle && <h1>{settings.homeTitle}</h1>}
+              {settings.homeIntro && <p className="lead">{settings.homeIntro}</p>}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <div className="page-shell">
         <PageBlocks blocks={settings.homeBlocks} />
 
         {settings.showKbList && (
-          <div style={{ marginTop: "3rem" }}>
+          <div style={settings.homeBlocks.length > 0 ? { marginTop: "3rem" } : undefined}>
             <h2>{settings.kbListTitle}</h2>
             {kbs.length === 0 && (
               <div className="empty">
