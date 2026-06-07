@@ -1,0 +1,52 @@
+name: DB integration (ephemeral Neon)
+
+# Runs the live-DB suite (npm run test:db) against a throwaway Neon branch created
+# per pull request, then deletes it. This supersedes the single shared DATABASE_URL
+# secret used by ci.yml. It is OPT-IN: every step is gated on HAS_NEON, so when the
+# Neon secrets are absent the job is a no-op (all steps skip) and stays green.
+#
+# To activate, add to the repo (Settings -> Secrets and variables -> Actions):
+#   - Secret  NEON_API_KEY      (Neon account API key)
+#   - Secret  NEON_PROJECT_ID   (the Neon project to branch from)
+# Verify the action versions/outputs below match the current Neon GitHub actions.
+
+on:
+  pull_request:
+
+jobs:
+  db-tests:
+    runs-on: ubuntu-latest
+    env:
+      HAS_NEON: ${{ secrets.NEON_API_KEY != '' && secrets.NEON_PROJECT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create ephemeral Neon branch
+        id: neon
+        if: env.HAS_NEON == 'true'
+        uses: neondatabase/create-branch-action@v5
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: ci-pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Live-DB integration tests (KI-1)
+        if: env.HAS_NEON == 'true'
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url_with_pooler }}
+        run: npm run test:db
+
+      - name: Delete ephemeral Neon branch
+        if: ${{ always() && env.HAS_NEON == 'true' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: ci-pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}

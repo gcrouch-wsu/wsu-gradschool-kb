@@ -485,6 +485,27 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS contact_info TEXT NOT NULL DEFAULT ''`;
     },
   },
+  {
+    id: "017_single_active_version",
+    async up(sql) {
+      await sql`
+        UPDATE kb_asset_versions v
+        SET status = 'replaced'
+        WHERE status = 'active'
+          AND EXISTS (
+            SELECT 1 FROM kb_asset_versions newer
+            WHERE newer.asset_id = v.asset_id
+              AND newer.status = 'active'
+              AND newer.version_number > v.version_number
+          )
+      `;
+      await sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_kb_asset_versions_one_active
+        ON kb_asset_versions (asset_id)
+        WHERE status = 'active'
+      `;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

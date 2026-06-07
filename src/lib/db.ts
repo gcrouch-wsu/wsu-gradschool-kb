@@ -499,8 +499,10 @@ export async function deletePage(pageId: string): Promise<void> {
 export async function deleteAsset(assetId: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM kb_asset_versions WHERE asset_id = ${assetId}`;
-  await sql`DELETE FROM kb_assets WHERE id = ${assetId}`;
+  await sql.transaction([
+    sql`DELETE FROM kb_asset_versions WHERE asset_id = ${assetId}`,
+    sql`DELETE FROM kb_assets WHERE id = ${assetId}`,
+  ]);
 }
 
 export async function deleteKb(kbId: string): Promise<void> {
@@ -605,10 +607,22 @@ export async function loadVersionsForAsset(assetId: string): Promise<AssetVersio
 export async function replaceVersionsForAsset(assetId: string, versions: AssetVersion[]): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM kb_asset_versions WHERE asset_id = ${assetId}`;
-  for (const version of versions) {
-    await insertAssetVersion(version);
-  }
+  const queries = [
+    sql`DELETE FROM kb_asset_versions WHERE asset_id = ${assetId}`,
+    ...versions.map(
+      (version) => sql`
+        INSERT INTO kb_asset_versions (
+          id, asset_id, version_number, status, body, mime_type, file_size_bytes,
+          original_filename, width, height, uploaded_at, notes
+        ) VALUES (
+          ${version.id}, ${version.assetId}, ${version.versionNumber}, ${version.status},
+          ${version.body}, ${version.mimeType}, ${version.fileSizeBytes}, ${version.originalFilename},
+          ${version.width ?? null}, ${version.height ?? null}, ${version.uploadedAt}, ${version.notes ?? ""}
+        )
+      `,
+    ),
+  ];
+  await sql.transaction(queries);
 }
 
 export async function updateAssetRecord(asset: Asset): Promise<void> {
@@ -653,6 +667,7 @@ export async function loadAssetForDelivery(homeKbId: string, slug: string): Prom
   const versions = (await sql`
     SELECT * FROM kb_asset_versions
     WHERE asset_id = ${asset.id} AND status = 'active'
+    ORDER BY version_number DESC
     LIMIT 1
   `) as unknown as VersionRow[];
   const active = versions[0];

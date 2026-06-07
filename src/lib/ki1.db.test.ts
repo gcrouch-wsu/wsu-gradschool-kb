@@ -9,11 +9,14 @@ import {
 import {
   createManagedAsset,
   getAssetForDelivery,
+  getRedirectsForAdmin,
   searchKb,
   updateAssetAltText,
   updatePageStatus,
+  upsertManualRedirect,
 } from "@/lib/kb-store";
-import { canAccessKb, type AdminSession } from "@/lib/auth";
+import { accessibleKbIds, canAccessKb, filterKbsForSession, type AdminSession } from "@/lib/auth";
+import { getAdminReviewDashboard } from "@/lib/admin-review";
 import { videoDeliveryUrl } from "@/lib/video";
 import { deleteUser, insertUser, replaceUserAssignments } from "@/lib/db-users";
 import type { ContentBlock, KbPage } from "@/lib/types";
@@ -307,6 +310,108 @@ describe.skipIf(!dbEnabled)("KI-1 live-DB integration", () => {
       } finally {
         await deleteUser(editorId);
         await deleteKb(otherKbId);
+      }
+    });
+  });
+
+  describe("admin scoping helpers (FB-11/FB-15)", () => {
+    const editorId = `user-${RUN}-scope`;
+    const editorEmail = `${RUN}-scope@test.edu`;
+    const otherKbId = `kb-${RUN}-scope-other`;
+    const now = new Date().toISOString();
+    const editorSession: AdminSession = {
+      userId: editorId,
+      email: editorEmail,
+      role: "editor",
+      source: "managed",
+      expiresAt: Date.now() + 1_000_000,
+      version: now,
+    };
+
+    beforeAll(async () => {
+      const sql = getSql();
+      await sql`
+        INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
+        VALUES (${otherKbId}, ${otherKbId}, 'Scope Other KB', '', 'published', '2026-01-01')
+      `;
+      await insertUser({
+        id: editorId,
+        email: editorEmail,
+        fullName: "Scope Editor",
+        passwordHash: "salt:hash",
+        role: "editor",
+        createdAt: now,
+        updatedAt: now,
+      });
+      await replaceUserAssignments(editorId, [KB_ID]);
+    });
+
+    afterAll(async () => {
+      await deleteUser(editorId);
+      await deleteKb(otherKbId);
+    });
+
+    it("accessibleKbIds returns the editor's assigned KBs and null for owners", async () => {
+      const allowed = await accessibleKbIds(editorSession);
+      expect(allowed).toContain(KB_ID);
+      expect(allowed).not.toContain(otherKbId);
+      expect(await accessibleKbIds({ ...editorSession, role: "owner" })).toBeNull();
+    });
+
+    it("filterKbsForSession drops KBs the editor is not assigned to", async () => {
+      const filtered = await filterKbsForSession(editorSession, [{ id: KB_ID }, { id: otherKbId }]);
+      expect(filtered.map((kb) => kb.id)).toEqual([KB_ID]);
+    });
+
+    it("getAdminReviewDashboard(allowedKbIds) excludes content from unassigned KBs", async () => {
+      const otherPageId = `page-${RUN}-scope-other`;
+      const sql = getSql();
+      await sql`
+        INSERT INTO kb_pages (id, kb_id, slug, path, sort_order, title, summary, status, visibility, blocks)
+        VALUES (${otherPageId}, ${otherKbId}, 'scope-other', 'scope-other', 0, 'Other KB Draft', '', 'draft', 'public', '[]'::jsonb)
+      `;
+
+      const scoped = await getAdminReviewDashboard([KB_ID]);
+      const scopedIds = [...scoped.draftPagesReady, ...scoped.draftPagesBlocked].map((page) => page.pageId);
+      expect(scopedIds).not.toContain(otherPageId);
+
+      const otherScoped = await getAdminReviewDashboard([otherKbId]);
+      const otherIds = [...otherScoped.draftPagesReady, ...otherScoped.draftPagesBlocked].map((page) => page.pageId);
+      expect(otherIds).toContain(otherPageId);
+    });
+  });
+
+  describe("manual redirects (FB-08)", () => {
+    it("persists and lists a manual redirect for a KB", async () => {
+      const created = await upsertManualRedirect({
+        kbId: KB_ID,
+        fromPath: `legacy/${RUN}`,
+        toPath: `current/${RUN}`,
+      });
+      expect(created.fromPath).toBe(`legacy/${RUN}`);
+
+      const list = await getRedirectsForAdmin(KB_ID);
+      expect(list.some((row) => row.fromPath === `legacy/${RUN}` && row.toPath === `current/${RUN}`)).toBe(true);
+    });
+  });
+
+  describe("asset version invariant (FB-13)", () => {
+    it("rejects a second active version for the same asset at the DB level", async () => {
+      const assetId = `asset-${RUN}-active`;
+      const sql = getSql();
+      const insertActive = (versionId: string, num: number) => sql`
+        INSERT INTO kb_asset_versions (
+          id, asset_id, version_number, status, body, mime_type, file_size_bytes,
+          original_filename, uploaded_at, notes
+        ) VALUES (
+          ${versionId}, ${assetId}, ${num}, 'active', 'data:', 'image/png', 0, 'x', '2026-01-01', ''
+        )
+      `;
+      try {
+        await insertActive(`${assetId}-v1`, 1);
+        await expect(insertActive(`${assetId}-v2`, 2)).rejects.toThrow();
+      } finally {
+        await sql`DELETE FROM kb_asset_versions WHERE asset_id = ${assetId}`;
       }
     });
   });

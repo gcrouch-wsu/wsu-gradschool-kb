@@ -213,7 +213,9 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `016_expanded_site_settings`.**
+  backfills. **Current head: `017_single_active_version`** (adds a partial unique index enforcing one
+  `active` version per asset; the migration first demotes any duplicate actives so it can't fail on
+  existing data).
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`.
 - Seed data: `src/lib/demo-data.ts` (used for both the no-DB in-memory mode and first-run seeding).
@@ -245,6 +247,14 @@ and public-page axe smoke tests against the in-memory seed dataset. It runs `npm
 when a `DATABASE_URL` repo secret is set** (point it at a dedicated Neon **test** branch — the suite
 writes/deletes data). The live-DB step sets `DATABASE_URL` per-step, never job-wide, so the
 in-memory run never sees a database.
+
+**Per-PR live-DB (`.github/workflows/db-pr.yml`):** an opt-in workflow creates a throwaway Neon branch
+per pull request, runs `npm run test:db` against it, and deletes it. Every step is gated on `HAS_NEON`,
+so without the `NEON_API_KEY` + `NEON_PROJECT_ID` secrets the job is a green no-op. When configured it
+supersedes the single shared `DATABASE_URL` secret above. The gated suite (`src/lib/ki1.db.test.ts`)
+covers edit-lock conflicts/rollback/expiry, FTS safety + staff prune, the managed-video model, editor
+KB scoping (`canAccessKb` / `accessibleKbIds` / `filterKbsForSession` / scoped review dashboard),
+manual redirect persistence, and the single-active-version DB invariant.
 
 ---
 
@@ -303,8 +313,6 @@ in-memory run never sees a database.
 - **"Accessible PDF"**: this is the browser's *print-to-PDF* over semantic HTML (`PrintPdfButton` +
   print CSS), which yields a clean, structured print — **not** a server-side tagged-PDF generator (FB-14).
 - **Accessibility**: enforced by the publish gate + axe **smoke** tests, not a full WCAG 2.1 AA audit.
-- **Asset version replacement** is multi-statement, not transactional; the single-active-version rule
-  is app-enforced, not a DB constraint (FB-13).
 
 **Thin / partial:**
 - KB management: create/edit + theming exist; **templates and advanced per-KB settings** are thin.
@@ -324,8 +332,6 @@ in-memory run never sees a database.
 - Rate limiting exists for login/search but is **per-instance in-memory**, so it is advisory on
   serverless rather than a hard control (§12 FB-02).
 - Bootstrap-owner sessions can't be revoked before their 8h expiry (§12 FB-04).
-- Asset version replacement is multi-statement, not a single transaction, and the single-active-version
-  rule is enforced in app code only (no DB constraint) — §12 FB-13.
 
 ---
 
@@ -474,16 +480,19 @@ Items are ordered by recommended priority.
 
 ### FB-08 — Per-PR ephemeral DB tests and broader gated coverage
 
-`[AI-AGENT-TASK] id:FB-08  priority:med  area:ci  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-08  priority:med  area:ci  effort:M  status:done`
 
-- **Finding:** the live-DB suite self-skips locally and only runs in CI when a single shared
-  `DATABASE_URL` secret is set, so DB-backed behavior (locks, FTS, scoping) often isn't exercised on a
-  given PR. The publish gate, import-commit, and redirect-creation paths have limited integration
-  coverage. (Medium, not low: this is the safety net for the authz/data-integrity fixes in FB-11/FB-13.)
-- **Suggested approach:** create an ephemeral Neon branch per PR (Neon GitHub integration) and point
-  `test:db` at it; add integration cases for the publish gate, DOCX import commit, and redirect creation.
-- **Touch points:** `.github/workflows/ci.yml`, `src/lib/ki1.db.test.ts`.
-- **Acceptance:** each PR runs the live-DB suite against an isolated branch that is torn down afterward.
+- **DONE (2026-06-07):** added `.github/workflows/db-pr.yml`, which creates a throwaway Neon branch per
+  pull request, runs `npm run test:db` against it, and deletes it — gated on `HAS_NEON` so it is a green
+  no-op until the `NEON_API_KEY` + `NEON_PROJECT_ID` secrets are configured. Broadened the gated suite
+  (`src/lib/ki1.db.test.ts`) with regression coverage for editor KB scoping
+  (`accessibleKbIds`/`filterKbsForSession`/scoped `getAdminReviewDashboard`), manual redirect
+  persistence, and the single-active-version DB invariant.
+- **To activate:** add the two Neon secrets (instructions are in the workflow header) and confirm the
+  Neon action versions/outputs match. Once active it supersedes the shared `DATABASE_URL` step in
+  `ci.yml`.
+- **Remaining (optional):** add gated cases for the publish gate and DOCX import-commit happy paths
+  (currently covered only by in-memory unit tests).
 
 ### FB-09 — Editor core hardening
 
@@ -543,19 +552,15 @@ Items are ordered by recommended priority.
 
 ### FB-13 — Make asset version replacement transactional + enforce single active version in DB
 
-`[AI-AGENT-TASK] id:FB-13  priority:med  area:data-integrity  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-13  priority:med  area:data-integrity  effort:M  status:done`
 
-- **Finding:** `replaceVersionsForAsset` (`src/lib/db.ts`) deletes all versions then re-inserts them one
-  at a time, **not** in a transaction; a mid-loop failure can corrupt version history and break the
-  stable public link. The "exactly one active version" rule lives in app code
-  (`src/lib/asset-lifecycle.ts`) with no DB constraint, and `loadAssetForDelivery` selects the active
-  version with `LIMIT 1` and no ordering.
-- **Why it matters:** stable, never-broken asset links are a core product promise (§1).
-- **Suggested approach:** wrap version replace/delete in `sql.transaction(...)`; add a partial unique
-  index enforcing one `active` (and at most one open `draft`) version per asset; make the delivery
-  query deterministic.
-- **Touch points:** `src/lib/db.ts`, `src/lib/migrations/index.ts` (new migration), `src/lib/ki1.db.test.ts`.
-- **Acceptance:** a simulated insert failure leaves prior versions intact; the DB rejects a second active version.
+- **DONE (2026-06-07):** `replaceVersionsForAsset` and `deleteAsset` (`src/lib/db.ts`) now run their
+  delete + inserts inside a single `sql.transaction([...])`, so a mid-batch failure rolls back and
+  leaves prior versions intact. Migration `017_single_active_version` adds a partial unique index
+  (`uq_kb_asset_versions_one_active`) enforcing one `active` version per asset (demoting any
+  pre-existing duplicates first so it can't fail on existing data). `loadAssetForDelivery` now orders
+  the active-version lookup by `version_number DESC` for determinism. Covered by a gated test asserting
+  the DB rejects a second active version.
 
 ### FB-14 — Resolve the "accessible PDF" claim (mechanism or implementation)
 
