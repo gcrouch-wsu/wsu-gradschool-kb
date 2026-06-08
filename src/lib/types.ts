@@ -38,6 +38,7 @@ export interface KnowledgeBase {
   description: string;
   status: KbStatus;
   updatedOn: string;
+  homepagePageId?: string | null;
 
   theme?: import("@/lib/kb-theme").KbTheme;
 }

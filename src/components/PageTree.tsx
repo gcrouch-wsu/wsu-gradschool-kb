@@ -4,17 +4,21 @@ import type { PageTreeNode } from "@/lib/types";
 function TreeItems({
   nodes,
   kbSlug,
+  homepagePageId,
+  currentPageId,
   currentPath,
 }: {
   nodes: PageTreeNode[];
   kbSlug: string;
+  homepagePageId?: string | null;
+  currentPageId?: string;
   currentPath?: string;
 }) {
   return (
     <ul>
       {nodes.map((node) => {
-        const href = `/kb/${kbSlug}/${node.page.path.join("/")}`;
-        const isCurrent = currentPath === node.page.path.join("/");
+        const href = node.page.id === homepagePageId ? `/kb/${kbSlug}` : `/kb/${kbSlug}/${node.page.path.join("/")}`;
+        const isCurrent = currentPageId ? currentPageId === node.page.id : currentPath === node.page.path.join("/");
         return (
           <li key={node.page.id}>
             <Link aria-current={isCurrent ? "page" : undefined} href={href}>
@@ -24,7 +28,13 @@ function TreeItems({
               <span className="badge badge--staff"> Staff</span>
             )}
             {node.children.length > 0 && (
-              <TreeItems currentPath={currentPath} kbSlug={kbSlug} nodes={node.children} />
+              <TreeItems
+                currentPageId={currentPageId}
+                currentPath={currentPath}
+                homepagePageId={homepagePageId}
+                kbSlug={kbSlug}
+                nodes={node.children}
+              />
             )}
           </li>
         );
@@ -36,14 +46,26 @@ function TreeItems({
 export function PageTree({
   nodes,
   kbSlug,
+  homepagePageId,
+  currentPageId,
   currentPath,
 }: {
   nodes: PageTreeNode[];
   kbSlug: string;
+  homepagePageId?: string | null;
+  currentPageId?: string;
   currentPath?: string;
 }) {
   if (nodes.length === 0) {
     return <p className="meta">No pages yet.</p>;
   }
-  return <TreeItems currentPath={currentPath} kbSlug={kbSlug} nodes={nodes} />;
+  return (
+    <TreeItems
+      currentPageId={currentPageId}
+      currentPath={currentPath}
+      homepagePageId={homepagePageId}
+      kbSlug={kbSlug}
+      nodes={nodes}
+    />
+  );
 }

@@ -92,6 +92,8 @@ export function AdminPageTreeManager({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [homepageBusyId, setHomepageBusyId] = useState<string | null>(null);
+  const [homepagePageId, setHomepagePageId] = useState<string | null>(kb.homepagePageId ?? null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
@@ -202,6 +204,29 @@ export function AdminPageTreeManager({
     }
   }
 
+  async function setHomepage(pageId: string | null) {
+    setHomepageBusyId(pageId ?? "__clear__");
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/kbs/${kb.id}/homepage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "Could not update knowledge base homepage.");
+      }
+      setHomepagePageId(data.homepagePageId ?? null);
+      setMessage(pageId ? "Knowledge base homepage updated." : "Knowledge base homepage cleared.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update knowledge base homepage.");
+    } finally {
+      setHomepageBusyId(null);
+    }
+  }
+
   async function handleDelete(pageId: string, title: string) {
     const confirmation = prompt(
       `Permanently delete "${title}"? This cannot be undone. Only archived pages with no child pages or references can be deleted. To confirm, type "DELETE" below.`,
@@ -243,6 +268,16 @@ export function AdminPageTreeManager({
         <button className="button" disabled={busy} onClick={saveLayout} type="button">
           {busy ? "Saving..." : "Save page tree"}
         </button>
+        {homepagePageId && (
+          <button
+            className="button button--ghost"
+            disabled={homepageBusyId === "__clear__"}
+            onClick={() => setHomepage(null)}
+            type="button"
+          >
+            {homepageBusyId === "__clear__" ? "Clearing..." : "Use generated KB landing"}
+          </button>
+        )}
         {archivedCount > 0 && (
           <label className="meta" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
             <input
@@ -257,6 +292,7 @@ export function AdminPageTreeManager({
       <ul className="tree-editor" aria-label={`${kb.title} page tree editor`}>
         {displayPages.map((page) => {
           const depth = Math.max(0, page.path.length - 1);
+          const isHomepage = homepagePageId === page.id;
           return (
             <li
               className="tree-editor__item"
@@ -273,6 +309,7 @@ export function AdminPageTreeManager({
                 </span>
                 <div>
                   <strong>{page.title}</strong>
+                  {isHomepage && <span className="badge badge--verified"> Homepage</span>}
                   {page.path.length === 1 && <span className="badge badge--section"> Section</span>}
                   {page.status === "draft" && <span className="badge badge--draft"> Draft</span>}
                   {page.status === "archived" && <span className="badge badge--archived"> Archived</span>}
@@ -284,6 +321,11 @@ export function AdminPageTreeManager({
                     /{page.path.join("/")} · Updated {page.updatedDisplayDate} ·{" "}
                     {page.visibility === "staff" ? "Staff only" : "Public"}
                   </div>
+                  {isHomepage && (page.status !== "published" || page.visibility === "staff") && (
+                    <div className="meta" style={{ marginTop: "0.25rem" }}>
+                      Public visitors will see the generated landing page until this homepage is published and public.
+                    </div>
+                  )}
                 </div>
                 <div className="tree-editor__actions">
                   <button
@@ -298,6 +340,16 @@ export function AdminPageTreeManager({
                   <Link className="button button--small" href={`/admin/pages/${page.id}`}>
                     Edit / save
                   </Link>
+                  {!isHomepage && page.status !== "archived" && (
+                    <button
+                      className="button button--ghost button--small"
+                      disabled={Boolean(homepageBusyId)}
+                      onClick={() => setHomepage(page.id)}
+                      type="button"
+                    >
+                      {homepageBusyId === page.id ? "Setting..." : "Set as homepage"}
+                    </button>
+                  )}
                   {page.status === "archived" ? (
                     <>
                       <button

@@ -18,6 +18,7 @@ import {
   deletePage as deletePageFromDb,
   getSql,
   updateAssetRecord,
+  updateKbHomepagePageId,
   updatePages,
   updatePageStatusColumn,
   updatePageLifecycle,
@@ -50,6 +51,7 @@ const globalForRuntime = globalThis as unknown as {
   __kbRuntimePages?: KbPage[];
   __kbRuntimeVersions?: Map<string, AssetVersion[]>;
   __kbRuntimeRedirects?: KbRedirect[];
+  __kbRuntimeKbHomepages?: Map<string, string | null>;
   __kbDeletedAssetIds?: Set<string>;
   __kbDeletedPageIds?: Set<string>;
 };
@@ -66,6 +68,13 @@ function runtimeRedirects(): KbRedirect[] {
     globalForRuntime.__kbRuntimeRedirects = [];
   }
   return globalForRuntime.__kbRuntimeRedirects;
+}
+
+function runtimeKbHomepages(): Map<string, string | null> {
+  if (!globalForRuntime.__kbRuntimeKbHomepages) {
+    globalForRuntime.__kbRuntimeKbHomepages = new Map();
+  }
+  return globalForRuntime.__kbRuntimeKbHomepages;
 }
 
 async function loadVersions(assetId: string): Promise<AssetVersion[]> {
@@ -129,16 +138,25 @@ function deletedPageIds(): Set<string> {
 function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
   const extraPages = runtimePages();
   const extraAssets = runtimeAssets();
+  const homepageOverrides = runtimeKbHomepages();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
-  if (extraPages.length === 0 && extraAssets.length === 0 && deletedPages.size === 0 && deletedAssets.size === 0) {
+  if (
+    extraPages.length === 0 &&
+    extraAssets.length === 0 &&
+    homepageOverrides.size === 0 &&
+    deletedPages.size === 0 &&
+    deletedAssets.size === 0
+  ) {
     return dbDataset;
   }
   const pageOverrides = new Map(extraPages.map((page) => [page.id, page]));
   const seedPageIds = new Set(dbDataset.pages.map((page) => page.id));
   const seedAssetIds = new Set(dbDataset.assets.map((asset) => asset.id));
   return {
-    knowledgeBases: dbDataset.knowledgeBases,
+    knowledgeBases: dbDataset.knowledgeBases.map((kb) =>
+      homepageOverrides.has(kb.id) ? { ...kb, homepagePageId: homepageOverrides.get(kb.id) ?? null } : kb,
+    ),
     pages: [
       ...dbDataset.pages
         .filter((page) => !deletedPages.has(page.id))
@@ -158,14 +176,23 @@ const getDataset = cache(async (): Promise<KbDataset> => {
   }
   const extra = runtimePages();
   const extraAssets = runtimeAssets();
+  const homepageOverrides = runtimeKbHomepages();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
-  if (extra.length === 0 && extraAssets.length === 0 && deletedPages.size === 0 && deletedAssets.size === 0) {
+  if (
+    extra.length === 0 &&
+    extraAssets.length === 0 &&
+    homepageOverrides.size === 0 &&
+    deletedPages.size === 0 &&
+    deletedAssets.size === 0
+  ) {
     return seedDataset;
   }
   const pageOverrides = new Map(extra.map((page) => [page.id, page]));
   return {
-    knowledgeBases: seedDataset.knowledgeBases,
+    knowledgeBases: seedDataset.knowledgeBases.map((kb) =>
+      homepageOverrides.has(kb.id) ? { ...kb, homepagePageId: homepageOverrides.get(kb.id) ?? null } : kb,
+    ),
     pages: [
       ...seedDataset.pages
         .filter((page) => !deletedPages.has(page.id))
@@ -247,6 +274,48 @@ export async function getKbBySlug(slug: string, includeUnpublished = false): Pro
 export async function getKbById(id: string): Promise<KnowledgeBase | null> {
   const dataset = await getDataset();
   return dataset.knowledgeBases.find((kb) => kb.id === id) ?? null;
+}
+
+export async function getKbHomepagePage(kbId: string, includeStaff: boolean): Promise<KbPage | null> {
+  const dataset = await getDataset();
+  const kb = dataset.knowledgeBases.find((candidate) => candidate.id === kbId);
+  if (!kb?.homepagePageId) {
+    return null;
+  }
+  return visiblePages(dataset, kbId, includeStaff).find((page) => page.id === kb.homepagePageId) ?? null;
+}
+
+export async function setKbHomepagePage(kbId: string, pageId: string | null): Promise<KnowledgeBase> {
+  const normalizedPageId = pageId ? normalizeRecordId(pageId) : null;
+  const dataset = await getDataset();
+  const kb = dataset.knowledgeBases.find((candidate) => candidate.id === kbId);
+  if (!kb) {
+    throw new Error("Knowledge base not found.");
+  }
+
+  if (normalizedPageId) {
+    const page = dataset.pages.find((candidate) => candidate.id === normalizedPageId);
+    if (!page || page.kbId !== kbId) {
+      throw new Error("Homepage page must belong to this knowledge base.");
+    }
+    if (page.status === "archived") {
+      throw new Error("Archived pages cannot be used as a knowledge base homepage.");
+    }
+  }
+
+  const updated: KnowledgeBase = {
+    ...kb,
+    homepagePageId: normalizedPageId,
+    updatedOn: new Date().toISOString().slice(0, 10),
+  };
+
+  if (isDatabaseEnabled()) {
+    await updateKbHomepagePageId(kbId, normalizedPageId);
+  } else {
+    runtimeKbHomepages().set(kbId, normalizedPageId);
+  }
+
+  return updated;
 }
 
 export async function getVisiblePagesForKb(kbId: string, includeStaff: boolean): Promise<KbPage[]> {

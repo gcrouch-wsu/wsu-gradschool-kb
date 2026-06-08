@@ -69,6 +69,9 @@ export default async function KbArticlePage({
   if (!page) {
     notFound();
   }
+  if (kb.homepagePageId === page.id) {
+    permanentRedirect(`/kb/${kb.slug}`);
+  }
 
   const settings = await loadSiteSettings();
   const tree = await buildPageTree(kb.id, isStaff);
@@ -99,7 +102,13 @@ export default async function KbArticlePage({
       <div className={`layout${showTocRail ? " layout--with-toc" : ""}`}>
         <aside className="sidebar page-tree" aria-label="Section navigation">
           <strong>{kb.title}</strong>
-          <PageTree currentPath={currentPath} kbSlug={kb.slug} nodes={tree} />
+          <PageTree
+            currentPageId={page.id}
+            currentPath={currentPath}
+            homepagePageId={kb.homepagePageId}
+            kbSlug={kb.slug}
+            nodes={tree}
+          />
         </aside>
         <article className="article flow">
           <nav aria-label="Breadcrumb" className="breadcrumbs">
@@ -114,6 +123,8 @@ export default async function KbArticlePage({
                   <li key={crumb.id}>
                     {isCurrent ? (
                       <span aria-current="page">{crumb.title}</span>
+                    ) : crumb.id === kb.homepagePageId ? (
+                      <Link href={`/kb/${kb.slug}`}>{crumb.title}</Link>
                     ) : (
                       <Link href={`/kb/${kb.slug}/${crumbPath}`}>{crumb.title}</Link>
                     )}

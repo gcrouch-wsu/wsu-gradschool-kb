@@ -152,6 +152,7 @@ interface KbRow {
   description: string;
   status: string;
   updated_on: string;
+  home_page_id?: string | null;
   theme?: unknown;
 }
 
@@ -211,6 +212,7 @@ function mapKb(row: KbRow): KnowledgeBase {
     description: row.description,
     status: row.status as KnowledgeBase["status"],
     updatedOn: row.updated_on,
+    homepagePageId: row.home_page_id ?? null,
     theme: row.theme ? mergeTheme(row.theme) : undefined,
   };
 }
@@ -341,6 +343,16 @@ export async function updateKbTheme(kbId: string, theme: KbTheme): Promise<void>
   await ensureSchema();
   const sql = getSql();
   await sql`UPDATE knowledge_bases SET theme = ${JSON.stringify(theme)} WHERE id = ${kbId}`;
+}
+
+export async function updateKbHomepagePageId(kbId: string, homepagePageId: string | null): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE knowledge_bases
+    SET home_page_id = ${homepagePageId}, updated_on = ${new Date().toISOString().slice(0, 10)}
+    WHERE id = ${kbId}
+  `;
 }
 
 function mapPage(row: PageRow): KbPage {

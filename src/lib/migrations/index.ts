@@ -571,6 +571,13 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title_font TEXT NOT NULL DEFAULT ''`;
     },
   },
+  {
+    id: "025_kb_homepage_page",
+    async up(sql) {
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS home_page_id TEXT`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_knowledge_bases_home_page ON knowledge_bases(home_page_id)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

@@ -28,6 +28,7 @@ export async function GET(request: Request) {
       description: row.description,
       status: row.status,
       updatedOn: row.updated_on,
+      homepagePageId: row.home_page_id ?? null,
     }));
     const kbs = await filterKbsForSession(guard.session, allKbs);
     return NextResponse.json({ kbs });
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
       description: body.description?.trim() || "",
       status: body.status === "published" ? "published" : "draft",
       updatedOn: new Date().toISOString().slice(0, 10),
+      homepagePageId: null,
     };
 
     await sql`
