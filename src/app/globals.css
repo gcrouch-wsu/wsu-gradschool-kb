@@ -683,10 +683,13 @@ p {
   color: #333;
 }
 
-/* Lists inside any flow container share the indent / item-spacing knobs. */
+/* Lists inside any flow container share the indent / item-spacing knobs.
+   NOTE: do NOT reset margin here — top-level lists are zeroed by `.flow > *`
+   and then re-spaced by the owl/heading rules above. Resetting margin here
+   would have equal specificity and (being later) clobber the heading->list and
+   block->list gaps. Only padding is safe to set on every list. */
 .flow ul,
 .flow ol {
-  margin: 0;
   padding-left: var(--indent-list);
 }
 
@@ -698,8 +701,10 @@ p {
   margin-top: var(--space-list-item);
 }
 
+/* Nested lists: reset UA margins, then add a small gap from their parent item. */
 .flow li > ul,
 .flow li > ol {
+  margin-block: 0;
   margin-top: var(--space-list-item);
 }
 

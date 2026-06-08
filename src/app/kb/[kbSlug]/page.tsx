@@ -54,7 +54,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <strong>Browse {kb.title}</strong>
             <PageTree kbSlug={kb.slug} nodes={tree} />
           </aside>
-          <div>
+          <div className="flow">
             <h2>Sections</h2>
             {topLevel.length === 0 && (
               <p className="empty">No published sections yet. Check back soon.</p>

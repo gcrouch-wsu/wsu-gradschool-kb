@@ -18,3 +18,17 @@ vercel.json.local
 
 .vercel
 .env*
+
+# Image files (screenshots, exports, scratch assets) — managed assets live in
+# Vercel Blob / the DB, not the repo. Force-add (git add -f) if one is ever needed.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.ico
+*.svg
+*.avif
+*.tif
+*.tiff
