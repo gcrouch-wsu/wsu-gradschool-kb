@@ -1045,6 +1045,7 @@ export interface CreatePageInput {
   showToc?: boolean;
   tocDepth?: number;
   showSummary?: boolean;
+  showPrintButton?: boolean;
 }
 
 export async function createPage(input: CreatePageInput): Promise<KbPage> {
@@ -1116,6 +1117,7 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     showToc: input.showToc ?? true,
     tocDepth: input.tocDepth ?? 3,
     showSummary: input.showSummary ?? true,
+    showPrintButton: input.showPrintButton ?? true,
   };
 
   if (isDatabaseEnabled()) {
@@ -1143,6 +1145,7 @@ export interface UpdatePageInput {
   showToc?: boolean;
   tocDepth?: number;
   showSummary?: boolean;
+  showPrintButton?: boolean;
   nextReviewDate?: string | null;
 }
 
@@ -1231,6 +1234,7 @@ export async function updatePage(input: UpdatePageInput, editorEmail?: string): 
           showToc: input.showToc ?? page.showToc,
           tocDepth: input.tocDepth ?? page.tocDepth,
           showSummary: input.showSummary ?? page.showSummary,
+          showPrintButton: input.showPrintButton ?? page.showPrintButton,
           nextReviewDate: input.nextReviewDate ?? page.nextReviewDate,
         };
       }

@@ -78,7 +78,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             {homepagePage.showSummary !== false && homepagePage.summary && <p className="lead">{homepagePage.summary}</p>}
             <div className="article-meta-row">
               <p className="meta">Updated on {formatDate(homepagePage.updatedDisplayDate)}</p>
-              <PrintPdfButton />
+              {homepagePage.showPrintButton !== false && <PrintPdfButton />}
             </div>
 
             <PageBlocks blocks={homepagePage.blocks} />

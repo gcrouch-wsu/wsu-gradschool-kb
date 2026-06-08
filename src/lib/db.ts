@@ -176,6 +176,7 @@ interface PageRow {
   show_toc: boolean;
   toc_depth: number;
   show_summary?: boolean;
+  show_print_button?: boolean;
   locked_by?: string | null;
   locked_at?: string | null;
   next_review_date?: string | null;
@@ -376,6 +377,7 @@ function mapPage(row: PageRow): KbPage {
     showToc: row.show_toc ?? true,
     tocDepth: row.toc_depth ?? 3,
     showSummary: row.show_summary ?? true,
+    showPrintButton: row.show_print_button ?? true,
     lockedBy: row.locked_by,
     lockedAt: row.locked_at,
     nextReviewDate: row.next_review_date,
@@ -414,14 +416,15 @@ export async function insertPage(page: KbPage): Promise<void> {
     INSERT INTO kb_pages (
       id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
-      show_toc, toc_depth, show_summary, locked_by, locked_at,
+      show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
       next_review_date, verified_at, verified_by
     ) VALUES (
       ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
       ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
       ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
       ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
-      ${page.showToc}, ${page.tocDepth}, ${page.showSummary ?? true}, ${page.lockedBy ?? null}, ${page.lockedAt ?? null},
+      ${page.showToc}, ${page.tocDepth}, ${page.showSummary ?? true}, ${page.showPrintButton ?? true},
+      ${page.lockedBy ?? null}, ${page.lockedAt ?? null},
       ${page.nextReviewDate ?? null}, ${page.verifiedAt ?? null}, ${page.verifiedBy ?? null}
     )
   `;
@@ -482,6 +485,7 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
             show_toc = ${page.showToc},
             toc_depth = ${page.tocDepth},
             show_summary = ${page.showSummary ?? true},
+            show_print_button = ${page.showPrintButton ?? true},
             next_review_date = ${page.nextReviewDate ?? null},
             verified_at = ${page.verifiedAt ?? null},
             verified_by = ${page.verifiedBy ?? null}
@@ -513,6 +517,7 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
         show_toc = ${page.showToc},
         toc_depth = ${page.tocDepth},
         show_summary = ${page.showSummary ?? true},
+        show_print_button = ${page.showPrintButton ?? true},
         next_review_date = ${page.nextReviewDate ?? null},
         verified_at = ${page.verifiedAt ?? null},
         verified_by = ${page.verifiedBy ?? null}

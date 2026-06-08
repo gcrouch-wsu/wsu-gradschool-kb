@@ -151,6 +151,8 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
   KB. Public `/kb/{kbSlug}` renders that page as the KB landing page when it is visible to the
   current visitor; otherwise it falls back to the generated section list. The homepage page's tree
   link uses `/kb/{kbSlug}` as its canonical URL.
+- Pages have a default-on `showPrintButton` / `show_print_button` flag. Public article and
+  KB-homepage pages render the browser print-to-PDF affordance only when this flag is not false.
 - **Serialization** (`src/lib/page-document.ts`): `blocksToDocumentHtml` (blocks → editor HTML) and
   `documentHtmlToBlocks` (editor HTML → blocks). Inline rich text is sanitized by
   `src/lib/rich-text.ts` (allowlist *rebuild* — the input is parsed and re-emitted from an allowlist

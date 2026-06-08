@@ -134,7 +134,7 @@ export default async function KbArticlePage({
           {page.showSummary !== false && page.summary && <p className="lead">{page.summary}</p>}
           <div className="article-meta-row">
             <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
-            <PrintPdfButton />
+            {page.showPrintButton !== false && <PrintPdfButton />}
           </div>
 
           <div className="print-only" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "1rem" }}>

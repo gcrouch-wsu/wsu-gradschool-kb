@@ -28,6 +28,7 @@ interface UpdateBody {
   showToc?: unknown;
   tocDepth?: unknown;
   showSummary?: unknown;
+  showPrintButton?: unknown;
   nextReviewDate?: unknown;
 }
 
@@ -62,6 +63,7 @@ export async function PATCH(
   const showToc = typeof body.showToc === "boolean" ? body.showToc : undefined;
   const tocDepth = typeof body.tocDepth === "number" ? body.tocDepth : undefined;
   const showSummary = typeof body.showSummary === "boolean" ? body.showSummary : undefined;
+  const showPrintButton = typeof body.showPrintButton === "boolean" ? body.showPrintButton : undefined;
   const nextReviewDate = typeof body.nextReviewDate === "string" ? body.nextReviewDate : undefined;
   const visibility: PageVisibility = body.visibility === "staff" ? "staff" : "public";
   const status: PageStatus = body.status === "published" ? "published" : "draft";
@@ -116,6 +118,7 @@ export async function PATCH(
       showToc,
       tocDepth,
       showSummary,
+      showPrintButton,
       nextReviewDate,
     }, guard.session.email);
     await recordAuditEvent({

@@ -578,6 +578,12 @@ const migrations: Migration[] = [
       await sql`CREATE INDEX IF NOT EXISTS idx_knowledge_bases_home_page ON knowledge_bases(home_page_id)`;
     },
   },
+  {
+    id: "026_page_print_button",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS show_print_button BOOLEAN NOT NULL DEFAULT TRUE`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

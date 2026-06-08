@@ -66,6 +66,7 @@ export interface KbPage {
   tocDepth: number;
 
   showSummary?: boolean;
+  showPrintButton?: boolean;
   lockedBy?: string | null;
   lockedAt?: string | null;
   aliasTargetId?: string | null;

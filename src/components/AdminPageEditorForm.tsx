@@ -123,6 +123,7 @@ export function AdminPageEditorForm({
   const [showToc, setShowToc] = useState(page.showToc);
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
+  const [showPrintButton, setShowPrintButton] = useState(page.showPrintButton !== false);
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
   const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
   const [verifiedAt, setVerifiedAt] = useState(page.verifiedAt);
@@ -193,6 +194,7 @@ export function AdminPageEditorForm({
     showToc,
     tocDepth,
     showSummary,
+    showPrintButton,
     blocks,
   });
   const [savedSnapshot, setSavedSnapshot] = useState(currentSnapshot);
@@ -316,6 +318,7 @@ export function AdminPageEditorForm({
           showToc,
           tocDepth,
           showSummary,
+          showPrintButton,
           nextReviewDate,
         }),
       });
@@ -467,6 +470,14 @@ export function AdminPageEditorForm({
           <label className="checkbox-inline">
             <input checked={showSummary} onChange={(event) => setShowSummary(event.target.checked)} type="checkbox" />
             <span>Show the summary as a lead paragraph on the page</span>
+          </label>
+          <label className="checkbox-inline">
+            <input
+              checked={showPrintButton}
+              onChange={(event) => setShowPrintButton(event.target.checked)}
+              type="checkbox"
+            />
+            <span>Show the PDF export button</span>
           </label>
           <label>
             <span className="meta">Nest under</span>

@@ -146,6 +146,8 @@ The document editor is a WYSIWYG surface with a wrapping toolbar:
   text, URL, and *open in new tab* (which adds `rel="noopener noreferrer"`).
 - **Review**: the **Editor note** button comments on selected text or pins a comment at the cursor
   between words/punctuation. Notes are editor-only and removed from public pages/search.
+- **Page display**: page settings can show/hide the summary lead paragraph and the public **PDF
+  export** button. Existing and new pages default to showing the export button.
 - **Media**: the **Media** button opens a picker to insert images/files from the asset library,
   upload a new image or document, or embed a YouTube/Vimeo/direct video. Library images prefill
   alt text from the asset default when one exists.
@@ -206,7 +208,8 @@ when `DATABASE_URL` is set.
 Public articles use a responsive 3-column layout (KB page tree · article · sticky "On this page"
 rail) that collapses on tablet/mobile. The page tree provides hierarchy and cross-page navigation;
 the right rail covers headings within the current page, so public article breadcrumbs are intentionally
-omitted. Tables scroll horizontally on narrow screens. Any article can be exported via the browser's
-**print-to-PDF** over semantic, print-styled HTML. (This relies on the browser's print engine; it is
-not a server-side tagged/PDF-UA generator — see `project_spec.md` FB-14.)
+omitted. Tables scroll horizontally on narrow screens. Article and KB-homepage pages can show a
+default-on **PDF export** button, which uses the browser's print-to-PDF over semantic,
+print-styled HTML. (This relies on the browser's print engine; it is not a server-side tagged/PDF-UA
+generator — see `project_spec.md` FB-14.)
  
