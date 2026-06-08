@@ -4,11 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   DEFAULT_THEME,
+  HEADING_FONT_STYLES,
+  HEADING_TEXT_DECORATIONS,
+  HEADING_TEXT_TRANSFORMS,
+  HEADING_WEIGHTS,
   SAFE_FONTS,
   contrastRating,
   contrastRatio,
   mergeTheme,
   themeToCssVars,
+  type HeadingLevel,
+  type ThemeHeadingStyle,
   type KbTheme,
 } from "@/lib/kb-theme";
 
@@ -17,6 +23,7 @@ const COLOR_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: string 
   { key: "h1", label: "Heading 1", help: "H1 page/section titles" },
   { key: "h2", label: "Heading 2", help: "H2 section headings" },
   { key: "h3", label: "Heading 3", help: "H3 sub-headings" },
+  { key: "h4", label: "Heading 4", help: "H4 detail headings" },
   { key: "accent", label: "Brand / accent", help: "Links, buttons, highlights" },
   { key: "muted", label: "Muted text", help: "Secondary captions and meta" },
   { key: "paper", label: "Surface", help: "Cards and panels" },
@@ -37,6 +44,7 @@ const PROCEDURE_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: str
 ];
 
 const FONT_KEYS = Object.keys(SAFE_FONTS);
+const HEADING_LEVELS: HeadingLevel[] = ["h1", "h2", "h3", "h4"];
 
 const TYPO_FIELDS: {
   key: keyof KbTheme["typography"];
@@ -93,7 +101,7 @@ export function ThemeEditor({
   dbEnabled: boolean;
   onSave: (theme: KbTheme) => Promise<void>;
 }) {
-  const [theme, setTheme] = useState<KbTheme>(initialTheme);
+  const [theme, setTheme] = useState<KbTheme>(() => mergeTheme(initialTheme));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +130,15 @@ export function ThemeEditor({
   }
   function setTypography(key: keyof KbTheme["typography"], num: number, unit: string) {
     setTheme((t) => ({ ...t, typography: { ...t.typography, [key]: `${num}${unit}` } }));
+  }
+  function setHeadingStyle<K extends keyof ThemeHeadingStyle>(level: HeadingLevel, key: K, value: ThemeHeadingStyle[K]) {
+    setTheme((t) => ({
+      ...t,
+      headingStyles: {
+        ...t.headingStyles,
+        [level]: { ...t.headingStyles[level], [key]: value },
+      },
+    }));
   }
 
   function toggleEditorFont(key: string, label: string, on: boolean) {
@@ -283,11 +300,26 @@ export function ThemeEditor({
               </select>
             </label>
           </div>
+          <div className="theme-heading-grid" style={{ marginTop: "1rem" }}>
+            {HEADING_LEVELS.map((level) => (
+              <label key={level}>
+                <span className="meta">{level.toUpperCase()} font</span>
+                <select className="input" onChange={(e) => setFont(level, e.target.value)} value={theme.fonts[level]}>
+                  <option value="">Use heading font</option>
+                  {FONT_KEYS.map((k) => (
+                    <option key={k} value={k}>
+                      {SAFE_FONTS[k].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
         </fieldset>
 
         <fieldset className="fieldset">
           <legend>Type scale</legend>
-          {(["base", "h1", "h2", "h3"] as const).map((key) => (
+          {(["base", "h1", "h2", "h3", "h4"] as const).map((key) => (
             <label className="theme-scale" key={key}>
               <span className="meta">{key === "base" ? "Body" : key.toUpperCase()}</span>
               <input
@@ -302,6 +334,75 @@ export function ThemeEditor({
             </label>
           ))}
           <p className="meta">H1 stays responsive (the value sets its maximum size on wide screens).</p>
+        </fieldset>
+
+        <fieldset className="fieldset">
+          <legend>Heading Effects</legend>
+          <div className="theme-heading-grid">
+            {HEADING_LEVELS.map((level) => (
+              <div className="theme-heading-style" key={level}>
+                <span className="meta">{level.toUpperCase()}</span>
+                <label>
+                  <span className="meta">Weight</span>
+                  <select
+                    className="input"
+                    onChange={(e) => setHeadingStyle(level, "weight", e.target.value)}
+                    value={theme.headingStyles[level].weight}
+                  >
+                    {HEADING_WEIGHTS.map((weight) => (
+                      <option key={weight} value={weight}>
+                        {weight}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="meta">Style</span>
+                  <select
+                    className="input"
+                    onChange={(e) => setHeadingStyle(level, "style", e.target.value as ThemeHeadingStyle["style"])}
+                    value={theme.headingStyles[level].style}
+                  >
+                    {HEADING_FONT_STYLES.map((style) => (
+                      <option key={style} value={style}>
+                        {style}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="meta">Decoration</span>
+                  <select
+                    className="input"
+                    onChange={(e) =>
+                      setHeadingStyle(level, "decoration", e.target.value as ThemeHeadingStyle["decoration"])
+                    }
+                    value={theme.headingStyles[level].decoration}
+                  >
+                    {HEADING_TEXT_DECORATIONS.map((decoration) => (
+                      <option key={decoration} value={decoration}>
+                        {decoration}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="meta">Case</span>
+                  <select
+                    className="input"
+                    onChange={(e) => setHeadingStyle(level, "transform", e.target.value as ThemeHeadingStyle["transform"])}
+                    value={theme.headingStyles[level].transform}
+                  >
+                    {HEADING_TEXT_TRANSFORMS.map((transform) => (
+                      <option key={transform} value={transform}>
+                        {transform}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ))}
+          </div>
         </fieldset>
 
         <fieldset className="fieldset">
@@ -409,6 +510,8 @@ export function ThemeEditor({
             <li>First item — note the gap above set by “space after heading”.</li>
             <li>Second item — spacing between items is its own control.</li>
           </ul>
+          <h4>Heading four</h4>
+          <p>Detail headings can now use their own font, color, size, weight, style, decoration, and case.</p>
 
           <div 
             className="alert alert--info" 
@@ -439,7 +542,7 @@ export function ThemeEditor({
               borderRadius: "4px"
             }}
           >
-            <h4 style={{ color: "var(--procedure-ink)", marginTop: 0 }}>Procedure Preview</h4>
+            <strong>Procedure Preview</strong>
             <p>Step-by-step guidance uses these colors.</p>
           </div>
 

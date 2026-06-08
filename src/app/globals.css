@@ -6,6 +6,7 @@
   --h1-color: var(--ink);
   --h2-color: var(--ink);
   --h3-color: var(--ink);
+  --h4-color: var(--ink);
   --muted: #6b6466;
   --line: #e4ddd8;
   --line-strong: #d2c9c3;
@@ -31,10 +32,31 @@
 
   --font-body: var(--font-sans);
   --font-heading: var(--font-sans);
+  --h1-font: var(--font-heading);
+  --h2-font: var(--font-heading);
+  --h3-font: var(--font-heading);
+  --h4-font: var(--font-heading);
   --base-size: 1rem;
   --h1-size: clamp(2.25rem, 5vw, 3.5rem);
   --h2-size: 1.75rem;
   --h3-size: 1.4rem;
+  --h4-size: 1.15rem;
+  --h1-weight: 900;
+  --h2-weight: 800;
+  --h3-weight: 700;
+  --h4-weight: 700;
+  --h1-style: normal;
+  --h2-style: normal;
+  --h3-style: normal;
+  --h4-style: normal;
+  --h1-decoration: none;
+  --h2-decoration: none;
+  --h3-decoration: none;
+  --h4-decoration: none;
+  --h1-transform: none;
+  --h2-transform: none;
+  --h3-transform: none;
+  --h4-transform: none;
 
   /* Typography & spacing — owner-controllable via the theme (themeToCssVars
      overrides these on .kb-theme-root). Values here are the static fallback. */
@@ -314,7 +336,6 @@ h4 {
   margin: 0;
   letter-spacing: var(--tracking-heading);
   color: var(--ink);
-  font-family: var(--font-heading);
   /* Avoid a lone short word on the last line of a heading; purely visual,
      invisible to assistive tech. */
   text-wrap: balance;
@@ -323,22 +344,45 @@ h4 {
 h1 {
   font-size: var(--h1-size);
   max-width: 900px;
-  font-weight: 900;
+  font-family: var(--h1-font);
+  font-weight: var(--h1-weight);
+  font-style: var(--h1-style);
+  text-decoration: var(--h1-decoration);
+  text-transform: var(--h1-transform);
   color: var(--h1-color);
 }
 
 h2 {
   font-size: var(--h2-size);
   margin-top: 2.5rem;
-  font-weight: 800;
+  font-family: var(--h2-font);
+  font-weight: var(--h2-weight);
+  font-style: var(--h2-style);
+  text-decoration: var(--h2-decoration);
+  text-transform: var(--h2-transform);
   color: var(--h2-color);
 }
 
 h3 {
   font-size: var(--h3-size);
   margin-top: 1.75rem;
-  font-weight: 700;
+  font-family: var(--h3-font);
+  font-weight: var(--h3-weight);
+  font-style: var(--h3-style);
+  text-decoration: var(--h3-decoration);
+  text-transform: var(--h3-transform);
   color: var(--h3-color);
+}
+
+h4 {
+  font-size: var(--h4-size);
+  margin-top: 1.5rem;
+  font-family: var(--h4-font);
+  font-weight: var(--h4-weight);
+  font-style: var(--h4-style);
+  text-decoration: var(--h4-decoration);
+  text-transform: var(--h4-transform);
+  color: var(--h4-color);
 }
 
 p {
@@ -2817,6 +2861,20 @@ article li > ol {
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   margin: 0.5rem 0;
+}
+
+.theme-heading-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.theme-heading-style {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
 }
 
 .kb-picker {

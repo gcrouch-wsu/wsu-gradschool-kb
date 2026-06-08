@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { loadSiteSettings } from "@/lib/db";
-import { DEFAULT_THEME, fontStack, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, fontStack, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,7 +21,7 @@ function roleLabel(role: string) {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [session, settings] = await Promise.all([getCurrentAdminSession(), loadSiteSettings()]);
 
-  const globalTheme = settings.globalTheme || DEFAULT_THEME;
+  const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const themeVars: CSSProperties = {
     ...(themeToCssVars(globalTheme) as CSSProperties),
     ...(settings.contentWidth ? { "--content-width": `${settings.contentWidth}px` } : {}),

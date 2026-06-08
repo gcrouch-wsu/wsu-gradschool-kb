@@ -20,7 +20,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
   const tree = await buildPageTree(kb.id, isStaff);
   const topLevel = tree.map((node) => node.page);
 
-  const baseTheme = settings.globalTheme || DEFAULT_THEME;
+  const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const effectiveTheme = kb.theme ? mergeTheme(kb.theme, baseTheme) : baseTheme;
   const themeVars = themeToCssVars(effectiveTheme) as CSSProperties;
 

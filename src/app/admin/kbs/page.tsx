@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { KnowledgeBase } from "@/lib/types";
+import type { KbStatus, KnowledgeBase } from "@/lib/types";
 import Link from "next/link";
 
 export default function AdminKbsPage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -67,8 +69,31 @@ export default function AdminKbsPage() {
       await loadData();
       setEditingId(null);
       setEditData({});
+      setMessage("Knowledge base updated.");
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error updating KB");
+    }
+  }
+
+  async function handleStatusChange(kbId: string, status: Extract<KbStatus, "draft" | "published">) {
+    setStatusBusyId(kbId);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/kbs/${kbId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || "Failed to update KB status");
+      }
+      await loadData();
+      setMessage(status === "published" ? "Knowledge base published." : "Knowledge base unpublished.");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error updating KB status");
+    } finally {
+      setStatusBusyId(null);
     }
   }
 
@@ -102,6 +127,12 @@ export default function AdminKbsPage() {
           {isCreating ? "Cancel" : "Create KB"}
         </button>
       </div>
+
+      <p className="alert alert--info">
+        Published pages are not enough for the public Knowledge Bases list. The knowledge base itself must also be
+        published.
+      </p>
+      {message && <p className="alert alert--success">{message}</p>}
 
       {isCreating && (
         <form className="form card" onSubmit={handleCreate} style={{ marginBottom: "2rem" }}>
@@ -179,16 +210,41 @@ export default function AdminKbsPage() {
                         {kb.status}
                       </span>
                     )}
+                    {!isEditing && kb.status !== "published" && (
+                      <div className="meta" style={{ marginTop: "0.5rem" }}>Hidden from public KB list</div>
+                    )}
                   </td>
                   <td>{kb.updatedOn}</td>
                   <td>
                     {isEditing ? (
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                         <button className="button button--small" onClick={() => handleUpdate(kb.id)}>Save</button>
                         <button className="button button--small button--ghost" onClick={() => { setEditingId(null); setEditData({}); }}>Cancel</button>
                       </div>
                     ) : (
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        {kb.status === "published" ? (
+                          <>
+                            <Link className="button button--small button--ghost" href={`/kb/${kb.slug}`}>View public</Link>
+                            <button
+                              className="button button--small button--ghost"
+                              disabled={statusBusyId === kb.id}
+                              onClick={() => handleStatusChange(kb.id, "draft")}
+                              type="button"
+                            >
+                              {statusBusyId === kb.id ? "Updating..." : "Unpublish"}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="button button--small"
+                            disabled={statusBusyId === kb.id}
+                            onClick={() => handleStatusChange(kb.id, "published")}
+                            type="button"
+                          >
+                            {statusBusyId === kb.id ? "Publishing..." : "Publish KB"}
+                          </button>
+                        )}
                         <button className="button button--small button--ghost" onClick={() => { setEditingId(kb.id); setEditData({}); }}>Edit</button>
                         <Link className="button button--small button--ghost" href={`/admin/pages?kb=${kb.id}`}>Pages</Link>
                         <Link className="button button--small button--ghost" href={`/admin/kbs/${kb.id}/styles`}>Styles</Link>

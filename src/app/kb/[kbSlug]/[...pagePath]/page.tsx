@@ -86,7 +86,7 @@ export default async function KbArticlePage({
 
   const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
   
-  const baseTheme = settings.globalTheme || DEFAULT_THEME;
+  const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const effectiveTheme = kb.theme ? mergeTheme(kb.theme, baseTheme) : baseTheme;
   const themeVars = themeToCssVars(effectiveTheme) as CSSProperties;
   

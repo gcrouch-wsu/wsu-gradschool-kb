@@ -5,7 +5,7 @@ import { getCurrentAdminSession } from "@/lib/auth";
 import { getPublishedKbs } from "@/lib/kb-store";
 import { loadSiteSettings } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { DEFAULT_THEME, fontStack, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, fontStack, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
 import type { KnowledgeBase } from "@/lib/types";
 import type { CSSProperties } from "react";
 
@@ -44,9 +44,10 @@ async function getHomeKbs(): Promise<HomeKb[]> {
 
 export default async function HomePage() {
   const [settings, kbs] = await Promise.all([loadSiteSettings(), getHomeKbs()]);
+  const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
 
   const themeVars: CSSProperties = {
-    ...(themeToCssVars(settings.globalTheme || DEFAULT_THEME) as CSSProperties),
+    ...(themeToCssVars(globalTheme) as CSSProperties),
     ...(settings.contentWidth ? { "--content-width": `${settings.contentWidth}px` } : {}),
   };
 

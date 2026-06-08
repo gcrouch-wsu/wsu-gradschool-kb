@@ -3,6 +3,7 @@ export interface ThemeColors {
   h1: string; 
   h2: string; 
   h3: string; 
+  h4: string;
   accent: string; 
   muted: string; 
   line: string; 
@@ -19,6 +20,10 @@ export interface ThemeColors {
 export interface ThemeFonts {
   body: string; 
   heading: string; 
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
 }
 
 export interface ThemeScale {
@@ -26,7 +31,22 @@ export interface ThemeScale {
   h1: string;
   h2: string;
   h3: string;
+  h4: string;
 }
+
+export type HeadingLevel = "h1" | "h2" | "h3" | "h4";
+export type HeadingFontStyle = "normal" | "italic";
+export type HeadingTextDecoration = "none" | "underline";
+export type HeadingTextTransform = "none" | "uppercase" | "capitalize";
+
+export interface ThemeHeadingStyle {
+  weight: string;
+  style: HeadingFontStyle;
+  decoration: HeadingTextDecoration;
+  transform: HeadingTextTransform;
+}
+
+export type ThemeHeadingStyles = Record<HeadingLevel, ThemeHeadingStyle>;
 
 export interface ThemeTypography {
   bodyLeading: string; // unitless line-height for body text
@@ -55,6 +75,7 @@ export interface KbTheme {
   colors: ThemeColors;
   fonts: ThemeFonts;
   scale: ThemeScale;
+  headingStyles: ThemeHeadingStyles;
   typography: ThemeTypography;
   editor: ThemeEditorAllowlist;
 }
@@ -73,6 +94,11 @@ export const SAFE_FONTS: Record<string, { label: string; stack: string }> = {
   mono: { label: "Monospace", stack: 'ui-monospace, "Cascadia Code", "Courier New", monospace' },
 };
 
+export const HEADING_WEIGHTS = ["300", "400", "500", "600", "700", "800", "900"] as const;
+export const HEADING_FONT_STYLES: HeadingFontStyle[] = ["normal", "italic"];
+export const HEADING_TEXT_DECORATIONS: HeadingTextDecoration[] = ["none", "underline"];
+export const HEADING_TEXT_TRANSFORMS: HeadingTextTransform[] = ["none", "uppercase", "capitalize"];
+
 export function fontStack(key: string): string {
   return SAFE_FONTS[key]?.stack ?? SAFE_FONTS.system.stack;
 }
@@ -83,6 +109,7 @@ export const DEFAULT_THEME: KbTheme = {
     h1: "#1d1a1b",
     h2: "#1d1a1b",
     h3: "#1d1a1b",
+    h4: "#1d1a1b",
     accent: "#a60f2d",
     muted: "#6b6466",
     line: "#e4ddd8",
@@ -95,8 +122,14 @@ export const DEFAULT_THEME: KbTheme = {
     procedureBorder: "#e4ddd8",
     procedureInk: "#1d1a1b",
   },
-  fonts: { body: "system", heading: "system" },
-  scale: { base: "1rem", h1: "3.5rem", h2: "1.75rem", h3: "1.4rem" },
+  fonts: { body: "system", heading: "system", h1: "", h2: "", h3: "", h4: "" },
+  scale: { base: "1rem", h1: "3.5rem", h2: "1.75rem", h3: "1.4rem", h4: "1.15rem" },
+  headingStyles: {
+    h1: { weight: "900", style: "normal", decoration: "none", transform: "none" },
+    h2: { weight: "800", style: "normal", decoration: "none", transform: "none" },
+    h3: { weight: "700", style: "normal", decoration: "none", transform: "none" },
+    h4: { weight: "700", style: "normal", decoration: "none", transform: "none" },
+  },
   typography: {
     bodyLeading: "1.65",
     headingLeading: "1.2",
@@ -178,6 +211,30 @@ function safeFontKey(value: unknown, fallback: string): string {
   return typeof value === "string" && SAFE_FONTS[value] ? value : fallback;
 }
 
+function safeOptionalFontKey(value: unknown, fallback: string): string {
+  if (value === "" || value == null) return "";
+  return safeFontKey(value, fallback);
+}
+
+function safeHeadingStyle(value: unknown, fallback: ThemeHeadingStyle): ThemeHeadingStyle {
+  const raw = (value ?? {}) as Partial<ThemeHeadingStyle>;
+  return {
+    weight:
+      typeof raw.weight === "string" && (HEADING_WEIGHTS as readonly string[]).includes(raw.weight)
+        ? raw.weight
+        : fallback.weight,
+    style: HEADING_FONT_STYLES.includes(raw.style as HeadingFontStyle)
+      ? (raw.style as HeadingFontStyle)
+      : fallback.style,
+    decoration: HEADING_TEXT_DECORATIONS.includes(raw.decoration as HeadingTextDecoration)
+      ? (raw.decoration as HeadingTextDecoration)
+      : fallback.decoration,
+    transform: HEADING_TEXT_TRANSFORMS.includes(raw.transform as HeadingTextTransform)
+      ? (raw.transform as HeadingTextTransform)
+      : fallback.transform,
+  };
+}
+
 function safeOptions(value: unknown, kind: "font" | "size" | "color", fallback: ThemeOption[]): ThemeOption[] {
   if (!Array.isArray(value)) {
     return fallback;
@@ -203,6 +260,7 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
   const c = (t.colors ?? {}) as Partial<ThemeColors>;
   const f = (t.fonts ?? {}) as Partial<ThemeFonts>;
   const s = (t.scale ?? {}) as Partial<ThemeScale>;
+  const hs = (t.headingStyles ?? {}) as Partial<ThemeHeadingStyles>;
   const ty = (t.typography ?? {}) as Partial<ThemeTypography>;
   const e = (t.editor ?? {}) as Partial<ThemeEditorAllowlist>;
   return {
@@ -211,6 +269,7 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       h1: safeHex(c.h1, base.colors.h1),
       h2: safeHex(c.h2, base.colors.h2),
       h3: safeHex(c.h3, base.colors.h3),
+      h4: safeHex(c.h4, base.colors.h4),
       accent: safeHex(c.accent, base.colors.accent),
       muted: safeHex(c.muted, base.colors.muted),
       line: safeHex(c.line, base.colors.line),
@@ -226,12 +285,23 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
     fonts: {
       body: safeFontKey(f.body, base.fonts.body),
       heading: safeFontKey(f.heading, base.fonts.heading),
+      h1: safeOptionalFontKey(f.h1, base.fonts.h1),
+      h2: safeOptionalFontKey(f.h2, base.fonts.h2),
+      h3: safeOptionalFontKey(f.h3, base.fonts.h3),
+      h4: safeOptionalFontKey(f.h4, base.fonts.h4),
     },
     scale: {
       base: safeRem(s.base, base.scale.base),
       h1: safeRem(s.h1, base.scale.h1),
       h2: safeRem(s.h2, base.scale.h2),
       h3: safeRem(s.h3, base.scale.h3),
+      h4: safeRem(s.h4, base.scale.h4),
+    },
+    headingStyles: {
+      h1: safeHeadingStyle(hs.h1, base.headingStyles.h1),
+      h2: safeHeadingStyle(hs.h2, base.headingStyles.h2),
+      h3: safeHeadingStyle(hs.h3, base.headingStyles.h3),
+      h4: safeHeadingStyle(hs.h4, base.headingStyles.h4),
     },
     typography: {
       bodyLeading: safeLeading(ty.bodyLeading, base.typography.bodyLeading, 1, 2.5),
@@ -314,11 +384,13 @@ export function themeToEditorPalette(theme: KbTheme): EditorPalette {
 }
 
 export function themeToCssVars(theme: KbTheme): Record<string, string> {
+  const headingFont = fontStack(theme.fonts.heading);
   return {
     "--ink": theme.colors.ink,
     "--h1-color": theme.colors.h1,
     "--h2-color": theme.colors.h2,
     "--h3-color": theme.colors.h3,
+    "--h4-color": theme.colors.h4,
     "--wsu-crimson": theme.colors.accent,
     "--wsu-crimson-dark": darken(theme.colors.accent),
     "--muted": theme.colors.muted,
@@ -332,11 +404,32 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--procedure-border": theme.colors.procedureBorder,
     "--procedure-ink": theme.colors.procedureInk,
     "--font-body": fontStack(theme.fonts.body),
-    "--font-heading": fontStack(theme.fonts.heading),
+    "--font-heading": headingFont,
+    "--h1-font": theme.fonts.h1 ? fontStack(theme.fonts.h1) : headingFont,
+    "--h2-font": theme.fonts.h2 ? fontStack(theme.fonts.h2) : headingFont,
+    "--h3-font": theme.fonts.h3 ? fontStack(theme.fonts.h3) : headingFont,
+    "--h4-font": theme.fonts.h4 ? fontStack(theme.fonts.h4) : headingFont,
     "--base-size": theme.scale.base,
     "--h1-size": `clamp(2.25rem, 5vw, ${theme.scale.h1})`,
     "--h2-size": theme.scale.h2,
     "--h3-size": theme.scale.h3,
+    "--h4-size": theme.scale.h4,
+    "--h1-weight": theme.headingStyles.h1.weight,
+    "--h2-weight": theme.headingStyles.h2.weight,
+    "--h3-weight": theme.headingStyles.h3.weight,
+    "--h4-weight": theme.headingStyles.h4.weight,
+    "--h1-style": theme.headingStyles.h1.style,
+    "--h2-style": theme.headingStyles.h2.style,
+    "--h3-style": theme.headingStyles.h3.style,
+    "--h4-style": theme.headingStyles.h4.style,
+    "--h1-decoration": theme.headingStyles.h1.decoration,
+    "--h2-decoration": theme.headingStyles.h2.decoration,
+    "--h3-decoration": theme.headingStyles.h3.decoration,
+    "--h4-decoration": theme.headingStyles.h4.decoration,
+    "--h1-transform": theme.headingStyles.h1.transform,
+    "--h2-transform": theme.headingStyles.h2.transform,
+    "--h3-transform": theme.headingStyles.h3.transform,
+    "--h4-transform": theme.headingStyles.h4.transform,
     "--leading-body": theme.typography.bodyLeading,
     "--leading-heading": theme.typography.headingLeading,
     "--tracking-body": theme.typography.bodyTracking,
