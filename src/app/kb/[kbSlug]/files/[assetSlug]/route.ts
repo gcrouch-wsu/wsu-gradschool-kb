@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { NextResponse } from "next/server";
+import { getCurrentAdminSession } from "@/lib/auth";
 import { getAssetForDelivery, getKbBySlug } from "@/lib/kb-store";
 import { videoDeliveryUrl } from "@/lib/video";
 
@@ -52,7 +53,8 @@ export async function GET(
 ) {
   const { kbSlug, assetSlug: rawAssetSlug } = await params;
   const assetSlug = decodeURIComponent(rawAssetSlug);
-  const kb = await getKbBySlug(kbSlug);
+  const isStaff = Boolean(await getCurrentAdminSession());
+  const kb = await getKbBySlug(kbSlug, isStaff);
   if (!kb) {
     notFound();
   }

@@ -17,12 +17,12 @@ export default async function SearchPage({
 }) {
   const { kbSlug } = await params;
   const { q = "" } = await searchParams;
-  const kb = await getKbBySlug(kbSlug);
+  const isStaff = Boolean(await getCurrentAdminSession());
+  const kb = await getKbBySlug(kbSlug, isStaff);
   if (!kb) {
     notFound();
   }
 
-  const isStaff = Boolean(await getCurrentAdminSession());
 
   let rateLimited = false;
   if (q.trim()) {

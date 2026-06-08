@@ -235,9 +235,13 @@ export async function getPublishedKbs(): Promise<KnowledgeBase[]> {
   return dataset.knowledgeBases.filter((kb) => kb.status === "published");
 }
 
-export async function getKbBySlug(slug: string): Promise<KnowledgeBase | null> {
+export async function getKbBySlug(slug: string, includeUnpublished = false): Promise<KnowledgeBase | null> {
   const dataset = await getDataset();
-  return dataset.knowledgeBases.find((kb) => kb.slug === slug && kb.status === "published") ?? null;
+  return (
+    dataset.knowledgeBases.find(
+      (kb) => kb.slug === slug && (includeUnpublished || kb.status === "published"),
+    ) ?? null
+  );
 }
 
 export async function getKbById(id: string): Promise<KnowledgeBase | null> {

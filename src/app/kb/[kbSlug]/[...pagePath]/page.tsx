@@ -4,7 +4,8 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
-import { TableOfContents, hasTocEntries } from "@/components/TableOfContents";
+import { TableOfContents } from "@/components/TableOfContents";
+import { hasTocEntries } from "@/lib/toc";
 import { getCurrentAdminSession } from "@/lib/auth";
 import {
   buildPageTree,
@@ -26,11 +27,11 @@ export async function generateMetadata({
   params: Promise<{ kbSlug: string; pagePath: string[] }>;
 }): Promise<Metadata> {
   const { kbSlug, pagePath } = await params;
-  const kb = await getKbBySlug(kbSlug);
+  const isStaff = Boolean(await getCurrentAdminSession());
+  const kb = await getKbBySlug(kbSlug, isStaff);
   if (!kb) {
     return {};
   }
-  const isStaff = Boolean(await getCurrentAdminSession());
   const page = await getPageByPath(kb.id, pagePath, isStaff);
   if (!page) {
     return {};
@@ -48,12 +49,12 @@ export default async function KbArticlePage({
   params: Promise<{ kbSlug: string; pagePath: string[] }>;
 }) {
   const { kbSlug, pagePath } = await params;
-  const kb = await getKbBySlug(kbSlug);
+  const isStaff = Boolean(await getCurrentAdminSession());
+  const kb = await getKbBySlug(kbSlug, isStaff);
   if (!kb) {
     notFound();
   }
 
-  const isStaff = Boolean(await getCurrentAdminSession());
   let effectivePath = pagePath;
   const redirectTarget = await getActiveRedirectTarget(kb.id, pagePath);
   if (redirectTarget) {

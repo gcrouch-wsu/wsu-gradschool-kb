@@ -10,12 +10,12 @@ import { loadSiteSettings } from "@/lib/db";
 
 export default async function KbHomePage({ params }: { params: Promise<{ kbSlug: string }> }) {
   const { kbSlug } = await params;
-  const kb = await getKbBySlug(kbSlug);
+  const isStaff = Boolean(await getCurrentAdminSession());
+  const kb = await getKbBySlug(kbSlug, isStaff);
   if (!kb) {
     notFound();
   }
 
-  const isStaff = Boolean(await getCurrentAdminSession());
   const settings = await loadSiteSettings();
   const tree = await buildPageTree(kb.id, isStaff);
   const topLevel = tree.map((node) => node.page);
