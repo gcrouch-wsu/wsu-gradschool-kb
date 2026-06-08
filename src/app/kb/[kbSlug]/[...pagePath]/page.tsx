@@ -100,7 +100,7 @@ export default async function KbArticlePage({
           <strong>{kb.title}</strong>
           <PageTree currentPath={currentPath} kbSlug={kb.slug} nodes={tree} />
         </aside>
-        <article className="article">
+        <article className="article flow">
           <nav aria-label="Breadcrumb" className="breadcrumbs">
             <ol>
               <li>
@@ -149,7 +149,7 @@ export default async function KbArticlePage({
             <PrintPdfButton />
           </div>
 
-          <div className="print-only" style={{ marginBottom: "2rem", borderBottom: "1px solid var(--line)", paddingBottom: "1rem" }}>
+          <div className="print-only" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "1rem" }}>
             {page.ownerLabel && (
               <p className="meta"><strong>Responsible Office:</strong> {page.ownerLabel}</p>
             )}

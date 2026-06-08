@@ -62,7 +62,7 @@ async function CardBlock({ block }: { block: Extract<ContentBlock, { type: "card
   return (
     <section className={`card ${backgroundClass}`}>
       {block.title && <strong className="card__title">{block.title}</strong>}
-      <div className="card__blocks">
+      <div className="card__blocks flow">
         <PageBlocks blocks={block.blocks} />
       </div>
     </section>
@@ -76,7 +76,7 @@ function ProcedureSectionBlock({ block }: { block: Extract<ContentBlock, { type:
       <HeadingTag className="anchor-heading procedure-section__title" id={block.blockId}>
         {block.title}
       </HeadingTag>
-      <div className="procedure-section__blocks">
+      <div className="procedure-section__blocks flow">
         <PageBlocks blocks={block.blocks} />
       </div>
     </section>

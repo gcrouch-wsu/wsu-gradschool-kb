@@ -35,6 +35,18 @@
   --h1-size: clamp(2.25rem, 5vw, 3.5rem);
   --h2-size: 1.75rem;
   --h3-size: 1.4rem;
+
+  /* Typography & spacing — owner-controllable via the theme (themeToCssVars
+     overrides these on .kb-theme-root). Values here are the static fallback. */
+  --leading-body: 1.65;
+  --leading-heading: 1.2;
+  --tracking-body: 0em;
+  --tracking-heading: -0.02em;
+  --space-block: 1.5rem;
+  --space-after-heading: 0.5rem;
+  --space-list-item: 0.4rem;
+  --indent-list: 1.75rem;
+  --measure: 72ch;
 }
 
 * {
@@ -47,6 +59,9 @@ html {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  font-feature-settings: "kern" 1, "liga" 1, "clig" 1, "calt" 1;
   scroll-behavior: smooth;
 }
 
@@ -55,6 +70,11 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* Unitless base leading so every flow element (lists, table cells, captions)
+     inherits comfortable spacing and still scales with user zoom. Body tracking
+     is intentionally NOT set here — it is scoped to reading surfaces below so an
+     owner's choice doesn't loosen nav/buttons/admin chrome. */
+  line-height: var(--leading-body);
 }
 
 .kb-theme-root {
@@ -290,11 +310,14 @@ h1,
 h2,
 h3,
 h4 {
-  line-height: 1.25;
+  line-height: var(--leading-heading);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-heading);
   color: var(--ink);
   font-family: var(--font-heading);
+  /* Avoid a lone short word on the last line of a heading; purely visual,
+     invisible to assistive tech. */
+  text-wrap: balance;
 }
 
 h1 {
@@ -319,7 +342,8 @@ h3 {
 }
 
 p {
-  line-height: 1.7;
+  line-height: var(--leading-body);
+  text-wrap: pretty;
 }
 
 .lead {
@@ -623,11 +647,33 @@ p {
   border-radius: var(--radius-lg);
   padding: 3rem 3.5rem;
   box-shadow: var(--shadow-sm);
-  max-width: 80ch;
+  max-width: var(--measure);
 }
 
-.article > * + * {
-  margin-top: 1.5rem;
+/* Flow / vertical-rhythm container shared by the article, the home content,
+   cards, and procedure sections. Spacing is owner-controllable via the theme.
+   Each direct child's own margins are zeroed; spacing is added between siblings
+   so headings, paragraphs, lists, tables, etc. share one predictable system. */
+/* Body letter-spacing applies only to reading text, not global UI chrome.
+   Headings re-assert --tracking-heading via the h1–h4 rule. */
+.article,
+.flow,
+.lead {
+  letter-spacing: var(--tracking-body);
+}
+
+.flow > * {
+  margin-block: 0;
+}
+
+.flow > * + * {
+  margin-top: var(--space-block);
+}
+
+/* The gap *below* a heading (e.g. heading -> list, or page title -> lead) is its
+   own knob, usually tighter than the gap between unrelated blocks. */
+.flow > :is(h1, h2, h3, h4) + * {
+  margin-top: var(--space-after-heading);
 }
 
 .article > p,
@@ -635,6 +681,26 @@ p {
 .article > ol {
   font-size: 1.1rem;
   color: #333;
+}
+
+/* Lists inside any flow container share the indent / item-spacing knobs. */
+.flow ul,
+.flow ol {
+  margin: 0;
+  padding-left: var(--indent-list);
+}
+
+.flow li {
+  margin-block: 0;
+}
+
+.flow li + li {
+  margin-top: var(--space-list-item);
+}
+
+.flow li > ul,
+.flow li > ol {
+  margin-top: var(--space-list-item);
 }
 
 .meta {
@@ -2843,6 +2909,8 @@ article li > ol {
   color: var(--ink);
   font-family: var(--font-body);
   font-size: var(--base-size);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
 }
 
 .theme-preview__surface a {

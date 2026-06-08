@@ -38,8 +38,32 @@ const PROCEDURE_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: str
 
 const FONT_KEYS = Object.keys(SAFE_FONTS);
 
+const TYPO_FIELDS: {
+  key: keyof KbTheme["typography"];
+  label: string;
+  help: string;
+  unit: "" | "em" | "rem" | "ch";
+  min: number;
+  max: number;
+  step: number;
+}[] = [
+  { key: "bodyLeading", label: "Body line height", help: "Leading for paragraphs and lists", unit: "", min: 1.2, max: 2.2, step: 0.05 },
+  { key: "headingLeading", label: "Heading line height", help: "Leading for H1–H4", unit: "", min: 1, max: 1.6, step: 0.05 },
+  { key: "bodyTracking", label: "Body letter-spacing", help: "Tracking for body text", unit: "em", min: -0.02, max: 0.1, step: 0.005 },
+  { key: "headingTracking", label: "Heading letter-spacing", help: "Tracking for headings", unit: "em", min: -0.06, max: 0.1, step: 0.005 },
+  { key: "blockSpacing", label: "Block spacing", help: "Gap between blocks (and before headings)", unit: "rem", min: 0.5, max: 3, step: 0.05 },
+  { key: "spaceAfterHeading", label: "Space after heading", help: "Gap below a heading, e.g. heading → list", unit: "rem", min: 0, max: 2, step: 0.05 },
+  { key: "listItemSpacing", label: "List item spacing", help: "Gap between list items", unit: "rem", min: 0, max: 1.5, step: 0.05 },
+  { key: "listIndent", label: "List indent", help: "List indentation", unit: "rem", min: 0.5, max: 3, step: 0.05 },
+  { key: "measure", label: "Reading width", help: "Max line length of the article column", unit: "ch", min: 45, max: 90, step: 1 },
+];
+
 function remToNumber(value: string): number {
   return Number(value.replace("rem", "")) || 0;
+}
+
+function typoToNumber(value: string): number {
+  return parseFloat(value) || 0;
 }
 
 function ContrastRow({ label, fg, bg, large }: { label: string; fg: string; bg: string; large?: boolean }) {
@@ -95,6 +119,9 @@ export function ThemeEditor({
   }
   function setScale(key: keyof KbTheme["scale"], rem: number) {
     setTheme((t) => ({ ...t, scale: { ...t.scale, [key]: `${rem}rem` } }));
+  }
+  function setTypography(key: keyof KbTheme["typography"], num: number, unit: string) {
+    setTheme((t) => ({ ...t, typography: { ...t.typography, [key]: `${num}${unit}` } }));
   }
 
   function toggleEditorFont(key: string, label: string, on: boolean) {
@@ -278,6 +305,29 @@ export function ThemeEditor({
         </fieldset>
 
         <fieldset className="fieldset">
+          <legend>Typography &amp; spacing</legend>
+          <p className="meta">
+            Readability controls applied across this KB&apos;s pages and home content. Line heights stay
+            unitless so they scale with the reader&apos;s zoom.
+          </p>
+          {TYPO_FIELDS.map((field) => (
+            <label className="theme-scale" key={field.key} title={field.help}>
+              <span className="meta">{field.label}</span>
+              <input
+                max={field.max}
+                min={field.min}
+                onChange={(e) => setTypography(field.key, Number(e.target.value), field.unit)}
+                step={field.step}
+                type="range"
+                value={typoToNumber(theme.typography[field.key])}
+              />
+              <span className="theme-scale__value">{theme.typography[field.key]}</span>
+            </label>
+          ))}
+          <p className="meta">“Space after heading” controls the gap between a heading and the list or text below it.</p>
+        </fieldset>
+
+        <fieldset className="fieldset">
           <legend>Editor palette</legend>
           <p className="meta">Which fonts and colors editors can apply to text in this KB.</p>
           <span className="meta">Fonts</span>
@@ -346,7 +396,7 @@ export function ThemeEditor({
 
       <aside className="theme-preview" aria-label="Live preview">
         <strong className="meta">Live preview — {kbTitle}</strong>
-        <div className="theme-preview__surface" ref={previewRef} style={previewVars as CSSProperties}>
+        <div className="theme-preview__surface flow" ref={previewRef} style={previewVars as CSSProperties}>
           <p className="eyebrow">Article</p>
           <h1>Heading one</h1>
           <h2>Heading two</h2>
@@ -354,6 +404,11 @@ export function ThemeEditor({
             Body text shows the chosen font, size, and color. Here is a <a href="#preview">styled link</a> and some{" "}
             <strong>bold emphasis</strong> for contrast.
           </p>
+          <h3>Section with a list</h3>
+          <ul>
+            <li>First item — note the gap above set by “space after heading”.</li>
+            <li>Second item — spacing between items is its own control.</li>
+          </ul>
 
           <div 
             className="alert alert--info" 

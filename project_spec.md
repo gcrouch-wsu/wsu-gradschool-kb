@@ -221,9 +221,12 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
     alignment, and max content width.
   - **Home Page Content** — a rich **content-block** editor for the home page and a **KB-list** toggle
     + heading.
-  - **Global Styling** — a **global default theme** (`globalTheme`: colors, fonts, type scale, editor
-    palette) that individual KBs inherit unless they define their own; edited with the shared
-    `ThemeEditor`.
+  - **Global Styling** — a **global default theme** (`globalTheme`: colors, fonts, type scale,
+    **typography & spacing**, editor palette) that individual KBs inherit unless they define their own;
+    edited with the shared `ThemeEditor`. The typography group (owner-set defaults, per-KB overridable)
+    covers body/heading line-height, body/heading letter-spacing, block spacing, the heading→content
+    gap (`spaceAfterHeading`), list item spacing, list indent, and the article reading measure — all
+    emitted as CSS variables by `themeToCssVars` and consumed by the `.flow` rhythm system (see §8).
 - All values are validated/clamped in `normalizeSiteSettings`; blank fields are blank-safe (the public
   shell omits empty elements and collapses an empty hero rather than rendering stray chrome). Falls
   back to defaults when unset or no DB. Owner-only in the UI and at the API (`GET`/`PUT`).
@@ -336,6 +339,14 @@ manual redirect persistence, and the single-active-version DB invariant.
   `accessibleKbIds`, and detail/edit server components use `canAccessKb(...) → notFound()`. A new admin
   surface is unscoped until you add one. Per-KB enforcement is real only with `DATABASE_URL`.
 - **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
+- **Vertical rhythm lives in the `.flow` container, not per-block margins.** Public reading surfaces
+  (`.article`, the home content wrapper, `.card__blocks`, `.procedure-section__blocks`) carry the
+  `flow` class. `.flow` zeroes each direct child's `margin-block` and adds spacing between siblings via
+  the theme-driven `--space-block` / `--space-after-heading` / list vars. Don't add ad-hoc top/bottom
+  margins to content blocks — set the theme typography values (or the CSS var fallbacks in `:root`)
+  instead, or content drifts out of the shared rhythm. The editor surface (`.wysiwyg-surface`) keeps
+  its own spacing and is intentionally **not** a `.flow` container. Line-heights are unitless and sizes
+  are rem/ch so everything scales with reader zoom (WCAG 1.4.4/1.4.8/1.4.12).
 
 ---
 

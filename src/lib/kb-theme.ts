@@ -22,10 +22,22 @@ export interface ThemeFonts {
 }
 
 export interface ThemeScale {
-  base: string; 
-  h1: string; 
-  h2: string; 
-  h3: string; 
+  base: string;
+  h1: string;
+  h2: string;
+  h3: string;
+}
+
+export interface ThemeTypography {
+  bodyLeading: string; // unitless line-height for body text
+  headingLeading: string; // unitless line-height for headings
+  bodyTracking: string; // letter-spacing (em) for body text
+  headingTracking: string; // letter-spacing (em) for headings
+  blockSpacing: string; // rem; vertical gap between content blocks (and before headings)
+  spaceAfterHeading: string; // rem; gap below a heading (e.g. heading -> list)
+  listItemSpacing: string; // rem; gap between list items
+  listIndent: string; // rem; list indentation
+  measure: string; // ch; max reading line length in the article column
 }
 
 export interface ThemeOption {
@@ -43,6 +55,7 @@ export interface KbTheme {
   colors: ThemeColors;
   fonts: ThemeFonts;
   scale: ThemeScale;
+  typography: ThemeTypography;
   editor: ThemeEditorAllowlist;
 }
 
@@ -84,6 +97,17 @@ export const DEFAULT_THEME: KbTheme = {
   },
   fonts: { body: "system", heading: "system" },
   scale: { base: "1rem", h1: "3.5rem", h2: "1.75rem", h3: "1.4rem" },
+  typography: {
+    bodyLeading: "1.65",
+    headingLeading: "1.2",
+    bodyTracking: "0em",
+    headingTracking: "-0.02em",
+    blockSpacing: "1.5rem",
+    spaceAfterHeading: "0.5rem",
+    listItemSpacing: "0.4rem",
+    listIndent: "1.75rem",
+    measure: "72ch",
+  },
   editor: {
     fonts: [
       { label: "Default", value: "" },
@@ -110,6 +134,31 @@ export const DEFAULT_THEME: KbTheme = {
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const REM = /^\d+(\.\d+)?rem$/;
+const EM = /^-?\d+(\.\d+)?em$/;
+const CH = /^\d+(\.\d+)?ch$/;
+const UNITLESS = /^\d+(\.\d+)?$/;
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+// Validate an unitless line-height ("1.65"), clamping to a safe range.
+function safeLeading(value: unknown, fallback: string, min: number, max: number): string {
+  if (typeof value === "number" && Number.isFinite(value)) return String(clampNumber(value, min, max));
+  if (typeof value === "string" && UNITLESS.test(value.trim())) {
+    return String(clampNumber(parseFloat(value), min, max));
+  }
+  return fallback;
+}
+
+// Validate a unit-bearing length ("1.5rem" / "-0.02em" / "72ch"), clamping the numeric part.
+function safeUnit(value: unknown, unit: "rem" | "em" | "ch", re: RegExp, fallback: string, min: number, max: number): string {
+  if (typeof value === "number" && Number.isFinite(value)) return `${clampNumber(value, min, max)}${unit}`;
+  if (typeof value === "string" && re.test(value.trim())) {
+    return `${clampNumber(parseFloat(value), min, max)}${unit}`;
+  }
+  return fallback;
+}
 
 function safeHex(value: unknown, fallback: string): string {
   if (typeof value !== "string" || !HEX.test(value.trim())) {
@@ -154,6 +203,7 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
   const c = (t.colors ?? {}) as Partial<ThemeColors>;
   const f = (t.fonts ?? {}) as Partial<ThemeFonts>;
   const s = (t.scale ?? {}) as Partial<ThemeScale>;
+  const ty = (t.typography ?? {}) as Partial<ThemeTypography>;
   const e = (t.editor ?? {}) as Partial<ThemeEditorAllowlist>;
   return {
     colors: {
@@ -182,6 +232,17 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       h1: safeRem(s.h1, base.scale.h1),
       h2: safeRem(s.h2, base.scale.h2),
       h3: safeRem(s.h3, base.scale.h3),
+    },
+    typography: {
+      bodyLeading: safeLeading(ty.bodyLeading, base.typography.bodyLeading, 1, 2.5),
+      headingLeading: safeLeading(ty.headingLeading, base.typography.headingLeading, 0.9, 2),
+      bodyTracking: safeUnit(ty.bodyTracking, "em", EM, base.typography.bodyTracking, -0.05, 0.2),
+      headingTracking: safeUnit(ty.headingTracking, "em", EM, base.typography.headingTracking, -0.08, 0.2),
+      blockSpacing: safeUnit(ty.blockSpacing, "rem", REM, base.typography.blockSpacing, 0, 4),
+      spaceAfterHeading: safeUnit(ty.spaceAfterHeading, "rem", REM, base.typography.spaceAfterHeading, 0, 3),
+      listItemSpacing: safeUnit(ty.listItemSpacing, "rem", REM, base.typography.listItemSpacing, 0, 2),
+      listIndent: safeUnit(ty.listIndent, "rem", REM, base.typography.listIndent, 0, 4),
+      measure: safeUnit(ty.measure, "ch", CH, base.typography.measure, 40, 100),
     },
     editor: {
       fonts: safeOptions(e.fonts, "font", base.editor.fonts),
@@ -276,5 +337,14 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--h1-size": `clamp(2.25rem, 5vw, ${theme.scale.h1})`,
     "--h2-size": theme.scale.h2,
     "--h3-size": theme.scale.h3,
+    "--leading-body": theme.typography.bodyLeading,
+    "--leading-heading": theme.typography.headingLeading,
+    "--tracking-body": theme.typography.bodyTracking,
+    "--tracking-heading": theme.typography.headingTracking,
+    "--space-block": theme.typography.blockSpacing,
+    "--space-after-heading": theme.typography.spaceAfterHeading,
+    "--space-list-item": theme.typography.listItemSpacing,
+    "--indent-list": theme.typography.listIndent,
+    "--measure": theme.typography.measure,
   };
 }

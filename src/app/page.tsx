@@ -74,7 +74,9 @@ export default async function HomePage() {
       )}
 
       <div className="page-shell">
-        <PageBlocks blocks={settings.homeBlocks} />
+        <div className="flow">
+          <PageBlocks blocks={settings.homeBlocks} />
+        </div>
 
         {settings.showKbList && (
           <div style={settings.homeBlocks.length > 0 ? { marginTop: "3rem" } : undefined}>
