@@ -144,6 +144,34 @@ export function blocksToDocumentHtml(blocks: ContentBlock[], kbSlug?: string): s
   return blocks.map((block) => blockToHtml(block, kbSlug)).join("");
 }
 
+// Readable HTML for the editor's source ("HTML") view: the same structure the
+// editor round-trips, minus editor-only chrome (image control buttons, empty
+// placeholder captions, contenteditable flags). Re-parsing the result through
+// documentHtmlToBlocks reconstructs the blocks, so the toggle is lossless for
+// supported content and safe (the parser drops anything outside the allowlist).
+export function blocksToSourceHtml(blocks: ContentBlock[], kbSlug?: string): string {
+  const root = parse(blocksToDocumentHtml(blocks, kbSlug));
+  for (const node of root.querySelectorAll(".doc-image__controls")) {
+    node.remove();
+  }
+  for (const node of root.querySelectorAll("figcaption")) {
+    const cls = node.getAttribute("class") ?? "";
+    if (/doc-image__caption--(missing|decorative|placeholder)/.test(cls)) {
+      node.remove();
+    }
+  }
+  for (const node of root.querySelectorAll("[contenteditable]")) {
+    node.removeAttribute("contenteditable");
+  }
+  for (const node of root.querySelectorAll("[data-placeholder]")) {
+    node.removeAttribute("data-placeholder");
+  }
+  return root.childNodes
+    .map((node) => node.toString())
+    .filter((html) => html.trim().length > 0)
+    .join("\n\n");
+}
+
 function blockToHtml(block: ContentBlock, kbSlug?: string): string {
   const id = escapeHtml(block.blockId);
   switch (block.type) {

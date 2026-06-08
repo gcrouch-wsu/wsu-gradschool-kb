@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   blocksToDocumentHtml,
+  blocksToSourceHtml,
   documentHtmlToBlocks,
   mergeDocumentAndExtraBlocks,
   sanitizePageDocument,
@@ -30,6 +31,38 @@ describe("page-document", () => {
     expect(parsed[0]?.type).toBe("paragraph");
     expect(parsed[1]).toMatchObject({ type: "heading", level: 2 });
     expect(parsed[2]).toMatchObject({ type: "list", ordered: true, start: 4, items: ["One", "Two"] });
+  });
+
+  it("round-trips the HTML source view (Visual ⇄ HTML toggle) across block types", () => {
+    const blocks: ContentBlock[] = [
+      { blockId: "h1", type: "heading", level: 2, text: "Title", html: "Title" },
+      { blockId: "p1", type: "paragraph", text: "Body", html: "Body" },
+      { blockId: "l1", type: "list", ordered: false, items: ["A", "B"], itemHtml: ["A", "B"] },
+      {
+        blockId: "c1",
+        type: "card",
+        background: "wash",
+        blocks: [{ blockId: "cp1", type: "paragraph", text: "Inside", html: "Inside" }],
+      },
+    ];
+    const source = blocksToSourceHtml(blocks);
+    // Editor-only chrome is stripped from the readable source.
+    expect(source).not.toContain("doc-image__controls");
+    expect(source).not.toContain("contenteditable");
+    // Re-parsing the source reconstructs every block type.
+    const parsed = documentHtmlToBlocks(source);
+    expect(parsed.map((b) => b.type)).toEqual(["heading", "paragraph", "list", "card"]);
+    expect(parsed[3]).toMatchObject({ type: "card", background: "wash" });
+  });
+
+  it("drops scripts and event handlers pasted into the HTML source", () => {
+    const pasted =
+      '<p data-block-id="p1">Hi<script>alert(1)</script></p><div onclick="evil()">x</div>';
+    const blocks = documentHtmlToBlocks(pasted);
+    const serialized = blocksToDocumentHtml(blocks);
+    expect(serialized).not.toContain("<script");
+    expect(serialized).not.toContain("onclick");
+    expect(serialized).not.toContain("alert(1)");
   });
 
   it("preserves an anchored note span through a flow round-trip, hidden from public render", () => {

@@ -703,6 +703,17 @@ p {
   margin-top: var(--space-list-item);
 }
 
+/* The KB list is a self-styled, bordered component. Keep flow's generic list
+   indentation/item-spacing off it, but DO NOT reset its margin so the
+   space-after-heading gap from the heading above it still applies. */
+.flow .kb-list {
+  padding-left: 0;
+}
+
+.flow .kb-list__item {
+  margin-top: 0;
+}
+
 .meta {
   color: var(--muted);
   font-size: 0.95rem;
@@ -1170,6 +1181,25 @@ p {
   display: flex;
   gap: 0.75rem;
   font-weight: 600;
+}
+
+/* Inline editor row for label + URL + a compact delete control (site settings
+   nav links). Replaces a 2-column grid that wrapped the delete button. */
+.link-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.link-row .input {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.field-group {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .toc-control {
@@ -2009,6 +2039,39 @@ article li > ol {
   position: sticky;
   top: 0;
   z-index: 60;
+}
+
+.editor-mode-toggle {
+  flex: none;
+}
+
+/* Editor "HTML" source view (Visual ⇄ HTML toggle). */
+.html-source {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.html-source__area {
+  width: 100%;
+  min-height: 28rem;
+  padding: 1rem 1.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-lg);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.html-source__area:focus {
+  border-color: var(--wsu-crimson);
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(166, 15, 45, 0.08);
 }
 
 .editor-toolbar-sticky .rich-text-toolbar {

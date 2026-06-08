@@ -74,36 +74,37 @@ export default async function HomePage() {
       )}
 
       <div className="page-shell">
+        {/* One flow container so the home content AND the KB-list section share the
+            owner-controlled spacing (block rhythm + space-after-heading). */}
         <div className="flow">
           <PageBlocks blocks={settings.homeBlocks} />
-        </div>
 
-        {settings.showKbList && (
-          <div style={settings.homeBlocks.length > 0 ? { marginTop: "3rem" } : undefined}>
-            <h2>{settings.kbListTitle}</h2>
-            {kbs.length === 0 && (
-              <div className="empty">
-                <p>No knowledge bases are published yet. Check back soon for guides and resources.</p>
-              </div>
-            )}
-            {kbs.length > 0 && (
-              <ul className="kb-list">
-                {kbs.map((kb) => (
-                  <li className="kb-list__item" key={kb.id}>
-                    <div className="kb-list__main">
-                      <h3 className="kb-list__title">
-                        <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
-                        {kb.isDraft && <span className="badge badge--draft">Draft</span>}
-                      </h3>
-                      {kb.description && <p className="kb-list__desc">{kb.description}</p>}
-                    </div>
-                    <p className="kb-list__meta meta">Updated {formatDate(kb.updatedOn)}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+          {settings.showKbList && (
+            <>
+              <h2>{settings.kbListTitle}</h2>
+              {kbs.length === 0 ? (
+                <div className="empty">
+                  <p>No knowledge bases are published yet. Check back soon for guides and resources.</p>
+                </div>
+              ) : (
+                <ul className="kb-list">
+                  {kbs.map((kb) => (
+                    <li className="kb-list__item" key={kb.id}>
+                      <div className="kb-list__main">
+                        <h3 className="kb-list__title">
+                          <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
+                          {kb.isDraft && <span className="badge badge--draft">Draft</span>}
+                        </h3>
+                        {kb.description && <p className="kb-list__desc">{kb.description}</p>}
+                      </div>
+                      <p className="kb-list__meta meta">Updated {formatDate(kb.updatedOn)}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

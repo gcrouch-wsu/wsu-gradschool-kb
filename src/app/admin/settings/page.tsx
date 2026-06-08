@@ -189,7 +189,7 @@ export default function AdminSettingsPage() {
               <div className="field-group">
                 <span className="meta">Navigation Links</span>
                 {settings.headerLinks.map((link, i) => (
-                  <div key={i} className="field-row">
+                  <div key={i} className="link-row">
                     <input
                       className="input"
                       placeholder="Label"
@@ -202,12 +202,17 @@ export default function AdminSettingsPage() {
                       value={link.url}
                       onChange={(e) => updateLinks("headerLinks", i, "url", e.target.value)}
                     />
-                    <button type="button" className="button button--ghost" onClick={() => removeLink("headerLinks", i)}>
+                    <button
+                      type="button"
+                      className="icon-button icon-button--danger"
+                      aria-label={`Remove header link ${i + 1}`}
+                      onClick={() => removeLink("headerLinks", i)}
+                    >
                       ✕
                     </button>
                   </div>
                 ))}
-                <button type="button" className="button button--ghost" onClick={() => addLink("headerLinks")}>
+                <button type="button" className="button button--small button--ghost" onClick={() => addLink("headerLinks")}>
                   + Add Link
                 </button>
               </div>
@@ -238,7 +243,7 @@ export default function AdminSettingsPage() {
               <div className="field-group">
                 <span className="meta">Footer Links</span>
                 {settings.footerLinks.map((link, i) => (
-                  <div key={i} className="field-row">
+                  <div key={i} className="link-row">
                     <input
                       className="input"
                       placeholder="Label"
@@ -251,12 +256,17 @@ export default function AdminSettingsPage() {
                       value={link.url}
                       onChange={(e) => updateLinks("footerLinks", i, "url", e.target.value)}
                     />
-                    <button type="button" className="button button--ghost" onClick={() => removeLink("footerLinks", i)}>
+                    <button
+                      type="button"
+                      className="icon-button icon-button--danger"
+                      aria-label={`Remove footer link ${i + 1}`}
+                      onClick={() => removeLink("footerLinks", i)}
+                    >
                       ✕
                     </button>
                   </div>
                 ))}
-                <button type="button" className="button button--ghost" onClick={() => addLink("footerLinks")}>
+                <button type="button" className="button button--small button--ghost" onClick={() => addLink("footerLinks")}>
                   + Add Link
                 </button>
               </div>

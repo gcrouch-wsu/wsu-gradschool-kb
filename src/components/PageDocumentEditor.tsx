@@ -11,6 +11,7 @@ import { TableBlockEditor } from "@/components/TableBlockEditor";
 import { blocksToSections, sectionsToBlocks, type EditorSection } from "@/lib/page-editor-list";
 import {
   blocksToDocumentHtml,
+  blocksToSourceHtml,
   documentHtmlToBlocks,
   sanitizePageDocument,
 } from "@/lib/page-document";
@@ -63,6 +64,8 @@ export function PageDocumentEditor({
   const [noteRequest, setNoteRequest] = useState<NoteEditRequest | null>(null);
   const [altRequest, setAltRequest] = useState<AltEditRequest | null>(null);
   const [formatHint, setFormatHint] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"visual" | "html">("visual");
+  const [htmlDraft, setHtmlDraft] = useState("");
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -71,6 +74,19 @@ export function PageDocumentEditor({
     setSections(nextSections);
     onChangeRef.current(sectionsToBlocks(nextSections));
   }, []);
+
+  function switchToHtml() {
+    if (viewMode === "html") return;
+    setHtmlDraft(blocksToSourceHtml(sectionsToBlocks(sections), kbSlug));
+    setViewMode("html");
+  }
+
+  function switchToVisual() {
+    if (viewMode === "visual") return;
+    const nextBlocks = documentHtmlToBlocks(htmlDraft);
+    emitChange(blocksToSections(nextBlocks));
+    setViewMode("visual");
+  }
 
   useEffect(() => {
     registerFormatIssueReporter(setFormatHint);
@@ -233,20 +249,57 @@ export function PageDocumentEditor({
   return (
     <div className="page-document-editor">
       <div className="editor-toolbar-sticky">
-        <DocumentToolbar
-          editorPalette={editorPalette}
-          onInsertInfoBox={handleInsertInfoBox}
-          onInsertMedia={() => setMediaPickerOpen(true)}
-          onAddNote={() => openNoteEditor()}
-          onAddTable={addTable}
-          onAddCard={addCard}
-          onAddProcedureSection={addProcedureSection}
-          onInsertSectionBreak={handleInsertSectionBreak}
-        />
+        <div className="seg editor-mode-toggle" role="group" aria-label="Editor mode">
+          <button
+            aria-pressed={viewMode === "visual"}
+            className="seg__btn"
+            onClick={switchToVisual}
+            type="button"
+          >
+            Visual
+          </button>
+          <button
+            aria-pressed={viewMode === "html"}
+            className="seg__btn"
+            onClick={switchToHtml}
+            title="Edit the document HTML"
+            type="button"
+          >
+            {"</> HTML"}
+          </button>
+        </div>
+        {viewMode === "visual" && (
+          <DocumentToolbar
+            editorPalette={editorPalette}
+            onInsertInfoBox={handleInsertInfoBox}
+            onInsertMedia={() => setMediaPickerOpen(true)}
+            onAddNote={() => openNoteEditor()}
+            onAddTable={addTable}
+            onAddCard={addCard}
+            onAddProcedureSection={addProcedureSection}
+            onInsertSectionBreak={handleInsertSectionBreak}
+          />
+        )}
         {formatHint && <p className="alert editor-format-hint">{formatHint}</p>}
         <PageEditorDebugPanel />
       </div>
 
+      {viewMode === "html" ? (
+        <div className="html-source">
+          <textarea
+            aria-label="Document HTML source"
+            className="html-source__area"
+            onChange={(e) => setHtmlDraft(e.target.value)}
+            spellCheck={false}
+            value={htmlDraft}
+          />
+          <p className="meta">
+            Edit the document HTML directly. Switching back to Visual re-parses and sanitizes it —
+            unsupported tags and attributes (scripts, styles, iframes, event handlers) are removed.
+          </p>
+        </div>
+      ) : (
+        <>
       {mediaPickerOpen && (
         <MediaPicker kbId={kbId} onClose={() => setMediaPickerOpen(false)} onInsert={insertBlockFromPicker} />
       )}
@@ -319,6 +372,8 @@ export function PageDocumentEditor({
           />
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 }
