@@ -33,6 +33,10 @@ export interface SiteSettings {
   homeBlocks: ContentBlock[];
   showKbList: boolean;
   kbListTitle: string;
+  kbListTitleColor: string; // hex; "" = inherit default
+  kbListTitleSize: string; // e.g. "1.75rem" / "28px"; "" = default
+  kbListTitleWeight: BrandTextWeight; // "" = default
+  kbListTitleFont: string; // SAFE_FONTS key; "" = inherit
   // Chrome
   headerLinks: NavLink[];
   footerText: string;
@@ -59,6 +63,10 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   homeBlocks: [],
   showKbList: true,
   kbListTitle: "Published knowledge bases",
+  kbListTitleColor: "",
+  kbListTitleSize: "",
+  kbListTitleWeight: "",
+  kbListTitleFont: "",
   headerLinks: [],
   footerText: "© Washington State University Graduate School",
   footerLinks: [
@@ -183,5 +191,9 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
     homeBlocks: Array.isArray(input.homeBlocks) ? (input.homeBlocks as ContentBlock[]) : DEFAULT_SITE_SETTINGS.homeBlocks,
     showKbList: typeof input.showKbList === "boolean" ? input.showKbList : DEFAULT_SITE_SETTINGS.showKbList,
     kbListTitle: pickText("kbListTitle", DEFAULT_SITE_SETTINGS.kbListTitle),
+    kbListTitleColor: safeBrandColor(input.kbListTitleColor),
+    kbListTitleSize: safeBrandSize(input.kbListTitleSize),
+    kbListTitleWeight: safeBrandWeight(input.kbListTitleWeight),
+    kbListTitleFont: safeBrandFont(input.kbListTitleFont),
   };
 }

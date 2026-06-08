@@ -58,7 +58,12 @@ export function PageDocumentEditor({
   onChange: (blocks: ContentBlock[]) => void;
 }) {
   const initialSections = blocksToSections(blocks);
-  const [sections, setSections] = useState<EditorSection[]>(initialSections);
+  // Always present at least one editable flow surface — otherwise an empty
+  // document (e.g. fresh Home Page Rich Content) renders just the toolbar with
+  // nowhere to type.
+  const [sections, setSections] = useState<EditorSection[]>(
+    initialSections.length > 0 ? initialSections : [{ type: "flow", blocks: [] }],
+  );
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [linkRequest, setLinkRequest] = useState<LinkEditRequest | null>(null);
   const [noteRequest, setNoteRequest] = useState<NoteEditRequest | null>(null);

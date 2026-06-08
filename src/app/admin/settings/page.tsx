@@ -513,6 +513,69 @@ export default function AdminSettingsPage() {
                 onChange={(e) => update("kbListTitle", e.target.value)}
               />
             </label>
+
+            <div className="field-group" style={{ marginTop: "1rem" }}>
+              <span className="meta">Section heading style (leave any field at default to inherit)</span>
+              <div className="field-row">
+                <label style={{ flex: 1 }}>
+                  <span className="meta">Color</span>
+                  <div className="theme-color__inputs">
+                    <input
+                      aria-label="Section heading color"
+                      type="color"
+                      value={settings.kbListTitleColor || "#1d1a1b"}
+                      onChange={(e) => update("kbListTitleColor", e.target.value)}
+                    />
+                    <input
+                      className="input"
+                      placeholder="Default"
+                      value={settings.kbListTitleColor}
+                      onChange={(e) => update("kbListTitleColor", e.target.value)}
+                    />
+                  </div>
+                </label>
+                <label style={{ flex: 1 }}>
+                  <span className="meta">Size (e.g. 1.75rem or 28px)</span>
+                  <input
+                    className="input"
+                    placeholder="Default"
+                    value={settings.kbListTitleSize}
+                    onChange={(e) => update("kbListTitleSize", e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="field-row">
+                <label style={{ flex: 1 }}>
+                  <span className="meta">Weight</span>
+                  <select
+                    className="input"
+                    value={settings.kbListTitleWeight}
+                    onChange={(e) => update("kbListTitleWeight", e.target.value as BrandTextWeight)}
+                  >
+                    {BRAND_TEXT_WEIGHTS.map((w) => (
+                      <option key={w || "default"} value={w}>
+                        {w === "" ? "Default" : w}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ flex: 1 }}>
+                  <span className="meta">Font</span>
+                  <select
+                    className="input"
+                    value={settings.kbListTitleFont}
+                    onChange={(e) => update("kbListTitleFont", e.target.value)}
+                  >
+                    <option value="">Default</option>
+                    {Object.entries(SAFE_FONTS).map(([key, font]) => (
+                      <option key={key} value={key}>
+                        {font.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
           </section>
 
           <div className="admin-actions" style={{ marginTop: "2rem" }}>

@@ -235,6 +235,10 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     home_blocks: any;
     show_kb_list: boolean;
     kb_list_title: string;
+    kb_list_title_color?: string;
+    kb_list_title_size?: string;
+    kb_list_title_weight?: string;
+    kb_list_title_font?: string;
     brand_text?: string;
     brand_text_color?: string;
     brand_text_size?: string;
@@ -262,6 +266,10 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     homeBlocks: row.home_blocks,
     showKbList: row.show_kb_list,
     kbListTitle: row.kb_list_title,
+    kbListTitleColor: row.kb_list_title_color,
+    kbListTitleSize: row.kb_list_title_size,
+    kbListTitleWeight: row.kb_list_title_weight,
+    kbListTitleFont: row.kb_list_title_font,
     brandText: row.brand_text,
     brandTextColor: row.brand_text_color,
     brandTextSize: row.brand_text_size,
@@ -283,6 +291,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       id, home_eyebrow, home_title, home_intro,
       header_links, footer_text, footer_links, contact_info,
       global_theme, home_blocks, show_kb_list, kb_list_title,
+      kb_list_title_color, kb_list_title_size, kb_list_title_weight, kb_list_title_font,
       brand_text, brand_text_color, brand_text_size, brand_text_weight, brand_text_font,
       logo_url, logo_width, header_alignment, hero_alignment, content_width,
       updated_at
@@ -292,6 +301,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       ${JSON.stringify(settings.headerLinks)}, ${settings.footerText}, ${JSON.stringify(settings.footerLinks)}, ${settings.contactInfo},
       ${settings.globalTheme ? JSON.stringify(settings.globalTheme) : null},
       ${JSON.stringify(settings.homeBlocks)}, ${settings.showKbList}, ${settings.kbListTitle},
+      ${settings.kbListTitleColor}, ${settings.kbListTitleSize}, ${settings.kbListTitleWeight}, ${settings.kbListTitleFont},
       ${settings.brandText}, ${settings.brandTextColor}, ${settings.brandTextSize}, ${settings.brandTextWeight}, ${settings.brandTextFont},
       ${settings.logoUrl}, ${settings.logoWidth},
       ${settings.headerAlignment}, ${settings.heroAlignment}, ${settings.contentWidth},
@@ -309,6 +319,10 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       home_blocks = EXCLUDED.home_blocks,
       show_kb_list = EXCLUDED.show_kb_list,
       kb_list_title = EXCLUDED.kb_list_title,
+      kb_list_title_color = EXCLUDED.kb_list_title_color,
+      kb_list_title_size = EXCLUDED.kb_list_title_size,
+      kb_list_title_weight = EXCLUDED.kb_list_title_weight,
+      kb_list_title_font = EXCLUDED.kb_list_title_font,
       brand_text = EXCLUDED.brand_text,
       brand_text_color = EXCLUDED.brand_text_color,
       brand_text_size = EXCLUDED.brand_text_size,

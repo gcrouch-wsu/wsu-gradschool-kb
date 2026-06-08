@@ -260,11 +260,12 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `023_brand_text_style`.** Migrations after `018_rate_limits` add content
+  backfills. **Current head: `024_kb_list_title_style`.** Migrations after `018_rate_limits` add content
   lifecycle columns (`019`: `next_review_date` / `verified_at` / `verified_by`), the global default
   site theme (`020`), home content blocks + KB-list controls (`021`), branding/logo + layout columns
   (`022`: `brand_text`, `logo_url`, `logo_width`, `header_alignment`, `hero_alignment`,
-  `content_width`), and brand-text style columns (`023`: color/size/weight/font).
+  `content_width`), brand-text style columns (`023`: color/size/weight/font), and KB-list
+  section-heading style columns (`024`: `kb_list_title_color/size/weight/font`).
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`.

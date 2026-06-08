@@ -5,7 +5,7 @@ import { getCurrentAdminSession } from "@/lib/auth";
 import { getPublishedKbs } from "@/lib/kb-store";
 import { loadSiteSettings } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { DEFAULT_THEME, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, fontStack, themeToCssVars } from "@/lib/kb-theme";
 import type { KnowledgeBase } from "@/lib/types";
 import type { CSSProperties } from "react";
 
@@ -59,6 +59,13 @@ export default async function HomePage() {
 
   const hasHero = Boolean(settings.homeEyebrow || settings.homeTitle || settings.homeIntro);
 
+  const kbListTitleStyle: CSSProperties = {
+    ...(settings.kbListTitleColor ? { color: settings.kbListTitleColor } : {}),
+    ...(settings.kbListTitleSize ? { fontSize: settings.kbListTitleSize } : {}),
+    ...(settings.kbListTitleWeight ? { fontWeight: Number(settings.kbListTitleWeight) } : {}),
+    ...(settings.kbListTitleFont ? { fontFamily: fontStack(settings.kbListTitleFont) } : {}),
+  };
+
   return (
     <div className="kb-theme-root" style={themeVars}>
       {hasHero && (
@@ -81,7 +88,7 @@ export default async function HomePage() {
 
           {settings.showKbList && (
             <>
-              <h2>{settings.kbListTitle}</h2>
+              <h2 style={kbListTitleStyle}>{settings.kbListTitle}</h2>
               {kbs.length === 0 ? (
                 <div className="empty">
                   <p>No knowledge bases are published yet. Check back soon for guides and resources.</p>

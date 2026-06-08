@@ -562,6 +562,15 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS brand_text_font TEXT NOT NULL DEFAULT ''`;
     },
   },
+  {
+    id: "024_kb_list_title_style",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title_color TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title_size TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title_weight TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kb_list_title_font TEXT NOT NULL DEFAULT ''`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {
