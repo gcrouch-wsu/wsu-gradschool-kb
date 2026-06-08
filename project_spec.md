@@ -46,8 +46,8 @@ Concretely, the platform must:
 
 **In scope (built):** public multi-KB reading experience; a custom block/rich-text editor; managed
 assets with versioning and stable URLs; Postgres full-text search; Owner/Admin/Editor auth with
-per-KB scoping; per-KB theming, a global default theme, and owner-level site settings (home content,
-branding/logo, and layout); DOCX staged import; automatic
+per-KB scoping; configurable per-KB homepage pages; per-KB theming, a global default theme, and
+owner-level site settings (home content, branding/logo, and layout); DOCX staged import; automatic
 redirects; DB-backed edit locks; a publish-time accessibility/governance gate; an audit log; and
 print-to-PDF export (browser print over semantic HTML — see §9 for the exact mechanism).
 
@@ -74,6 +74,7 @@ checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsF
 | Area | Owner | Admin | Editor | Scope mechanism |
 |------|-------|-------|--------|-----------------|
 | Pages list/edit/publish | all | all | assigned | `filterKbsForSession` + `requireKbAccess` |
+| KB homepage assignment | all | all | assigned | `requireKbAccess` |
 | Assets list/edit | all | all | assigned | `filterKbsForSession` + `requireKbAccess` |
 | Imports (list/detail/edit/delete) | all | all | assigned | `requireKbAccess` |
 | Redirects (read/create/delete) | all | all | assigned | `requireKbAccess` |
@@ -91,6 +92,7 @@ surfaces are added):
 | `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Editors | The pages list uses `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
 | `/admin/pages/[pageId]` | Owner/Admin/assigned Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
 | Page mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | `PATCH`, status, layout, lock, and create routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/pages/**/route.ts` |
+| KB homepage API | Owner/Admin/assigned Editor | Sets or clears `knowledge_bases.home_page_id`; route uses `requireAdminMutation` plus `requireKbAccess(kbId)`. | `src/app/api/admin/kbs/[kbId]/homepage/route.ts` |
 | `/admin/assets` and asset picker API | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; picker `GET /api/admin/assets` requires a session and `requireKbAccess(kbId)`. | `src/app/admin/assets/page.tsx`, `src/app/api/admin/assets/route.ts` |
 | `/admin/assets/[assetId]` | Owner/Admin/assigned Editor | Detail page resolves the asset's home KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/assets/[assetId]/page.tsx` |
 | Asset mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | Upload/metadata/status/replace/activate routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/assets/**/route.ts` |
@@ -145,6 +147,10 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
   with optional custom start number, alert (rendered in the editor as a reader-visible info box),
   image with separate optional caption, table, asset_link, card (recursive, max depth 3), top-level
   procedure_section, video, and section_divider.
+- A KB can optionally point `homepagePageId` / `knowledge_bases.home_page_id` at one page in that
+  KB. Public `/kb/{kbSlug}` renders that page as the KB landing page when it is visible to the
+  current visitor; otherwise it falls back to the generated section list. The homepage page's tree
+  link uses `/kb/{kbSlug}` as its canonical URL.
 - **Serialization** (`src/lib/page-document.ts`): `blocksToDocumentHtml` (blocks → editor HTML) and
   `documentHtmlToBlocks` (editor HTML → blocks). Inline rich text is sanitized by
   `src/lib/rich-text.ts` (allowlist *rebuild* — the input is parsed and re-emitted from an allowlist
@@ -222,7 +228,8 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
   - **Home Page Content** — a rich **content-block** editor for the home page and a **KB-list** toggle
     + heading.
   - **Global Styling** — a **global default theme** (`globalTheme`: colors, fonts, type scale,
-    **typography & spacing**, editor palette) that individual KBs inherit unless they define their own;
+    **H1-H4 heading color/font/size/effects**, **typography & spacing**, editor palette) that
+    individual KBs inherit unless they define their own;
     edited with the shared `ThemeEditor`. The typography group (owner-set defaults, per-KB overridable)
     covers body/heading line-height, body/heading letter-spacing, block spacing, the heading→content
     gap (`spaceAfterHeading`), list item spacing, list indent, and the article reading measure — all
@@ -242,6 +249,19 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 ### Home page (`src/app/page.tsx`)
 - Renders published KBs as a **list** (scales better than cards). A signed-in **editor** also sees
   their assigned KBs (drafts badged); owners/admins/public see all published.
+
+### KB landing pages (`src/app/kb/[kbSlug]/page.tsx`)
+- A KB root route first checks for a configured `homepagePageId`. If the page is visible to the
+  current visitor (published/public for public users; published/draft for signed-in staff), the KB
+  root renders that page content with the standard left page tree and optional right "On this page"
+  rail.
+- If no homepage is configured, or the configured page is not visible to the current visitor, the
+  route falls back to the generated section-list landing page.
+- Direct visits to the homepage page's nested path redirect to `/kb/{kbSlug}` so there is one
+  canonical URL for the landing content.
+- Public article breadcrumbs were intentionally removed: the left page tree handles cross-page
+  hierarchy and the right rail handles in-page headings, so a third navigation layer at the top of
+  the article was redundant and created alignment clutter.
 
 ### Page archive/delete policy
 - Archive = hidden from the public site, not deleted. Editors can archive pages in their assigned
@@ -354,7 +374,8 @@ manual redirect persistence, and the single-active-version DB invariant.
 ## 9. Current feature status
 
 **Working & verified (unit + live-DB):**
-- Multi-KB public site, 3-column docs layout, breadcrumbs, depth-controlled right-rail TOC.
+- Multi-KB public site, configurable KB homepage pages, 3-column docs layout, hierarchical page-tree
+  navigation, depth-controlled right-rail TOC.
 - Block editor (rich text, alignment, links, media picker, cards, tables, video, info boxes,
   procedure sections, selected-text notes, cursor-position note pins, separate captions/alt text,
   continued numbering controls).
@@ -406,7 +427,7 @@ Narrative backlog; the actionable, tagged version is §12.
 - **Public experience**: home search/filter + pagination as KB count grows; TOC scroll-spy;
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
 - **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
-  landing layout); bulk page operations; trash/restore; scheduled publish.
+  navigation options); bulk page operations; trash/restore; scheduled publish.
 - **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact view.
 - **Governance & ops**: wire audit-log retention; per-KB activity feed from the audit log; per-PR
   ephemeral Neon DB tests; broader integration + a11y coverage; a real rate-limit load test.

@@ -11,7 +11,6 @@ import {
   buildPageTree,
   getAssetById,
   getActiveRedirectTarget,
-  getBreadcrumbs,
   getKbById,
   getKbBySlug,
   getPageByPath,
@@ -75,7 +74,6 @@ export default async function KbArticlePage({
 
   const settings = await loadSiteSettings();
   const tree = await buildPageTree(kb.id, isStaff);
-  const breadcrumbs = await getBreadcrumbs(kb.id, page.path, isStaff);
   const currentPath = page.path.join("/");
   const relatedAssets = (
     await Promise.all(page.relatedAssetIds.map((assetId) => getAssetById(assetId)))
@@ -111,28 +109,6 @@ export default async function KbArticlePage({
           />
         </aside>
         <article className="article flow">
-          <nav aria-label="Breadcrumb" className="breadcrumbs">
-            <ol>
-              <li>
-                <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
-              </li>
-              {breadcrumbs.map((crumb) => {
-                const crumbPath = crumb.path.join("/");
-                const isCurrent = crumbPath === currentPath;
-                return (
-                  <li key={crumb.id}>
-                    {isCurrent ? (
-                      <span aria-current="page">{crumb.title}</span>
-                    ) : crumb.id === kb.homepagePageId ? (
-                      <Link href={`/kb/${kb.slug}`}>{crumb.title}</Link>
-                    ) : (
-                      <Link href={`/kb/${kb.slug}/${crumbPath}`}>{crumb.title}</Link>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </nav>
           <p className="eyebrow">
             Article
             {page.status === "draft" && <span className="badge badge--draft"> Draft</span>}

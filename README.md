@@ -6,8 +6,9 @@ current implementation status.
 
 ## Highlights
 
-- **Public KB**: home/article routes, hierarchical sidebar nav, breadcrumbs, and a responsive
-  **3-column docs layout** (nav · article · sticky on-page TOC rail) with depth-controlled TOC.
+- **Public KB**: home/article routes, hierarchical sidebar nav, configurable KB landing pages, and
+  a responsive **3-column docs layout** (nav · article · sticky on-page TOC rail) with
+  depth-controlled TOC.
 - **Rich editor**: paragraphs, headings, lists with continued numbering controls, reader-visible
   **info boxes**, procedure sections, tables, cards, images, videos, and internal **editor notes**
   anchored to selected text or a cursor position; text/image **alignment**; a **link dialog**
@@ -107,7 +108,7 @@ To use Neon, create a database and set `DATABASE_URL` locally and in Vercel:
 DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
-Schema changes are applied automatically on first request via versioned migrations in `src/lib/migrations/` (tracked in `_schema_migrations`). These include asset versions, redirects, staged imports, users / KB assignments, TOC settings, edit-lock columns, and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
+Schema changes are applied automatically on first request via versioned migrations in `src/lib/migrations/` (tracked in `_schema_migrations`). These include asset versions, redirects, staged imports, users / KB assignments, KB homepage page selection, TOC settings, edit-lock columns, and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
 
 ## Managed assets
 
@@ -128,8 +129,9 @@ Embedded images are promoted into managed image assets when the draft is created
 ## Managing Pages
 
 Signed-in admins manage pages at `/admin/pages`: reopen drafts, edit metadata and content,
-move a page under a different parent, and publish. The page-tree editor supports drag reorder,
-re-nesting, inline edit, and publishing drafts directly from the tree.
+move a page under a different parent, choose a KB homepage page, and publish. The page-tree editor
+supports drag reorder, re-nesting, inline edit, setting/clearing the KB homepage, and publishing
+drafts directly from the tree.
 
 The document editor is a WYSIWYG surface with a wrapping toolbar:
 
@@ -159,6 +161,14 @@ missing alt text. *Save & publish* /
 changes** indicator is shown, and concurrent edits are guarded by DB-backed edit locks.
 
 Supported DOCX inline formatting is preserved on import and can be edited in the page editor.
+
+## Knowledge base landing pages
+
+Each knowledge base can optionally mark one page as its homepage from `/admin/pages`. When set,
+`/kb/{kbSlug}` renders that page's content as the KB landing page while the left page tree still
+shows every visible page in the KB. The homepage item in the tree links back to `/kb/{kbSlug}` so
+there is one canonical URL for the landing content. If no homepage is selected, or if the selected
+page is not public/published for a public visitor, the KB falls back to the generated section list.
 
 ## Roles & access
 
@@ -193,8 +203,10 @@ when `DATABASE_URL` is set.
 
 ## Reading experience
 
-Public articles use a responsive 3-column layout (navigation · article · sticky "On this page"
-rail) that collapses on tablet/mobile. Tables scroll horizontally on narrow screens. Any article
-can be exported via the browser's **print-to-PDF** over semantic, print-styled HTML. (This relies on
-the browser's print engine; it is not a server-side tagged/PDF-UA generator — see `project_spec.md` FB-14.)
+Public articles use a responsive 3-column layout (KB page tree · article · sticky "On this page"
+rail) that collapses on tablet/mobile. The page tree provides hierarchy and cross-page navigation;
+the right rail covers headings within the current page, so public article breadcrumbs are intentionally
+omitted. Tables scroll horizontally on narrow screens. Any article can be exported via the browser's
+**print-to-PDF** over semantic, print-styled HTML. (This relies on the browser's print engine; it is
+not a server-side tagged/PDF-UA generator — see `project_spec.md` FB-14.)
  
