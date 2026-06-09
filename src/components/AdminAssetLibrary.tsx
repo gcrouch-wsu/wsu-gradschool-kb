@@ -156,11 +156,7 @@ export function AdminAssetLibrary({
       </div>
 
       {filtered.length === 0 ? (
-        <p className="meta asset-library__empty">
-          {assets.length === 0
-            ? "No assets in this knowledge base yet. Use the Upload tab to add a file."
-            : "No assets match your search or filters."}
-        </p>
+        <p className="meta asset-library__empty">No assets match your search or filters.</p>
       ) : (
         <div className="asset-library__table-wrap">
           <table className="asset-library__table">

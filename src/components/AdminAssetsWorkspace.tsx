@@ -7,29 +7,34 @@ import {
   type AdminAssetLibraryRow,
 } from "@/components/AdminAssetLibrary";
 import { AdminAssetUploadForm } from "@/components/AdminAssetUploadForm";
-
-type PageTab = "library" | "upload";
+import { KbScopePicker, type KbScopeOption } from "@/components/KbScopePicker";
+import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
+import {
+  buildAdminAssetsQuery,
+  parseAdminAssetsTab,
+  type AdminAssetsTab,
+} from "@/lib/admin-assets-query";
 
 interface AdminAssetsWorkspaceProps {
   assets: AdminAssetLibraryRow[];
-  kbId: string;
+  kbSlug: string;
   kbTitle: string;
-  kbs: { id: string; title: string }[];
+  kbs: KbScopeOption[];
   statusFilter?: string;
 }
 
-const PAGE_TABS: PageTab[] = ["library", "upload"];
+const PAGE_TABS: AdminAssetsTab[] = ["knowledge-base", "upload"];
 
 export function AdminAssetsWorkspace({
   assets,
-  kbId,
+  kbSlug,
   kbTitle,
   kbs,
   statusFilter,
 }: AdminAssetsWorkspaceProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab: PageTab = searchParams.get("tab") === "upload" ? "upload" : "library";
+  const activeTab = parseAdminAssetsTab(searchParams.get("tab"));
 
   const tabLibraryId = useId();
   const tabUploadId = useId();
@@ -39,35 +44,41 @@ export function AdminAssetsWorkspace({
   const libraryTabRef = useRef<HTMLButtonElement>(null);
   const uploadTabRef = useRef<HTMLButtonElement>(null);
 
-  const setTab = useCallback(
-    (tab: PageTab) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (tab === "upload") {
-        params.set("tab", "upload");
-      } else {
-        params.delete("tab");
-      }
-      router.replace(`/admin/assets?${params.toString()}`, { scroll: false });
+  const replaceQuery = useCallback(
+    (next: { kbSlug?: string; tab?: AdminAssetsTab; status?: string }) => {
+      const params = buildAdminAssetsQuery({
+        kbSlug: next.kbSlug ?? kbSlug,
+        status: next.status ?? statusFilter,
+        tab: next.tab ?? activeTab,
+      });
+      router.replace(`/admin/assets?${params}`, { scroll: false });
     },
-    [router, searchParams],
+    [activeTab, kbSlug, router, statusFilter],
+  );
+
+  const setTab = useCallback(
+    (tab: AdminAssetsTab) => {
+      replaceQuery({ tab });
+    },
+    [replaceQuery],
+  );
+
+  const selectKb = useCallback(
+    (slug: string) => {
+      replaceQuery({ kbSlug: slug, tab: activeTab });
+    },
+    [activeTab, replaceQuery],
   );
 
   const hrefForStatus = useCallback(
     (status?: string) => {
-      const params = new URLSearchParams({ kb: kbId });
-      if (status) {
-        params.set("status", status);
-      }
-      if (activeTab === "upload") {
-        params.set("tab", "upload");
-      }
-      return `/admin/assets?${params.toString()}`;
+      return `/admin/assets?${buildAdminAssetsQuery({ kbSlug, status, tab: activeTab })}`;
     },
-    [activeTab, kbId],
+    [activeTab, kbSlug],
   );
 
-  function focusTab(tab: PageTab) {
-    (tab === "library" ? libraryTabRef : uploadTabRef).current?.focus();
+  function focusTab(tab: AdminAssetsTab) {
+    (tab === "knowledge-base" ? libraryTabRef : uploadTabRef).current?.focus();
   }
 
   function onTabListKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -94,6 +105,8 @@ export function AdminAssetsWorkspace({
 
   return (
     <>
+      <KbScopePicker kbs={kbs} onSelect={selectKb} selectedSlug={kbSlug} />
+
       <div
         aria-label="Asset library views"
         className="admin-tabs"
@@ -103,12 +116,12 @@ export function AdminAssetsWorkspace({
         <button
           ref={libraryTabRef}
           aria-controls={panelLibraryId}
-          aria-selected={activeTab === "library"}
-          className={`tab-button${activeTab === "library" ? " is-active" : ""}`}
+          aria-selected={activeTab === "knowledge-base"}
+          className={`tab-button${activeTab === "knowledge-base" ? " is-active" : ""}`}
           id={tabLibraryId}
-          onClick={() => setTab("library")}
+          onClick={() => setTab("knowledge-base")}
           role="tab"
-          tabIndex={activeTab === "library" ? 0 : -1}
+          tabIndex={activeTab === "knowledge-base" ? 0 : -1}
           type="button"
         >
           Knowledge base
@@ -130,17 +143,24 @@ export function AdminAssetsWorkspace({
 
       <div
         aria-labelledby={tabLibraryId}
-        hidden={activeTab !== "library"}
+        hidden={activeTab !== "knowledge-base"}
         id={panelLibraryId}
         role="tabpanel"
         tabIndex={0}
       >
-        <AdminAssetLibrary
-          assets={assets}
-          hrefForStatus={hrefForStatus}
-          kbTitle={kbTitle}
-          statusFilter={statusFilter}
-        />
+        {assets.length === 0 ? (
+          <WorkspaceEmptyState
+            action={{ label: "Upload an asset", onClick: () => setTab("upload") }}
+            message="No assets in this knowledge base yet"
+          />
+        ) : (
+          <AdminAssetLibrary
+            assets={assets}
+            hrefForStatus={hrefForStatus}
+            kbTitle={kbTitle}
+            statusFilter={statusFilter}
+          />
+        )}
       </div>
 
       <div
@@ -153,7 +173,10 @@ export function AdminAssetsWorkspace({
         <section className="card asset-upload-panel">
           <h2 className="admin-panel__title">Upload to {kbTitle}</h2>
           <p className="meta">PDF, Word (.docx/.doc), or plain text — up to 25 MB. You can also link a video.</p>
-          <AdminAssetUploadForm kbs={kbs} lockKbId={kbId} />
+          <AdminAssetUploadForm
+            kbs={kbs.map((kb) => ({ id: kb.id, title: kb.title }))}
+            lockKbId={kbs.find((kb) => kb.slug === kbSlug)?.id}
+          />
         </section>
       </div>
     </>

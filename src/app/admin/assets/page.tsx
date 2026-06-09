@@ -3,20 +3,11 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AdminAssetsWorkspace } from "@/components/AdminAssetsWorkspace";
 import type { AdminAssetLibraryRow } from "@/components/AdminAssetLibrary";
+import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
+import { buildAdminAssetsQuery, parseAdminAssetsTab } from "@/lib/admin-assets-query";
 import { formatBytes, formatDate } from "@/lib/format";
 import { getAllAssetsForAdmin, getAllKbsForAdmin } from "@/lib/kb-store";
-
-function buildAssetsQuery(kbId: string, status?: string, tab?: string) {
-  const params = new URLSearchParams({ kb: kbId });
-  if (status) {
-    params.set("status", status);
-  }
-  if (tab === "upload") {
-    params.set("tab", "upload");
-  }
-  return params.toString();
-}
 
 export default async function AdminAssetsPage({
   searchParams,
@@ -29,17 +20,61 @@ export default async function AdminAssetsPage({
   }
 
   const { kb: kbFilter, status: statusFilter, tab: tabFilter } = await searchParams;
+  const activeTab = parseAdminAssetsTab(tabFilter);
 
   const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
-  const defaultKb = kbs.find((kb) => kb.slug === "graduate-school") ?? kbs[0];
 
-  if (!kbFilter && defaultKb) {
-    redirect(`/admin/assets?${buildAssetsQuery(defaultKb.id, statusFilter, tabFilter)}`);
+  if (kbs.length === 0) {
+    return (
+      <div className="page-shell">
+        <nav aria-label="Breadcrumb" className="breadcrumbs">
+          <ol>
+            <li>
+              <Link href="/admin">Admin</Link>
+            </li>
+            <li>
+              <span aria-current="page">Assets</span>
+            </li>
+          </ol>
+        </nav>
+
+        <h1>Asset library</h1>
+        <p className="lead">
+          Browse and manage files per knowledge base. Upload documents with stable public URLs — replace
+          files without breaking links when you activate a new version.
+        </p>
+
+        <WorkspaceEmptyState
+          action={{ href: "/admin/kbs", label: "Create a knowledge base" }}
+          message="No knowledge bases"
+        />
+      </div>
+    );
   }
 
-  const selectedKb = kbs.find((kb) => kb.id === kbFilter);
+  const defaultKb = kbs[0];
+  const selectedKb =
+    kbs.find((kb) => kb.slug === kbFilter) ??
+    (kbFilter ? kbs.find((kb) => kb.id === kbFilter) : undefined);
+
   if (!selectedKb) {
-    redirect(defaultKb ? `/admin/assets?${buildAssetsQuery(defaultKb.id)}` : "/admin");
+    redirect(
+      `/admin/assets?${buildAdminAssetsQuery({
+        kbSlug: defaultKb.slug,
+        status: statusFilter,
+        tab: activeTab,
+      })}`,
+    );
+  }
+
+  if (kbFilter !== selectedKb.slug) {
+    redirect(
+      `/admin/assets?${buildAdminAssetsQuery({
+        kbSlug: selectedKb.slug,
+        status: statusFilter,
+        tab: activeTab,
+      })}`,
+    );
   }
 
   let assets = await getAllAssetsForAdmin(selectedKb.id);
@@ -62,6 +97,8 @@ export default async function AdminAssetsPage({
       asset.status === "active" ? `/kb/${selectedKb.slug}/files/${asset.slug}` : undefined,
   }));
 
+  const assetsHref = `/admin/assets?${buildAdminAssetsQuery({ kbSlug: selectedKb.slug })}`;
+
   return (
     <div className="page-shell">
       <nav aria-label="Breadcrumb" className="breadcrumbs">
@@ -70,7 +107,7 @@ export default async function AdminAssetsPage({
             <Link href="/admin">Admin</Link>
           </li>
           <li>
-            <Link href={`/admin/assets?kb=${selectedKb.id}`}>Assets</Link>
+            <Link href={assetsHref}>Assets</Link>
           </li>
           <li>
             <span aria-current="page">{selectedKb.title}</span>
@@ -84,24 +121,12 @@ export default async function AdminAssetsPage({
         files without breaking links when you activate a new version.
       </p>
 
-      <nav aria-label="Knowledge bases" className="asset-kb-tabs">
-        {kbs.map((kb) => (
-          <Link
-            className={kb.id === selectedKb.id ? "asset-kb-tabs__link is-active" : "asset-kb-tabs__link"}
-            href={`/admin/assets?${buildAssetsQuery(kb.id, statusFilter, tabFilter)}`}
-            key={kb.id}
-          >
-            {kb.title}
-          </Link>
-        ))}
-      </nav>
-
       <Suspense fallback={<p className="meta">Loading asset library…</p>}>
         <AdminAssetsWorkspace
           assets={rows}
-          kbId={selectedKb.id}
+          kbSlug={selectedKb.slug}
           kbTitle={selectedKb.title}
-          kbs={kbs.map((kb) => ({ id: kb.id, title: kb.title }))}
+          kbs={kbs.map((kb) => ({ id: kb.id, slug: kb.slug, title: kb.title }))}
           statusFilter={statusFilter}
         />
       </Suspense>
