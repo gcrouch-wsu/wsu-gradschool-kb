@@ -1,34 +1,45 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { AdminAssetLibrary, type AdminAssetLibraryRow } from "@/components/AdminAssetLibrary";
-import { AdminAssetUploadForm } from "@/components/AdminAssetUploadForm";
+import { AdminAssetsWorkspace } from "@/components/AdminAssetsWorkspace";
+import type { AdminAssetLibraryRow } from "@/components/AdminAssetLibrary";
 import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { formatBytes, formatDate } from "@/lib/format";
 import { getAllAssetsForAdmin, getAllKbsForAdmin } from "@/lib/kb-store";
 
+function buildAssetsQuery(kbId: string, status?: string, tab?: string) {
+  const params = new URLSearchParams({ kb: kbId });
+  if (status) {
+    params.set("status", status);
+  }
+  if (tab === "upload") {
+    params.set("tab", "upload");
+  }
+  return params.toString();
+}
+
 export default async function AdminAssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ kb?: string; status?: string }>;
+  searchParams: Promise<{ kb?: string; status?: string; tab?: string }>;
 }) {
   const session = await getCurrentAdminSession();
   if (!session) {
     redirect("/admin/sign-in?next=/admin/assets");
   }
 
-  const { kb: kbFilter, status: statusFilter } = await searchParams;
+  const { kb: kbFilter, status: statusFilter, tab: tabFilter } = await searchParams;
 
   const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const defaultKb = kbs.find((kb) => kb.slug === "graduate-school") ?? kbs[0];
 
   if (!kbFilter && defaultKb) {
-    const statusQuery = statusFilter ? `&status=${statusFilter}` : "";
-    redirect(`/admin/assets?kb=${defaultKb.id}${statusQuery}`);
+    redirect(`/admin/assets?${buildAssetsQuery(defaultKb.id, statusFilter, tabFilter)}`);
   }
 
   const selectedKb = kbs.find((kb) => kb.id === kbFilter);
   if (!selectedKb) {
-    redirect(defaultKb ? `/admin/assets?kb=${defaultKb.id}` : "/admin");
+    redirect(defaultKb ? `/admin/assets?${buildAssetsQuery(defaultKb.id)}` : "/admin");
   }
 
   let assets = await getAllAssetsForAdmin(selectedKb.id);
@@ -51,25 +62,33 @@ export default async function AdminAssetsPage({
       asset.status === "active" ? `/kb/${selectedKb.slug}/files/${asset.slug}` : undefined,
   }));
 
-  const statusQuery = statusFilter ? `&status=${statusFilter}` : "";
-
   return (
     <div className="page-shell">
-      <p className="eyebrow">Admin</p>
+      <nav aria-label="Breadcrumb" className="breadcrumbs">
+        <ol>
+          <li>
+            <Link href="/admin">Admin</Link>
+          </li>
+          <li>
+            <Link href={`/admin/assets?kb=${selectedKb.id}`}>Assets</Link>
+          </li>
+          <li>
+            <span aria-current="page">{selectedKb.title}</span>
+          </li>
+        </ol>
+      </nav>
+
       <h1>Asset library</h1>
       <p className="lead">
         Browse and manage files per knowledge base. Upload documents with stable public URLs — replace
         files without breaking links when you activate a new version.
       </p>
-      <p className="meta">
-        <Link href="/admin">← Back to admin</Link>
-      </p>
 
-      <nav className="asset-kb-tabs" aria-label="Knowledge bases">
+      <nav aria-label="Knowledge bases" className="asset-kb-tabs">
         {kbs.map((kb) => (
           <Link
             className={kb.id === selectedKb.id ? "asset-kb-tabs__link is-active" : "asset-kb-tabs__link"}
-            href={`/admin/assets?kb=${kb.id}${statusQuery}`}
+            href={`/admin/assets?${buildAssetsQuery(kb.id, statusFilter, tabFilter)}`}
             key={kb.id}
           >
             {kb.title}
@@ -77,18 +96,15 @@ export default async function AdminAssetsPage({
         ))}
       </nav>
 
-      <AdminAssetLibrary
-        assets={rows}
-        kbId={selectedKb.id}
-        kbTitle={selectedKb.title}
-        statusFilter={statusFilter}
-      />
-
-      <details className="card asset-upload-panel">
-        <summary>Upload document to {selectedKb.title}</summary>
-        <p className="meta">PDF, Word (.docx/.doc), or plain text — up to 25 MB.</p>
-        <AdminAssetUploadForm kbs={kbs} lockKbId={selectedKb.id} />
-      </details>
+      <Suspense fallback={<p className="meta">Loading asset library…</p>}>
+        <AdminAssetsWorkspace
+          assets={rows}
+          kbId={selectedKb.id}
+          kbTitle={selectedKb.title}
+          kbs={kbs.map((kb) => ({ id: kb.id, title: kb.title }))}
+          statusFilter={statusFilter}
+        />
+      </Suspense>
     </div>
   );
 }

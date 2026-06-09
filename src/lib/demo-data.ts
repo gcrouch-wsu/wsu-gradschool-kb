@@ -10,6 +10,24 @@ export const knowledgeBases: KnowledgeBase[] = [
     status: "published",
     updatedOn: "2026-06-02",
   },
+  {
+    id: "kb-grad-school-2",
+    title: "Graduate School Knowledge Base 2",
+    slug: "graduate-school-2",
+    description:
+      "Public procedures, guidance, templates, and support information for Graduate School partners.",
+    status: "published",
+    updatedOn: "2026-06-02",
+  },
+  {
+    id: "kb-grad-school-3",
+    title: "Graduate School Knowledge Base 3",
+    slug: "graduate-school-3",
+    description:
+      "Public procedures, guidance, templates, and support information for Graduate School partners.",
+    status: "published",
+    updatedOn: "2026-06-02",
+  },
 ];
 
 export const assets: Asset[] = [
