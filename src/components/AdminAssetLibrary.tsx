@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type { AssetStatus } from "@/lib/types";
 
 export type AdminAssetLibraryRow = {
@@ -23,13 +23,14 @@ export function AdminAssetLibrary({
   assets,
   kbTitle,
   statusFilter,
-  kbId,
+  hrefForStatus,
 }: {
   assets: AdminAssetLibraryRow[];
   kbTitle: string;
-  kbId: string;
   statusFilter?: string;
+  hrefForStatus: (status?: string) => string;
 }) {
+  const searchFieldId = useId();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("title");
@@ -82,7 +83,7 @@ export function AdminAssetLibrary({
         <div className="asset-library__status">
           <Link
             className={!statusFilter ? "asset-library__status-link is-active" : "asset-library__status-link"}
-            href={`/admin/assets?kb=${kbId}`}
+            href={hrefForStatus()}
           >
             All
           </Link>
@@ -90,7 +91,7 @@ export function AdminAssetLibrary({
             className={
               statusFilter === "active" ? "asset-library__status-link is-active" : "asset-library__status-link"
             }
-            href={`/admin/assets?kb=${kbId}&status=active`}
+            href={hrefForStatus("active")}
           >
             Active
           </Link>
@@ -98,7 +99,7 @@ export function AdminAssetLibrary({
             className={
               statusFilter === "archived" ? "asset-library__status-link is-active" : "asset-library__status-link"
             }
-            href={`/admin/assets?kb=${kbId}&status=archived`}
+            href={hrefForStatus("archived")}
           >
             Archived
           </Link>
@@ -106,10 +107,11 @@ export function AdminAssetLibrary({
       </div>
 
       <div className="asset-library__controls">
-        <label className="asset-library__search">
+        <label className="asset-library__search" htmlFor={searchFieldId}>
           <span className="sr-only">Search assets</span>
           <input
             className="input"
+            id={searchFieldId}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by title or slug…"
             type="search"
@@ -126,18 +128,25 @@ export function AdminAssetLibrary({
             ] as const
           ).map(([value, label, count]) => (
             <button
+              aria-selected={typeFilter === value}
               className={typeFilter === value ? "asset-library__tab is-active" : "asset-library__tab"}
               key={value}
               onClick={() => setTypeFilter(value)}
+              role="tab"
               type="button"
             >
               {label} ({count})
             </button>
           ))}
         </div>
-        <label className="asset-library__sort">
+        <label className="asset-library__sort" htmlFor={`${searchFieldId}-sort`}>
           <span className="meta">Sort</span>
-          <select className="input" onChange={(event) => setSortKey(event.target.value as SortKey)} value={sortKey}>
+          <select
+            className="input"
+            id={`${searchFieldId}-sort`}
+            onChange={(event) => setSortKey(event.target.value as SortKey)}
+            value={sortKey}
+          >
             <option value="title">Title</option>
             <option value="updated">Last updated</option>
             <option value="size">File size</option>
@@ -147,11 +156,7 @@ export function AdminAssetLibrary({
       </div>
 
       {filtered.length === 0 ? (
-        <p className="meta asset-library__empty">
-          {assets.length === 0
-            ? "No assets in this knowledge base yet. Upload a document below."
-            : "No assets match your search or filters."}
-        </p>
+        <p className="meta asset-library__empty">No assets match your search or filters.</p>
       ) : (
         <div className="asset-library__table-wrap">
           <table className="asset-library__table">

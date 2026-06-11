@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 type AssetUploadType = "file" | "video";
 
@@ -11,9 +11,16 @@ export function AdminAssetUploadForm({
 }: {
   kbs: { id: string; title: string }[];
   defaultKbId?: string;
-
   lockKbId?: string;
 }) {
+  const formId = useId();
+  const kbFieldId = `${formId}-kb`;
+  const titleFieldId = `${formId}-title`;
+  const descriptionFieldId = `${formId}-description`;
+  const fileFieldId = `${formId}-file`;
+  const providerFieldId = `${formId}-provider`;
+  const videoUrlFieldId = `${formId}-video-url`;
+
   const [kbId, setKbId] = useState(lockKbId ?? defaultKbId ?? kbs[0]?.id ?? "");
   const [uploadType, setUploadType] = useState<AssetUploadType>("file");
   const [file, setFile] = useState<File | null>(null);
@@ -61,7 +68,6 @@ export function AdminAssetUploadForm({
         const assetId = data.asset?.id;
         setCreatedUrl(assetId ? `/admin/assets/${assetId}` : data.url ?? null);
       } else {
-
         const response = await fetch("/api/admin/assets/videos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -105,7 +111,7 @@ export function AdminAssetUploadForm({
           onClick={() => setUploadType("file")}
           type="button"
         >
-          Upload File
+          Upload file
         </button>
         <button
           aria-pressed={uploadType === "video"}
@@ -113,14 +119,14 @@ export function AdminAssetUploadForm({
           onClick={() => setUploadType("video")}
           type="button"
         >
-          Link Video
+          Link video
         </button>
       </div>
 
       {!lockKbId && (
-        <label>
+        <label htmlFor={kbFieldId}>
           <span className="meta">Knowledge base</span>
-          <select className="input" onChange={(e) => setKbId(e.target.value)} value={kbId}>
+          <select className="input" id={kbFieldId} onChange={(e) => setKbId(e.target.value)} value={kbId}>
             {kbs.map((kb) => (
               <option key={kb.id} value={kb.id}>
                 {kb.title}
@@ -130,36 +136,39 @@ export function AdminAssetUploadForm({
         </label>
       )}
 
-      <label>
+      <label htmlFor={titleFieldId}>
         <span className="meta">Title (optional)</span>
-        <input className="input" onChange={(e) => setTitle(e.target.value)} value={title} />
+        <input className="input" id={titleFieldId} onChange={(e) => setTitle(e.target.value)} value={title} />
       </label>
 
-      <label>
+      <label htmlFor={descriptionFieldId}>
         <span className="meta">Description (optional)</span>
         <input
           className="input"
+          id={descriptionFieldId}
           onChange={(e) => setDescription(e.target.value)}
           value={description}
         />
       </label>
 
       {uploadType === "file" ? (
-        <label>
+        <label htmlFor={fileFieldId}>
           <span className="meta">File (PDF, Word, or text)</span>
           <input
             accept=".pdf,.doc,.docx,.txt,application/pdf"
+            id={fileFieldId}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             type="file"
           />
         </label>
       ) : (
         <div className="field-row">
-          <label>
+          <label htmlFor={providerFieldId}>
             <span className="meta">Provider</span>
             <select
               className="input"
-              onChange={(e) => setVideoProvider(e.target.value as any)}
+              id={providerFieldId}
+              onChange={(e) => setVideoProvider(e.target.value as "youtube" | "vimeo" | "direct")}
               value={videoProvider}
             >
               <option value="youtube">YouTube</option>
@@ -167,10 +176,11 @@ export function AdminAssetUploadForm({
               <option value="direct">Direct URL</option>
             </select>
           </label>
-          <label style={{ flex: 2 }}>
-            <span className="meta">URL or Embed ID</span>
+          <label htmlFor={videoUrlFieldId} style={{ flex: 2 }}>
+            <span className="meta">URL or embed ID</span>
             <input
               className="input"
+              id={videoUrlFieldId}
               onChange={(e) => setVideoUrl(e.target.value)}
               placeholder={videoProvider === "direct" ? "https://..." : "e.g. dQw4w9WgXcQ"}
               value={videoUrl}

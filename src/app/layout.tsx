@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import type { CSSProperties } from "react";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { loadSiteSettings } from "@/lib/db";
@@ -19,6 +20,9 @@ function roleLabel(role: string) {
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const isAdminShell = pathname.startsWith("/admin") && !pathname.startsWith("/admin/sign-in");
+
   const [session, settings] = await Promise.all([getCurrentAdminSession(), loadSiteSettings()]);
 
   const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
@@ -42,73 +46,81 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         : "";
 
   return (
-    <html className="kb-theme-root" lang="en" style={themeVars}>
-      <body>
-        <a className="skip-link" href="#main">
-          Skip to content
-        </a>
-        <header className="site-header">
-          <div className={`site-header__inner${headerAlignClass}`}>
-            {hasBrand && (
-              <Link className={`brand${settings.logoUrl ? " brand--has-logo" : ""}`} href="/">
-                {settings.logoUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    alt={settings.brandText || "Home"}
-                    className="brand__logo"
-                    src={settings.logoUrl}
-                    style={settings.logoWidth ? { width: `${settings.logoWidth}px`, maxHeight: "none" } : undefined}
-                  />
-                )}
-                {settings.brandText && (
-                  <span className="brand__text" style={brandTextStyle}>
-                    {settings.brandText}
-                  </span>
-                )}
-              </Link>
-            )}
-            <nav className="nav" aria-label="Primary">
-              <Link href="/">Knowledge bases</Link>
-              {settings.headerLinks.map((link, i) => (
-                <a key={i} href={link.url}>
-                  {link.label}
-                </a>
-              ))}
-              <Link href="/admin">Admin</Link>
-              {session && (
-                <span className="nav-user" title={`Signed in as ${session.email}`}>
-                  <span className="nav-user__name">{session.email}</span>
-                  <span className="nav-user__role">{roleLabel(session.role)}</span>
-                </span>
+    <html className={`kb-theme-root${isAdminShell ? " admin-app" : ""}`} lang="en" style={themeVars}>
+      <body className={isAdminShell ? "admin-app-body" : undefined}>
+        {!isAdminShell && (
+          <a className="skip-link" href="#main">
+            Skip to content
+          </a>
+        )}
+        {!isAdminShell && (
+          <header className="site-header">
+            <div className={`site-header__inner${headerAlignClass}`}>
+              {hasBrand && (
+                <Link className={`brand${settings.logoUrl ? " brand--has-logo" : ""}`} href="/">
+                  {settings.logoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt={settings.brandText || "Home"}
+                      className="brand__logo"
+                      src={settings.logoUrl}
+                      style={settings.logoWidth ? { width: `${settings.logoWidth}px`, maxHeight: "none" } : undefined}
+                    />
+                  )}
+                  {settings.brandText && (
+                    <span className="brand__text" style={brandTextStyle}>
+                      {settings.brandText}
+                    </span>
+                  )}
+                </Link>
               )}
-              {session && (
-                <form action="/api/admin/logout" className="nav-signout" method="post">
-                  <button className="nav-signout__button" type="submit">
-                    Sign out
-                  </button>
-                </form>
-              )}
-            </nav>
-          </div>
-        </header>
-        <main id="main">{children}</main>
-        <footer className="site-footer">
-          <div className="site-footer__inner">
-            <div className="footer-brand">
-              {settings.footerText && <p className="meta">{settings.footerText}</p>}
-              {settings.contactInfo && <p className="meta">{settings.contactInfo}</p>}
-            </div>
-            {settings.footerLinks.length > 0 && (
-              <nav className="footer-nav" aria-label="Footer">
-                {settings.footerLinks.map((link, i) => (
+              <nav className="nav" aria-label="Primary">
+                <Link href="/">Knowledge bases</Link>
+                {settings.headerLinks.map((link, i) => (
                   <a key={i} href={link.url}>
                     {link.label}
                   </a>
                 ))}
+                <Link href="/admin">Admin</Link>
+                {session && (
+                  <span className="nav-user" title={`Signed in as ${session.email}`}>
+                    <span className="nav-user__name">{session.email}</span>
+                    <span className="nav-user__role">{roleLabel(session.role)}</span>
+                  </span>
+                )}
+                {session && (
+                  <form action="/api/admin/logout" className="nav-signout" method="post">
+                    <button className="nav-signout__button" type="submit">
+                      Sign out
+                    </button>
+                  </form>
+                )}
               </nav>
-            )}
-          </div>
-        </footer>
+            </div>
+          </header>
+        )}
+        <main className={isAdminShell ? "admin-app-main" : undefined} id="main">
+          {children}
+        </main>
+        {!isAdminShell && (
+          <footer className="site-footer">
+            <div className="site-footer__inner">
+              <div className="footer-brand">
+                {settings.footerText && <p className="meta">{settings.footerText}</p>}
+                {settings.contactInfo && <p className="meta">{settings.contactInfo}</p>}
+              </div>
+              {settings.footerLinks.length > 0 && (
+                <nav className="footer-nav" aria-label="Footer">
+                  {settings.footerLinks.map((link, i) => (
+                    <a key={i} href={link.url}>
+                      {link.label}
+                    </a>
+                  ))}
+                </nav>
+              )}
+            </div>
+          </footer>
+        )}
       </body>
     </html>
   );
