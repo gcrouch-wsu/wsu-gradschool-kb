@@ -1497,6 +1497,18 @@ p {
 
   .editor-form .fieldset {
     padding: 1rem;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .editor-form .fieldset > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .editor-form .fieldset legend {
+    max-width: 100%;
+    white-space: normal;
   }
 
   .editor-form .fieldset,
@@ -1579,21 +1591,46 @@ p {
     max-width: 100%;
   }
 
+  .editor-form .checkbox-inline,
+  .editor-form label.checkbox-inline {
+    align-items: flex-start;
+    white-space: normal;
+    width: 100%;
+  }
+
+  .editor-form .editor-content,
+  .editor-form .editor-content .editor-readiness,
+  .editor-form .editor-content .issue-list {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
   .editor-form .editor-toolbar-sticky {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    position: static;
+    top: auto;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+    padding: 0.5rem;
+    overflow-x: visible;
   }
 
   .editor-form .editor-toolbar-sticky .rich-text-toolbar {
-    flex-wrap: nowrap;
-    min-width: max-content;
-    width: max-content;
+    flex-wrap: wrap;
+    min-width: 0;
+    width: 100%;
   }
 
   .editor-form .document-toolbar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    width: 100%;
+  }
+
+  .editor-form .document-toolbar__structure,
+  .editor-form .document-toolbar__insert,
+  .editor-form .document-toolbar__review {
+    width: 100%;
   }
 
   .editor-form .table-editor {
@@ -1609,6 +1646,34 @@ p {
 
   .editor-form .wysiwyg-table-cell {
     min-width: 0;
+  }
+
+  .editor-form .block-list {
+    gap: 0.75rem;
+  }
+
+  .editor-form .block-editor {
+    padding: 0.75rem;
+  }
+
+  .editor-form .wysiwyg-surface {
+    min-height: 10rem;
+    padding: 0.9rem;
+  }
+
+  .editor-form .wysiwyg-surface ul,
+  .editor-form .wysiwyg-surface ol {
+    padding-left: 1.35rem;
+  }
+
+  .editor-form .html-source__area {
+    min-height: 18rem;
+    padding: 0.75rem;
+  }
+
+  .editor-form .rich-text-toolbar__select,
+  .editor-form .rich-text-toolbar__number {
+    max-width: 100%;
   }
 }
 
