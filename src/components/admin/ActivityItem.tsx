@@ -1,5 +1,6 @@
 "use client";
 
+import { createElement } from "react";
 import { getActivityIcon, type ActivityIconName } from "@/components/admin/admin-icons";
 
 interface ActivityItemProps {
@@ -10,12 +11,10 @@ interface ActivityItemProps {
 }
 
 export function ActivityItem({ icon, action, actor, time }: ActivityItemProps) {
-  const Icon = getActivityIcon(icon);
-
   return (
     <li className="admin-activity-item">
       <div aria-hidden className="admin-activity-item__avatar">
-        <Icon size={16} strokeWidth={1.75} />
+        {createElement(getActivityIcon(icon), { size: 16, strokeWidth: 1.75 })}
       </div>
       <div className="admin-activity-item__body">
         <p className="admin-activity-item__action">{action}</p>
