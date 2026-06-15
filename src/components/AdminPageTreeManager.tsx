@@ -161,6 +161,7 @@ function TreeRowMenu({
   const menuId = useId();
 
   const actionableItems = items.filter((item) => !item.divider);
+  const clampedActiveIndex = Math.min(activeIndex, Math.max(actionableItems.length - 1, 0));
 
   useEffect(() => {
     if (!open) return;
@@ -173,10 +174,6 @@ function TreeRowMenu({
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
-
-  useEffect(() => {
-    setActiveIndex((index) => Math.min(index, Math.max(actionableItems.length - 1, 0)));
-  }, [actionableItems.length]);
 
   function closeMenu() {
     setOpen(false);
@@ -205,10 +202,10 @@ function TreeRowMenu({
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((index) => (index + 1) % actionableItems.length);
+      setActiveIndex((clampedActiveIndex + 1) % actionableItems.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((index) => (index - 1 + actionableItems.length) % actionableItems.length);
+      setActiveIndex((clampedActiveIndex - 1 + actionableItems.length) % actionableItems.length);
     } else if (event.key === "Home") {
       event.preventDefault();
       setActiveIndex(0);
@@ -217,11 +214,9 @@ function TreeRowMenu({
       setActiveIndex(actionableItems.length - 1);
     } else if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      selectItem(activeIndex);
+      selectItem(clampedActiveIndex);
     }
   }
-
-  let menuItemIndex = -1;
 
   return (
     <div className="tree-editor__menu-anchor" ref={rootRef}>
@@ -250,13 +245,12 @@ function TreeRowMenu({
             if (item.divider) {
               return <li key={`divider-${index}`} className="tree-editor__menu-divider" role="separator" />;
             }
-            menuItemIndex += 1;
-            const currentIndex = menuItemIndex;
+            const currentIndex = actionableItems.indexOf(item);
             return (
               <li key={item.label} role="none">
                 <button
                   className={`kb-picker__option tree-editor__menu-item${
-                    currentIndex === activeIndex ? " is-active" : ""
+                    currentIndex === clampedActiveIndex ? " is-active" : ""
                   }${item.danger ? " tree-editor__menu-item--danger" : ""}`}
                   disabled={item.disabled}
                   onClick={() => selectItem(currentIndex)}
@@ -327,7 +321,7 @@ interface PageTreeOverflowMenuProps {
 }
 
 function PageTreeOverflowMenu({
-  busy,
+  busy: _busy,
   canDelete,
   homepageBusy,
   isHomepage,
@@ -533,6 +527,7 @@ export function AdminPageTreeManager({
 }) {
   const [pages, setPages] = useState(() => normalizeSiblingOrders(initialPages));
   const [savedBaseline, setSavedBaseline] = useState(() => normalizeSiblingOrders(initialPages));
+  const [trackedInitialPages, setTrackedInitialPages] = useState(initialPages);
   const [showArchived, setShowArchived] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -546,11 +541,12 @@ export function AdminPageTreeManager({
   const [deleteTarget, setDeleteTarget] = useState<PageItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PageItem | null>(null);
 
-  useEffect(() => {
+  if (trackedInitialPages !== initialPages) {
     const normalized = normalizeSiblingOrders(initialPages);
+    setTrackedInitialPages(initialPages);
     setPages(normalized);
     setSavedBaseline(normalized);
-  }, [initialPages]);
+  }
 
   const visiblePages = useMemo(
     () => (showArchived ? pages : pages.filter((page) => page.status !== "archived")),
@@ -829,6 +825,7 @@ export function AdminPageTreeManager({
               aria-expanded={hasChildren ? true : undefined}
               aria-level={depth + 1}
               aria-posinset={posinset}
+              aria-selected={false}
               aria-setsize={siblings.length}
               className="tree-editor__item"
               data-depth={depth}
