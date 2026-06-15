@@ -4,6 +4,7 @@ import { AdminPageTreeManager } from "@/components/AdminPageTreeManager";
 import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
 
+
 export default async function AdminPagesPage() {
   const session = await getCurrentAdminSession();
   if (!session) {
@@ -48,15 +49,11 @@ export default async function AdminPagesPage() {
                 + New Page
               </Link>
             </div>
-            {pages.length === 0 ? (
-              <p className="meta">No pages yet.</p>
-            ) : (
-              <AdminPageTreeManager
-                canDelete={session.role === "owner" || session.role === "admin"}
-                initialPages={pages}
-                kb={kb}
-              />
-            )}
+            <AdminPageTreeManager
+              canDelete={session.role === "owner" || session.role === "admin"}
+              initialPages={pages}
+              kb={kb}
+            />
           </section>
         ))}
       </div>
