@@ -1349,9 +1349,93 @@ p {
 }
 
 .import-actions {
+  align-items: center;
+  background: #f3f3f4;
+  border: 1px solid #d7d1cc;
+  border-radius: 12px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  overflow-x: auto;
+}
+
+.editor-form .import-actions > .badge {
+  margin-left: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  padding: 0.35rem 0.75rem;
+  order: 1;
+}
+
+.editor-form .import-actions > .unsaved-pill {
+  order: 2;
+}
+
+.editor-form .import-actions > a.button--ghost {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--ink);
+  font-weight: 600;
+  margin-left: auto;
+  order: 3;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.editor-form .import-actions > a.button--ghost:hover {
+  background: transparent;
+  color: var(--wsu-crimson);
+  text-decoration: underline;
+}
+
+.editor-form .import-actions > button.button--ghost {
+  background: var(--paper);
+  border: 1.5px solid #bdb8b3;
+  box-shadow: none;
+  color: var(--ink);
+  font-weight: 700;
+  order: 4;
+}
+
+.editor-form .import-actions > button.button--ghost:hover {
+  background: #ece8e3;
+  border-color: #a5a09a;
+  color: var(--ink);
+}
+
+.editor-form .import-actions > button.button:not(.button--ghost) {
+  box-shadow: none;
+  order: 5;
+}
+
+.editor-form .import-actions > .tree-editor__menu-anchor {
+  margin-left: 0;
+  order: 6;
+}
+
+.editor-form .import-actions .icon-button {
+  height: 2.45rem;
+  width: 2.45rem;
+}
+
+@media (max-width: 760px) {
+  .editor-form .import-actions {
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  .editor-form .import-actions > a.button--ghost,
+  .editor-form .import-actions > button.button--ghost {
+    display: none;
+  }
+
+  .editor-form .import-actions > .tree-editor__menu-anchor {
+    margin-left: auto;
+  }
 }
 
 .import-preview h3 {
