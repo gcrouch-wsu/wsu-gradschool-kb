@@ -1351,13 +1351,13 @@ p {
 .import-actions {
   align-items: center;
   background: #f3f3f4;
-  border: 1px solid #d7d1cc;
+  /* border: 1px solid #d7d1cc; */
   border-radius: 12px;
   display: flex;
   flex-wrap: nowrap;
   gap: 0.75rem;
   padding: 0.55rem 0.7rem;
-  overflow-x: auto;
+  /* overflow-x: auto; */
 }
 
 .editor-form .import-actions > .badge {
