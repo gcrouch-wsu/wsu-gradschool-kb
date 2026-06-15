@@ -37,9 +37,7 @@ export function KbScopePicker({ kbs, selectedSlug, onSelect }: KbScopePickerProp
     );
   }, [kbs, query]);
 
-  useEffect(() => {
-    setActiveIndex((index) => Math.min(Math.max(index, 0), Math.max(matches.length - 1, 0)));
-  }, [matches.length]);
+  const clampedActiveIndex = Math.min(Math.max(activeIndex, 0), Math.max(matches.length - 1, 0));
 
   useEffect(() => {
     if (!open) return;
@@ -83,14 +81,14 @@ export function KbScopePicker({ kbs, selectedSlug, onSelect }: KbScopePickerProp
   function onSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((index) => Math.min(index + 1, matches.length - 1));
+      setActiveIndex(Math.min(clampedActiveIndex + 1, matches.length - 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((index) => Math.max(index - 1, 0));
+      setActiveIndex(Math.max(clampedActiveIndex - 1, 0));
     } else if (event.key === "Enter") {
-      if (matches[activeIndex]) {
+      if (matches[clampedActiveIndex]) {
         event.preventDefault();
-        selectKb(matches[activeIndex].slug);
+        selectKb(matches[clampedActiveIndex].slug);
       }
     } else if (event.key === "Escape") {
       event.preventDefault();
@@ -167,7 +165,7 @@ export function KbScopePicker({ kbs, selectedSlug, onSelect }: KbScopePickerProp
 
             <ul className="kb-picker__menu" id={listboxId} role="listbox">
               {matches.length === 0 ? (
-                <li className="kb-picker__empty" aria-disabled>
+                <li className="kb-picker__empty" role="presentation">
                   No matches.
                 </li>
               ) : (
@@ -177,7 +175,7 @@ export function KbScopePicker({ kbs, selectedSlug, onSelect }: KbScopePickerProp
                     <li
                       key={kb.id}
                       aria-selected={isSelected}
-                      className={`kb-picker__option${index === activeIndex ? " is-active" : ""}${
+                      className={`kb-picker__option${index === clampedActiveIndex ? " is-active" : ""}${
                         isSelected ? " is-selected" : ""
                       }`}
                       onMouseDown={(event) => {

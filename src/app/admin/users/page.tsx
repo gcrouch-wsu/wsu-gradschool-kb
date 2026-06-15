@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { KnowledgeBase, User } from "@/lib/types";
 import KbAssignmentPicker from "@/components/KbAssignmentPicker";
 
@@ -33,26 +33,26 @@ export default function AdminUsersPage() {
   const [editRole, setEditRole] = useState<User["role"]>("editor");
   const [editAssignments, setEditAssignments] = useState<string[]>([]);
 
-  async function loadData() {
-    try {
-      const [usersRes, kbsRes] = await Promise.all([fetch("/api/admin/users"), fetch("/api/admin/kbs")]);
-      if (!usersRes.ok) throw new Error("Failed to load users");
-      const usersData = await usersRes.json();
-      setUsers(usersData.users);
-      if (kbsRes.ok) {
-        const kbsData = await kbsRes.json();
-        setKbs(kbsData.kbs ?? []);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error loading users");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loadData = useCallback(
+    () =>
+      Promise.all([fetch("/api/admin/users"), fetch("/api/admin/kbs")])
+        .then(async ([usersRes, kbsRes]) => {
+          if (!usersRes.ok) throw new Error("Failed to load users");
+          const usersData = await usersRes.json();
+          setUsers(usersData.users);
+          if (kbsRes.ok) {
+            const kbsData = await kbsRes.json();
+            setKbs(kbsData.kbs ?? []);
+          }
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : "Error loading users"))
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   function kbTitle(kbId: string) {
     return kbs.find((kb) => kb.id === kbId)?.title ?? kbId;

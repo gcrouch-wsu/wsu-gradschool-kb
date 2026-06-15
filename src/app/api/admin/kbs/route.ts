@@ -4,7 +4,7 @@ import { filterKbsForSession } from "@/lib/auth";
 import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import { slugify } from "@/lib/slug";
-import type { KnowledgeBase } from "@/lib/types";
+import type { KbStatus, KnowledgeBase } from "@/lib/types";
 
 export async function GET(request: Request) {
 
@@ -20,8 +20,16 @@ export async function GET(request: Request) {
   const sql = getSql();
 
   try {
-    const rows = await sql`SELECT * FROM knowledge_bases ORDER BY title`;
-    const allKbs: KnowledgeBase[] = rows.map((row: any) => ({
+    const rows = (await sql`SELECT * FROM knowledge_bases ORDER BY title`) as unknown as Array<{
+      id: string;
+      title: string;
+      slug: string;
+      description: string;
+      status: KbStatus;
+      updated_on: string;
+      home_page_id?: string | null;
+    }>;
+    const allKbs: KnowledgeBase[] = rows.map((row) => ({
       id: row.id,
       title: row.title,
       slug: row.slug,

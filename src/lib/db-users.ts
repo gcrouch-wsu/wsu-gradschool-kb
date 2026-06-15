@@ -1,5 +1,5 @@
 import { ensureSchema, getSql } from "@/lib/db";
-import type { User, UserRole, KbUserAssignment } from "@/lib/types";
+import type { User, UserRole } from "@/lib/types";
 
 interface UserRow {
   id: string;

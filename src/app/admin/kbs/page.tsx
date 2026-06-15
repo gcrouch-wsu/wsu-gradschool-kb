@@ -200,7 +200,7 @@ export default function AdminKbsPage() {
                       <select 
                         className="input" 
                         value={editData.status ?? kb.status}
-                        onChange={e => setEditData({...editData, status: e.target.value as any})}
+                        onChange={e => setEditData({...editData, status: e.target.value as KbStatus})}
                       >
                         <option value="draft">Draft</option>
                         <option value="published">Published</option>

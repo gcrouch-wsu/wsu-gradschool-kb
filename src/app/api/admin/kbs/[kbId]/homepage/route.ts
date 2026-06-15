@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { getKbById, getPageByIdForAdmin, setKbHomepagePage } from "@/lib/kb-store";
+import { getPageByIdForAdmin, setKbHomepagePage } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 

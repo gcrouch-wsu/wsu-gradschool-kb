@@ -278,7 +278,8 @@ function serializeDocumentNode(node: Node): string {
   const blockId = blockIdFrom(node);
 
   if (tag === "section" && hasClass(node, "doc-card")) {
-    const background = (node.getAttribute("data-background") as any) || "paper";
+    const background =
+      (node.getAttribute("data-background") as Extract<ContentBlock, { type: "card" }>["background"]) || "paper";
     const title = node.getAttribute("data-title") || "";
     const inner = node.childNodes.map(serializeDocumentNode).join("");
     return `<section class="doc-card doc-card--${background}" data-block-id="${escapeHtml(blockId)}" data-background="${background}" data-title="${escapeHtml(title)}">${inner}</section>`;
@@ -421,7 +422,8 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
         blockId: blockIdFrom(node),
         type: "card",
         title: node.getAttribute("data-title") || undefined,
-        background: (node.getAttribute("data-background") as any) || "paper",
+        background:
+          (node.getAttribute("data-background") as Extract<ContentBlock, { type: "card" }>["background"]) || "paper",
         blocks: documentHtmlToBlocks(node.innerHTML, depth + 1),
       });
       continue;
@@ -582,7 +584,8 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
       blocks.push({
         blockId: blockIdFrom(node),
         type: "video",
-        provider: (node.getAttribute("data-provider") as any) || undefined,
+        provider:
+          (node.getAttribute("data-provider") as Extract<ContentBlock, { type: "video" }>["provider"]) || undefined,
         embedId: node.getAttribute("data-embed-id") || undefined,
         url: node.getAttribute("data-url") || undefined,
         title: node.getAttribute("data-title") || undefined,

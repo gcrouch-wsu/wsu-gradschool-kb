@@ -29,7 +29,13 @@ export async function PATCH(
   const sql = getSql();
 
   try {
-    const updates: any = { updated_on: new Date().toISOString().slice(0, 10) };
+    const updates: {
+      updated_on: string;
+      title?: string;
+      description?: string;
+      status?: "published" | "draft";
+      slug?: string;
+    } = { updated_on: new Date().toISOString().slice(0, 10) };
 
     if (body.title !== undefined) updates.title = body.title.trim();
     if (body.description !== undefined) updates.description = body.description.trim();

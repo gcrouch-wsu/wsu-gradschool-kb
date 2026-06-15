@@ -54,7 +54,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  function update(field: keyof SiteSettings, value: any) {
+  function update<K extends keyof SiteSettings>(field: K, value: SiteSettings[K]) {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
     setSaved(false);
   }
