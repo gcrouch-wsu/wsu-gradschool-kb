@@ -38,6 +38,9 @@ export function AdminAssetLibrary({
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     let rows = assets;
+    if (statusFilter === "active" || statusFilter === "archived") {
+      rows = rows.filter((asset) => asset.status === statusFilter);
+    }
     if (typeFilter !== "all") {
       rows = rows.filter((asset) => asset.assetType === typeFilter);
     }
@@ -62,7 +65,7 @@ export function AdminAssetLibrary({
       return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
     });
     return sorted;
-  }, [assets, query, sortKey, typeFilter]);
+  }, [assets, query, sortKey, statusFilter, typeFilter]);
 
   const documentCount = assets.filter((asset) => asset.assetType === "document").length;
   const imageCount = assets.filter((asset) => asset.assetType === "image").length;

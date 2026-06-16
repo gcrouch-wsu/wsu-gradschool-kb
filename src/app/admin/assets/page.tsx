@@ -77,12 +77,7 @@ export default async function AdminAssetsPage({
     );
   }
 
-  let assets = await getAllAssetsForAdmin(selectedKb.id);
-  if (statusFilter === "archived") {
-    assets = assets.filter((asset) => asset.status === "archived");
-  } else if (statusFilter === "active") {
-    assets = assets.filter((asset) => asset.status === "active");
-  }
+  const assets = await getAllAssetsForAdmin(selectedKb.id);
 
   const rows: AdminAssetLibraryRow[] = assets.map((asset) => ({
     id: asset.id,
