@@ -4259,7 +4259,11 @@ html.admin-app body.admin-app-body {
   gap: 0.85rem;
   list-style: none;
   margin: 0;
+  max-height: clamp(16rem, 42vh, 28rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0;
+  padding-right: 0.25rem;
 }
 
 .admin-activity-item {
@@ -4372,6 +4376,10 @@ html.admin-app body.admin-app-body {
   .admin-dashboard__panels,
   .admin-dashboard__stats {
     grid-template-columns: 1fr;
+  }
+
+  .admin-activity-feed {
+    max-height: clamp(14rem, 50vh, 22rem);
   }
 
   .admin-shell__topbar {
