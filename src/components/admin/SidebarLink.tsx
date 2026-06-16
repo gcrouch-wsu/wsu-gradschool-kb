@@ -19,9 +19,11 @@ export function SidebarLink({ href, label, icon: Icon, exact = false }: SidebarL
 
   return (
     <Link
+      aria-label={label}
       aria-current={active ? "page" : undefined}
       className={`admin-shell__nav-link${active ? " is-active" : ""}`}
       href={href}
+      title={label}
     >
       <Icon aria-hidden size={18} strokeWidth={1.75} />
       <span>{label}</span>

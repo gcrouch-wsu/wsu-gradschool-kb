@@ -3753,6 +3753,7 @@ article li > ol {
   --admin-crimson: #981e32;
   --admin-crimson-dark: #7a1828;
   --admin-sidebar-width: 220px;
+  --admin-sidebar-collapsed-width: 72px;
   --admin-surface: #ffffff;
   --admin-surface-muted: #f7f7f8;
   --admin-border: #e8e4e1;
@@ -3799,6 +3800,7 @@ html.admin-app body.admin-app-body {
   height: 100vh;
   background: var(--admin-crimson);
   color: #fff;
+  transition: width 0.2s ease;
 }
 
 .admin-shell__sidebar-top {
@@ -3819,8 +3821,16 @@ html.admin-app body.admin-app-body {
 .admin-shell__brand {
   align-items: flex-start;
   display: flex;
+  justify-content: space-between;
   gap: 0.65rem;
   padding: 0 0.25rem;
+}
+
+.admin-shell__brand-lockup {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.65rem;
+  min-width: 0;
 }
 
 .admin-shell__brand-mark {
@@ -3837,6 +3847,27 @@ html.admin-app body.admin-app-body {
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.admin-shell__sidebar-toggle {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 2.25rem;
+  justify-content: center;
+  padding: 0;
+  width: 2.25rem;
+}
+
+.admin-shell__sidebar-toggle:hover,
+.admin-shell__sidebar-toggle:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  outline: none;
 }
 
 .admin-shell__section-label {
@@ -3868,6 +3899,10 @@ html.admin-app body.admin-app-body {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+.admin-shell__nav-link svg {
+  flex-shrink: 0;
+}
+
 .admin-shell__nav-link:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
@@ -3883,6 +3918,38 @@ html.admin-app body.admin-app-body {
   background: rgba(255, 255, 255, 0.22);
   height: 1px;
   margin: 0 0.75rem 0.85rem;
+}
+
+.admin-shell__sidebar.is-collapsed {
+  width: var(--admin-sidebar-collapsed-width);
+}
+
+.admin-shell__sidebar.is-collapsed .admin-shell__sidebar-top {
+  padding-inline: 0.75rem;
+}
+
+.admin-shell__sidebar.is-collapsed .admin-shell__sidebar-bottom {
+  padding-inline: 0.75rem;
+}
+
+.admin-shell__sidebar.is-collapsed .admin-shell__brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.admin-shell__sidebar.is-collapsed .admin-shell__brand-lockup,
+.admin-shell__sidebar.is-collapsed .admin-shell__section-label,
+.admin-shell__sidebar.is-collapsed .admin-shell__nav-link span {
+  display: none;
+}
+
+.admin-shell__sidebar.is-collapsed .admin-shell__nav-link {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.admin-shell__sidebar.is-collapsed .admin-shell__sidebar-divider {
+  margin-inline: 0;
 }
 
 .admin-shell__main {
@@ -4341,31 +4408,35 @@ html.admin-app body.admin-app-body {
 
 @media (max-width: 760px) {
   .admin-shell {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .admin-shell__sidebar {
-    height: auto;
-    width: 100%;
+    height: 100vh;
+    width: var(--admin-sidebar-width);
   }
 
   .admin-shell__sidebar-top {
-    overflow: visible;
+    overflow-y: auto;
   }
 
   .admin-shell__main {
-    height: auto;
+    height: 100vh;
     min-height: 0;
   }
 
   html.admin-app,
   html.admin-app body.admin-app-body {
-    overflow: auto;
+    overflow: hidden;
   }
 
   .admin-app-main {
-    height: auto;
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
+  }
+
+  .admin-shell__content {
+    padding: 1.25rem 1rem 1.5rem;
   }
 
   .admin-dashboard__header {
