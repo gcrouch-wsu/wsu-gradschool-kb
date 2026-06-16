@@ -2012,6 +2012,14 @@ p {
   margin-top: 1.5rem;
 }
 
+.admin-assets-workspace__panel {
+  margin-top: 1.5rem;
+}
+
+.admin-assets-workspace__panel--upload {
+  margin-top: 2.25rem;
+}
+
 .asset-library__header {
   align-items: flex-start;
   display: flex;
@@ -2198,7 +2206,7 @@ p {
 }
 
 .asset-upload-panel {
-  margin-top: 2rem;
+  margin-top: 0;
   background: var(--paper);
   border: 1.5px solid var(--line);
   border-radius: var(--radius-md);

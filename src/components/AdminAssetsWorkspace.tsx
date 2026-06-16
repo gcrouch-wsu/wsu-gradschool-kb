@@ -143,6 +143,7 @@ export function AdminAssetsWorkspace({
 
       <div
         aria-labelledby={tabLibraryId}
+        className="admin-assets-workspace__panel"
         hidden={activeTab !== "knowledge-base"}
         id={panelLibraryId}
         role="tabpanel"
@@ -165,6 +166,7 @@ export function AdminAssetsWorkspace({
 
       <div
         aria-labelledby={tabUploadId}
+        className="admin-assets-workspace__panel admin-assets-workspace__panel--upload"
         hidden={activeTab !== "upload"}
         id={panelUploadId}
         role="tabpanel"
