@@ -2960,10 +2960,6 @@ article li > ol {
   cursor: grab;
 }
 
-.tree-editor__item[data-depth]:not([data-depth="0"]) {
-  border-left-color: var(--line);
-}
-
 .tree-editor__item:active {
   cursor: grabbing;
 }
