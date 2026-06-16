@@ -81,7 +81,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     {link.label}
                   </a>
                 ))}
-                <Link href="/admin">Admin</Link>
+                <Link href={session ? "/admin" : "/admin/sign-in?next=%2Fadmin"} prefetch={false}>
+                  Admin
+                </Link>
                 {session && (
                   <span className="nav-user" title={`Signed in as ${session.email}`}>
                     <span className="nav-user__name">{session.email}</span>
