@@ -464,6 +464,40 @@ p {
     flex-direction: column;
     gap: 0.4rem;
   }
+
+  .admin-pages {
+    width: min(100%, calc(100vw - 1.5rem));
+  }
+
+  .admin-pages h1 {
+    font-size: clamp(2rem, 12vw, 3.2rem);
+    line-height: 0.95;
+  }
+
+  .admin-pages .lead {
+    font-size: 1rem;
+  }
+
+  .admin-pages__actions,
+  .admin-pages__kb-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .admin-pages__actions .button,
+  .admin-pages__kb-header .button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .admin-pages__grid {
+    gap: 1rem;
+  }
+
+  .admin-pages__kb-card {
+    padding: 1rem;
+  }
 }
 
 .card { min-width: 0; 
@@ -3022,6 +3056,96 @@ article li > ol {
   cursor: grabbing;
 }
 
+.admin-pages__kb-header {
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.admin-pages__kb-header h2 {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .page-tree-manager {
+    gap: 1rem;
+    margin: 1rem 0 1.25rem;
+  }
+
+  .page-tree-manager > .admin-actions {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 0;
+  }
+
+  .page-tree-manager > .admin-actions .button,
+  .page-tree-manager > .admin-actions .meta {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .tree-editor {
+    gap: 0.65rem;
+  }
+
+  .tree-editor__item[data-depth="0"] {
+    margin-left: 0 !important;
+  }
+
+  .tree-editor__item[data-depth="1"] {
+    margin-left: 0.45rem !important;
+  }
+
+  .tree-editor__item[data-depth="2"] {
+    margin-left: 0.9rem !important;
+  }
+
+  .tree-editor__item[data-depth="3"],
+  .tree-editor__item[data-depth="4"],
+  .tree-editor__item[data-depth="5"] {
+    margin-left: 1.35rem !important;
+  }
+
+  .tree-editor__row {
+    align-items: stretch;
+    gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 0.85rem;
+  }
+
+  .tree-editor__handle-group {
+    align-self: flex-start;
+  }
+
+  .tree-editor__title-row {
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+
+  .tree-editor__title-row strong {
+    flex-basis: 100%;
+    line-height: 1.3;
+  }
+
+  .tree-editor__row > .meta,
+  .tree-editor__row .meta {
+    overflow-wrap: anywhere;
+  }
+
+  .editor-toolbar.tree-editor__actions,
+  .block-editor__actions.tree-editor__actions,
+  .tree-editor__actions {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
+  .tree-editor__actions .button {
+    justify-content: center;
+  }
+}
+
 .site-footer {
   background: var(--paper);
   border-top: 1px solid var(--line);
@@ -3821,16 +3945,8 @@ html.admin-app body.admin-app-body {
 .admin-shell__brand {
   align-items: flex-start;
   display: flex;
-  justify-content: space-between;
   gap: 0.65rem;
   padding: 0 0.25rem;
-}
-
-.admin-shell__brand-lockup {
-  align-items: flex-start;
-  display: flex;
-  gap: 0.65rem;
-  min-width: 0;
 }
 
 .admin-shell__brand-mark {
@@ -3851,22 +3967,24 @@ html.admin-app body.admin-app-body {
 
 .admin-shell__sidebar-toggle {
   align-items: center;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--admin-surface-muted);
+  border: 1px solid var(--admin-border);
   border-radius: 10px;
-  color: #fff;
+  color: var(--admin-crimson);
   cursor: pointer;
   display: inline-flex;
   flex-shrink: 0;
   height: 2.25rem;
   justify-content: center;
   padding: 0;
+  position: relative;
   width: 2.25rem;
+  z-index: 30;
 }
 
 .admin-shell__sidebar-toggle:hover,
 .admin-shell__sidebar-toggle:focus-visible {
-  background: rgba(255, 255, 255, 0.18);
+  background: color-mix(in srgb, var(--admin-crimson) 9%, var(--admin-surface));
   outline: none;
 }
 
@@ -3932,12 +4050,7 @@ html.admin-app body.admin-app-body {
   padding-inline: 0.75rem;
 }
 
-.admin-shell__sidebar.is-collapsed .admin-shell__brand {
-  justify-content: center;
-  padding-inline: 0;
-}
-
-.admin-shell__sidebar.is-collapsed .admin-shell__brand-lockup,
+.admin-shell__sidebar.is-collapsed .admin-shell__brand,
 .admin-shell__sidebar.is-collapsed .admin-shell__section-label,
 .admin-shell__sidebar.is-collapsed .admin-shell__nav-link span {
   display: none;
@@ -4409,11 +4522,28 @@ html.admin-app body.admin-app-body {
 @media (max-width: 760px) {
   .admin-shell {
     flex-direction: row;
+    padding-left: var(--admin-sidebar-collapsed-width);
+    position: relative;
   }
 
   .admin-shell__sidebar {
+    box-shadow: 18px 0 40px rgba(29, 26, 27, 0.22);
     height: 100vh;
+    left: 0;
+    position: absolute;
+    top: 0;
     width: var(--admin-sidebar-width);
+    z-index: 20;
+  }
+
+  .admin-shell__sidebar.is-collapsed {
+    box-shadow: none;
+  }
+
+  .admin-shell.is-sidebar-expanded .admin-shell__sidebar-toggle {
+    left: calc(var(--admin-sidebar-width) - 1.125rem);
+    position: fixed;
+    top: 1rem;
   }
 
   .admin-shell__sidebar-top {
@@ -4423,6 +4553,7 @@ html.admin-app body.admin-app-body {
   .admin-shell__main {
     height: 100vh;
     min-height: 0;
+    width: 100%;
   }
 
   html.admin-app,

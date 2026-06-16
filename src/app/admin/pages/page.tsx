@@ -20,7 +20,7 @@ export default async function AdminPagesPage() {
   );
 
   return (
-    <div className="page-shell">
+    <div className="page-shell admin-pages">
       <p className="eyebrow">Admin</p>
       <h1>Pages</h1>
       <p className="lead">
@@ -31,7 +31,7 @@ export default async function AdminPagesPage() {
         <Link href="/admin">← Back to admin</Link>
       </p>
 
-      <div className="admin-actions">
+      <div className="admin-actions admin-pages__actions">
         <Link className="button" href="/admin/pages/new">
           Create Page
         </Link>
@@ -40,10 +40,10 @@ export default async function AdminPagesPage() {
         </Link>
       </div>
 
-      <div className="grid">
+      <div className="grid admin-pages__grid">
         {groups.map(({ kb, pages }) => (
-          <section className="card" key={kb.id}>
-            <div className="admin-actions" style={{ marginBottom: "1.5rem", justifyContent: "space-between" }}>
+          <section className="card admin-pages__kb-card" key={kb.id}>
+            <div className="admin-actions admin-pages__kb-header">
               <h2>{kb.title}</h2>
               <Link className="button button--small button--ghost" href={`/admin/pages/new?kb=${kb.id}`}>
                 + New Page
