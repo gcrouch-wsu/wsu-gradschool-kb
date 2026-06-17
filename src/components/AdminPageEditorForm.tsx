@@ -13,6 +13,16 @@ import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
 
+const visibilityOptions = [
+  { label: "Public", value: "public" },
+  { label: "Staff only", value: "staff" },
+];
+
+const tocDepthOptions = [
+  { label: "H2 only", value: "2" },
+  { label: "H2 + H3", value: "3" },
+];
+
 interface ParentOption {
   path: string;
   title: string;
@@ -350,8 +360,7 @@ export function AdminPageEditorForm({
       },
       ...parentOptions.map((option) => ({
         description: `${option.status} page`,
-        // label: `${"— ".repeat(Math.max(0, option.depth - 1))}${option.title}`, #add the - if you want to separate the parent from the subpage
-        label: `${"".repeat(Math.max(0, option.depth - 1))}${option.title}`,
+        label: option.title,
         searchText: `${option.title} ${option.status} ${option.path}`,
         value: option.path,
       })),
@@ -696,41 +705,32 @@ export function AdminPageEditorForm({
             searchPlaceholder="Search parent pages..."
             value={parentPath}
           />
-          <div className="field-row">
-            <label>
-              <span className="meta">Visibility</span>
-              <select
-                className="input"
-                onChange={(event) => setVisibility(event.target.value === "staff" ? "staff" : "public")}
-                value={visibility}
-              >
-                <option value="public">Public</option>
-                <option value="staff">Staff only</option>
-              </select>
+          <div className="field-row field-row--toc-settings">
+            <DropdownSelect
+              disabled={isLocked}
+              label="Visibility"
+              onChange={(value) => setVisibility(value === "staff" ? "staff" : "public")}
+              options={visibilityOptions}
+              searchable={false}
+              value={visibility}
+            />
+            <label className="checkbox-inline toc-control__show">
+              <input
+                checked={showToc}
+                disabled={isLocked}
+                onChange={(event) => setShowToc(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Show on page</span>
             </label>
-            <label>
-              <span className="meta">Table of contents</span>
-              <div className="toc-control">
-                <label className="checkbox-inline">
-                  <input
-                    checked={showToc}
-                    onChange={(event) => setShowToc(event.target.checked)}
-                    type="checkbox"
-                  />
-                  <span>Show on page</span>
-                </label>
-                <select
-                  aria-label="Heading depth"
-                  className="input toc-control__depth"
-                  disabled={!showToc}
-                  onChange={(event) => setTocDepth(Number(event.target.value))}
-                  value={tocDepth}
-                >
-                  <option value={2}>H2 only</option>
-                  <option value={3}>H2 + H3</option>
-                </select>
-              </div>
-            </label>
+            <DropdownSelect
+              disabled={isLocked || !showToc}
+              label="Table of contents"
+              onChange={(value) => setTocDepth(Number(value))}
+              options={tocDepthOptions}
+              searchable={false}
+              value={String(tocDepth)}
+            />
           </div>
         </fieldset>
 

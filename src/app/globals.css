@@ -1448,6 +1448,15 @@ p {
   grid-template-columns: minmax(180px, 0.3fr) minmax(0, 1fr);
 }
 
+.field-row--toc-settings {
+  align-items: end;
+  grid-template-columns: minmax(160px, 1fr) auto minmax(160px, 1fr);
+}
+
+.toc-control__show {
+  min-height: 2.65rem;
+}
+
 .checkbox-row {
   align-items: center;
   display: flex;
@@ -1480,6 +1489,11 @@ p {
   flex-wrap: wrap;
   gap: 0.75rem;
   min-height: 2.6rem;
+}
+
+.toc-control-field {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .checkbox-inline,
@@ -3811,6 +3825,13 @@ article li > ol {
   text-align: left;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   width: 100%;
+}
+
+.kb-picker--scope .kb-picker__trigger:disabled {
+  background: var(--wash);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .kb-picker--scope .kb-picker__trigger:hover {
