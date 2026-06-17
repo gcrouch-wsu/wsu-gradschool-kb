@@ -184,7 +184,17 @@ export function AdminAssetUploadForm({
           validateFile={validateDocumentFile}
         />
       ) : (
-        <div className="field-row">
+        <>
+          <label htmlFor={videoUrlFieldId}>
+            <span className="meta">URL or embed ID</span>
+            <input
+              className="input"
+              id={videoUrlFieldId}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder={videoProvider === "direct" ? "https://..." : "e.g. dQw4w9WgXcQ"}
+              value={videoUrl}
+            />
+          </label>
           <DropdownSelect
             label="Provider"
             onChange={(nextValue) => setVideoProvider(nextValue as "youtube" | "vimeo" | "direct")}
@@ -196,17 +206,7 @@ export function AdminAssetUploadForm({
             searchable={false}
             value={videoProvider}
           />
-          <label htmlFor={videoUrlFieldId} style={{ flex: 2 }}>
-            <span className="meta">URL or embed ID</span>
-            <input
-              className="input"
-              id={videoUrlFieldId}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder={videoProvider === "direct" ? "https://..." : "e.g. dQw4w9WgXcQ"}
-              value={videoUrl}
-            />
-          </label>
-        </div>
+        </>
       )}
 
       <button className="button" disabled={busy} type="submit">
