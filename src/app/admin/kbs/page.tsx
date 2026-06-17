@@ -149,7 +149,7 @@ export default function AdminKbsPage() {
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
       </p>
-      <div className="admin-actions">
+      <div className="admin-actions admin-kbs__header">
         <h1>Knowledge Base Management</h1>
         <button className="button" onClick={() => setIsCreating(!isCreating)} type="button">
           {isCreating ? "Cancel" : "Create KB"}

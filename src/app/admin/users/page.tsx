@@ -143,7 +143,7 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
       </p>
-      <div className="admin-actions">
+      <div className="admin-actions admin-users__header">
         <h1>User Management</h1>
         <button className="button" onClick={() => setIsCreating(!isCreating)}>
           {isCreating ? "Cancel" : "Add User"}
