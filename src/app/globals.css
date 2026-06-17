@@ -2223,12 +2223,12 @@ p {
   text-align: center;
 }
 
-.asset-file-picker {
+.file-upload-picker {
   display: grid;
   gap: 0.45rem;
 }
 
-.asset-file-picker__dropzone {
+.file-upload-picker__dropzone {
   align-items: center;
   background: color-mix(in srgb, var(--wash) 65%, var(--paper));
   border: 1.5px dashed var(--line-strong);
@@ -2241,14 +2241,14 @@ p {
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.asset-file-picker__dropzone:hover,
-.asset-file-picker__dropzone:focus-within {
+.file-upload-picker__dropzone:hover,
+.file-upload-picker__dropzone:focus-within {
   background: var(--wash);
   border-color: var(--wsu-crimson);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--wsu-crimson) 12%, transparent);
 }
 
-.asset-file-picker__input {
+.file-upload-picker__input {
   height: 1px;
   opacity: 0;
   overflow: hidden;
@@ -2256,7 +2256,7 @@ p {
   width: 1px;
 }
 
-.asset-file-picker__icon {
+.file-upload-picker__icon {
   align-items: center;
   background: var(--paper);
   border: 1.5px solid var(--line);
@@ -2268,13 +2268,13 @@ p {
   width: 2.75rem;
 }
 
-.asset-file-picker__content {
+.file-upload-picker__content {
   display: grid;
   gap: 0.15rem;
   min-width: 0;
 }
 
-.asset-file-picker__title {
+.file-upload-picker__title {
   color: var(--ink);
   font-size: 0.95rem;
   font-weight: 800;
@@ -2283,12 +2283,12 @@ p {
   white-space: nowrap;
 }
 
-.asset-file-picker__hint {
+.file-upload-picker__hint {
   color: var(--muted);
   font-size: 0.86rem;
 }
 
-.asset-file-picker__action {
+.file-upload-picker__action {
   background: var(--paper);
   border: 1.5px solid var(--line);
   border-radius: 999px;
@@ -2299,7 +2299,7 @@ p {
   white-space: nowrap;
 }
 
-.asset-file-picker__clear {
+.file-upload-picker__clear {
   align-items: center;
   background: transparent;
   border: 0;
@@ -2314,7 +2314,7 @@ p {
   padding: 0;
 }
 
-.asset-file-picker__clear:hover {
+.file-upload-picker__clear:hover {
   color: var(--wsu-crimson);
 }
 
@@ -4844,12 +4844,12 @@ html.admin-app body.admin-app-body {
     max-height: clamp(7rem, 25vh, 11rem);
   }
 
-  .asset-file-picker__dropzone {
+  .file-upload-picker__dropzone {
     align-items: flex-start;
     grid-template-columns: auto 1fr;
   }
 
-  .asset-file-picker__action {
+  .file-upload-picker__action {
     grid-column: 1 / -1;
     justify-self: stretch;
     text-align: center;

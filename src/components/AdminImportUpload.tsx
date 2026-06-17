@@ -2,8 +2,9 @@
 
 import { BookOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { DropdownSelect } from "@/components/DropdownSelect";
+import { FileUploadPicker } from "@/components/FileUploadPicker";
 import { PILOT_IMPORT_TARGETS } from "@/lib/pilot-imports";
 
 export interface ImportKbOption {
@@ -11,12 +12,35 @@ export interface ImportKbOption {
   title: string;
 }
 
+const acceptedImportTypes = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const importMaxFileSize = 25 * 1024 * 1024;
+const macroEnabledWordExtensions = [".docm", ".dotm", ".dot"];
+
+function validateImportFile(file: File) {
+  const fileName = file.name.toLowerCase();
+  if (macroEnabledWordExtensions.some((extension) => fileName.endsWith(extension)) || file.type.includes("macroEnabled")) {
+    return "Macro-enabled Word files are not allowed. Save as a plain .docx and try again.";
+  }
+  if (!fileName.endsWith(".docx") && file.type !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    return "Please upload a .docx file.";
+  }
+  if (file.size === 0) return "That file is empty.";
+  if (file.size > importMaxFileSize) return "File is larger than 25 MB.";
+  return null;
+}
+
 export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }) {
   const router = useRouter();
+  const fileFieldId = useId();
   const [kbId, setKbId] = useState(kbOptions[0]?.id ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleFileChange(nextFile: File | null) {
+    setError(null);
+    setFile(nextFile);
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -63,14 +87,17 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
           searchLabel="Search knowledge bases"
           value={kbId}
         />
-        <label>
-          <span className="meta">Word document (.docx)</span>
-          <input
-            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            type="file"
-          />
-        </label>
+        <FileUploadPicker
+          accept={acceptedImportTypes}
+          disabled={busy}
+          file={file}
+          helperText="Word document (.docx) up to 25 MB"
+          id={fileFieldId}
+          label="Word document (.docx)"
+          onError={setError}
+          onFileChange={handleFileChange}
+          validateFile={validateImportFile}
+        />
         <button className="button" disabled={busy || !file} type="submit">
           {busy ? "Parsing and staging…" : "Upload and review"}
         </button>
