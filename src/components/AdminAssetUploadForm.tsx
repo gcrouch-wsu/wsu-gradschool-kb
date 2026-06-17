@@ -1,10 +1,23 @@
 "use client";
 
-import { BookOpen } from "lucide-react";
-import { useId, useState } from "react";
+import { BookOpen, FileText, UploadCloud, X } from "lucide-react";
+import { useId, useRef, useState } from "react";
 import { DropdownSelect } from "@/components/DropdownSelect";
 
 type AssetUploadType = "file" | "video";
+
+const acceptedDocumentTypes = ".pdf,.doc,.docx,.txt,application/pdf,text/plain";
+const maxFileSize = 25 * 1024 * 1024;
+
+function formatFileSize(size: number) {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isAcceptedDocument(file: File) {
+  const fileName = file.name.toLowerCase();
+  return [".pdf", ".doc", ".docx", ".txt"].some((extension) => fileName.endsWith(extension));
+}
 
 export function AdminAssetUploadForm({
   kbs,
@@ -20,6 +33,7 @@ export function AdminAssetUploadForm({
   const descriptionFieldId = `${formId}-description`;
   const fileFieldId = `${formId}-file`;
   const videoUrlFieldId = `${formId}-video-url`;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [kbId, setKbId] = useState(lockKbId ?? defaultKbId ?? kbs[0]?.id ?? "");
   const [uploadType, setUploadType] = useState<AssetUploadType>("file");
@@ -31,6 +45,31 @@ export function AdminAssetUploadForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+
+  function handleSelectedFile(nextFile: File | null) {
+    if (!nextFile) {
+      setFile(null);
+      return;
+    }
+    if (!isAcceptedDocument(nextFile)) {
+      setError("Choose a PDF, Word, or text file.");
+      setFile(null);
+      return;
+    }
+    if (nextFile.size > maxFileSize) {
+      setError("Choose a file that is 25 MB or smaller.");
+      setFile(null);
+      return;
+    }
+    setError(null);
+    setCreatedUrl(null);
+    setFile(nextFile);
+  }
+
+  function clearSelectedFile() {
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -88,6 +127,7 @@ export function AdminAssetUploadForm({
       setVideoUrl("");
       setTitle("");
       setDescription("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Action failed.");
     } finally {
@@ -153,15 +193,43 @@ export function AdminAssetUploadForm({
       </label>
 
       {uploadType === "file" ? (
-        <label htmlFor={fileFieldId}>
-          <span className="meta">File (PDF, Word, or text)</span>
-          <input
-            accept=".pdf,.doc,.docx,.txt,application/pdf"
-            id={fileFieldId}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            type="file"
-          />
-        </label>
+        <div className="asset-file-picker">
+          <span className="meta">File</span>
+          <label
+            className="asset-file-picker__dropzone"
+            htmlFor={fileFieldId}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              handleSelectedFile(event.dataTransfer.files?.[0] ?? null);
+            }}
+          >
+            <input
+              accept={acceptedDocumentTypes}
+              className="asset-file-picker__input"
+              id={fileFieldId}
+              onChange={(event) => handleSelectedFile(event.target.files?.[0] ?? null)}
+              ref={fileInputRef}
+              type="file"
+            />
+            <span className="asset-file-picker__icon" aria-hidden>
+              {file ? <FileText size={24} strokeWidth={1.75} /> : <UploadCloud size={24} strokeWidth={1.75} />}
+            </span>
+            <span className="asset-file-picker__content">
+              <span className="asset-file-picker__title">{file ? file.name : "Choose a file or drag it here"}</span>
+              <span className="asset-file-picker__hint">
+                {file ? `${formatFileSize(file.size)} selected` : "PDF, Word, or text document up to 25 MB"}
+              </span>
+            </span>
+            <span className="asset-file-picker__action">{file ? "Choose another" : "Browse files"}</span>
+          </label>
+          {file && (
+            <button className="asset-file-picker__clear" onClick={clearSelectedFile} type="button">
+              <X aria-hidden size={16} strokeWidth={1.75} />
+              Remove selected file
+            </button>
+          )}
+        </div>
       ) : (
         <div className="field-row">
           <DropdownSelect
