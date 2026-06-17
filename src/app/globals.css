@@ -3804,6 +3804,12 @@ article li > ol {
   letter-spacing: 0.05em;
 }
 
+.asset-upload-panel .kb-picker--scope .kb-picker__label {
+  color: var(--muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+}
+
 .kb-picker--scope .kb-picker__control {
   position: relative;
 }
