@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { Eye, EyeOff, MoreHorizontal } from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { DropdownSelect } from "@/components/DropdownSelect";
@@ -226,8 +226,17 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
-              <button className="button button--ghost" onClick={() => setShowPassword(!showPassword)} type="button">
-                {showPassword ? "Hide" : "Show"}
+              <button
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                type="button"
+              >
+                {showPassword ? (
+                  <EyeOff aria-hidden size={18} strokeWidth={1.8} />
+                ) : (
+                  <Eye aria-hidden size={18} strokeWidth={1.8} />
+                )}
               </button>
             </div>
           </label>

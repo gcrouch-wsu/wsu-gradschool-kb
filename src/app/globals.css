@@ -1202,6 +1202,30 @@ p {
   padding: 0.5rem;
 }
 
+.password-toggle {
+  align-items: center;
+  background: var(--paper);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  justify-content: center;
+  line-height: 1;
+  padding: 0.75rem;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  width: 2.75rem;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: var(--wash);
+  border-color: var(--wsu-crimson);
+  color: var(--wsu-crimson);
+  outline: none;
+}
+
 .admin-inline-actions {
   margin: 0 0 1.5rem;
 }
@@ -5092,6 +5116,10 @@ html.admin-app body.admin-app-body {
 
   .modal-form__inline-field .button {
     justify-content: center;
+    width: 100%;
+  }
+
+  .modal-form__inline-field .password-toggle {
     width: 100%;
   }
 
