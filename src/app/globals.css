@@ -2213,6 +2213,16 @@ p {
   padding: 1.25rem 1.5rem;
 }
 
+.asset-upload-panel .seg {
+  display: flex;
+  width: 100%;
+}
+
+.asset-upload-panel .seg__btn {
+  flex: 1;
+  text-align: center;
+}
+
 .asset-upload-panel summary {
   cursor: pointer;
   font-weight: 800;
