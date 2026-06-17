@@ -2375,6 +2375,7 @@ p {
   border: 1.5px solid var(--line);
   border-radius: var(--radius-md);
   padding: 1.25rem 1.5rem;
+  width: min(100%, 650px);
 }
 
 .asset-upload-panel .seg {
