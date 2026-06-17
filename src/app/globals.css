@@ -3784,6 +3784,12 @@ article li > ol {
   text-transform: uppercase;
 }
 
+.editor-form .kb-picker--scope .kb-picker__label {
+  color: var(--muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+}
+
 .kb-picker--scope .kb-picker__control {
   position: relative;
 }

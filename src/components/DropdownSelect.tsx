@@ -13,6 +13,7 @@ export interface DropdownSelectOption {
 
 interface DropdownSelectProps {
   className?: string;
+  disabled?: boolean;
   emptyMessage?: string;
   label: string;
   onChange: (value: string) => void;
@@ -27,6 +28,7 @@ interface DropdownSelectProps {
 
 export function DropdownSelect({
   className,
+  disabled = false,
   emptyMessage = "No matches.",
   label,
   onChange,
@@ -149,6 +151,7 @@ export function DropdownSelect({
           aria-haspopup="listbox"
           aria-labelledby={labelId}
           className="kb-picker__trigger"
+          disabled={disabled}
           onClick={() => setOpen((value) => !value)}
           onKeyDown={onTriggerKeyDown}
           type="button"
@@ -176,6 +179,7 @@ export function DropdownSelect({
                   aria-autocomplete="list"
                   aria-controls={listboxId}
                   className="kb-picker__search-input"
+                  disabled={disabled}
                   id={searchFieldId}
                   onChange={(event) => {
                     setQuery(event.target.value);

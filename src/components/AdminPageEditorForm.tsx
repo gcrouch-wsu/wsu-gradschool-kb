@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
@@ -340,6 +341,23 @@ export function AdminPageEditorForm({
   }, [page.id]);
 
   const previewUrl = useMemo(() => savedUrl ?? `/kb/${kb.slug}/${page.path.join("/")}`, [kb.slug, page.path, savedUrl]);
+  const parentSelectOptions = useMemo(
+    () => [
+      {
+        description: `Root of ${kb.title}`,
+        label: "Top level",
+        value: "",
+      },
+      ...parentOptions.map((option) => ({
+        description: `${option.status} page`,
+        // label: `${"— ".repeat(Math.max(0, option.depth - 1))}${option.title}`, #add the - if you want to separate the parent from the subpage
+        label: `${"".repeat(Math.max(0, option.depth - 1))}${option.title}`,
+        searchText: `${option.title} ${option.status} ${option.path}`,
+        value: option.path,
+      })),
+    ],
+    [kb.title, parentOptions],
+  );
 
   const summaryError = issues.some((issue) => issue.toLowerCase().includes("summary"));
   const contactError = issues.some((issue) => issue.toLowerCase().includes("contact email"));
@@ -669,17 +687,15 @@ export function AdminPageEditorForm({
             />
             <span>Show the PDF export button</span>
           </label>
-          <label>
-            <span className="meta">Nest under</span>
-            <select className="input" onChange={(event) => setParentPath(event.target.value)} value={parentPath}>
-              <option value="">Top level</option>
-              {parentOptions.map((option) => (
-                <option key={option.path} value={option.path}>
-                  {`${"  ".repeat(Math.max(0, option.depth - 1))}${option.title} (${option.status})`}
-                </option>
-              ))}
-            </select>
-          </label>
+          <DropdownSelect
+            disabled={isLocked}
+            label="Nest under"
+            onChange={setParentPath}
+            options={parentSelectOptions}
+            searchLabel="Search parent pages"
+            searchPlaceholder="Search parent pages..."
+            value={parentPath}
+          />
           <div className="field-row">
             <label>
               <span className="meta">Visibility</span>
