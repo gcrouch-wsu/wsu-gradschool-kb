@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdminSearchGapsTable } from "@/components/admin/AdminSearchGapsTable";
 import { listAuditEvents } from "@/lib/audit-log";
 import { getCurrentAdminSession } from "@/lib/auth";
 
@@ -29,6 +30,8 @@ export default async function SearchGapPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 50);
 
+  const gapRows = sortedGaps.map(([term, count]) => ({ term, count }));
+
   return (
     <div className="page-shell">
       <nav className="breadcrumbs" aria-label="Breadcrumb">
@@ -50,32 +53,8 @@ export default async function SearchGapPage() {
         These terms were searched by users but returned zero results. Use this to identify missing content.
       </p>
 
-      <div className="table-wrap" style={{ marginTop: "2rem" }}>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Search Term</th>
-              <th>Failed Search Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedGaps.map(([term, count]) => (
-              <tr key={term}>
-                <td>
-                  <span style={{ fontWeight: 800, fontSize: "1.1rem" }}>{term}</span>
-                </td>
-                <td>{count}</td>
-              </tr>
-            ))}
-            {sortedGaps.length === 0 && (
-              <tr>
-                <td className="meta" colSpan={2}>
-                  No zero-result searches recorded in the audit retention window.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div style={{ marginTop: "2rem" }}>
+        <AdminSearchGapsTable gaps={gapRows} />
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ export type AdminDataTableProps<T> = {
   pageSize?: number;
   pageSizeOptions?: number[];
   emptyMessage?: string;
+  hideSearch?: boolean;
   actionsColumn?: {
     header?: string;
     cell: (row: T) => ReactNode;
@@ -41,6 +42,7 @@ export function AdminDataTable<T>({
   pageSize: initialPageSize = DEFAULT_PAGE_SIZE,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   emptyMessage = "No results match your search.",
+  hideSearch = false,
   actionsColumn,
   toolbarExtra,
 }: AdminDataTableProps<T>) {
@@ -69,21 +71,23 @@ export function AdminDataTable<T>({
   return (
     <section className="admin-data-table">
       <div className="admin-data-table__toolbar">
-        <label className="admin-data-table__search" htmlFor={searchFieldId}>
-          <Search aria-hidden className="admin-data-table__search-icon" size={16} strokeWidth={1.75} />
-          <span className="sr-only">Search table</span>
-          <input
-            className="input"
-            id={searchFieldId}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(1);
-            }}
-            placeholder={searchPlaceholder}
-            type="search"
-            value={query}
-          />
-        </label>
+        {!hideSearch && (
+          <label className="admin-data-table__search" htmlFor={searchFieldId}>
+            <Search aria-hidden className="admin-data-table__search-icon" size={16} strokeWidth={1.75} />
+            <span className="sr-only">Search table</span>
+            <input
+              className="input"
+              id={searchFieldId}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
+              placeholder={searchPlaceholder}
+              type="search"
+              value={query}
+            />
+          </label>
+        )}
         {toolbarExtra}
         <div className="admin-data-table__page-size">
           <DropdownSelect

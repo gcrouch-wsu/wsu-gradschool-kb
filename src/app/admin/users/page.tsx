@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import type { KnowledgeBase, User } from "@/lib/types";
+import { MoreHorizontal } from "lucide-react";
+import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import KbAssignmentPicker from "@/components/KbAssignmentPicker";
-
+import type { KnowledgeBase, User } from "@/lib/types";
 interface ManagedUser {
   id: string;
   email: string;
@@ -15,8 +17,15 @@ interface ManagedUser {
   kbAssignments: string[];
 }
 
-export default function AdminUsersPage() {
-  const [users, setUsers] = useState<ManagedUser[]>([]);
+function userSearchFilter(user: ManagedUser, query: string) {
+  return (
+    user.email.toLowerCase().includes(query) ||
+    user.fullName.toLowerCase().includes(query) ||
+    user.role.toLowerCase().includes(query)
+  );
+}
+
+export default function AdminUsersPage() {  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,80 +196,110 @@ export default function AdminUsersPage() {
         </form>
       )}
 
-      <div className="table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Knowledge bases</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => {
+      <AdminDataTable
+        columns={[
+          {
+            id: "name",
+            header: "Name",
+            cell: (user) => <strong>{user.fullName || "—"}</strong>,
+          },
+          {
+            id: "email",
+            header: "Email",
+            cell: (user) => user.email,
+          },
+          {
+            id: "role",
+            header: "Role",
+            cell: (user) => {
               const isEditing = editingId === user.id;
+              if (isEditing) {
+                return (
+                  <select
+                    className="input"
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as User["role"])}
+                  >
+                    <option value="editor">Editor</option>
+                    <option value="admin">Admin</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                );
+              }
               return (
-                <tr key={user.id}>
-                  <td><strong>{user.fullName || "—"}</strong></td>
-                  <td>{user.email}</td>
-                  <td>
-                    {isEditing ? (
-                      <select className="input" value={editRole} onChange={(e) => setEditRole(e.target.value as User["role"])}>
-                        <option value="editor">Editor</option>
-                        <option value="admin">Admin</option>
-                        <option value="owner">Owner</option>
-                      </select>
-                    ) : (
-                      <span className={`badge ${user.role === "owner" ? "badge--staff" : "badge--section"}`}>{user.role}</span>
-                    )}
-                  </td>
-                  <td>
-                    {isEditing ? (
-                      editRole === "editor" ? (
-                        <KbAssignmentPicker
-                          kbs={kbs}
-                          selected={editAssignments}
-                          onChange={setEditAssignments}
-                        />
-                      ) : (
-                        <span className="meta">All knowledge bases</span>
-                      )
-                    ) : user.role === "editor" ? (
-                      user.kbAssignments.length > 0 ? (
-                        <span className="meta">{user.kbAssignments.map(kbTitle).join(", ")}</span>
-                      ) : (
-                        <span className="meta" style={{ color: "var(--wsu-crimson)" }}>None assigned</span>
-                      )
-                    ) : (
-                      <span className="meta">All knowledge bases</span>
-                    )}
-                  </td>
-                  <td>
-                    {isEditing ? (
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <button className="button button--small" onClick={() => handleUpdateUser(user.id)}>Save</button>
-                        <button className="button button--small button--ghost" onClick={() => setEditingId(null)}>Cancel</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <button className="button button--small button--ghost" onClick={() => startEdit(user)}>Edit</button>
-                        <button className="button button--small button--ghost" onClick={() => handleDelete(user.id)}>Delete</button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
+                <span className={`badge ${user.role === "owner" ? "badge--staff" : "badge--section"}`}>
+                  {user.role}
+                </span>
               );
-            })}
-            {users.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ textAlign: "center" }} className="meta">No managed users found.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            },
+          },
+          {
+            id: "kbs",
+            header: "Knowledge bases",
+            cell: (user) => {
+              const isEditing = editingId === user.id;
+              if (isEditing) {
+                return editRole === "editor" ? (
+                  <KbAssignmentPicker kbs={kbs} selected={editAssignments} onChange={setEditAssignments} />
+                ) : (
+                  <span className="meta">All knowledge bases</span>
+                );
+              }
+              if (user.role === "editor") {
+                return user.kbAssignments.length > 0 ? (
+                  <span className="meta">{user.kbAssignments.map(kbTitle).join(", ")}</span>
+                ) : (
+                  <span className="meta" style={{ color: "var(--wsu-crimson)" }}>
+                    None assigned
+                  </span>
+                );
+              }
+              return <span className="meta">All knowledge bases</span>;
+            },
+          },
+        ]}
+        emptyMessage="No managed users found."
+        getRowId={(user) => user.id}
+        rows={users}
+        searchFilter={userSearchFilter}
+        searchPlaceholder="Search by name, email, or role…"
+        actionsColumn={{
+          header: "Actions",
+          cell: (user) => {
+            const isEditing = editingId === user.id;
+            if (isEditing) {
+              return (
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button className="button button--small" onClick={() => handleUpdateUser(user.id)} type="button">
+                    Save
+                  </button>
+                  <button className="button button--small button--ghost" onClick={() => setEditingId(null)} type="button">
+                    Cancel
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <AdminRowMenu
+                items={[
+                  {
+                    label: "Edit",
+                    onSelect: () => startEdit(user),
+                  },
+                  { divider: true, label: "" },
+                  {
+                    danger: true,
+                    label: "Delete",
+                    onSelect: () => handleDelete(user.id),
+                  },
+                ]}
+                menuLabel={`Actions for ${user.email}`}
+                triggerContent={<MoreHorizontal aria-hidden size={18} strokeWidth={1.75} />}
+                triggerLabel={`More options for ${user.email}`}
+              />
+            );
+          },
+        }}
+      />    </div>
   );
 }

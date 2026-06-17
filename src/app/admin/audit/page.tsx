@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdminAuditEventsTable } from "@/components/admin/AdminAuditEventsTable";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { listAuditEvents } from "@/lib/audit-log";
 import { getAllKbsForAdmin } from "@/lib/kb-store";
@@ -104,44 +105,7 @@ export default async function AdminAuditPage({
         </Link>
       </div>
 
-      <div className="table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Actor</th>
-              <th>Action</th>
-              <th>Item</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.length === 0 ? (
-              <tr>
-                <td colSpan={5}>No audit events match these filters.</td>
-              </tr>
-            ) : (
-              events.map((event) => (
-                <tr key={event.id}>
-                  <td>{new Date(event.createdAt).toLocaleString()}</td>
-                  <td>
-                    {event.actorEmail}
-                    <div className="meta">{event.actorRole}</div>
-                  </td>
-                  <td>{event.action}</td>
-                  <td>
-                    {event.entityLabel || event.entityId}
-                    <div className="meta">{event.entityType}</div>
-                  </td>
-                  <td>
-                    <code>{JSON.stringify(event.details)}</code>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <AdminAuditEventsTable events={events} />
     </div>
   );
 }
