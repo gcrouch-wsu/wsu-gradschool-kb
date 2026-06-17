@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
+import { Modal } from "@/components/Modal";
 import type { KbStatus, KnowledgeBase } from "@/lib/types";
 
 function kbSearchFilter(kb: KnowledgeBase, query: string) {
@@ -68,6 +69,13 @@ export default function AdminKbsPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error creating KB");
     }
+  }
+
+  function closeCreateModal() {
+    setIsCreating(false);
+    setNewTitle("");
+    setNewDescription("");
+    setNewSlug("");
   }
 
   async function handleUpdate(kbId: string) {
@@ -151,8 +159,8 @@ export default function AdminKbsPage() {
       </p>
       <div className="admin-actions admin-kbs__header">
         <h1>Knowledge Base Management</h1>
-        <button className="button" onClick={() => setIsCreating(!isCreating)} type="button">
-          {isCreating ? "Cancel" : "Create KB"}
+        <button className="button" onClick={() => setIsCreating(true)} type="button">
+          Create KB
         </button>
       </div>
 
@@ -163,34 +171,45 @@ export default function AdminKbsPage() {
       {message && <p className="alert alert--success">{message}</p>}
 
       {isCreating && (
-        <form className="form card" onSubmit={handleCreate} style={{ marginBottom: "2rem" }}>
-          <h2>New Knowledge Base</h2>
-          <label>
-            <span className="meta">Title</span>
-            <input className="input" required value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-          </label>
-          <label>
-            <span className="meta">URL Slug (optional)</span>
-            <input
-              className="input"
-              value={newSlug}
-              onChange={(e) => setNewSlug(e.target.value)}
-              placeholder="e.g. graduate-school"
-            />
-          </label>
-          <label>
-            <span className="meta">Description</span>
-            <textarea
-              className="input"
-              rows={3}
-              value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
-            />
-          </label>
-          <button className="button" type="submit">
-            Create KB
-          </button>
-        </form>
+        <Modal
+          description="Create a draft knowledge base. You can publish it after adding pages and reviewing the setup."
+          onClose={closeCreateModal}
+          title="New Knowledge Base"
+        >
+          <form className="form" onSubmit={handleCreate}>
+            <label>
+              <span className="meta">Title</span>
+              <input
+                className="input"
+                data-autofocus
+                required
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+            </label>
+            <label>
+              <span className="meta">URL Slug (optional)</span>
+              <input
+                className="input"
+                value={newSlug}
+                onChange={(e) => setNewSlug(e.target.value)}
+                placeholder="e.g. graduate-school"
+              />
+            </label>
+            <label>
+              <span className="meta">Description</span>
+              <textarea
+                className="input"
+                rows={3}
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+              />
+            </label>
+            <button className="button" type="submit">
+              Create KB
+            </button>
+          </form>
+        </Modal>
       )}
 
       <AdminDataTable
