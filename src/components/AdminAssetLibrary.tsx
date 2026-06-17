@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
 import type { AssetStatus } from "@/lib/types";
 
 export type AdminAssetLibraryRow = {
@@ -142,20 +143,19 @@ export function AdminAssetLibrary({
             </button>
           ))}
         </div>
-        <label className="asset-library__sort" htmlFor={`${searchFieldId}-sort`}>
-          <span className="meta">Sort</span>
-          <select
-            className="input"
-            id={`${searchFieldId}-sort`}
-            onChange={(event) => setSortKey(event.target.value as SortKey)}
-            value={sortKey}
-          >
-            <option value="title">Title</option>
-            <option value="updated">Last updated</option>
-            <option value="size">File size</option>
-            <option value="type">Type</option>
-          </select>
-        </label>
+        <DropdownSelect
+          className="asset-library__sort"
+          label="Sort"
+          onChange={(nextValue) => setSortKey(nextValue as SortKey)}
+          options={[
+            { label: "Title", value: "title" },
+            { label: "Last updated", value: "updated" },
+            { label: "File size", value: "size" },
+            { label: "Type", value: "type" },
+          ]}
+          searchable={false}
+          value={sortKey}
+        />
       </div>
 
       {filtered.length === 0 ? (

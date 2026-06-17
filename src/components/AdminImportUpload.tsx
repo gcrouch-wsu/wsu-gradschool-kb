@@ -1,7 +1,9 @@
 "use client";
 
+import { BookOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
 import { PILOT_IMPORT_TARGETS } from "@/lib/pilot-imports";
 
 export interface ImportKbOption {
@@ -50,16 +52,17 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
           so you can review content and images before creating a draft page.
         </p>
         {error && <p className="alert">{error}</p>}
-        <label>
-          <span className="meta">Knowledge base</span>
-          <select className="input" onChange={(e) => setKbId(e.target.value)} value={kbId}>
-            {kbOptions.map((kb) => (
-              <option key={kb.id} value={kb.id}>
-                {kb.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        <DropdownSelect
+          label="Knowledge base"
+          onChange={setKbId}
+          options={kbOptions.map((kb) => ({
+            icon: <BookOpen aria-hidden size={18} strokeWidth={1.75} />,
+            label: kb.title,
+            value: kb.id,
+          }))}
+          searchLabel="Search knowledge bases"
+          value={kbId}
+        />
         <label>
           <span className="meta">Word document (.docx)</span>
           <input

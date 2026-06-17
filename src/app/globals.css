@@ -3460,6 +3460,11 @@ article li > ol {
   max-width: 28rem;
 }
 
+.form .kb-picker--scope {
+  max-width: 100%;
+  width: 100%;
+}
+
 .kb-picker--scope .kb-picker__label {
   color: var(--muted);
   font-size: 0.72rem;
@@ -3587,6 +3592,19 @@ article li > ol {
   gap: 0.65rem;
   justify-content: space-between;
   padding: 0.55rem 0.65rem;
+}
+
+.kb-picker--scope .kb-picker__option-main {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.kb-picker--scope .kb-picker__option-icon {
+  color: var(--admin-crimson, var(--wsu-crimson));
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 .kb-picker--scope .kb-picker__option.is-active {

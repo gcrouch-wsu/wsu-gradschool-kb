@@ -1,6 +1,8 @@
 "use client";
 
+import { BookOpen } from "lucide-react";
 import { useId, useState } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
 
 type AssetUploadType = "file" | "video";
 
@@ -14,11 +16,9 @@ export function AdminAssetUploadForm({
   lockKbId?: string;
 }) {
   const formId = useId();
-  const kbFieldId = `${formId}-kb`;
   const titleFieldId = `${formId}-title`;
   const descriptionFieldId = `${formId}-description`;
   const fileFieldId = `${formId}-file`;
-  const providerFieldId = `${formId}-provider`;
   const videoUrlFieldId = `${formId}-video-url`;
 
   const [kbId, setKbId] = useState(lockKbId ?? defaultKbId ?? kbs[0]?.id ?? "");
@@ -124,16 +124,17 @@ export function AdminAssetUploadForm({
       </div>
 
       {!lockKbId && (
-        <label htmlFor={kbFieldId}>
-          <span className="meta">Knowledge base</span>
-          <select className="input" id={kbFieldId} onChange={(e) => setKbId(e.target.value)} value={kbId}>
-            {kbs.map((kb) => (
-              <option key={kb.id} value={kb.id}>
-                {kb.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        <DropdownSelect
+          label="Knowledge base"
+          onChange={setKbId}
+          options={kbs.map((kb) => ({
+            icon: <BookOpen aria-hidden size={18} strokeWidth={1.75} />,
+            label: kb.title,
+            value: kb.id,
+          }))}
+          searchLabel="Search knowledge bases"
+          value={kbId}
+        />
       )}
 
       <label htmlFor={titleFieldId}>
@@ -163,19 +164,17 @@ export function AdminAssetUploadForm({
         </label>
       ) : (
         <div className="field-row">
-          <label htmlFor={providerFieldId}>
-            <span className="meta">Provider</span>
-            <select
-              className="input"
-              id={providerFieldId}
-              onChange={(e) => setVideoProvider(e.target.value as "youtube" | "vimeo" | "direct")}
-              value={videoProvider}
-            >
-              <option value="youtube">YouTube</option>
-              <option value="vimeo">Vimeo</option>
-              <option value="direct">Direct URL</option>
-            </select>
-          </label>
+          <DropdownSelect
+            label="Provider"
+            onChange={(nextValue) => setVideoProvider(nextValue as "youtube" | "vimeo" | "direct")}
+            options={[
+              { label: "YouTube", value: "youtube" },
+              { label: "Vimeo", value: "vimeo" },
+              { label: "Direct URL", value: "direct" },
+            ]}
+            searchable={false}
+            value={videoProvider}
+          />
           <label htmlFor={videoUrlFieldId} style={{ flex: 2 }}>
             <span className="meta">URL or embed ID</span>
             <input
