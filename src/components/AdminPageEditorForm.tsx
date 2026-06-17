@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
@@ -37,22 +38,52 @@ function ActionOverflowMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const actionableItems = items.filter((item) => !item.divider);
   const clampedActiveIndex = Math.min(activeIndex, Math.max(actionableItems.length - 1, 0));
 
+  function updateMenuPosition() {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 152;
+    setMenuPosition({
+      left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
+      top: rect.bottom + 6,
+    });
+  }
+
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
         setOpen(false);
         triggerRef.current?.focus();
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
   }, [open]);
 
   function closeMenu() {
@@ -70,6 +101,7 @@ function ActionOverflowMenu({
   function onTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
       event.preventDefault();
+      updateMenuPosition();
       setOpen(true);
     }
   }
@@ -109,19 +141,24 @@ function ActionOverflowMenu({
         aria-label="More actions"
         className="icon-button"
         disabled={disabled}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (!open) updateMenuPosition();
+          setOpen((value) => !value);
+        }}
         onKeyDown={onTriggerKeyDown}
         type="button"
       >
         ⋯
       </button>
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <ul
           aria-label="More page actions"
-          className="kb-picker__menu tree-editor__menu"
+          className="kb-picker__menu tree-editor__menu tree-editor__menu--portal"
           id={menuId}
           onKeyDown={onMenuKeyDown}
+          ref={menuRef}
           role="menu"
+          style={{ left: menuPosition.left, top: menuPosition.top }}
         >
           {items.map((item, index) => {
             if (item.divider) {
@@ -145,7 +182,8 @@ function ActionOverflowMenu({
               </li>
             );
           })}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   );

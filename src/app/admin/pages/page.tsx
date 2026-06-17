@@ -22,7 +22,17 @@ export default async function AdminPagesPage() {
   return (
     <div className="page-shell admin-pages">
       <p className="eyebrow">Admin</p>
-      <h1>Pages</h1>
+      <div className="admin-actions admin-pages__header">
+        <h1>Pages</h1>
+        <div className="admin-actions admin-pages__actions">
+          <Link className="button" href="/admin/pages/new">
+            Create Page
+          </Link>
+          <Link className="button button--ghost" href="/admin/import">
+            Import from DOCX
+          </Link>
+        </div>
+      </div>
       <p className="lead">
         Manage imported and seeded pages. Use this screen to reopen drafts, publish content, and move pages
         under the correct parent in the KB tree.
@@ -30,15 +40,6 @@ export default async function AdminPagesPage() {
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
       </p>
-
-      <div className="admin-actions admin-pages__actions">
-        <Link className="button" href="/admin/pages/new">
-          Create Page
-        </Link>
-        <Link className="button button--ghost" href="/admin/import">
-          Import from DOCX
-        </Link>
-      </div>
 
       <div className="grid admin-pages__grid">
         {groups.map(({ kb, pages }) => (
