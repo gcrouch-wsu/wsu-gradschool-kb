@@ -6,6 +6,7 @@ import { MoreHorizontal } from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import KbAssignmentPicker from "@/components/KbAssignmentPicker";
+import { ModalForm } from "@/components/Modal";
 import type { KnowledgeBase, User } from "@/lib/types";
 interface ManagedUser {
   id: string;
@@ -92,9 +93,20 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
       setNewFullName("");
       setNewRole("editor");
       setNewAssignments([]);
+      setShowPassword(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error creating user");
     }
+  }
+
+  function closeCreateUserModal() {
+    setIsCreating(false);
+    setShowPassword(false);
+    setNewEmail("");
+    setNewPassword("");
+    setNewFullName("");
+    setNewRole("editor");
+    setNewAssignments([]);
   }
 
   function startEdit(user: ManagedUser) {
@@ -145,8 +157,8 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
       </p>
       <div className="admin-actions admin-users__header">
         <h1>User Management</h1>
-        <button className="button" onClick={() => setIsCreating(!isCreating)}>
-          {isCreating ? "Cancel" : "Add User"}
+        <button className="button" onClick={() => setIsCreating(true)} type="button">
+          Add User
         </button>
       </div>
       <p className="meta">
@@ -155,19 +167,38 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
       </p>
 
       {isCreating && (
-        <form className="form card" onSubmit={handleCreateUser} style={{ marginBottom: "2rem" }}>
-          <h2>New User</h2>
+        <ModalForm
+          description="Create an admin user and choose whether they can manage all knowledge bases or only assigned ones."
+          onClose={closeCreateUserModal}
+          onSubmit={handleCreateUser}
+          submitLabel="Create User"
+          title="New User"
+          width="lg"
+        >
           <label>
             <span className="meta">Email</span>
-            <input className="input" type="email" required autoComplete="off" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+            <input
+              autoComplete="off"
+              className="input"
+              data-autofocus
+              required
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+            />
           </label>
           <label>
             <span className="meta">Full Name</span>
-            <input className="input" autoComplete="off" value={newFullName} onChange={(e) => setNewFullName(e.target.value)} />
+            <input
+              autoComplete="off"
+              className="input"
+              value={newFullName}
+              onChange={(e) => setNewFullName(e.target.value)}
+            />
           </label>
           <label>
             <span className="meta">Password</span>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div className="modal-form__inline-field">
               <input
                 className="input"
                 required
@@ -176,7 +207,7 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
-              <button className="button button--ghost" onClick={() => setShowPassword(!showPassword)} type="button" style={{ minWidth: "4.5rem", padding: "0.5rem" }}>
+              <button className="button button--ghost" onClick={() => setShowPassword(!showPassword)} type="button">
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
@@ -192,8 +223,7 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
           {newRole === "editor" && (
             <KbAssignmentPicker kbs={kbs} selected={newAssignments} onChange={setNewAssignments} />
           )}
-          <button className="button" type="submit">Create User</button>
-        </form>
+        </ModalForm>
       )}
 
       <AdminDataTable
