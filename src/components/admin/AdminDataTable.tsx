@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { DropdownSelect } from "@/components/DropdownSelect";
 
@@ -59,18 +59,9 @@ export function AdminDataTable<T>({
   }, [query, rows, searchFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
 
-  useEffect(() => {
-    setPage(1);
-  }, [query, pageSize, rows.length]);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
-
-  const pageStart = (page - 1) * pageSize;
+  const pageStart = (currentPage - 1) * pageSize;
   const pageRows = filtered.slice(pageStart, pageStart + pageSize);
   const rangeStart = filtered.length === 0 ? 0 : pageStart + 1;
   const rangeEnd = Math.min(pageStart + pageSize, filtered.length);
@@ -84,7 +75,10 @@ export function AdminDataTable<T>({
           <input
             className="input"
             id={searchFieldId}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
             placeholder={searchPlaceholder}
             type="search"
             value={query}
@@ -94,7 +88,10 @@ export function AdminDataTable<T>({
         <div className="admin-data-table__page-size">
           <DropdownSelect
             label="Rows per page"
-            onChange={(value) => setPageSize(Number(value))}
+            onChange={(value) => {
+              setPageSize(Number(value));
+              setPage(1);
+            }}
             options={pageSizeOptions.map((option) => ({
               label: String(option),
               value: String(option),
@@ -151,20 +148,20 @@ export function AdminDataTable<T>({
           <button
             aria-label="Previous page"
             className="button button--small button--ghost admin-data-table__page-btn"
-            disabled={page <= 1}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={currentPage <= 1}
+            onClick={() => setPage(currentPage - 1)}
             type="button"
           >
             <ChevronLeft aria-hidden size={16} strokeWidth={1.75} />
           </button>
           <span className="admin-data-table__page-label">
-            Page {page} of {totalPages}
+            Page {currentPage} of {totalPages}
           </span>
           <button
             aria-label="Next page"
             className="button button--small button--ghost admin-data-table__page-btn"
-            disabled={page >= totalPages}
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={currentPage >= totalPages}
+            onClick={() => setPage(currentPage + 1)}
             type="button"
           >
             <ChevronRight aria-hidden size={16} strokeWidth={1.75} />
