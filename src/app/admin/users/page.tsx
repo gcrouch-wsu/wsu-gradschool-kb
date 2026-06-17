@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
+import { DropdownSelect } from "@/components/DropdownSelect";
 import KbAssignmentPicker from "@/components/KbAssignmentPicker";
 import { ModalForm } from "@/components/Modal";
 import type { KnowledgeBase, User } from "@/lib/types";
@@ -25,6 +26,24 @@ function userSearchFilter(user: ManagedUser, query: string) {
     user.role.toLowerCase().includes(query)
   );
 }
+
+const userRoleOptions = [
+  {
+    description: "Can edit only assigned knowledge bases",
+    label: "Editor",
+    value: "editor",
+  },
+  {
+    description: "Can manage all knowledge bases",
+    label: "Admin",
+    value: "admin",
+  },
+  {
+    description: "Full platform access",
+    label: "Owner",
+    value: "owner",
+  },
+];
 
 export default function AdminUsersPage() {  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
@@ -212,14 +231,13 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
               </button>
             </div>
           </label>
-          <label>
-            <span className="meta">Role</span>
-            <select className="input" value={newRole} onChange={(e) => setNewRole(e.target.value as User["role"])}>
-              <option value="editor">Editor (assigned KBs only)</option>
-              <option value="admin">Admin (all KBs)</option>
-              <option value="owner">Owner (full access)</option>
-            </select>
-          </label>
+          <DropdownSelect
+            label="Role"
+            onChange={(value) => setNewRole(value as User["role"])}
+            options={userRoleOptions}
+            searchable={false}
+            value={newRole}
+          />
           {newRole === "editor" && (
             <KbAssignmentPicker kbs={kbs} selected={newAssignments} onChange={setNewAssignments} />
           )}
