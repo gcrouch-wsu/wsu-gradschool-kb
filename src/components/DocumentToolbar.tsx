@@ -1,5 +1,6 @@
 "use client";
 
+import { CreditCard, ImagePlus, Rows3, Table2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RichTextToolbar } from "@/components/RichTextToolbar";
 import type { EditorPalette } from "@/lib/kb-theme";
@@ -155,13 +156,14 @@ export function DocumentToolbar({
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
       <div className="document-toolbar__insert" role="group" aria-label="Insert">
         <button
-          className={buttonClass}
+          aria-label="Insert divider"
+          className={`${buttonClass} rich-text-toolbar__button--icon`}
           onMouseDown={(event) => toolbarPrepare(event)}
           onClick={onInsertSectionBreak}
           title="Insert a section divider"
           type="button"
         >
-          Divider
+          <Rows3 aria-hidden size={16} strokeWidth={1.75} />
         </button>
         <button
           className={buttonClass}
@@ -173,31 +175,34 @@ export function DocumentToolbar({
           Procedure section
         </button>
         <button
-          className={buttonClass}
+          aria-label="Insert table"
+          className={`${buttonClass} rich-text-toolbar__button--icon`}
           onMouseDown={(event) => toolbarPrepare(event)}
           onClick={onAddTable}
           title="Insert an accessible table section"
           type="button"
         >
-          Table
+          <Table2 aria-hidden size={16} strokeWidth={1.75} />
         </button>
         <button
-          className={buttonClass}
+          aria-label="Insert card section"
+          className={`${buttonClass} rich-text-toolbar__button--icon`}
           onMouseDown={(event) => toolbarPrepare(event)}
           onClick={onAddCard}
           title="Insert a highlighted card section"
           type="button"
         >
-          Card
+          <CreditCard aria-hidden size={16} strokeWidth={1.75} />
         </button>
         <button
-          className={buttonClass}
+          aria-label="Insert media"
+          className={`${buttonClass} rich-text-toolbar__button--icon`}
           onMouseDown={(event) => toolbarPrepare(event)}
           onClick={onInsertMedia}
           title="Insert an image, video, or file from the asset library"
           type="button"
         >
-          Media
+          <ImagePlus aria-hidden size={16} strokeWidth={1.75} />
         </button>
         <button
           className={buttonClass}
