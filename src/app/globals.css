@@ -3361,6 +3361,22 @@ article li > ol {
   width: 100%;
 }
 
+.tree-editor__menu-item-icon-wrap {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.tree-editor__menu-item-icon {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.tree-editor__menu-item-label {
+  font-size: 0.85rem;
+}
+
 .tree-editor__menu-item.is-active,
 .tree-editor__menu-item.is-selected {
   background: var(--wash);

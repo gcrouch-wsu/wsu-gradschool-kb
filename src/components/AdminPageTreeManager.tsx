@@ -1,6 +1,16 @@
 "use client";
 
-import { ArrowUpDown, GripVertical } from "lucide-react";
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  CircleCheck,
+  CornerDownRight,
+  CornerUpLeft,
+  GripVertical,
+  House,
+} from "lucide-react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
@@ -137,6 +147,7 @@ interface TreeRowMenuItem {
   danger?: boolean;
   disabled?: boolean;
   divider?: boolean;
+  icon?: ReactNode;
   label: string;
   onSelect: () => void;
 }
@@ -253,12 +264,25 @@ function TreeRowMenu({
                     currentIndex === clampedActiveIndex ? " is-active" : ""
                   }${item.danger ? " tree-editor__menu-item--danger" : ""}`}
                   disabled={item.disabled}
+                  aria-label={item.label}
                   onClick={() => selectItem(currentIndex)}
                   onMouseEnter={() => setActiveIndex(currentIndex)}
                   role="menuitem"
+                  title={item.label}
                   type="button"
                 >
-                  <span className="kb-picker__option-title">{item.label}</span>
+                  {item.icon ? (
+                    <span className="tree-editor__menu-item-icon-wrap">
+                      <span aria-hidden className="tree-editor__menu-item-icon">
+                        {item.icon}
+                      </span>
+                      <span className="kb-picker__option-title tree-editor__menu-item-label">
+                        {item.label}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="kb-picker__option-title">{item.label}</span>
+                  )}
                 </button>
               </li>
             );
@@ -295,10 +319,30 @@ function PageTreeMoveMenu({
   return (
     <TreeRowMenu
       items={[
-        { label: "Move up", disabled: !canMoveUp, onSelect: onMoveUp },
-        { label: "Move down", disabled: !canMoveDown, onSelect: onMoveDown },
-        { label: "Nest under previous page", disabled: !canMoveInto, onSelect: onMoveInto },
-        { label: "Move out one level", disabled: !canMoveOut, onSelect: onMoveOut },
+        {
+          label: "Move up",
+          icon: <ArrowUp aria-hidden size={16} strokeWidth={1.75} />,
+          disabled: !canMoveUp,
+          onSelect: onMoveUp,
+        },
+        {
+          label: "Move down",
+          icon: <ArrowDown aria-hidden size={16} strokeWidth={1.75} />,
+          disabled: !canMoveDown,
+          onSelect: onMoveDown,
+        },
+        {
+          label: "Nest under previous page",
+          icon: <CornerDownRight aria-hidden size={16} strokeWidth={1.75} />,
+          disabled: !canMoveInto,
+          onSelect: onMoveInto,
+        },
+        {
+          label: "Move out one level",
+          icon: <CornerUpLeft aria-hidden size={16} strokeWidth={1.75} />,
+          disabled: !canMoveOut,
+          onSelect: onMoveOut,
+        },
       ]}
       menuLabel={`Move options for ${pageTitle}`}
       triggerContent={<ArrowUpDown aria-hidden size={16} strokeWidth={1.75} />}
@@ -337,13 +381,15 @@ function PageTreeOverflowMenu({
 
     if (!isHomepage && page.status !== "archived") {
       entries.push({
-        label: homepageBusy ? "Setting..." : "Set as homepage",
+        icon: <House aria-hidden size={16} strokeWidth={1.75} />,
+        label: homepageBusy ? "Setting..." : "Set Home",
         disabled: homepageBusy,
         onSelect: onHomepage,
       });
     }
 
     entries.push({
+      icon: <CircleCheck aria-hidden size={16} strokeWidth={1.75} />,
       label: statusBusy ? publishToggleBusyLabel(page.status) : publishToggleLabel(page.status),
       disabled: statusBusy,
       onSelect: onPublishToggle,
@@ -353,6 +399,7 @@ function PageTreeOverflowMenu({
       entries.push({ divider: true, label: "", onSelect: () => {} });
       entries.push({
         danger: true,
+        icon: <Archive aria-hidden size={16} strokeWidth={1.75} />,
         label: statusBusy ? "Archiving..." : "Archive",
         disabled: statusBusy,
         onSelect: onArchive,
@@ -384,10 +431,7 @@ function PageTreeOverflowMenu({
 
   return (
     <TreeRowMenu
-      items={items.map((item) => ({
-        ...item,
-        label: item.danger ? item.label : item.label,
-      }))}
+      items={items}
       menuLabel={`More actions for ${page.title}`}
       triggerContent="⋯"
       triggerLabel={`More actions for ${page.title}`}
