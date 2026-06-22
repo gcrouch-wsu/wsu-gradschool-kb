@@ -34,10 +34,28 @@ export default async function AdminPage() {
       </div>
 
       <div className="admin-dashboard__stats">
-        <StatCard icon="book-open" label="Published knowledge bases" tone="blue" value={counts.publishedKbs} />
-        <StatCard icon="file-check" label="Published pages" tone="green" value={counts.publishedPages} />
-        <StatCard icon="file-pen" label="Draft pages" tone="amber" value={counts.draftPages} />
-        <StatCard icon="folder-open" label="Active assets" tone="gray" value={counts.activeAssets} />
+        <StatCard
+          href="/admin/kbs"
+          icon="book-open"
+          label="Published knowledge bases"
+          tone="blue"
+          value={counts.publishedKbs}
+        />
+        <StatCard
+          href="/admin/pages"
+          icon="file-check"
+          label="Published pages"
+          tone="green"
+          value={counts.publishedPages}
+        />
+        <StatCard icon="file-pen" href="/admin/pages?status=draft" label="Draft pages" tone="amber" value={counts.draftPages} />
+        <StatCard
+          href="/admin/assets?status=active"
+          icon="folder-open"
+          label="Active assets"
+          tone="gray"
+          value={counts.activeAssets}
+        />
       </div>
 
       <div className="admin-dashboard__panels">
