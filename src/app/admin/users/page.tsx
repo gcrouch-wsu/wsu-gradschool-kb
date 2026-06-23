@@ -272,15 +272,13 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
               const isEditing = editingId === user.id;
               if (isEditing) {
                 return (
-                  <select
-                    className="input"
+                  <DropdownSelect
+                    label="Role"
+                    onChange={(value) => setEditRole(value as User["role"])}
+                    options={userRoleOptions}
+                    searchable={false}
                     value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as User["role"])}
-                  >
-                    <option value="editor">Editor</option>
-                    <option value="admin">Admin</option>
-                    <option value="owner">Owner</option>
-                  </select>
+                  />
                 );
               }
               return (
