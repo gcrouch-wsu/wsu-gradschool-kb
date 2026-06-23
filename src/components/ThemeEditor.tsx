@@ -51,6 +51,10 @@ const FONT_OPTIONS = FONT_KEYS.map((key) => ({
   value: key,
 }));
 const HEADING_FONT_OPTIONS = [{ label: "Use heading font", value: "" }, ...FONT_OPTIONS];
+const HEADING_WEIGHT_OPTIONS = HEADING_WEIGHTS.map((weight) => ({ label: weight, value: weight }));
+const HEADING_STYLE_OPTIONS = HEADING_FONT_STYLES.map((style) => ({ label: style, value: style }));
+const HEADING_DECORATION_OPTIONS = HEADING_TEXT_DECORATIONS.map((decoration) => ({ label: decoration, value: decoration }));
+const HEADING_TRANSFORM_OPTIONS = HEADING_TEXT_TRANSFORMS.map((transform) => ({ label: transform, value: transform }));
 
 const TYPO_FIELDS: {
   key: keyof KbTheme["typography"];
@@ -344,64 +348,34 @@ export function ThemeEditor({
             {HEADING_LEVELS.map((level) => (
               <div className="theme-heading-style" key={level}>
                 <span className="meta">{level.toUpperCase()}</span>
-                <label>
-                  <span className="meta">Weight</span>
-                  <select
-                    className="input"
-                    onChange={(e) => setHeadingStyle(level, "weight", e.target.value)}
-                    value={theme.headingStyles[level].weight}
-                  >
-                    {HEADING_WEIGHTS.map((weight) => (
-                      <option key={weight} value={weight}>
-                        {weight}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="meta">Style</span>
-                  <select
-                    className="input"
-                    onChange={(e) => setHeadingStyle(level, "style", e.target.value as ThemeHeadingStyle["style"])}
-                    value={theme.headingStyles[level].style}
-                  >
-                    {HEADING_FONT_STYLES.map((style) => (
-                      <option key={style} value={style}>
-                        {style}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="meta">Decoration</span>
-                  <select
-                    className="input"
-                    onChange={(e) =>
-                      setHeadingStyle(level, "decoration", e.target.value as ThemeHeadingStyle["decoration"])
-                    }
-                    value={theme.headingStyles[level].decoration}
-                  >
-                    {HEADING_TEXT_DECORATIONS.map((decoration) => (
-                      <option key={decoration} value={decoration}>
-                        {decoration}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="meta">Case</span>
-                  <select
-                    className="input"
-                    onChange={(e) => setHeadingStyle(level, "transform", e.target.value as ThemeHeadingStyle["transform"])}
-                    value={theme.headingStyles[level].transform}
-                  >
-                    {HEADING_TEXT_TRANSFORMS.map((transform) => (
-                      <option key={transform} value={transform}>
-                        {transform}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <DropdownSelect
+                  label="Weight"
+                  onChange={(value) => setHeadingStyle(level, "weight", value)}
+                  options={HEADING_WEIGHT_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].weight}
+                />
+                <DropdownSelect
+                  label="Style"
+                  onChange={(value) => setHeadingStyle(level, "style", value as ThemeHeadingStyle["style"])}
+                  options={HEADING_STYLE_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].style}
+                />
+                <DropdownSelect
+                  label="Decoration"
+                  onChange={(value) => setHeadingStyle(level, "decoration", value as ThemeHeadingStyle["decoration"])}
+                  options={HEADING_DECORATION_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].decoration}
+                />
+                <DropdownSelect
+                  label="Case"
+                  onChange={(value) => setHeadingStyle(level, "transform", value as ThemeHeadingStyle["transform"])}
+                  options={HEADING_TRANSFORM_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].transform}
+                />
               </div>
             ))}
           </div>

@@ -1541,11 +1541,16 @@ p {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .link-row .input {
   flex: 1 1 11rem;
-  min-width: 0;
+  min-width: min(100%, 11rem);
+}
+
+.link-row .icon-button {
+  flex: 0 0 auto;
 }
 
 .field-group {

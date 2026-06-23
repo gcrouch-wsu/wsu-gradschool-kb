@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdminAuditFilters } from "@/components/admin/AdminAuditFilters";
 import { AdminAuditEventsTable } from "@/components/admin/AdminAuditEventsTable";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { listAuditEvents } from "@/lib/audit-log";
@@ -42,64 +43,9 @@ export default async function AdminAuditPage({
         <Link href="/admin">← Back to admin</Link>
       </p>
 
-      <form className="form card audit-filter" method="get">
-        <div className="field-row">
-          <label>
-            <span className="meta">Search</span>
-            <input className="input" defaultValue={filter.q} name="q" placeholder="Actor, action, or item" />
-          </label>
-          <label>
-            <span className="meta">Action</span>
-            <input className="input" defaultValue={filter.action} name="action" placeholder="page.updated" />
-          </label>
-        </div>
-        <div className="field-row">
-          <label>
-            <span className="meta">Entity type</span>
-            <select className="input" defaultValue={filter.entityType} name="entityType">
-              <option value="">Any</option>
-              <option value="page">Page</option>
-              <option value="asset">Asset</option>
-              <option value="kb">Knowledge base</option>
-              <option value="import">Import</option>
-              <option value="redirect">Redirect</option>
-              <option value="user">User</option>
-              <option value="settings">Settings</option>
-            </select>
-          </label>
-          <label>
-            <span className="meta">Knowledge base</span>
-            <select className="input" defaultValue={filter.kbId} name="kbId">
-              <option value="">Any</option>
-              {kbs.map((kb) => (
-                <option key={kb.id} value={kb.id}>
-                  {kb.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="field-row">
-          <label>
-            <span className="meta">From</span>
-            <input className="input" defaultValue={filter.from} name="from" type="date" />
-          </label>
-          <label>
-            <span className="meta">To</span>
-            <input className="input" defaultValue={filter.to} name="to" type="date" />
-          </label>
-        </div>
-        <div className="admin-actions">
-          <button className="button" type="submit">
-            Apply filters
-          </button>
-          <Link className="button button--ghost" href="/admin/audit">
-            Clear
-          </Link>
-        </div>
-      </form>
+      <AdminAuditFilters filter={filter} kbs={kbs} />
 
-      <div className="admin-actions">
+      <div className="admin-actions" style={{ marginTop: "1rem" }}>
         <Link className="button button--ghost" href="/admin/audit/search">
           View Search Gaps
         </Link>
