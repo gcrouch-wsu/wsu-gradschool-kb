@@ -198,6 +198,42 @@ textarea:focus-visible,
   width: auto;
 }
 
+.site-brand--sign-in {
+  margin-bottom: 1.5rem;
+}
+
+.site-brand__logo {
+  display: block;
+  height: auto;
+  max-height: 72px;
+  max-width: min(280px, 100%);
+  width: auto;
+}
+
+.site-brand__text {
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.admin-shell__brand-logo {
+  background: #fff;
+  border-radius: var(--radius-sm);
+  display: block;
+  height: auto;
+  max-height: 40px;
+  max-width: 100%;
+  padding: 0.2rem 0.35rem;
+  width: auto;
+}
+
+.admin-sign-in .eyebrow {
+  margin-top: 0;
+}
+
 .brand__text {
   display: inline-block;
 }
