@@ -1553,6 +1553,33 @@ p {
   flex: 0 0 auto;
 }
 
+@media (max-width: 760px) {
+  .grid--two {
+    grid-template-columns: 1fr;
+  }
+
+  .field-group,
+  .field-group > *,
+  .field-group label {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .link-row {
+    width: 100%;
+  }
+
+  .link-row .input {
+    flex: 1 1 calc(100% - 3rem);
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .link-row .icon-button {
+    margin-left: auto;
+  }
+}
+
 .field-group {
   display: grid;
   gap: 0.75rem;
