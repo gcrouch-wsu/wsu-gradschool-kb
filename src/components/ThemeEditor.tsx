@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
 import {
   DEFAULT_THEME,
   HEADING_FONT_STYLES,
@@ -45,6 +46,11 @@ const PROCEDURE_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: str
 
 const FONT_KEYS = Object.keys(SAFE_FONTS);
 const HEADING_LEVELS: HeadingLevel[] = ["h1", "h2", "h3", "h4"];
+const FONT_OPTIONS = FONT_KEYS.map((key) => ({
+  label: SAFE_FONTS[key].label,
+  value: key,
+}));
+const HEADING_FONT_OPTIONS = [{ label: "Use heading font", value: "" }, ...FONT_OPTIONS];
 
 const TYPO_FIELDS: {
   key: keyof KbTheme["typography"];
@@ -279,40 +285,36 @@ export function ThemeEditor({
         <fieldset className="fieldset">
           <legend>Fonts</legend>
           <div className="field-row">
-            <label>
-              <span className="meta">Body font</span>
-              <select className="input" onChange={(e) => setFont("body", e.target.value)} value={theme.fonts.body}>
-                {FONT_KEYS.map((k) => (
-                  <option key={k} value={k}>
-                    {SAFE_FONTS[k].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="meta">Heading font</span>
-              <select className="input" onChange={(e) => setFont("heading", e.target.value)} value={theme.fonts.heading}>
-                {FONT_KEYS.map((k) => (
-                  <option key={k} value={k}>
-                    {SAFE_FONTS[k].label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div style={{ flex: 1 }}>
+              <DropdownSelect
+                label="Body font"
+                onChange={(value) => setFont("body", value)}
+                options={FONT_OPTIONS}
+                searchable={false}
+                value={theme.fonts.body}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <DropdownSelect
+                label="Heading font"
+                onChange={(value) => setFont("heading", value)}
+                options={FONT_OPTIONS}
+                searchable={false}
+                value={theme.fonts.heading}
+              />
+            </div>
           </div>
           <div className="theme-heading-grid" style={{ marginTop: "1rem" }}>
             {HEADING_LEVELS.map((level) => (
-              <label key={level}>
-                <span className="meta">{level.toUpperCase()} font</span>
-                <select className="input" onChange={(e) => setFont(level, e.target.value)} value={theme.fonts[level]}>
-                  <option value="">Use heading font</option>
-                  {FONT_KEYS.map((k) => (
-                    <option key={k} value={k}>
-                      {SAFE_FONTS[k].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div key={level}>
+                <DropdownSelect
+                  label={`${level.toUpperCase()} font`}
+                  onChange={(value) => setFont(level, value)}
+                  options={HEADING_FONT_OPTIONS}
+                  searchable={false}
+                  value={theme.fonts[level]}
+                />
+              </div>
             ))}
           </div>
         </fieldset>
