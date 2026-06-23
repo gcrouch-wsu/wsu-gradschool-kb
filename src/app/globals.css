@@ -587,6 +587,10 @@ p {
   grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
 }
 
+.layout > * {
+  min-width: 0;
+}
+
 .layout--with-toc {
   grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(0, 260px);
   grid-template-areas: "nav main toc";
@@ -746,7 +750,9 @@ p {
   border-radius: var(--radius-lg);
   padding: 3rem 3.5rem;
   box-shadow: var(--shadow-sm);
-  max-width: var(--measure);
+  width: 100%;
+  min-width: 0;
+  max-width: min(100%, var(--measure));
 }
 
 /* Flow / vertical-rhythm container shared by the article, the home content,
