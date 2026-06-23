@@ -22,8 +22,7 @@ function roleLabel(role: string) {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = (await headers()).get("x-pathname") ?? "";
-  const isSignIn = pathname.startsWith("/admin/sign-in");
-  const isAdminShell = pathname.startsWith("/admin") && !isSignIn;
+  const isAdminShell = pathname.startsWith("/admin") && !pathname.startsWith("/admin/sign-in");
 
   const [session, settings] = await Promise.all([getCurrentAdminSession(), loadSiteSettings()]);
 
@@ -52,7 +51,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {!isAdminShell && (
           <header className="site-header">
             <div className={`site-header__inner${headerAlignClass}`}>
-              {hasBrand && !isSignIn && <SiteBrand href="/" settings={settings} variant="header" />}
+              {hasBrand && <SiteBrand href="/" settings={settings} variant="header" />}
               <nav className="nav" aria-label="Primary">
                 <Link href="/">Knowledge bases</Link>
                 {settings.headerLinks.map((link, i) => (

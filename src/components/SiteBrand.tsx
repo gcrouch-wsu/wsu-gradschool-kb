@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { fontStack } from "@/lib/kb-theme";
 import { DEFAULT_SITE_SETTINGS, type SiteSettings } from "@/lib/site-settings";
 
-export type SiteBrandVariant = "header" | "sidebar";
+export type SiteBrandVariant = "header" | "sidebar" | "sign-in";
 
 export type SiteBrandSettings = Pick<
   SiteSettings,
@@ -32,21 +32,12 @@ function brandTextStyle(settings: SiteBrandSettings): CSSProperties {
 }
 
 function logoStyle(settings: SiteBrandSettings, variant: SiteBrandVariant): CSSProperties | undefined {
-  if (variant === "sidebar") {
-    if (!settings.logoWidth) {
-      return undefined;
-    }
-
-    return {
-      width: `${settings.logoWidth}px`,
-      maxWidth: "100%",
-      height: "auto",
-      maxHeight: "var(--admin-topbar-height, 60px)",
-    };
-  }
-
   if (!settings.logoWidth) {
     return undefined;
+  }
+
+  if (variant === "sidebar") {
+    return { width: `${settings.logoWidth}px`, maxWidth: "100%", height: "auto" };
   }
 
   return { width: `${settings.logoWidth}px`, maxHeight: "none" };
@@ -103,7 +94,7 @@ export function SiteBrand({ href = "/", settings, variant = "header" }: SiteBran
   if (variant === "sidebar") {
     return wrapLink(
       href,
-      `admin-shell__brand${hasLogo ? " admin-shell__brand--logo" : ""}${hasLogo && settings.logoWidth ? " admin-shell__brand--logo-sized" : ""}`,
+      "admin-shell__brand",
       hasLogo ? (
         <BrandLogo alt={alt} className="admin-shell__brand-logo" settings={settings} variant={variant} />
       ) : (
@@ -112,6 +103,18 @@ export function SiteBrand({ href = "/", settings, variant = "header" }: SiteBran
           <span className="admin-shell__brand-text">{displayText}</span>
         </>
       ),
+    );
+  }
+
+  if (variant === "sign-in") {
+    return (
+      <div className="site-brand site-brand--sign-in">
+        {hasLogo ? (
+          <BrandLogo alt={alt} className="site-brand__logo" settings={settings} variant={variant} />
+        ) : (
+          <p className="site-brand__text">{displayText}</p>
+        )}
+      </div>
     );
   }
 
