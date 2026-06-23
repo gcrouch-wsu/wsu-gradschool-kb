@@ -453,34 +453,26 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
 
-              <label>
-                <span className="meta">Header alignment</span>
-                <select
-                  className="input"
-                  value={settings.headerAlignment}
-                  onChange={(e) => update("headerAlignment", e.target.value as Alignment)}
-                >
-                  {ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a.charAt(0).toUpperCase() + a.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span className="meta">Home hero text alignment</span>
-                <select
-                  className="input"
-                  value={settings.heroAlignment}
-                  onChange={(e) => update("heroAlignment", e.target.value as Alignment)}
-                >
-                  {ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a.charAt(0).toUpperCase() + a.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <DropdownSelect
+                label="Header alignment"
+                onChange={(value) => update("headerAlignment", value as Alignment)}
+                options={ALIGNMENTS.map((alignment) => ({
+                  label: alignment.charAt(0).toUpperCase() + alignment.slice(1),
+                  value: alignment,
+                }))}
+                searchable={false}
+                value={settings.headerAlignment}
+              />
+              <DropdownSelect
+                label="Home hero text alignment"
+                onChange={(value) => update("heroAlignment", value as Alignment)}
+                options={ALIGNMENTS.map((alignment) => ({
+                  label: alignment.charAt(0).toUpperCase() + alignment.slice(1),
+                  value: alignment,
+                }))}
+                searchable={false}
+                value={settings.heroAlignment}
+              />
               <label>
                 <span className="meta">Max content width in pixels (leave 0 for default 1320)</span>
                 <input
