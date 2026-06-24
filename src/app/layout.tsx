@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import type { CSSProperties } from "react";
+import { hasSiteBrand, SiteBrand } from "@/components/SiteBrand";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { loadSiteSettings } from "@/lib/db";
-import { DEFAULT_THEME, fontStack, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,13 +32,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     ...(settings.contentWidth ? { "--content-width": `${settings.contentWidth}px` } : {}),
   };
 
-  const hasBrand = Boolean(settings.logoUrl || settings.brandText);
-  const brandTextStyle: CSSProperties = {
-    ...(settings.brandTextColor ? { color: settings.brandTextColor } : {}),
-    ...(settings.brandTextSize ? { fontSize: settings.brandTextSize } : {}),
-    ...(settings.brandTextWeight ? { fontWeight: Number(settings.brandTextWeight) } : {}),
-    ...(settings.brandTextFont ? { fontFamily: fontStack(settings.brandTextFont) } : {}),
-  };
+  const hasBrand = hasSiteBrand(settings);
   const headerAlignClass =
     settings.headerAlignment === "center"
       ? " is-center"
@@ -56,24 +51,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {!isAdminShell && (
           <header className="site-header">
             <div className={`site-header__inner${headerAlignClass}`}>
-              {hasBrand && (
-                <Link className={`brand${settings.logoUrl ? " brand--has-logo" : ""}`} href="/">
-                  {settings.logoUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      alt={settings.brandText || "Home"}
-                      className="brand__logo"
-                      src={settings.logoUrl}
-                      style={settings.logoWidth ? { width: `${settings.logoWidth}px`, maxHeight: "none" } : undefined}
-                    />
-                  )}
-                  {settings.brandText && (
-                    <span className="brand__text" style={brandTextStyle}>
-                      {settings.brandText}
-                    </span>
-                  )}
-                </Link>
-              )}
+              {hasBrand && <SiteBrand href="/" settings={settings} variant="header" />}
               <nav className="nav" aria-label="Primary">
                 <Link href="/">Knowledge bases</Link>
                 {settings.headerLinks.map((link, i) => (

@@ -3,14 +3,16 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { AdminSession } from "@/lib/auth";
+import type { SiteBrandSettings } from "@/components/SiteBrand";
 import { Sidebar } from "@/components/admin/Sidebar";
 import { TopBar } from "@/components/admin/TopBar";
 interface AdminShellProps {
+  branding: SiteBrandSettings;
   session: AdminSession;
   children: ReactNode;
 }
 
-export function AdminShell({ session, children }: AdminShellProps) {
+export function AdminShell({ branding, session, children }: AdminShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export function AdminShell({ session, children }: AdminShellProps) {
 
   return (
     <div className={`admin-shell${isSidebarCollapsed ? " is-sidebar-collapsed" : " is-sidebar-expanded"}`}>
-      <Sidebar isCollapsed={isSidebarCollapsed} session={session} />
+      <Sidebar branding={branding} isCollapsed={isSidebarCollapsed} session={session} />
       <div className="admin-shell__main">
         <TopBar
           isSidebarCollapsed={isSidebarCollapsed}

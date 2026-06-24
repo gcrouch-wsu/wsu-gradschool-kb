@@ -10,6 +10,7 @@ import KbAssignmentPicker from "@/components/KbAssignmentPicker";
 import { ModalForm } from "@/components/Modal";
 import { PageLoader } from "@/components/PageLoader";
 import type { KnowledgeBase, User } from "@/lib/types";
+import { readApiErrorMessage, useStatusModal } from "@/lib/use-status-modal";
 interface ManagedUser {
   id: string;
   email: string;
@@ -46,7 +47,8 @@ const userRoleOptions = [
   },
 ];
 
-export default function AdminUsersPage() {  const [users, setUsers] = useState<ManagedUser[]>([]);
+export default function AdminUsersPage() {  const { showError, showSuccess, statusModal } = useStatusModal();
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,8 +105,7 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
         }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to create user");
+        throw new Error(await readApiErrorMessage(res, "Failed to create user"));
       }
       await loadData();
       setIsCreating(false);
@@ -114,8 +115,9 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
       setNewRole("editor");
       setNewAssignments([]);
       setShowPassword(false);
+      showSuccess("User created successfully.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error creating user");
+      showError(err instanceof Error ? err.message : "Error creating user");
     }
   }
 
@@ -146,13 +148,13 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
         }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to update user");
+        throw new Error(await readApiErrorMessage(res, "Failed to update user"));
       }
       await loadData();
       setEditingId(null);
+      showSuccess("User updated successfully.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error updating user");
+      showError(err instanceof Error ? err.message : "Error updating user");
     }
   }
 
@@ -160,10 +162,13 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
     if (!confirm("Are you sure you want to delete this user?")) return;
     try {
       const res = await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete user");
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res, "Failed to delete user"));
+      }
       setUsers(users.filter((u) => u.id !== userId));
+      showSuccess("User deleted.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error deleting user");
+      showError(err instanceof Error ? err.message : "Error deleting user");
     }
   }
 
@@ -273,15 +278,13 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
               const isEditing = editingId === user.id;
               if (isEditing) {
                 return (
-                  <select
-                    className="input"
+                  <DropdownSelect
+                    label="Role"
+                    onChange={(value) => setEditRole(value as User["role"])}
+                    options={userRoleOptions}
+                    searchable={false}
                     value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as User["role"])}
-                  >
-                    <option value="editor">Editor</option>
-                    <option value="admin">Admin</option>
-                    <option value="owner">Owner</option>
-                  </select>
+                  />
                 );
               }
               return (
@@ -358,6 +361,8 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
             );
           },
         }}
-      />    </div>
+      />
+      {statusModal}
+    </div>
   );
 }

@@ -9,6 +9,7 @@ import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { ModalForm } from "@/components/Modal";
 import { PageLoader } from "@/components/PageLoader";
 import type { KbStatus, KnowledgeBase } from "@/lib/types";
+import { readApiErrorMessage, useStatusModal } from "@/lib/use-status-modal";
 
 function kbSearchFilter(kb: KnowledgeBase, query: string) {
   return (
@@ -21,10 +22,10 @@ function kbSearchFilter(kb: KnowledgeBase, query: string) {
 
 export default function AdminKbsPage() {
   const router = useRouter();
+  const { showError, showSuccess, statusModal } = useStatusModal();
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const [isCreating, setIsCreating] = useState(false);
@@ -60,15 +61,18 @@ export default function AdminKbsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newTitle, description: newDescription, slug: newSlug, status: "draft" }),
       });
-      if (!res.ok) throw new Error("Failed to create KB");
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res, "Failed to create KB"));
+      }
 
       await loadData();
       setIsCreating(false);
       setNewTitle("");
       setNewDescription("");
       setNewSlug("");
+      showSuccess("Knowledge base created.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error creating KB");
+      showError(err instanceof Error ? err.message : "Error creating KB");
     }
   }
 
@@ -86,20 +90,21 @@ export default function AdminKbsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editData),
       });
-      if (!res.ok) throw new Error("Failed to update KB");
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res, "Failed to update KB"));
+      }
 
       await loadData();
       setEditingId(null);
       setEditData({});
-      setMessage("Knowledge base updated.");
+      showSuccess("Knowledge base updated.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error updating KB");
+      showError(err instanceof Error ? err.message : "Error updating KB");
     }
   }
 
   async function handleStatusChange(kbId: string, status: Extract<KbStatus, "draft" | "published">) {
     setStatusBusyId(kbId);
-    setMessage(null);
     try {
       const res = await fetch(`/api/admin/kbs/${kbId}`, {
         method: "PATCH",
@@ -107,13 +112,12 @@ export default function AdminKbsPage() {
         body: JSON.stringify({ status }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.message || "Failed to update KB status");
+        throw new Error(await readApiErrorMessage(res, "Failed to update KB status"));
       }
       await loadData();
-      setMessage(status === "published" ? "Knowledge base published." : "Knowledge base unpublished.");
+      showSuccess(status === "published" ? "Knowledge base published." : "Knowledge base unpublished.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error updating KB status");
+      showError(err instanceof Error ? err.message : "Error updating KB status");
     } finally {
       setStatusBusyId(null);
     }
@@ -128,12 +132,12 @@ export default function AdminKbsPage() {
     try {
       const res = await fetch(`/api/admin/kbs/${kbId}`, { method: "DELETE" });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to delete KB");
+        throw new Error(await readApiErrorMessage(res, "Failed to delete KB"));
       }
       await loadData();
+      showSuccess("Knowledge base deleted.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error deleting KB");
+      showError(err instanceof Error ? err.message : "Error deleting KB");
     }
   }
 
@@ -163,7 +167,6 @@ export default function AdminKbsPage() {
         Published pages are not enough for the public Knowledge Bases list. The knowledge base itself must also be
         published.
       </p>
-      {message && <p className="alert alert--success">{message}</p>}
 
       {isCreating && (
         <ModalForm
@@ -362,6 +365,7 @@ export default function AdminKbsPage() {
           },
         }}
       />
+      {statusModal}
     </div>
   );
 }

@@ -11,14 +11,17 @@ import {
   Users,
 } from "lucide-react";
 import type { AdminSession } from "@/lib/auth";
+import type { SiteBrandSettings } from "@/components/SiteBrand";
+import { SiteBrand } from "@/components/SiteBrand";
 import { SidebarLink } from "@/components/admin/SidebarLink";
 
 interface SidebarProps {
+  branding: SiteBrandSettings;
   isCollapsed: boolean;
   session: AdminSession;
 }
 
-export function Sidebar({ isCollapsed, session }: SidebarProps) {
+export function Sidebar({ branding, isCollapsed, session }: SidebarProps) {
   const isOwner = session.role === "owner";
   const canAudit = session.role === "owner" || session.role === "admin";
 
@@ -28,10 +31,7 @@ export function Sidebar({ isCollapsed, session }: SidebarProps) {
       className={`admin-shell__sidebar${isCollapsed ? " is-collapsed" : ""}`}
     >
       <div className="admin-shell__sidebar-top">
-        <div className="admin-shell__brand">
-          <span aria-hidden className="admin-shell__brand-mark" />
-          <span className="admin-shell__brand-text">WSU Knowledge Base</span>
-        </div>
+        <SiteBrand href="/admin" settings={branding} variant="sidebar" />
 
         <p className="admin-shell__section-label">Admin</p>
 

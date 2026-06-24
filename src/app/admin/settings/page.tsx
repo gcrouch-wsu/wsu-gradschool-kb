@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
+import { FileUploadPicker } from "@/components/FileUploadPicker";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { PageLoader } from "@/components/PageLoader";
 import { ThemeEditor } from "@/components/ThemeEditor";
@@ -15,7 +17,22 @@ import {
   type SiteSettings,
 } from "@/lib/site-settings";
 
+const acceptedLogoTypes = "image/png,image/jpeg,image/gif,image/webp";
+const maxLogoSizeBytes = 5 * 1024 * 1024;
+
 export default function AdminSettingsPage() {
+  const logoUploadFieldId = useId();
+  const brandWeightOptions = BRAND_TEXT_WEIGHTS.map((weight) => ({
+    label: weight === "" ? "Default" : weight,
+    value: weight,
+  }));
+  const brandFontOptions = [
+    { label: "Default", value: "" },
+    ...Object.entries(SAFE_FONTS).map(([key, font]) => ({
+      label: font.label,
+      value: key,
+    })),
+  ];
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,6 +40,7 @@ export default function AdminSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [dbEnabled, setDbEnabled] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [activeTab, setActiveTab] = useState<"general" | "branding" | "home" | "styling">("general");
 
   useEffect(() => {
@@ -48,10 +66,29 @@ export default function AdminSettingsPage() {
         throw new Error(data.message || "Failed to upload logo");
       }
       update("logoUrl", data.url);
+      setLogoFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error uploading logo");
     } finally {
       setLogoUploading(false);
+    }
+  }
+
+  function validateLogoFile(file: File) {
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
+      return "Use a PNG, JPG, GIF, or WebP image.";
+    }
+    if (file.size > maxLogoSizeBytes) {
+      return "Logo is larger than 5 MB.";
+    }
+    return null;
+  }
+
+  function handleLogoFileChange(file: File | null) {
+    setError(null);
+    setLogoFile(file);
+    if (file) {
+      void handleLogoUpload(file);
     }
   }
 
@@ -318,19 +355,17 @@ export default function AdminSettingsPage() {
                 <p className="meta">No logo set.</p>
               )}
 
-              <label>
-                <span className="meta">Upload an image (PNG, JPG, GIF, WebP — max 5 MB)</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp"
-                  disabled={logoUploading}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleLogoUpload(file);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+              <FileUploadPicker
+                accept={acceptedLogoTypes}
+                disabled={logoUploading}
+                file={logoFile}
+                helperText="PNG, JPG, GIF, or WebP up to 5 MB"
+                id={logoUploadFieldId}
+                label="Upload an image"
+                onError={setError}
+                onFileChange={handleLogoFileChange}
+                validateFile={validateLogoFile}
+              />
               {logoUploading && <p className="meta">Uploading…</p>}
 
               <label>
@@ -398,66 +433,47 @@ export default function AdminSettingsPage() {
                   </label>
                 </div>
                 <div className="field-row">
-                  <label style={{ flex: 1 }}>
-                    <span className="meta">Weight</span>
-                    <select
-                      className="input"
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Weight"
+                      onChange={(value) => update("brandTextWeight", value as BrandTextWeight)}
+                      options={brandWeightOptions}
+                      searchable={false}
                       value={settings.brandTextWeight}
-                      onChange={(e) => update("brandTextWeight", e.target.value as BrandTextWeight)}
-                    >
-                      {BRAND_TEXT_WEIGHTS.map((w) => (
-                        <option key={w || "default"} value={w}>
-                          {w === "" ? "Default" : w}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={{ flex: 1 }}>
-                    <span className="meta">Font</span>
-                    <select
-                      className="input"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Font"
+                      onChange={(value) => update("brandTextFont", value)}
+                      options={brandFontOptions}
+                      searchable={false}
                       value={settings.brandTextFont}
-                      onChange={(e) => update("brandTextFont", e.target.value)}
-                    >
-                      <option value="">Default</option>
-                      {Object.entries(SAFE_FONTS).map(([key, font]) => (
-                        <option key={key} value={key}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    />
+                  </div>
                 </div>
               </div>
 
-              <label>
-                <span className="meta">Header alignment</span>
-                <select
-                  className="input"
-                  value={settings.headerAlignment}
-                  onChange={(e) => update("headerAlignment", e.target.value as Alignment)}
-                >
-                  {ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a.charAt(0).toUpperCase() + a.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span className="meta">Home hero text alignment</span>
-                <select
-                  className="input"
-                  value={settings.heroAlignment}
-                  onChange={(e) => update("heroAlignment", e.target.value as Alignment)}
-                >
-                  {ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a.charAt(0).toUpperCase() + a.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <DropdownSelect
+                label="Header alignment"
+                onChange={(value) => update("headerAlignment", value as Alignment)}
+                options={ALIGNMENTS.map((alignment) => ({
+                  label: alignment.charAt(0).toUpperCase() + alignment.slice(1),
+                  value: alignment,
+                }))}
+                searchable={false}
+                value={settings.headerAlignment}
+              />
+              <DropdownSelect
+                label="Home hero text alignment"
+                onChange={(value) => update("heroAlignment", value as Alignment)}
+                options={ALIGNMENTS.map((alignment) => ({
+                  label: alignment.charAt(0).toUpperCase() + alignment.slice(1),
+                  value: alignment,
+                }))}
+                searchable={false}
+                value={settings.heroAlignment}
+              />
               <label>
                 <span className="meta">Max content width in pixels (leave 0 for default 1320)</span>
                 <input
@@ -546,35 +562,24 @@ export default function AdminSettingsPage() {
                 </label>
               </div>
               <div className="field-row">
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Weight</span>
-                  <select
-                    className="input"
+                <div style={{ flex: 1 }}>
+                  <DropdownSelect
+                    label="Weight"
+                    onChange={(value) => update("kbListTitleWeight", value as BrandTextWeight)}
+                    options={brandWeightOptions}
+                    searchable={false}
                     value={settings.kbListTitleWeight}
-                    onChange={(e) => update("kbListTitleWeight", e.target.value as BrandTextWeight)}
-                  >
-                    {BRAND_TEXT_WEIGHTS.map((w) => (
-                      <option key={w || "default"} value={w}>
-                        {w === "" ? "Default" : w}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Font</span>
-                  <select
-                    className="input"
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <DropdownSelect
+                    label="Font"
+                    onChange={(value) => update("kbListTitleFont", value)}
+                    options={brandFontOptions}
+                    searchable={false}
                     value={settings.kbListTitleFont}
-                    onChange={(e) => update("kbListTitleFont", e.target.value)}
-                  >
-                    <option value="">Default</option>
-                    {Object.entries(SAFE_FONTS).map(([key, font]) => (
-                      <option key={key} value={key}>
-                        {font.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  />
+                </div>
               </div>
             </div>
           </section>
