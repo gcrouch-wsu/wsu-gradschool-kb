@@ -8,6 +8,7 @@ import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import KbAssignmentPicker from "@/components/KbAssignmentPicker";
 import { ModalForm } from "@/components/Modal";
+import { PageLoader } from "@/components/PageLoader";
 import type { KnowledgeBase, User } from "@/lib/types";
 interface ManagedUser {
   id: string;
@@ -166,7 +167,7 @@ export default function AdminUsersPage() {  const [users, setUsers] = useState<M
     }
   }
 
-  if (loading) return <div className="page-shell"><p>Loading users…</p></div>;
+  if (loading) return <PageLoader label="Loading users" />;
   if (error) return <div className="page-shell"><p className="alert alert--error">{error}</p></div>;
 
   return (

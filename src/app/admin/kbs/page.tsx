@@ -7,6 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { ModalForm } from "@/components/Modal";
+import { PageLoader } from "@/components/PageLoader";
 import type { KbStatus, KnowledgeBase } from "@/lib/types";
 
 function kbSearchFilter(kb: KnowledgeBase, query: string) {
@@ -136,13 +137,7 @@ export default function AdminKbsPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="page-shell">
-        <p>Loading knowledge bases...</p>
-      </div>
-    );
-  }
+  if (loading) return <PageLoader label="Loading knowledge bases" />;
 
   if (error) {
     return (

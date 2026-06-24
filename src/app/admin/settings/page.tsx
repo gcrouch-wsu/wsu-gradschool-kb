@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
+import { PageLoader } from "@/components/PageLoader";
 import { ThemeEditor } from "@/components/ThemeEditor";
 import { DEFAULT_THEME, SAFE_FONTS } from "@/lib/kb-theme";
 import {
@@ -110,7 +111,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  if (loading) return <div className="page-shell"><p>Loading settings…</p></div>;
+  if (loading) return <PageLoader label="Loading settings" />;
 
   return (
     <div className="page-shell">

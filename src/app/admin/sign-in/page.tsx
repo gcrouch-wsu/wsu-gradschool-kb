@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { AdminSignInForm } from "@/components/AdminSignInForm";
+import { PageLoader } from "@/components/PageLoader";
 
 export default function AdminSignInPage() {
   return (
@@ -7,7 +8,7 @@ export default function AdminSignInPage() {
       <p className="eyebrow">Admin</p>
       <h1>Sign in</h1>
       <p className="lead">Use the configured administrator account to access the KB admin shell.</p>
-      <Suspense fallback={<p>Loading sign-in form...</p>}>
+      <Suspense fallback={<PageLoader label="Loading sign-in form" />}>
         <AdminSignInForm />
       </Suspense>
     </div>
