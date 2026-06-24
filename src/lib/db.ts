@@ -230,12 +230,12 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     home_eyebrow: string;
     home_title: string;
     home_intro: string;
-    header_links: any;
+    header_links: unknown;
     footer_text: string;
-    footer_links: any;
+    footer_links: unknown;
     contact_info: string;
-    global_theme?: any;
-    home_blocks: any;
+    global_theme?: unknown;
+    home_blocks: unknown;
     show_kb_list: boolean;
     kb_list_title: string;
     kb_list_title_color?: string;

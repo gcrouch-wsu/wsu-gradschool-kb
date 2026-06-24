@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
-import { canAccessKb, getCurrentAdminSession } from "@/lib/auth";
+import { canAccessKb, getCurrentAdminSession, type AdminSession } from "@/lib/auth";
 import { isSameOrigin } from "@/lib/origin";
 
 export { isSameOrigin };
 
 export async function requireKbAccess(
-  session: { userId: string; email: string; role: string },
+  session: AdminSession,
   kbId: string | null | undefined,
 ): Promise<NextResponse | null> {
   if (!kbId) {
     return NextResponse.json({ message: "Knowledge base not found." }, { status: 404 });
   }
 
-  const allowed = await canAccessKb(session as any, kbId);
+  const allowed = await canAccessKb(session, kbId);
   if (!allowed) {
     return NextResponse.json(
       { message: "You are not assigned to this knowledge base." },
@@ -23,7 +23,7 @@ export async function requireKbAccess(
 }
 
 type AdminGuardResult =
-  | { ok: true; email: string; session: any }
+  | { ok: true; email: string; session: AdminSession }
   | { ok: false; response: NextResponse };
 
 export async function requireAdminMutation(request: Request): Promise<AdminGuardResult> {

@@ -128,8 +128,9 @@ export function PageDocumentEditor({
   function addBlockToFirstFlow(block: ContentBlock) {
     const next = [...sections];
     const flowIndex = next.findIndex((s) => s.type === "flow");
-    if (flowIndex >= 0) {
-      (next[flowIndex] as any).blocks.push(block);
+    const existing = flowIndex >= 0 ? next[flowIndex] : null;
+    if (existing && existing.type === "flow") {
+      existing.blocks.push(block);
     } else {
       next.unshift({ type: "flow", blocks: [block] });
     }
@@ -164,7 +165,7 @@ export function PageDocumentEditor({
     emitChange(next);
   }
 
-  function updateFlowSection(index: number, html: string, isBlur: boolean) {
+  function updateFlowSection(index: number, html: string, _isBlur: boolean) {
     const clean = sanitizePageDocument(html);
     const flowBlocks = documentHtmlToBlocks(clean);
     const next = [...sections];
@@ -364,7 +365,7 @@ export function PageDocumentEditor({
             index={index}
             isFirst={index === 0}
             isLast={index === sections.length - 1}
-            key={section.type === "flow" ? `flow-${index}` : (section as any).block.blockId}
+            key={section.type === "flow" ? `flow-${index}` : section.block.blockId}
             kbSlug={kbSlug}
             onMove={moveSection}
             onRemove={() => removeSection(index)}
@@ -414,7 +415,9 @@ function SectionEditor({
   const lastSyncedHtml = useRef("");
 
   const onUpdateFlowRef = useRef(onUpdateFlow);
-  onUpdateFlowRef.current = onUpdateFlow;
+  useEffect(() => {
+    onUpdateFlowRef.current = onUpdateFlow;
+  }, [onUpdateFlow]);
 
   useEffect(() => {
     if (section.type === "flow") {
@@ -509,7 +512,12 @@ function SectionEditor({
               <span className="meta">Provider</span>
               <select
                 className="input"
-                onChange={(e) => onUpdateVideo({ ...section.block, provider: e.target.value as any })}
+                onChange={(e) =>
+                  onUpdateVideo({
+                    ...section.block,
+                    provider: e.target.value as Extract<ContentBlock, { type: "video" }>["provider"],
+                  })
+                }
                 value={section.block.provider}
               >
                 <option value="youtube">YouTube</option>
@@ -615,7 +623,12 @@ function SectionEditor({
               <span className="meta">Background</span>
               <select
                 className="input"
-                onChange={(e) => onUpdateCard({ ...section.block, background: e.target.value as any })}
+                onChange={(e) =>
+                  onUpdateCard({
+                    ...section.block,
+                    background: e.target.value as Extract<ContentBlock, { type: "card" }>["background"],
+                  })
+                }
                 value={section.block.background}
               >
                 <option value="paper">Paper (White)</option>

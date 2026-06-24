@@ -1,7 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { MoreHorizontal } from "lucide-react";
+import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import type { KbRedirect } from "@/lib/types";
+
+function redirectSearchFilter(redirect: KbRedirect, query: string) {
+  return (
+    redirect.fromPath.toLowerCase().includes(query) ||
+    redirect.toPath.toLowerCase().includes(query) ||
+    redirect.reason.toLowerCase().includes(query)
+  );
+}
 
 export function AdminRedirectsManager({
   kbId,
@@ -74,8 +85,8 @@ export function AdminRedirectsManager({
   return (
     <div>
       <p className="meta">
-        Public URLs use <code>/kb/{kbSlug}/…</code>. Map old Confluence-style paths to current page
-        paths. Auto-redirects are also created when published pages move.
+        Public URLs use <code>/kb/{kbSlug}/…</code>. Map old Confluence-style paths to current page paths.
+        Auto-redirects are also created when published pages move.
       </p>
       {error && <p className="alert">{error}</p>}
       {message && <p className="alert alert--success">{message}</p>}
@@ -102,11 +113,7 @@ export function AdminRedirectsManager({
         </label>
         <label>
           <span className="meta">Reason (optional)</span>
-          <input
-            className="input"
-            onChange={(e) => setReason(e.target.value)}
-            value={reason}
-          />
+          <input className="input" onChange={(e) => setReason(e.target.value)} value={reason} />
         </label>
         <button className="button" disabled={busy || !fromPath || !toPath} type="submit">
           {busy ? "Saving…" : "Save redirect"}
@@ -114,43 +121,49 @@ export function AdminRedirectsManager({
       </form>
 
       <h2 style={{ marginTop: "2rem" }}>Active redirects ({redirects.length})</h2>
-      {redirects.length === 0 ? (
-        <p className="meta">No manual redirects yet.</p>
-      ) : (
-        <table className="content-table">
-          <thead>
-            <tr>
-              <th scope="col">From</th>
-              <th scope="col">To</th>
-              <th scope="col">Reason</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {redirects.map((redirect) => (
-              <tr key={redirect.id}>
-                <td>
-                  <code>/kb/{kbSlug}/{redirect.fromPath}</code>
-                </td>
-                <td>
-                  <code>/kb/{kbSlug}/{redirect.toPath}</code>
-                </td>
-                <td>{redirect.reason}</td>
-                <td>
-                  <button
-                    className="button button--ghost button--small"
-                    disabled={busy}
-                    onClick={() => handleDelete(redirect.id)}
-                    type="button"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+
+      <AdminDataTable
+        columns={[
+          {
+            id: "from",
+            header: "From",
+            cell: (redirect) => <code>/kb/{kbSlug}/{redirect.fromPath}</code>,
+          },
+          {
+            id: "to",
+            header: "To",
+            cell: (redirect) => <code>/kb/{kbSlug}/{redirect.toPath}</code>,
+          },
+          {
+            id: "reason",
+            header: "Reason",
+            cell: (redirect) => redirect.reason,
+          },
+        ]}
+        emptyMessage="No manual redirects yet."
+        getRowId={(redirect) => redirect.id}
+        rows={redirects}
+        searchFilter={redirectSearchFilter}
+        searchPlaceholder="Search paths or reason…"
+        actionsColumn={{
+          header: "Actions",
+          cell: (redirect) => (
+            <AdminRowMenu
+              disabled={busy}
+              items={[
+                {
+                  danger: true,
+                  label: "Delete",
+                  onSelect: () => handleDelete(redirect.id),
+                },
+              ]}
+              menuLabel={`Actions for ${redirect.fromPath}`}
+              triggerContent={<MoreHorizontal aria-hidden size={18} strokeWidth={1.75} />}
+              triggerLabel={`More options for ${redirect.fromPath}`}
+            />
+          ),
+        }}
+      />
     </div>
   );
 }

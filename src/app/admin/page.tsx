@@ -1,102 +1,121 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { Plus } from "lucide-react";
+import type { ActivityIconName } from "@/components/admin/admin-icons";
+import { ActivityItem } from "@/components/admin/ActivityItem";
+import { PageStatusDonut } from "@/components/admin/PageStatusDonut";
+import { StatCard } from "@/components/admin/StatCard";
+import { listAuditEvents } from "@/lib/audit-log";
+import { auditEntityTone, formatAuditAction, formatRelativeTime } from "@/lib/format-audit";
 import { getAdminCounts } from "@/lib/kb-store";
 import { getStagedImportCounts } from "@/lib/staged-imports";
 
 export default async function AdminPage() {
-  const session = await getCurrentAdminSession();
-  if (!session) {
-    redirect("/admin/sign-in?next=/admin");
-  }
+  const [counts, stagedCounts, events] = await Promise.all([
+    getAdminCounts(),
+    getStagedImportCounts(),
+    listAuditEvents({}),
+  ]);
 
-  const [counts, stagedCounts] = await Promise.all([getAdminCounts(), getStagedImportCounts()]);
-  const storageLabel = counts.storageMode === "neon" ? "Neon Postgres" : "In-memory seed (no DATABASE_URL)";
+  const storageLabel =
+    counts.storageMode === "neon" ? "Neon Postgres" : "In-memory seed (no DATABASE_URL)";
+  const recentEvents = events.slice(0, 8);
 
   return (
-    <div className="page-shell">
-      <p className="eyebrow">Admin</p>
-      <h1>Knowledge Base Admin</h1>
-      <p className="lead">
-        Signed in as {session.email} ({session.role}). Content store: <strong>{storageLabel}</strong>.
-      </p>
-      <div className="admin-actions">
-        <Link className="button" href="/admin/pages">
-          Manage pages
+    <div className="admin-dashboard">
+      <div className="admin-dashboard__header">
+        <div>
+          <p className="admin-dashboard__eyebrow">{storageLabel}</p>
+          <h1 className="admin-dashboard__title">Dashboard</h1>
+        </div>
+        <Link className="button admin-dashboard__cta" href="/admin/pages/new">
+          <Plus aria-hidden size={18} strokeWidth={1.75} />
+          New page
         </Link>
-        <Link className="button" href="/admin/assets">
-          Manage assets
-        </Link>
-        {session.role === "owner" && (
-          <>
-            <Link className="button" href="/admin/kbs">
-              Manage KBs
-            </Link>
-            <Link className="button" href="/admin/users">
-              Manage users
-            </Link>
-            <Link className="button" href="/admin/settings">
-              Site settings
-            </Link>
-          </>
-        )}
-        <Link className="button" href="/admin/review">
-          Review dashboard
-        </Link>
-        {(session.role === "owner" || session.role === "admin") && (
-          <Link className="button button--ghost" href="/admin/audit">
-            Audit log
-          </Link>
-        )}
-        <Link className="button" href="/admin/import">
-          Import from Word (.docx)
-        </Link>
-        <Link className="button button--ghost" href="/admin/redirects">
-          URL redirects
-        </Link>
-        <form action="/api/admin/logout" method="post">
-          <button className="button button--ghost" type="submit">
-            Sign out
-          </button>
-        </form>
       </div>
-      <div className="grid grid--two">
-        <article className="card stat-card">
-          <span className="stat-card__value">{counts.publishedKbs}</span>
-          <span className="stat-card__label">Published knowledge bases</span>
-        </article>
-        <article className="card stat-card">
-          <span className="stat-card__value">{counts.publishedPages}</span>
-          <span className="stat-card__label">Published pages</span>
-        </article>
-        <article className="card stat-card">
-          <span className="stat-card__value">{counts.draftPages}</span>
-          <span className="stat-card__label">Draft pages</span>
-        </article>
-        <article className="card stat-card">
-          <span className="stat-card__value">{counts.archivedPages}</span>
-          <span className="stat-card__label">Archived pages</span>
-        </article>
-        <article className="card stat-card">
-          <span className="stat-card__value">{counts.activeAssets}</span>
-          <span className="stat-card__label">Active assets</span>
-        </article>
-        <article className="card stat-card">
-          <span className="stat-card__value">{counts.archivedAssets}</span>
-          <span className="stat-card__label">Archived assets</span>
-        </article>
-        <article className="card stat-card">
-          <span className="stat-card__value">{stagedCounts.needsReview}</span>
-          <span className="stat-card__label">Staged imports awaiting review</span>
-        </article>
-        <article className="card">
-          <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Storage</h2>
-          <p className="meta">
-            {counts.storageMode === "neon"
-              ? "Reading from Neon Postgres. Schema auto-creates and seeds on first run."
-              : "Using in-memory seed data. Set DATABASE_URL to persist to Neon."}
-          </p>
-        </article>
+
+      <div className="admin-dashboard__stats">
+        <StatCard
+          href="/admin/kbs"
+          icon="book-open"
+          label="Published knowledge bases"
+          tone="blue"
+          value={counts.publishedKbs}
+        />
+        <StatCard
+          href="/admin/pages"
+          icon="file-check"
+          label="Published pages"
+          tone="green"
+          value={counts.publishedPages}
+        />
+        <StatCard icon="file-pen" href="/admin/pages?status=draft" label="Draft pages" tone="amber" value={counts.draftPages} />
+        <StatCard
+          href="/admin/assets?status=active"
+          icon="folder-open"
+          label="Active assets"
+          tone="gray"
+          value={counts.activeAssets}
+        />
+      </div>
+
+      <div className="admin-dashboard__panels">
+        <section aria-labelledby="pages-by-status-title" className="admin-panel">
+          <h2 className="admin-panel__title" id="pages-by-status-title">
+            Pages by status
+          </h2>
+          <PageStatusDonut
+            archived={counts.archivedPages}
+            draft={counts.draftPages}
+            published={counts.publishedPages}
+          />
+        </section>
+
+        <section aria-labelledby="recent-activity-title" className="admin-panel">
+          <h2 className="admin-panel__title" id="recent-activity-title">
+            Recent activity
+          </h2>
+          {recentEvents.length === 0 ? (
+            <p className="admin-panel__empty">No recent activity yet.</p>
+          ) : (
+            <ul className="admin-activity-feed">
+              {recentEvents.map((entry) => (
+                  <ActivityItem
+                    action={formatAuditAction(entry)}
+                    actor={entry.actorEmail}
+                    icon={auditEntityTone(entry.entityType) as ActivityIconName}
+                    key={entry.id}
+                    time={formatRelativeTime(entry.createdAt)}
+                  />
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <div className="admin-info-banner" role="status">
+        <p>
+          {counts.storageMode === "neon" ? (
+            <>
+              Reading from <strong>Neon Postgres</strong>. Schema auto-creates and seeds on first run.
+            </>
+          ) : (
+            <>
+              Using <strong>in-memory seed data</strong>. Set <code>DATABASE_URL</code> to persist to Neon.
+            </>
+          )}
+          {stagedCounts.needsReview > 0 && (
+            <>
+              {" "}
+              <Link href="/admin/import">{stagedCounts.needsReview} staged import(s) awaiting review.</Link>
+            </>
+          )}
+          {counts.archivedAssets > 0 && (
+            <>
+              {" "}
+              {counts.archivedAssets} archived asset{counts.archivedAssets === 1 ? "" : "s"} in the library.
+            </>
+          )}
+        </p>
       </div>
     </div>
   );

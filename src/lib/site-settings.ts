@@ -96,12 +96,9 @@ function normalizeLinks(raw: unknown): NavLink[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((item): item is { label: string; url: string } => {
-      return (
-        item &&
-        typeof item === "object" &&
-        typeof (item as any).label === "string" &&
-        typeof (item as any).url === "string"
-      );
+      if (!item || typeof item !== "object") return false;
+      const candidate = item as Record<string, unknown>;
+      return typeof candidate.label === "string" && typeof candidate.url === "string";
     })
     .map((item) => ({
       label: item.label.trim().slice(0, 100),

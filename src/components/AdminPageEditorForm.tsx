@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
@@ -11,6 +13,16 @@ import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
 
+const visibilityOptions = [
+  { label: "Public", value: "public" },
+  { label: "Staff only", value: "staff" },
+];
+
+const tocDepthOptions = [
+  { label: "H2 only", value: "2" },
+  { label: "H2 + H3", value: "3" },
+];
+
 interface ParentOption {
   path: string;
   title: string;
@@ -19,6 +31,174 @@ interface ParentOption {
 }
 
 type EditableStatus = "draft" | "published";
+
+interface OverflowMenuItem {
+  danger?: boolean;
+  disabled?: boolean;
+  divider?: boolean;
+  label: string;
+  onSelect: () => void;
+}
+
+function ActionOverflowMenu({
+  disabled,
+  items,
+}: {
+  disabled: boolean;
+  items: OverflowMenuItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
+  const menuId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const actionableItems = items.filter((item) => !item.divider);
+  const clampedActiveIndex = Math.min(activeIndex, Math.max(actionableItems.length - 1, 0));
+
+  function updateMenuPosition() {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 152;
+    setMenuPosition({
+      left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
+      top: rect.bottom + 6,
+    });
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open]);
+
+  function closeMenu() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function selectItem(index: number) {
+    const item = actionableItems[index];
+    if (!item || item.disabled) return;
+    item.onSelect();
+    closeMenu();
+  }
+
+  function onTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      updateMenuPosition();
+      setOpen(true);
+    }
+  }
+
+  function onMenuKeyDown(event: React.KeyboardEvent<HTMLUListElement>) {
+    if (actionableItems.length === 0) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((clampedActiveIndex + 1) % actionableItems.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((clampedActiveIndex - 1 + actionableItems.length) % actionableItems.length);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setActiveIndex(actionableItems.length - 1);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectItem(clampedActiveIndex);
+    }
+  }
+
+  return (
+    <div className="tree-editor__menu-anchor" ref={rootRef}>
+      <button
+        ref={triggerRef}
+        aria-controls={open ? menuId : undefined}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label="More actions"
+        className="icon-button"
+        disabled={disabled}
+        onClick={() => {
+          if (!open) updateMenuPosition();
+          setOpen((value) => !value);
+        }}
+        onKeyDown={onTriggerKeyDown}
+        type="button"
+      >
+        ⋯
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <ul
+          aria-label="More page actions"
+          className="kb-picker__menu tree-editor__menu tree-editor__menu--portal"
+          id={menuId}
+          onKeyDown={onMenuKeyDown}
+          ref={menuRef}
+          role="menu"
+          style={{ left: menuPosition.left, top: menuPosition.top }}
+        >
+          {items.map((item, index) => {
+            if (item.divider) {
+              return <li key={`divider-${index}`} className="tree-editor__menu-divider" role="separator" />;
+            }
+            const currentIndex = actionableItems.indexOf(item);
+            return (
+              <li key={`${item.label}-${index}`} role="none">
+                <button
+                  className={`kb-picker__option tree-editor__menu-item${
+                    currentIndex === clampedActiveIndex ? " is-active" : ""
+                  }${item.danger ? " tree-editor__menu-item--danger" : ""}`}
+                  disabled={item.disabled}
+                  onClick={() => selectItem(currentIndex)}
+                  onMouseEnter={() => setActiveIndex(currentIndex)}
+                  role="menuitem"
+                  type="button"
+                >
+                  <span className="kb-picker__option-title">{item.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>,
+        document.body,
+      )}
+    </div>
+  );
+}
 
 function collectInlineHtml(blocks: ContentBlock[]): string[] {
   const html: string[] = [];
@@ -171,6 +351,22 @@ export function AdminPageEditorForm({
   }, [page.id]);
 
   const previewUrl = useMemo(() => savedUrl ?? `/kb/${kb.slug}/${page.path.join("/")}`, [kb.slug, page.path, savedUrl]);
+  const parentSelectOptions = useMemo(
+    () => [
+      {
+        description: `Root of ${kb.title}`,
+        label: "Top level",
+        value: "",
+      },
+      ...parentOptions.map((option) => ({
+        description: `${option.status} page`,
+        label: option.title,
+        searchText: `${option.title} ${option.status} ${option.path}`,
+        value: option.path,
+      })),
+    ],
+    [kb.title, parentOptions],
+  );
 
   const summaryError = issues.some((issue) => issue.toLowerCase().includes("summary"));
   const contactError = issues.some((issue) => issue.toLowerCase().includes("contact email"));
@@ -340,9 +536,42 @@ export function AdminPageEditorForm({
   }
 
   const isLocked = lockError !== null;
+  const statusPillClass =
+    savedStatus === "published"
+      ? "badge badge--verified"
+      : savedStatus === "archived"
+        ? "badge badge--archived"
+        : "badge badge--draft";
+  const statusPillText =
+    savedStatus === "published" ? "● Published" : savedStatus === "archived" ? "● Archived" : "● Draft";
+
+  const publishedOverflowItems: OverflowMenuItem[] = [
+    {
+      label: lifecycleBusy ? "Unpublishing..." : "Unpublish",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setLifecycleStatus("draft"),
+    },
+    { divider: true, label: "", onSelect: () => {} },
+    {
+      danger: true,
+      label: lifecycleBusy ? "Archiving..." : "Archive",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setLifecycleStatus("archived"),
+    },
+  ];
+
+  const draftOverflowItems: OverflowMenuItem[] = [
+    {
+      danger: true,
+      label: lifecycleBusy ? "Archiving..." : "Archive",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setLifecycleStatus("archived"),
+    },
+  ];
 
   const actionButtons = (
     <div className="import-actions">
+      <span className={statusPillClass}>{statusPillText}</span>
       {dirty && (
         <span className="unsaved-pill" role="status">
           ● Unsaved changes
@@ -386,24 +615,12 @@ export function AdminPageEditorForm({
               >
                 {busy === "published" ? "Saving..." : "Save changes"}
               </button>
-              <button
-                className="button button--ghost"
-                disabled={lifecycleBusy || isLocked}
-                onClick={() => setLifecycleStatus("draft")}
-                type="button"
-              >
-                {lifecycleBusy ? "Unpublishing..." : "Unpublish"}
-              </button>
             </>
           )}
-          <button
-            className="button button--ghost"
+          <ActionOverflowMenu
             disabled={lifecycleBusy || isLocked}
-            onClick={() => setLifecycleStatus("archived")}
-            type="button"
-          >
-            {lifecycleBusy ? "Archiving..." : "Archive"}
-          </button>
+            items={savedStatus === "published" ? publishedOverflowItems : draftOverflowItems}
+          />
         </>
       )}
       <Link className="button button--ghost" href={previewUrl}>
@@ -479,52 +696,41 @@ export function AdminPageEditorForm({
             />
             <span>Show the PDF export button</span>
           </label>
-          <label>
-            <span className="meta">Nest under</span>
-            <select className="input" onChange={(event) => setParentPath(event.target.value)} value={parentPath}>
-              <option value="">Top level</option>
-              {parentOptions.map((option) => (
-                <option key={option.path} value={option.path}>
-                  {`${"  ".repeat(Math.max(0, option.depth - 1))}${option.title} (${option.status})`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="field-row">
-            <label>
-              <span className="meta">Visibility</span>
-              <select
-                className="input"
-                onChange={(event) => setVisibility(event.target.value === "staff" ? "staff" : "public")}
-                value={visibility}
-              >
-                <option value="public">Public</option>
-                <option value="staff">Staff only</option>
-              </select>
+          <DropdownSelect
+            disabled={isLocked}
+            label="Nest under"
+            onChange={setParentPath}
+            options={parentSelectOptions}
+            searchLabel="Search parent pages"
+            searchPlaceholder="Search parent pages..."
+            value={parentPath}
+          />
+          <div className="field-row field-row--toc-settings">
+            <DropdownSelect
+              disabled={isLocked}
+              label="Visibility"
+              onChange={(value) => setVisibility(value === "staff" ? "staff" : "public")}
+              options={visibilityOptions}
+              searchable={false}
+              value={visibility}
+            />
+            <label className="checkbox-inline toc-control__show">
+              <input
+                checked={showToc}
+                disabled={isLocked}
+                onChange={(event) => setShowToc(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Show on page</span>
             </label>
-            <label>
-              <span className="meta">Table of contents</span>
-              <div className="toc-control">
-                <label className="checkbox-inline">
-                  <input
-                    checked={showToc}
-                    onChange={(event) => setShowToc(event.target.checked)}
-                    type="checkbox"
-                  />
-                  <span>Show on page</span>
-                </label>
-                <select
-                  aria-label="Heading depth"
-                  className="input toc-control__depth"
-                  disabled={!showToc}
-                  onChange={(event) => setTocDepth(Number(event.target.value))}
-                  value={tocDepth}
-                >
-                  <option value={2}>H2 only</option>
-                  <option value={3}>H2 + H3</option>
-                </select>
-              </div>
-            </label>
+            <DropdownSelect
+              disabled={isLocked || !showToc}
+              label="Table of contents"
+              onChange={(value) => setTocDepth(Number(value))}
+              options={tocDepthOptions}
+              searchable={false}
+              value={String(tocDepth)}
+            />
           </div>
         </fieldset>
 

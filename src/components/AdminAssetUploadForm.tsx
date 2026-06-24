@@ -1,8 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { BookOpen } from "lucide-react";
+import { useId, useState } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
+import { FileUploadPicker } from "@/components/FileUploadPicker";
 
 type AssetUploadType = "file" | "video";
+
+const acceptedDocumentTypes = ".pdf,.doc,.docx,.txt,application/pdf,text/plain";
+const maxFileSize = 25 * 1024 * 1024;
+
+function isAcceptedDocument(file: File) {
+  const fileName = file.name.toLowerCase();
+  return [".pdf", ".doc", ".docx", ".txt"].some((extension) => fileName.endsWith(extension));
+}
+
+function validateDocumentFile(file: File) {
+  if (!isAcceptedDocument(file)) return "Choose a PDF, Word, or text file.";
+  if (file.size > maxFileSize) return "Choose a file that is 25 MB or smaller.";
+  return null;
+}
 
 export function AdminAssetUploadForm({
   kbs,
@@ -11,9 +28,14 @@ export function AdminAssetUploadForm({
 }: {
   kbs: { id: string; title: string }[];
   defaultKbId?: string;
-
   lockKbId?: string;
 }) {
+  const formId = useId();
+  const titleFieldId = `${formId}-title`;
+  const descriptionFieldId = `${formId}-description`;
+  const fileFieldId = `${formId}-file`;
+  const videoUrlFieldId = `${formId}-video-url`;
+
   const [kbId, setKbId] = useState(lockKbId ?? defaultKbId ?? kbs[0]?.id ?? "");
   const [uploadType, setUploadType] = useState<AssetUploadType>("file");
   const [file, setFile] = useState<File | null>(null);
@@ -24,6 +46,12 @@ export function AdminAssetUploadForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+
+  function handleFileChange(nextFile: File | null) {
+    setError(null);
+    setCreatedUrl(null);
+    setFile(nextFile);
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -61,7 +89,6 @@ export function AdminAssetUploadForm({
         const assetId = data.asset?.id;
         setCreatedUrl(assetId ? `/admin/assets/${assetId}` : data.url ?? null);
       } else {
-
         const response = await fetch("/api/admin/assets/videos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -105,7 +132,7 @@ export function AdminAssetUploadForm({
           onClick={() => setUploadType("file")}
           type="button"
         >
-          Upload File
+          Upload file
         </button>
         <button
           aria-pressed={uploadType === "video"}
@@ -113,70 +140,73 @@ export function AdminAssetUploadForm({
           onClick={() => setUploadType("video")}
           type="button"
         >
-          Link Video
+          Link video
         </button>
       </div>
 
       {!lockKbId && (
-        <label>
-          <span className="meta">Knowledge base</span>
-          <select className="input" onChange={(e) => setKbId(e.target.value)} value={kbId}>
-            {kbs.map((kb) => (
-              <option key={kb.id} value={kb.id}>
-                {kb.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        <DropdownSelect
+          label="Knowledge base"
+          onChange={setKbId}
+          options={kbs.map((kb) => ({
+            icon: <BookOpen aria-hidden size={18} strokeWidth={1.75} />,
+            label: kb.title,
+            value: kb.id,
+          }))}
+          searchLabel="Search knowledge bases"
+          value={kbId}
+        />
       )}
 
-      <label>
+      <label htmlFor={titleFieldId}>
         <span className="meta">Title (optional)</span>
-        <input className="input" onChange={(e) => setTitle(e.target.value)} value={title} />
+        <input className="input" id={titleFieldId} onChange={(e) => setTitle(e.target.value)} value={title} />
       </label>
 
-      <label>
+      <label htmlFor={descriptionFieldId}>
         <span className="meta">Description (optional)</span>
         <input
           className="input"
+          id={descriptionFieldId}
           onChange={(e) => setDescription(e.target.value)}
           value={description}
         />
       </label>
 
       {uploadType === "file" ? (
-        <label>
-          <span className="meta">File (PDF, Word, or text)</span>
-          <input
-            accept=".pdf,.doc,.docx,.txt,application/pdf"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            type="file"
-          />
-        </label>
+        <FileUploadPicker
+          accept={acceptedDocumentTypes}
+          file={file}
+          helperText="PDF, Word, or text document up to 25 MB"
+          id={fileFieldId}
+          onError={setError}
+          onFileChange={handleFileChange}
+          validateFile={validateDocumentFile}
+        />
       ) : (
-        <div className="field-row">
-          <label>
-            <span className="meta">Provider</span>
-            <select
-              className="input"
-              onChange={(e) => setVideoProvider(e.target.value as any)}
-              value={videoProvider}
-            >
-              <option value="youtube">YouTube</option>
-              <option value="vimeo">Vimeo</option>
-              <option value="direct">Direct URL</option>
-            </select>
-          </label>
-          <label style={{ flex: 2 }}>
-            <span className="meta">URL or Embed ID</span>
+        <>
+          <label htmlFor={videoUrlFieldId}>
+            <span className="meta">URL or embed ID</span>
             <input
               className="input"
+              id={videoUrlFieldId}
               onChange={(e) => setVideoUrl(e.target.value)}
               placeholder={videoProvider === "direct" ? "https://..." : "e.g. dQw4w9WgXcQ"}
               value={videoUrl}
             />
           </label>
-        </div>
+          <DropdownSelect
+            label="Provider"
+            onChange={(nextValue) => setVideoProvider(nextValue as "youtube" | "vimeo" | "direct")}
+            options={[
+              { label: "YouTube", value: "youtube" },
+              { label: "Vimeo", value: "vimeo" },
+              { label: "Direct URL", value: "direct" },
+            ]}
+            searchable={false}
+            value={videoProvider}
+          />
+        </>
       )}
 
       <button className="button" disabled={busy} type="submit">

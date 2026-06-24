@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { SkeletonTile } from "@/components/route-states/RouteSkeleton";
 import { formatBytes } from "@/lib/format";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 import type { ContentBlock } from "@/lib/types";
@@ -196,7 +197,18 @@ export function MediaPicker({
 
           {tab === "library" && (
             <>
-              {loading && <p className="meta">Loading library…</p>}
+              {loading && (
+                <div
+                  aria-busy="true"
+                  aria-label="Loading library"
+                  className="media-picker__grid"
+                  role="status"
+                >
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <SkeletonTile key={index} />
+                  ))}
+                </div>
+              )}
               {!loading && assets.length === 0 && (
                 <p className="empty">No images or files in this knowledge base yet. Use “Upload new”.</p>
               )}
@@ -209,7 +221,7 @@ export function MediaPicker({
                     type="button"
                   >
                     {asset.assetType === "image" && asset.url ? (
-
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img alt="" className="media-picker__thumb" loading="lazy" src={asset.url} />
                     ) : (
                       <span className="media-picker__thumb media-picker__thumb--file" aria-hidden="true">

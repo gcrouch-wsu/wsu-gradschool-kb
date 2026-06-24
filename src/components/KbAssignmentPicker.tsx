@@ -37,9 +37,7 @@ export default function KbAssignmentPicker({
     );
   }, [kbs, selected, query]);
 
-  useEffect(() => {
-    setActiveIndex((i) => Math.min(Math.max(i, 0), Math.max(matches.length - 1, 0)));
-  }, [matches.length]);
+  const clampedActiveIndex = Math.min(Math.max(activeIndex, 0), Math.max(matches.length - 1, 0));
 
   useEffect(() => {
     if (!open) return;
@@ -67,14 +65,14 @@ export default function KbAssignmentPicker({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
+      setActiveIndex(Math.min(clampedActiveIndex + 1, matches.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, 0));
+      setActiveIndex(Math.max(clampedActiveIndex - 1, 0));
     } else if (e.key === "Enter") {
-      if (open && matches[activeIndex]) {
+      if (open && matches[clampedActiveIndex]) {
         e.preventDefault();
-        add(matches[activeIndex].id);
+        add(matches[clampedActiveIndex].id);
       }
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -130,7 +128,7 @@ export default function KbAssignmentPicker({
             {open && (
               <ul className="kb-picker__menu" id={listboxId} role="listbox">
                 {matches.length === 0 ? (
-                  <li className="kb-picker__empty" aria-disabled>
+                  <li className="kb-picker__empty" role="presentation">
                     {selected.length === kbs.length ? "All knowledge bases assigned." : "No matches."}
                   </li>
                 ) : (
@@ -138,8 +136,8 @@ export default function KbAssignmentPicker({
                     <li
                       key={kb.id}
                       role="option"
-                      aria-selected={index === activeIndex}
-                      className={`kb-picker__option ${index === activeIndex ? "is-active" : ""}`}
+                      aria-selected={index === clampedActiveIndex}
+                      className={`kb-picker__option ${index === clampedActiveIndex ? "is-active" : ""}`}
                       onMouseEnter={() => setActiveIndex(index)}
 
                       onMouseDown={(e) => {
