@@ -60,7 +60,7 @@ export default async function HomePage({
   const themeVars: CSSProperties = {
     ...(themeToCssVars(globalTheme) as CSSProperties),
     ...(settings.contentWidth ? { "--content-width": `${settings.contentWidth}px` } : {}),
-  };
+  };  
 
   const heroAlignClass =
     settings.heroAlignment === "center"
