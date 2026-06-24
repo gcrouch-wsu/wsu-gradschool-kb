@@ -189,9 +189,9 @@ export default function AdminSettingsPage() {
       </div>
 
       {settings && activeTab === "general" && (
-        <form className="form" onSubmit={handleSave}>
-          <div className="grid grid--two">
-            <section className="card">
+        <form className="form form--wide" onSubmit={handleSave}>
+          <div className="settings-general__layout">
+            <section className="card settings-general__hero">
               <h2>Home Page Hero</h2>
               <p className="meta">The main heading and introduction on the site home page.</p>
               <label>
@@ -222,7 +222,7 @@ export default function AdminSettingsPage() {
               </label>
             </section>
 
-            <section className="card">
+            <section className="card settings-general__header">
               <h2>Site Header</h2>
               <div className="field-group">
                 <span className="meta">Navigation Links</span>
@@ -255,29 +255,25 @@ export default function AdminSettingsPage() {
                 </button>
               </div>
             </section>
-          </div>
 
-          <section className="card" style={{ marginTop: "2rem" }}>
-            <h2>Site Footer</h2>
-            <div className="grid grid--two">
-              <div>
-                <label>
-                  <span className="meta">Copyright/Brand Text</span>
-                  <input
-                    className="input"
-                    value={settings.footerText}
-                    onChange={(e) => update("footerText", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span className="meta">Contact Information</span>
-                  <input
-                    className="input"
-                    value={settings.contactInfo}
-                    onChange={(e) => update("contactInfo", e.target.value)}
-                  />
-                </label>
-              </div>
+            <section className="card settings-general__footer">
+              <h2>Site Footer</h2>
+              <label>
+                <span className="meta">Copyright/Brand Text</span>
+                <input
+                  className="input"
+                  value={settings.footerText}
+                  onChange={(e) => update("footerText", e.target.value)}
+                />
+              </label>
+              <label>
+                <span className="meta">Contact Information</span>
+                <input
+                  className="input"
+                  value={settings.contactInfo}
+                  onChange={(e) => update("contactInfo", e.target.value)}
+                />
+              </label>
               <div className="field-group">
                 <span className="meta">Footer Links</span>
                 {settings.footerLinks.map((link, i) => (
@@ -308,10 +304,10 @@ export default function AdminSettingsPage() {
                   + Add Link
                 </button>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
 
-          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+          <div className="admin-actions settings-form__actions settings-general__actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save general settings"}
             </button>
@@ -320,7 +316,7 @@ export default function AdminSettingsPage() {
       )}
 
       {settings && activeTab === "branding" && (
-        <form className="form" onSubmit={handleSave}>
+        <form className="form form--wide" onSubmit={handleSave}>
           <div className="grid grid--two">
             <section className="card">
               <h2>Site Logo</h2>
@@ -488,7 +484,7 @@ export default function AdminSettingsPage() {
             </section>
           </div>
 
-          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+          <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save logo & layout"}
             </button>
@@ -497,7 +493,7 @@ export default function AdminSettingsPage() {
       )}
 
       {settings && activeTab === "home" && (
-        <form className="form" onSubmit={handleSave}>
+        <form className="form form--wide" onSubmit={handleSave}>
           <section className="card" style={{ marginBottom: "2rem" }}>
             <h2>Home Page Rich Content</h2>
             <p className="lead">
@@ -584,7 +580,7 @@ export default function AdminSettingsPage() {
             </div>
           </section>
 
-          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+          <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save home page content"}
             </button>
