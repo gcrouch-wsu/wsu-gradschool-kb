@@ -153,11 +153,11 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <div className="grid grid--two">
               {topLevel.map((page) => (
                 <article className="card" key={page.id}>
-                  <h3>
+                  <h2>
                     <Link href={`/kb/${kb.slug}/${page.path.join("/")}`}>{page.title}</Link>
                     {page.visibility === "staff" && <span className="badge badge--staff"> Staff</span>}
                     {page.verifiedAt && <span className="badge badge--verified"> ✓ Verified</span>}
-                  </h3>
+                  </h2>
                   <p>{page.summary}</p>
                   <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
                 </article>
