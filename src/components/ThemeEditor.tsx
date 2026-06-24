@@ -288,8 +288,8 @@ export function ThemeEditor({
 
         <fieldset className="fieldset">
           <legend>Fonts</legend>
-          <div className="field-row">
-            <div style={{ flex: 1 }}>
+          <div className="field-row theme-editor__font-row">
+            <div>
               <DropdownSelect
                 label="Body font"
                 onChange={(value) => setFont("body", value)}
@@ -298,7 +298,7 @@ export function ThemeEditor({
                 value={theme.fonts.body}
               />
             </div>
-            <div style={{ flex: 1 }}>
+            <div>
               <DropdownSelect
                 label="Heading font"
                 onChange={(value) => setFont("heading", value)}
@@ -308,7 +308,7 @@ export function ThemeEditor({
               />
             </div>
           </div>
-          <div className="theme-heading-grid" style={{ marginTop: "1rem" }}>
+          <div className="theme-heading-grid theme-editor__heading-fonts">
             {HEADING_LEVELS.map((level) => (
               <div key={level}>
                 <DropdownSelect
@@ -439,7 +439,7 @@ export function ThemeEditor({
           </div>
         </fieldset>
 
-        <div className="admin-actions">
+        <div className="admin-actions theme-editor__actions">
           <button className="button" disabled={saving || !dbEnabled} onClick={save} type="button">
             {saving ? "Saving…" : "Save styles"}
           </button>

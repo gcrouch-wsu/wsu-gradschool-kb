@@ -591,8 +591,8 @@ export default function AdminSettingsPage() {
       )}
 
       {settings && activeTab === "styling" && (
-        <section>
-          <div className="card" style={{ marginBottom: "2rem" }}>
+        <section className="settings-styling">
+          <div className="card settings-styling__intro">
             <h2>Global Default Styling</h2>
             <p className="lead">
               Adjust the default brand colors and fonts for the entire platform. Individual knowledge bases
