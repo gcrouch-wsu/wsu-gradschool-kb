@@ -317,7 +317,7 @@ export default function AdminSettingsPage() {
 
       {settings && activeTab === "branding" && (
         <form className="form form--wide" onSubmit={handleSave}>
-          <div className="grid grid--two">
+          <div className="grid settings-branding__layout">
             <section className="card">
               <h2>Site Logo</h2>
               <p className="meta">
@@ -494,91 +494,93 @@ export default function AdminSettingsPage() {
 
       {settings && activeTab === "home" && (
         <form className="form form--wide" onSubmit={handleSave}>
-          <section className="card" style={{ marginBottom: "2rem" }}>
-            <h2>Home Page Rich Content</h2>
-            <p className="lead">
-              Use the block editor to add custom content below the hero section.
-            </p>
-            <PageDocumentEditor
-              blocks={settings.homeBlocks}
-              kbId="global"
-              kbSlug="global"
-              onChange={(blocks) => update("homeBlocks", blocks)}
-            />
-          </section>
-
-          <section className="card">
-            <h2>Knowledge Base List Section</h2>
-            <p className="meta">Control how the list of published knowledge bases appears.</p>
-            <label className="checkbox-inline" style={{ marginBottom: "1rem" }}>
-              <input
-                type="checkbox"
-                checked={settings.showKbList}
-                onChange={(e) => update("showKbList", e.target.checked)}
+          <div className="grid settings-home__layout">
+            <section className="card">
+              <h2>Home Page Rich Content</h2>
+              <p className="lead">
+                Use the block editor to add custom content below the hero section.
+              </p>
+              <PageDocumentEditor
+                blocks={settings.homeBlocks}
+                kbId="global"
+                kbSlug="global"
+                onChange={(blocks) => update("homeBlocks", blocks)}
               />
-              <span>Show the list of published knowledge bases</span>
-            </label>
-            <label>
-              <span className="meta">Section Heading</span>
-              <input
-                className="input"
-                value={settings.kbListTitle}
-                onChange={(e) => update("kbListTitle", e.target.value)}
-              />
-            </label>
+            </section>
 
-            <div className="field-group" style={{ marginTop: "1rem" }}>
-              <span className="meta">Section heading style (leave any field at default to inherit)</span>
-              <div className="field-row">
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Color</span>
-                  <div className="theme-color__inputs">
-                    <input
-                      aria-label="Section heading color"
-                      type="color"
-                      value={settings.kbListTitleColor || "#1d1a1b"}
-                      onChange={(e) => update("kbListTitleColor", e.target.value)}
-                    />
+            <section className="card">
+              <h2>Knowledge Base List Section</h2>
+              <p className="meta">Control how the list of published knowledge bases appears.</p>
+              <label className="checkbox-inline" style={{ marginBottom: "1rem" }}>
+                <input
+                  type="checkbox"
+                  checked={settings.showKbList}
+                  onChange={(e) => update("showKbList", e.target.checked)}
+                />
+                <span>Show the list of published knowledge bases</span>
+              </label>
+              <label>
+                <span className="meta">Section Heading</span>
+                <input
+                  className="input"
+                  value={settings.kbListTitle}
+                  onChange={(e) => update("kbListTitle", e.target.value)}
+                />
+              </label>
+
+              <div className="field-group" style={{ marginTop: "1rem" }}>
+                <span className="meta">Section heading style (leave any field at default to inherit)</span>
+                <div className="field-row">
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Color</span>
+                    <div className="theme-color__inputs">
+                      <input
+                        aria-label="Section heading color"
+                        type="color"
+                        value={settings.kbListTitleColor || "#1d1a1b"}
+                        onChange={(e) => update("kbListTitleColor", e.target.value)}
+                      />
+                      <input
+                        className="input"
+                        placeholder="Default"
+                        value={settings.kbListTitleColor}
+                        onChange={(e) => update("kbListTitleColor", e.target.value)}
+                      />
+                    </div>
+                  </label>
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Size (e.g. 1.75rem or 28px)</span>
                     <input
                       className="input"
                       placeholder="Default"
-                      value={settings.kbListTitleColor}
-                      onChange={(e) => update("kbListTitleColor", e.target.value)}
+                      value={settings.kbListTitleSize}
+                      onChange={(e) => update("kbListTitleSize", e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="field-row">
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Weight"
+                      onChange={(value) => update("kbListTitleWeight", value as BrandTextWeight)}
+                      options={brandWeightOptions}
+                      searchable={false}
+                      value={settings.kbListTitleWeight}
                     />
                   </div>
-                </label>
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Size (e.g. 1.75rem or 28px)</span>
-                  <input
-                    className="input"
-                    placeholder="Default"
-                    value={settings.kbListTitleSize}
-                    onChange={(e) => update("kbListTitleSize", e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="field-row">
-                <div style={{ flex: 1 }}>
-                  <DropdownSelect
-                    label="Weight"
-                    onChange={(value) => update("kbListTitleWeight", value as BrandTextWeight)}
-                    options={brandWeightOptions}
-                    searchable={false}
-                    value={settings.kbListTitleWeight}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <DropdownSelect
-                    label="Font"
-                    onChange={(value) => update("kbListTitleFont", value)}
-                    options={brandFontOptions}
-                    searchable={false}
-                    value={settings.kbListTitleFont}
-                  />
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Font"
+                      onChange={(value) => update("kbListTitleFont", value)}
+                      options={brandFontOptions}
+                      searchable={false}
+                      value={settings.kbListTitleFont}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
 
           <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>

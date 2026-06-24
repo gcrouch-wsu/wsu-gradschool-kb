@@ -1109,7 +1109,18 @@ p {
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 761px) {
+.settings-home__layout,
+.settings-branding__layout {
+  align-items: start;
+  grid-template-columns: 1fr;
+}
+
+.settings-home__layout > .card,
+.settings-branding__layout > .card {
+  min-width: 0;
+}
+
+@media (min-width: 1025px) {
   .settings-general__layout {
     align-items: start;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1131,9 +1142,12 @@ p {
     grid-row: 1 / span 2;
     align-self: start;
   }
-}
 
-@media (min-width: 761px) {
+  .settings-home__layout,
+  .settings-branding__layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
   .settings-form__actions {
     width: 100%;
   }
@@ -1148,7 +1162,7 @@ p {
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1024px) {
   .settings-form__actions {
     width: 100%;
   }
