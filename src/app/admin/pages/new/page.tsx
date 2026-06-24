@@ -6,7 +6,7 @@ import { BookOpen } from "lucide-react";
 import type { KnowledgeBase } from "@/lib/types";
 import Link from "next/link";
 import { DropdownSelect } from "@/components/DropdownSelect";
-import { PageLoader } from "@/components/PageLoader";
+import { RouteLoadingPage } from "@/components/route-states/RouteLoadingPage";
 
 export default function NewPageScreen() {
   const router = useRouter();
@@ -61,7 +61,7 @@ export default function NewPageScreen() {
     }
   }
 
-  if (loading) return <PageLoader label="Loading page form" />;
+  if (loading) return <RouteLoadingPage preset="import" variant="admin" />;
 
   return (
     <div className="page-shell">

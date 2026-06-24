@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AdminAssetsWorkspace } from "@/components/AdminAssetsWorkspace";
 import type { AdminAssetLibraryRow } from "@/components/AdminAssetLibrary";
-import { PageLoader } from "@/components/PageLoader";
+import { RouteLoadingPage } from "@/components/route-states/RouteLoadingPage";
 import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { buildAdminAssetsQuery, parseAdminAssetsTab } from "@/lib/admin-assets-query";
@@ -117,7 +117,7 @@ export default async function AdminAssetsPage({
         files without breaking links when you activate a new version.
       </p>
 
-      <Suspense fallback={<PageLoader label="Loading asset library" />}>
+      <Suspense fallback={<RouteLoadingPage preset="assets" variant="admin" />}>
         <AdminAssetsWorkspace
           assets={rows}
           kbSlug={selectedKb.slug}

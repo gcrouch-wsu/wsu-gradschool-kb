@@ -146,7 +146,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <PageTree homepagePageId={kb.homepagePageId} kbSlug={kb.slug} nodes={tree} />
           </aside>
           <div className="flow">
-            <h2>Sections</h2>
+            {/* <h2>Sections</h2> */}
             {topLevel.length === 0 && (
               <p className="empty">No published sections yet. Check back soon.</p>
             )}

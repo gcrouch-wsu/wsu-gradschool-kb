@@ -3853,26 +3853,6 @@ article li > ol {
   font-weight: 500;
 }
 
-.page-loader {
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  min-height: 12rem;
-  padding: 2rem;
-}
-
-.page-loader__spinner {
-  animation: page-loader-spin 0.7s linear infinite;
-  border: 3px solid var(--line);
-  border-radius: 50%;
-  border-top-color: var(--wsu-crimson);
-  height: 2.25rem;
-  width: 2.25rem;
-}
-
-@keyframes page-loader-spin {
-  to {
-    transform: rotate(360deg);
 /* ── Route loading & status states ─────────────────────────────────────── */
 
 @keyframes route-shimmer {
@@ -4227,8 +4207,6 @@ article li > ol {
   .route-status__actions button.button {
     justify-content: center;
     width: 100%;
-  }
-}
   }
 }
 

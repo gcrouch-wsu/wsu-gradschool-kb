@@ -8,7 +8,7 @@ import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import KbAssignmentPicker from "@/components/KbAssignmentPicker";
 import { ModalForm } from "@/components/Modal";
-import { PageLoader } from "@/components/PageLoader";
+import { RouteLoadingPage } from "@/components/route-states/RouteLoadingPage";
 import type { KnowledgeBase, User } from "@/lib/types";
 import { readApiErrorMessage, useStatusModal } from "@/lib/use-status-modal";
 interface ManagedUser {
@@ -172,7 +172,7 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
     }
   }
 
-  if (loading) return <PageLoader label="Loading users" />;
+  if (loading) return <RouteLoadingPage preset="audit" variant="admin" />;
   if (error) return <div className="page-shell"><p className="alert alert--error">{error}</p></div>;
 
   return (

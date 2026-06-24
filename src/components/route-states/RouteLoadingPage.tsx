@@ -14,7 +14,9 @@ export type RouteLoadingPreset =
   | "review"
   | "dashboard"
   | "import"
-  | "assets";
+  | "assets"
+  | "settings"
+  | "sign-in";
 
 export type RouteLoadingVariant = "public" | "admin";
 
@@ -174,6 +176,43 @@ function AssetsPreset() {
   );
 }
 
+function SettingsPreset() {
+  return (
+    <div className="page-shell">
+      <PageHeaderSkeleton />
+      <div className="route-loading__filters" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+        {Array.from({ length: 4 }, (_, index) => (
+          <SkeletonBlock key={index} height="2.5rem" />
+        ))}
+      </div>
+      <div className="route-loading__grid-2">
+        {Array.from({ length: 2 }, (_, index) => (
+          <section className="route-loading__section-card" key={index}>
+            <SkeletonLine maxWidth="10rem" width="45%" />
+            {Array.from({ length: 4 }, (_, rowIndex) => (
+              <SkeletonLine key={rowIndex} width={`${90 - rowIndex * 8}%`} />
+            ))}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SignInPreset() {
+  return (
+    <div className="page-shell">
+      <PageHeaderSkeleton />
+      <section className="route-loading__section-card" style={{ maxWidth: "28rem" }}>
+        {Array.from({ length: 3 }, (_, index) => (
+          <SkeletonBlock key={index} height="2.5rem" />
+        ))}
+        <SkeletonButton />
+      </section>
+    </div>
+  );
+}
+
 const presetComponents: Record<RouteLoadingPreset, () => React.JSX.Element> = {
   audit: AuditPreset,
   pages: PagesPreset,
@@ -181,6 +220,8 @@ const presetComponents: Record<RouteLoadingPreset, () => React.JSX.Element> = {
   dashboard: DashboardPreset,
   import: ImportPreset,
   assets: AssetsPreset,
+  settings: SettingsPreset,
+  "sign-in": SignInPreset,
 };
 
 interface RouteLoadingPageProps {
