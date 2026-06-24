@@ -37,19 +37,18 @@ export default async function AdminAuditPage({
   return (
     <div className="page-shell">
       <p className="eyebrow">Admin</p>
-      <h1>Audit log</h1>
+      <div className="admin-actions admin-audit__header">
+        <h1>Audit log</h1>
+        <Link className="button button--ghost" href="/admin/audit/search">
+          View Search Gaps
+        </Link>
+      </div>
       <p className="lead">Recent administrative actions. Entries store metadata and small details, not full content snapshots.</p>
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
       </p>
 
       <AdminAuditFilters filter={filter} kbs={kbs} />
-
-      <div className="admin-actions" style={{ marginTop: "1rem" }}>
-        <Link className="button button--ghost" href="/admin/audit/search">
-          View Search Gaps
-        </Link>
-      </div>
 
       <AdminAuditEventsTable events={events} />
     </div>
