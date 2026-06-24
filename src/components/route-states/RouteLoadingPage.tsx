@@ -16,7 +16,9 @@ export type RouteLoadingPreset =
   | "import"
   | "assets"
   | "settings"
-  | "sign-in";
+  | "sign-in"
+  | "home"
+  | "kb";
 
 export type RouteLoadingVariant = "public" | "admin";
 
@@ -213,6 +215,54 @@ function SignInPreset() {
   );
 }
 
+function HomePreset() {
+  return (
+    <>
+      <section className="hero">
+        <div className="site-header__inner route-loading__header" style={{ marginBottom: 0 }}>
+          <SkeletonLine size="lg" maxWidth="18rem" width="55%" />
+          <SkeletonLine maxWidth="32rem" width="90%" />
+          <SkeletonLine maxWidth="24rem" width="70%" />
+        </div>
+      </section>
+      <div className="page-shell">
+        <SkeletonLine size="lg" maxWidth="14rem" width="40%" style={{ marginBottom: "1.25rem" }} />
+        <div className="route-loading__grid-assets">
+          {Array.from({ length: 6 }, (_, index) => (
+            <SkeletonTile key={index} />
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function KbPreset() {
+  return (
+    <div className="page-shell">
+      <div className="layout">
+        <aside className="sidebar" style={{ display: "grid", gap: "0.5rem" }}>
+          <SkeletonLine maxWidth="10rem" width="85%" />
+          <SkeletonTreeLine />
+          <SkeletonTreeLine indent={1} />
+          <SkeletonTreeLine indent={1} />
+          <SkeletonTreeLine indent={2} />
+          <SkeletonTreeLine />
+          <SkeletonTreeLine indent={1} />
+        </aside>
+        <article className="flow" style={{ display: "grid", gap: "0.75rem" }}>
+          <SkeletonLine size="sm" width="6rem" />
+          <SkeletonLine size="lg" maxWidth="22rem" width="75%" />
+          <SkeletonLine maxWidth="28rem" width="88%" />
+          {Array.from({ length: 8 }, (_, index) => (
+            <SkeletonLine key={index} width={`${96 - index * 4}%`} />
+          ))}
+        </article>
+      </div>
+    </div>
+  );
+}
+
 const presetComponents: Record<RouteLoadingPreset, () => React.JSX.Element> = {
   audit: AuditPreset,
   pages: PagesPreset,
@@ -222,6 +272,8 @@ const presetComponents: Record<RouteLoadingPreset, () => React.JSX.Element> = {
   assets: AssetsPreset,
   settings: SettingsPreset,
   "sign-in": SignInPreset,
+  home: HomePreset,
+  kb: KbPreset,
 };
 
 interface RouteLoadingPageProps {

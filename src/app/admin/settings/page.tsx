@@ -5,7 +5,7 @@ import { useEffect, useId, useState } from "react";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { FileUploadPicker } from "@/components/FileUploadPicker";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
-import { RouteLoadingPage } from "@/components/route-states/RouteLoadingPage";
+import { PageLoader } from "@/components/PageLoader";
 import { ThemeEditor } from "@/components/ThemeEditor";
 import { DEFAULT_THEME, SAFE_FONTS } from "@/lib/kb-theme";
 import {
@@ -148,7 +148,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  if (loading) return <RouteLoadingPage preset="settings" variant="admin" />;
+  if (loading) return <PageLoader label="Loading settings" />;
 
   return (
     <div className="page-shell">

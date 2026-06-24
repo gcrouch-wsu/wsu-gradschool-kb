@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { AdminSignInForm } from "@/components/AdminSignInForm";
-import { RouteLoadingPage } from "@/components/route-states/RouteLoadingPage";
+import { PageLoader } from "@/components/PageLoader";
 
 export default async function AdminSignInPage() {
 
@@ -9,7 +9,7 @@ export default async function AdminSignInPage() {
       <p className="eyebrow">Admin</p>
       <h1>Sign in</h1>
       <p className="lead">Use the configured administrator account to access the KB admin shell.</p>
-      <Suspense fallback={<RouteLoadingPage preset="sign-in" variant="admin" />}>
+      <Suspense fallback={<PageLoader label="Loading sign-in form" />}>
         <AdminSignInForm />
       </Suspense>
     </div>

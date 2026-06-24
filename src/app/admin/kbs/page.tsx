@@ -7,7 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { ModalForm } from "@/components/Modal";
-import { RouteLoadingPage } from "@/components/route-states/RouteLoadingPage";
+import { PageLoader } from "@/components/PageLoader";
 import type { KbStatus, KnowledgeBase } from "@/lib/types";
 import { readApiErrorMessage, useStatusModal } from "@/lib/use-status-modal";
 
@@ -141,7 +141,7 @@ export default function AdminKbsPage() {
     }
   }
 
-  if (loading) return <RouteLoadingPage preset="audit" variant="admin" />;
+  if (loading) return <PageLoader label="Loading knowledge bases" />;
 
   if (error) {
     return (
