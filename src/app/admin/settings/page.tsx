@@ -470,17 +470,6 @@ export default function AdminSettingsPage() {
                 searchable={false}
                 value={settings.heroAlignment}
               />
-              <label>
-                <span className="meta">Max content width in pixels (leave 0 for default 1320)</span>
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  max={2400}
-                  value={settings.contentWidth || ""}
-                  onChange={(e) => update("contentWidth", Number(e.target.value) || 0)}
-                />
-              </label>
             </section>
           </div>
 
@@ -602,7 +591,7 @@ export default function AdminSettingsPage() {
           <ThemeEditor
             contentWidthField={
               <label>
-                <span className="meta">Max page width in pixels (0 = default 1320; also under Logo &amp; Layout)</span>
+                <span className="meta">Max page width in pixels (0 = default 1320)</span>
                 <input
                   className="input"
                   type="number"

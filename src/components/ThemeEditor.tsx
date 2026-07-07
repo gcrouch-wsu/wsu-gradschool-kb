@@ -145,8 +145,22 @@ export function ThemeEditor({
   const previewVars = useMemo(() => themeToCssVars(theme), [theme]);
   const previewRef = useRef<HTMLDivElement>(null);
 
+  const measureUnlimited = theme.typography.measure === "0ch";
+  const lastMeasure = useRef("72ch");
+
+  function toggleMeasureLimit(unlimited: boolean) {
+    if (unlimited) {
+      lastMeasure.current = theme.typography.measure;
+      setTheme((t) => ({ ...t, typography: { ...t.typography, measure: "0ch" } }));
+    } else {
+      const restored = lastMeasure.current === "0ch" ? "72ch" : lastMeasure.current;
+      setTheme((t) => ({ ...t, typography: { ...t.typography, measure: restored } }));
+    }
+  }
+
   // Warn when the Reading width slider is capped by the page layout and can't visibly grow.
   const widthHint = useMemo(() => {
+    if (theme.typography.measure === "0ch") return null;
     const shell = siteContentWidth && siteContentWidth > 0 ? siteContentWidth : DEFAULT_CONTENT_WIDTH;
     const nav = parseFloat(theme.layout.navWidth) || 280;
     const toc = parseFloat(theme.layout.tocWidth) || 260;
@@ -457,14 +471,23 @@ export function ThemeEditor({
           <label className="theme-scale" title="Max line length of the article column">
             <span className="meta">Reading width</span>
             <input
-              max={90}
+              disabled={measureUnlimited}
+              max={120}
               min={45}
               onChange={(e) => setTypography("measure", Number(e.target.value), "ch")}
               step={1}
               type="range"
-              value={typoToNumber(theme.typography.measure)}
+              value={measureUnlimited ? 120 : typoToNumber(theme.typography.measure)}
             />
-            <span className="theme-scale__value">{theme.typography.measure}</span>
+            <span className="theme-scale__value">{measureUnlimited ? "No limit" : theme.typography.measure}</span>
+          </label>
+          <label className="checkbox-inline">
+            <input
+              checked={measureUnlimited}
+              onChange={(e) => toggleMeasureLimit(e.target.checked)}
+              type="checkbox"
+            />
+            <span>No limit — the article fills the available width</span>
           </label>
           {LAYOUT_FIELDS.map((field) => (
             <label className="theme-scale" key={field.key} title={field.help}>

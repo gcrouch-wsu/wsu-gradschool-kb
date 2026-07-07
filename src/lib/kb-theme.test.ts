@@ -58,6 +58,17 @@ describe("kb-theme", () => {
     expect(vars["--h1-weight"]).toBe(DEFAULT_THEME.headingStyles.h1.weight);
   });
 
+  it("clamps reading width and supports the no-limit value", () => {
+    expect(mergeTheme({ typography: { measure: "120ch" } }).typography.measure).toBe("120ch");
+    expect(mergeTheme({ typography: { measure: "500ch" } }).typography.measure).toBe("140ch");
+    expect(mergeTheme({ typography: { measure: "12px" } }).typography.measure).toBe(DEFAULT_THEME.typography.measure);
+
+    const unlimited = mergeTheme({ typography: { measure: "0ch" } });
+    expect(unlimited.typography.measure).toBe("0ch");
+    expect(themeToCssVars(unlimited)["--measure"]).toBe("100%");
+    expect(themeToCssVars(DEFAULT_THEME)["--measure"]).toBe("72ch");
+  });
+
   it("fills, clamps, and emits layout column widths", () => {
     expect(mergeTheme({}).layout).toEqual(DEFAULT_THEME.layout);
 

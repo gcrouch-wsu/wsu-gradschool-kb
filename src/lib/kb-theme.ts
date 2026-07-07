@@ -57,7 +57,7 @@ export interface ThemeTypography {
   spaceAfterHeading: string; // rem; gap below a heading (e.g. heading -> list)
   listItemSpacing: string; // rem; gap between list items
   listIndent: string; // rem; list indentation
-  measure: string; // ch; max reading line length in the article column
+  measure: string; // ch; max reading line length in the article column ("0ch" = no cap, fill the column)
 }
 
 export interface ThemeLayout {
@@ -204,6 +204,19 @@ function safeUnit(value: unknown, unit: "rem" | "em" | "ch" | "px", re: RegExp, 
   return fallback;
 }
 
+// Reading width: "0ch" disables the line-length cap; anything else clamps to a sane range.
+function safeMeasure(value: unknown, fallback: string): string {
+  const num =
+    typeof value === "number" && Number.isFinite(value)
+      ? value
+      : typeof value === "string" && CH.test(value.trim())
+        ? parseFloat(value)
+        : null;
+  if (num === null) return fallback;
+  if (num === 0) return "0ch";
+  return `${clampNumber(num, 40, 140)}ch`;
+}
+
 function safeHex(value: unknown, fallback: string): string {
   if (typeof value !== "string" || !HEX.test(value.trim())) {
     return fallback;
@@ -324,7 +337,7 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       spaceAfterHeading: safeUnit(ty.spaceAfterHeading, "rem", REM, base.typography.spaceAfterHeading, 0, 3),
       listItemSpacing: safeUnit(ty.listItemSpacing, "rem", REM, base.typography.listItemSpacing, 0, 2),
       listIndent: safeUnit(ty.listIndent, "rem", REM, base.typography.listIndent, 0, 4),
-      measure: safeUnit(ty.measure, "ch", CH, base.typography.measure, 40, 100),
+      measure: safeMeasure(ty.measure, base.typography.measure),
     },
     layout: {
       navWidth: safeUnit(l.navWidth, "px", PX, base.layout.navWidth, 160, 480),
@@ -454,7 +467,7 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--space-after-heading": theme.typography.spaceAfterHeading,
     "--space-list-item": theme.typography.listItemSpacing,
     "--indent-list": theme.typography.listIndent,
-    "--measure": theme.typography.measure,
+    "--measure": theme.typography.measure === "0ch" ? "100%" : theme.typography.measure,
     "--nav-width": theme.layout.navWidth,
     "--toc-width": theme.layout.tocWidth,
   };
