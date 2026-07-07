@@ -168,6 +168,32 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 - Toolbar formatting, links, alt text, and editor notes live in `src/lib/page-editor-format.ts`
   (selection save/restore + `document.execCommand`, plus DOM helpers). Selection plumbing is in
   `src/lib/rich-text-selection.ts`.
+- **Keydown pipeline** (`handleEditorKeyDown`): Tab/Shift+Tab list nesting, **Ctrl/Cmd+K** link
+  dialog, structural undo/redo (below), and a **heading-merge guard** that stops Backspace/Delete
+  from silently demoting H2/H3s when deleting empty lines next to a heading or range-deleting into one.
+- **Links**: the link dialog wraps the selection in a highlighted **draft marker span**
+  (`doc-link-draft`) while open, so the target stays visible and survives re-renders; commit swaps
+  the marker for a real `<a>` via DOM surgery (no `insertHTML`). Bare domains get `https://`, plain
+  emails get `mailto:`. No-selection and cross-block selections fail early with a hint.
+- **Paste & drop** (`handleEditorPaste`/`handleEditorDrop`): clipboard HTML (Word/Outlook/web) is run
+  through `sanitizePageDocument` *at paste time* so the surface always shows what will save; pasted
+  H1→H2 and H4–H6→H3. Pasted or dropped **image files upload to the asset library**
+  (`POST /api/admin/assets/images`) and insert as proper `doc-image` figures with alt/align/size
+  controls — the browser default (bare `<img>`) was silently dropped by the sanitizer.
+- **Structural undo** (`src/lib/page-editor-undo.ts`): innerHTML snapshots taken before DOM-surgery
+  operations (list indent/outdent, image controls, alt text, link/note commits, heading guard) so
+  Ctrl+Z / the toolbar Undo–Redo buttons reverse them; typing hands control back to native undo.
+- **Work protection** (`AdminPageEditorForm`): `beforeunload` warning when dirty, plus a debounced
+  **localStorage draft backup** (`kb-editor-backup:{pageId}`) with a "Restore draft / Discard"
+  banner on reopen; cleared on successful save.
+- **Draft preview** (`DraftPreviewModal`): renders current unsaved blocks with public article styling
+  via `blocksToSourceHtml`; videos/file links appear as placeholders (they resolve server-side).
+- **Sanitizer guards** (`page-document.ts`): duplicate `data-block-id`s are re-minted on every
+  sanitize (split lists used to share an id → flaky saves); inline `font-size` spans are stripped
+  from headings so theme control wins.
+- Toolbar extras: **symbol palette** (Ω), **Copy anchor** button when the caret is in a heading,
+  keyboard-shortcuts popover, "Starts at" ordered-list control. Nested `<ol>`s render 1./a./i.
+  Offending H3-before-H2 headings are outlined by `markHeadingOrderProblems` (like missing alt).
 - **Notes are Word-style anchored comments**: a selected-text note wraps the text in an inline
   `<span class="doc-note" data-note-body="…">`; a cursor-position note inserts an empty
   `doc-note doc-note--point` span. They render as a highlight/pin in the editor and are **stripped
@@ -381,6 +407,13 @@ manual redirect persistence, and the single-active-version DB invariant.
 - Block editor (rich text, alignment, links, media picker, cards, tables, video, info boxes,
   procedure sections, selected-text notes, cursor-position note pins, separate captions/alt text,
   continued numbering controls).
+- Editor hardening round (2026-07, `feature/width-controls` branch): marker-based link dialog with
+  URL normalization + Ctrl+K; paste/drop image upload to the asset library; sanitize-at-paste for
+  Word/web HTML; heading-merge guard; duplicate block-id re-minting; heading font-size stripping;
+  first-item list-indent fix + nested ordered-list numbering; structural undo/redo; symbol palette;
+  heading anchor copy; shortcuts popover; `beforeunload` guard + localStorage draft backup/restore;
+  draft preview modal. **Unit-tested and built, but only lightly verified in a real browser — treat
+  as needing manual QA (see §10).**
 - Managed assets with stable links + versions; managed video model + public YouTube/Vimeo embeds
   (CSP `frame-src` allowlisted); per-image alt text.
 - Postgres FTS with staff-visibility prune and punctuation safety.
@@ -413,8 +446,15 @@ manual redirect persistence, and the single-active-version DB invariant.
 - **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Public table
   cells also lack `scope` attributes today.
 - No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
-- The contenteditable editor is custom; complex selection edge cases may still surface and should be
-  verified in a real browser after editor changes.
+- **The contenteditable editor is still buggy.** It is custom, and complex selection edge cases keep
+  surfacing in real use (heading demotion on delete, list splits with duplicate ids, lost pasted
+  images, and touchy link insertion were all found by editors in 2026-07). The hardening round above
+  addresses those specific reports, but every editor change needs manual verification in a real
+  browser (Chrome + Firefox at minimum), and further reports should be expected. FB-09 (migrating
+  the flow surfaces to a maintained framework) remains the structural fix.
+- **No revision history**: a bad save permanently overwrites page content; there is no per-save
+  snapshot or restore. The audit log records *that* a change happened, not the content. This is the
+  biggest missing trust feature for multi-author use — see FB-24.
 - Rate limiting falls back to in-memory only when `DATABASE_URL` is unset; production Neon mode uses a
   shared `kb_rate_limits` table (§12 FB-02).
 
@@ -424,8 +464,9 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 Narrative backlog; the actionable, tagged version is §12.
 
-- **Editor**: positioned margin/comment rail (true Word-style), comment threads/resolve, and a
-  hardened editor core (a maintained rich-text framework) if contenteditable selection bugs persist.
+- **Editor**: **page revision history with restore (FB-24 — next priority)**; positioned
+  margin/comment rail (true Word-style), comment threads/resolve, and a hardened editor core
+  (a maintained rich-text framework — FB-09) since contenteditable selection bugs keep surfacing.
 - **Public experience**: home search/filter + pagination as KB count grows; TOC scroll-spy;
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
 - **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
@@ -608,7 +649,9 @@ Items are ordered by recommended priority.
 `[AI-AGENT-TASK] id:FB-09  priority:med  area:editor  effort:L  status:open`
 
 - **Finding:** the editor is a custom `contentEditable` surface (`src/components/PageDocumentEditor.tsx`);
-  §10 acknowledges complex selection edge cases may still surface.
+  §10 acknowledges complex selection edge cases may still surface — and they have (heading demotion
+  on delete, list-split duplicate ids, dropped pasted images, fragile link insertion; all patched
+  point-by-point in the 2026-07 hardening round, but the underlying architecture is unchanged).
 - **Suggested approach:** evaluate migrating the inline-flow surfaces to a maintained rich-text framework
   (e.g. Lexical/ProseMirror) **behind the existing `page-document.ts` block (de)serialization boundary**,
   so the `ContentBlock` model and sanitizer stay the source of truth. Add the positioned margin/comment
@@ -623,8 +666,10 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-10  priority:low  area:public-ux  effort:M  status:open`
 
-- **Items:** TOC scroll-spy active-section highlight; "copy link to heading"; previous/next page nav;
-  home search/filter + pagination as KB count grows; **card title H2/H3 level selector** for outline accuracy.
+- **Items:** TOC scroll-spy active-section highlight; "copy link to heading" on the *public* page
+  (the editor toolbar got a Copy-anchor button in 2026-07; readers still have no hover affordance);
+  previous/next page nav; home search/filter + pagination as KB count grows; **card title H2/H3
+  level selector** for outline accuracy.
 - **Touch points:** `src/components/TableOfContents.tsx`, `src/app/page.tsx`, `src/components/PageBlocks.tsx`, card editor.
 - **Acceptance:** each sub-item ships behind its own small PR with an axe smoke check.
 
@@ -811,3 +856,28 @@ Items are ordered by recommended priority.
   content blocks or full page summaries by slug.
 - **Acceptance:** An external app can successfully fetch a JSON representation of a public article using
   a valid API key; the response includes metadata and sanitized content blocks.
+
+### FB-24 — Page revision history with restore
+
+`[AI-AGENT-TASK] id:FB-24  priority:high  area:editor  effort:L  status:open`
+
+- **Finding:** every save permanently overwrites page content — there is no per-save snapshot,
+  diff, or restore. The audit log (`src/lib/audit-log.ts`) records that a change happened, not the
+  content. The 2026-07 hardening round added *client-side* protection only (a `localStorage` draft
+  backup in `AdminPageEditorForm` keyed `kb-editor-backup:{pageId}`, plus a `beforeunload` guard);
+  that protects unsaved work on one machine but cannot recover a bad save. For a heavily used
+  multi-author KB this is the biggest missing trust feature.
+- **Suggested approach:** a `kb_page_revisions` table (page id, revision number, full
+  title/summary/metadata/blocks JSON, author, timestamp) written inside the same `updatePages`
+  transaction that saves the page. Keep a bounded window (e.g. last 50 revisions or 12 months) with
+  a cleanup job like the audit-log purge. UI: a "History" panel on `/admin/pages/[pageId]` listing
+  revisions with author/time; selecting one shows a read-only render (reuse `DraftPreviewModal`'s
+  source-HTML approach) and offers "Restore this version" — which itself saves a *new* revision
+  rather than rewriting history. Do this on its own branch: it needs a migration and touches the
+  page-write path.
+- **Touch points:** `src/lib/db.ts` (`updatePages`), new migration, `src/app/admin/pages/[pageId]/`,
+  `src/components/AdminPageEditorForm.tsx`, optionally `src/lib/audit-log.ts` for linkage.
+- **Acceptance:** (1) every successful save creates a revision atomically with the page write;
+  (2) an editor can view any listed revision and restore it without data loss (restore = new
+  revision); (3) revision writes do not break the edit-lock batch semantics (§5 Edit locks, §8
+  abort-guard gotcha); (4) retention cleanup verified against a live DB.
