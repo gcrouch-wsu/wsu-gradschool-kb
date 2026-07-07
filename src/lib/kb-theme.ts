@@ -60,6 +60,11 @@ export interface ThemeTypography {
   measure: string; // ch; max reading line length in the article column
 }
 
+export interface ThemeLayout {
+  navWidth: string; // px; max width of the page-tree column on KB pages
+  tocWidth: string; // px; max width of the table-of-contents rail on KB pages
+}
+
 export interface ThemeOption {
   label: string;
   value: string;
@@ -77,6 +82,7 @@ export interface KbTheme {
   scale: ThemeScale;
   headingStyles: ThemeHeadingStyles;
   typography: ThemeTypography;
+  layout: ThemeLayout;
   editor: ThemeEditorAllowlist;
 }
 
@@ -141,6 +147,10 @@ export const DEFAULT_THEME: KbTheme = {
     listIndent: "1.75rem",
     measure: "72ch",
   },
+  layout: {
+    navWidth: "280px",
+    tocWidth: "260px",
+  },
   editor: {
     fonts: [
       { label: "Default", value: "" },
@@ -169,6 +179,7 @@ const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const REM = /^\d+(\.\d+)?rem$/;
 const EM = /^-?\d+(\.\d+)?em$/;
 const CH = /^\d+(\.\d+)?ch$/;
+const PX = /^\d+(\.\d+)?px$/;
 const UNITLESS = /^\d+(\.\d+)?$/;
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -185,7 +196,7 @@ function safeLeading(value: unknown, fallback: string, min: number, max: number)
 }
 
 // Validate a unit-bearing length ("1.5rem" / "-0.02em" / "72ch"), clamping the numeric part.
-function safeUnit(value: unknown, unit: "rem" | "em" | "ch", re: RegExp, fallback: string, min: number, max: number): string {
+function safeUnit(value: unknown, unit: "rem" | "em" | "ch" | "px", re: RegExp, fallback: string, min: number, max: number): string {
   if (typeof value === "number" && Number.isFinite(value)) return `${clampNumber(value, min, max)}${unit}`;
   if (typeof value === "string" && re.test(value.trim())) {
     return `${clampNumber(parseFloat(value), min, max)}${unit}`;
@@ -262,6 +273,7 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
   const s = (t.scale ?? {}) as Partial<ThemeScale>;
   const hs = (t.headingStyles ?? {}) as Partial<ThemeHeadingStyles>;
   const ty = (t.typography ?? {}) as Partial<ThemeTypography>;
+  const l = (t.layout ?? {}) as Partial<ThemeLayout>;
   const e = (t.editor ?? {}) as Partial<ThemeEditorAllowlist>;
   return {
     colors: {
@@ -313,6 +325,10 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       listItemSpacing: safeUnit(ty.listItemSpacing, "rem", REM, base.typography.listItemSpacing, 0, 2),
       listIndent: safeUnit(ty.listIndent, "rem", REM, base.typography.listIndent, 0, 4),
       measure: safeUnit(ty.measure, "ch", CH, base.typography.measure, 40, 100),
+    },
+    layout: {
+      navWidth: safeUnit(l.navWidth, "px", PX, base.layout.navWidth, 160, 480),
+      tocWidth: safeUnit(l.tocWidth, "px", PX, base.layout.tocWidth, 160, 420),
     },
     editor: {
       fonts: safeOptions(e.fonts, "font", base.editor.fonts),
@@ -439,5 +455,7 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--space-list-item": theme.typography.listItemSpacing,
     "--indent-list": theme.typography.listIndent,
     "--measure": theme.typography.measure,
+    "--nav-width": theme.layout.navWidth,
+    "--toc-width": theme.layout.tocWidth,
   };
 }

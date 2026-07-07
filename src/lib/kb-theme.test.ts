@@ -58,6 +58,18 @@ describe("kb-theme", () => {
     expect(vars["--h1-weight"]).toBe(DEFAULT_THEME.headingStyles.h1.weight);
   });
 
+  it("fills, clamps, and emits layout column widths", () => {
+    expect(mergeTheme({}).layout).toEqual(DEFAULT_THEME.layout);
+
+    const t = mergeTheme({ layout: { navWidth: "9999px", tocWidth: "50%" } });
+    expect(t.layout.navWidth).toBe("480px");
+    expect(t.layout.tocWidth).toBe(DEFAULT_THEME.layout.tocWidth);
+
+    const vars = themeToCssVars(mergeTheme({ layout: { navWidth: "320px", tocWidth: "240px" } }));
+    expect(vars["--nav-width"]).toBe("320px");
+    expect(vars["--toc-width"]).toBe("240px");
+  });
+
   it("computes WCAG contrast ratios", () => {
     expect(contrastRatio("#000000", "#ffffff")).toBeCloseTo(21, 0);
     expect(contrastRatio("#777777", "#777777")).toBeCloseTo(1, 1);

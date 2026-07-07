@@ -69,6 +69,10 @@
   --space-list-item: 0.4rem;
   --indent-list: 1.75rem;
   --measure: 72ch;
+
+  /* Layout column widths — owner-controllable via the theme. */
+  --nav-width: 280px;
+  --toc-width: 260px;
 }
 
 * {
@@ -686,7 +690,7 @@ p {
 .layout {
   display: grid;
   gap: 3rem;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, var(--nav-width)) minmax(0, 1fr);
 }
 
 .layout > * {
@@ -694,7 +698,7 @@ p {
 }
 
 .layout--with-toc {
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(0, 260px);
+  grid-template-columns: minmax(240px, var(--nav-width)) minmax(0, 1fr) minmax(0, var(--toc-width));
   grid-template-areas: "nav main toc";
 }
 
@@ -724,7 +728,7 @@ p {
 @media (max-width: 1024px) {
   .layout--with-toc {
     gap: 2rem 2.5rem;
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    grid-template-columns: minmax(220px, min(var(--nav-width), 260px)) minmax(0, 1fr);
     grid-template-areas:
       "nav toc"
       "nav main";

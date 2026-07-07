@@ -600,9 +600,23 @@ export default function AdminSettingsPage() {
             </p>
           </div>
           <ThemeEditor
+            contentWidthField={
+              <label>
+                <span className="meta">Max page width in pixels (0 = default 1320; also under Logo &amp; Layout)</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  max={2400}
+                  value={settings.contentWidth || ""}
+                  onChange={(e) => update("contentWidth", Number(e.target.value) || 0)}
+                />
+              </label>
+            }
             dbEnabled={dbEnabled}
             initialTheme={settings.globalTheme || DEFAULT_THEME}
             kbTitle="Global Default"
+            siteContentWidth={settings.contentWidth}
             onSave={async (newTheme) => {
               const nextSettings = { ...settings, globalTheme: newTheme };
               const res = await fetch("/api/admin/settings", {

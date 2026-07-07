@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ThemeEditor } from "@/components/ThemeEditor";
 import { getCurrentAdminSession } from "@/lib/auth";
-import { isDatabaseEnabled } from "@/lib/db";
+import { isDatabaseEnabled, loadSiteSettings } from "@/lib/db";
 import { getKbById } from "@/lib/kb-store";
 import { DEFAULT_THEME, mergeTheme } from "@/lib/kb-theme";
 
@@ -32,6 +32,7 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
     notFound();
   }
 
+  const settings = await loadSiteSettings();
   const theme = kb.theme ? mergeTheme(kb.theme) : DEFAULT_THEME;
 
   return (
@@ -48,6 +49,7 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
         dbEnabled={isDatabaseEnabled()}
         initialTheme={theme}
         kbTitle={kb.title}
+        siteContentWidth={settings.contentWidth}
         onSave={async (newTheme) => {
           const res = await fetch(`/api/admin/kbs/${kb.id}/theme`, {
             method: "PATCH",

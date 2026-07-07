@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import {
   DEFAULT_THEME,
@@ -73,8 +73,26 @@ const TYPO_FIELDS: {
   { key: "spaceAfterHeading", label: "Space after heading", help: "Gap below a heading, e.g. heading → list", unit: "rem", min: 0, max: 2, step: 0.05 },
   { key: "listItemSpacing", label: "List item spacing", help: "Gap between list items", unit: "rem", min: 0, max: 1.5, step: 0.05 },
   { key: "listIndent", label: "List indent", help: "List indentation", unit: "rem", min: 0.5, max: 3, step: 0.05 },
-  { key: "measure", label: "Reading width", help: "Max line length of the article column", unit: "ch", min: 45, max: 90, step: 1 },
 ];
+
+const LAYOUT_FIELDS: {
+  key: keyof KbTheme["layout"];
+  label: string;
+  help: string;
+  min: number;
+  max: number;
+  step: number;
+}[] = [
+  { key: "navWidth", label: "Page tree width", help: "Max width of the left navigation column", min: 180, max: 360, step: 5 },
+  { key: "tocWidth", label: "TOC width", help: "Max width of the on-this-page rail", min: 200, max: 320, step: 5 },
+];
+
+// Approximate px per "ch" at the default 16px body size; good enough for the layout hint.
+const PX_PER_CH = 8;
+// .layout grid gaps (3rem each) and .article horizontal padding (3.5rem each side).
+const LAYOUT_GAPS_PX = 96;
+const ARTICLE_PADDING_PX = 112;
+const DEFAULT_CONTENT_WIDTH = 1320;
 
 function remToNumber(value: string): number {
   return Number(value.replace("rem", "")) || 0;
@@ -105,11 +123,17 @@ export function ThemeEditor({
   initialTheme,
   dbEnabled,
   onSave,
+  siteContentWidth,
+  contentWidthField,
 }: {
   kbTitle: string;
   initialTheme: KbTheme;
   dbEnabled: boolean;
   onSave: (theme: KbTheme) => Promise<void>;
+  /** Site-wide max content width in px (0 = default). Used to warn when Reading width can't take effect. */
+  siteContentWidth?: number;
+  /** Optional extra control (e.g. the site Max content width input) rendered inside the Layout fieldset. */
+  contentWidthField?: ReactNode;
 }) {
   const [theme, setTheme] = useState<KbTheme>(() => mergeTheme(initialTheme));
   const [saving, setSaving] = useState(false);
@@ -120,6 +144,22 @@ export function ThemeEditor({
 
   const previewVars = useMemo(() => themeToCssVars(theme), [theme]);
   const previewRef = useRef<HTMLDivElement>(null);
+
+  // Warn when the Reading width slider is capped by the page layout and can't visibly grow.
+  const widthHint = useMemo(() => {
+    const shell = siteContentWidth && siteContentWidth > 0 ? siteContentWidth : DEFAULT_CONTENT_WIDTH;
+    const nav = parseFloat(theme.layout.navWidth) || 280;
+    const toc = parseFloat(theme.layout.tocWidth) || 260;
+    const textWidth = shell - nav - toc - LAYOUT_GAPS_PX - ARTICLE_PADDING_PX;
+    const measurePx = (parseFloat(theme.typography.measure) || 72) * PX_PER_CH;
+    if (measurePx <= textWidth) return null;
+    const effectiveCh = Math.max(0, Math.floor(textWidth / PX_PER_CH));
+    return (
+      `With the current max page width (${shell}px) and side column sizes, the article text column tops out ` +
+      `around ${effectiveCh}ch, so Reading width settings above that have no visible effect. Raise the max ` +
+      `content width or narrow the page tree / TOC columns to allow longer lines.`
+    );
+  }, [siteContentWidth, theme.layout.navWidth, theme.layout.tocWidth, theme.typography.measure]);
 
   useEffect(() => {
     const el = previewRef.current;
@@ -140,6 +180,9 @@ export function ThemeEditor({
   }
   function setTypography(key: keyof KbTheme["typography"], num: number, unit: string) {
     setTheme((t) => ({ ...t, typography: { ...t.typography, [key]: `${num}${unit}` } }));
+  }
+  function setLayout(key: keyof KbTheme["layout"], px: number) {
+    setTheme((t) => ({ ...t, layout: { ...t.layout, [key]: `${px}px` } }));
   }
   function setHeadingStyle<K extends keyof ThemeHeadingStyle>(level: HeadingLevel, key: K, value: ThemeHeadingStyle[K]) {
     setTheme((t) => ({
@@ -402,6 +445,42 @@ export function ThemeEditor({
             </label>
           ))}
           <p className="meta">“Space after heading” controls the gap between a heading and the list or text below it.</p>
+        </fieldset>
+
+        <fieldset className="fieldset">
+          <legend>Page &amp; column widths</legend>
+          <p className="meta">
+            Widths of the three columns on KB pages: the page tree, the article (reading) column, and the
+            table-of-contents rail.
+          </p>
+          {contentWidthField}
+          <label className="theme-scale" title="Max line length of the article column">
+            <span className="meta">Reading width</span>
+            <input
+              max={90}
+              min={45}
+              onChange={(e) => setTypography("measure", Number(e.target.value), "ch")}
+              step={1}
+              type="range"
+              value={typoToNumber(theme.typography.measure)}
+            />
+            <span className="theme-scale__value">{theme.typography.measure}</span>
+          </label>
+          {LAYOUT_FIELDS.map((field) => (
+            <label className="theme-scale" key={field.key} title={field.help}>
+              <span className="meta">{field.label}</span>
+              <input
+                max={field.max}
+                min={field.min}
+                onChange={(e) => setLayout(field.key, Number(e.target.value))}
+                step={field.step}
+                type="range"
+                value={parseFloat(theme.layout[field.key]) || 0}
+              />
+              <span className="theme-scale__value">{theme.layout[field.key]}</span>
+            </label>
+          ))}
+          {widthHint && <p className="alert alert--warning">{widthHint}</p>}
         </fieldset>
 
         <fieldset className="fieldset">
