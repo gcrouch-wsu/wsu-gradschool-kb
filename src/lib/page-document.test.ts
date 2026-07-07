@@ -55,6 +55,35 @@ describe("page-document", () => {
     expect(parsed[3]).toMatchObject({ type: "card", background: "wash" });
   });
 
+  it("re-mints duplicate data-block-ids so split blocks stay addressable", () => {
+    const html =
+      '<ol data-block-id="list-3"><li>One</li></ol>' +
+      '<p data-block-id="p1">Between</p>' +
+      '<ol data-block-id="list-3"><li>Two</li></ol>';
+    const clean = sanitizePageDocument(html);
+    const ids = [...clean.matchAll(/data-block-id="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3);
+    expect(ids).toContain("list-3");
+  });
+
+  it("strips inline font-size overrides from headings but keeps other styling", () => {
+    const html =
+      '<h2 data-block-id="h1"><span style="font-size: 1.6rem">Title</span></h2>' +
+      '<h3 data-block-id="h2"><span style="font-size: 1.2rem; color: #981e32">Sub</span></h3>' +
+      '<p data-block-id="p1"><span style="font-size: 1.375rem">Body</span></p>';
+    const clean = sanitizePageDocument(html);
+    const heading = clean.match(/<h2[^>]*>.*?<\/h2>/)?.[0] ?? "";
+    const subheading = clean.match(/<h3[^>]*>.*?<\/h3>/)?.[0] ?? "";
+    const paragraph = clean.match(/<p[^>]*>.*?<\/p>/)?.[0] ?? "";
+    expect(heading).not.toContain("font-size");
+    expect(heading).toContain("Title");
+    expect(subheading).not.toContain("font-size");
+    expect(subheading).toContain("color: #981e32");
+    // Paragraph sizing is a deliberate author choice and stays.
+    expect(paragraph).toContain("font-size");
+  });
+
   it("drops scripts and event handlers pasted into the HTML source", () => {
     const pasted =
       '<p data-block-id="p1">Hi<script>alert(1)</script></p><div onclick="evil()">x</div>';

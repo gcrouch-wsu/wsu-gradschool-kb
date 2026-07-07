@@ -163,6 +163,10 @@ export interface LinkEditRequest {
   newTab: boolean;
   isEdit: boolean;
   anchor: HTMLAnchorElement | null;
+  // Placeholder span wrapped around the selection while the dialog is open.
+  // Keeps the target visibly highlighted and survives editor re-renders, so
+  // committing the link can never lose the insertion point.
+  marker: HTMLElement | null;
 }
 
 let linkEditorOpener: ((request: LinkEditRequest) => void) | null = null;
@@ -186,16 +190,117 @@ function anchorFromSelection(): HTMLAnchorElement | null {
   return null;
 }
 
+const BLOCK_TAGS = /^(P|H2|H3|LI|TD|TH|FIGCAPTION)$/;
+
+function nearestBlock(node: Node | null, surface: HTMLElement): HTMLElement | null {
+  let current: Node | null = node;
+  while (current && current !== surface) {
+    if (current instanceof HTMLElement && BLOCK_TAGS.test(current.tagName)) {
+      return current;
+    }
+    current = current.parentNode;
+  }
+  return null;
+}
+
+const LINK_DRAFT_CLASS = "doc-link-draft";
+
+// Unwrap a draft marker, restoring the original content (used on cancel, and
+// defensively before creating a new draft).
+export function releaseLinkDraft(marker: HTMLElement | null) {
+  if (!marker || !marker.isConnected) {
+    return;
+  }
+  const parent = marker.parentNode;
+  if (!parent) {
+    return;
+  }
+  while (marker.firstChild) {
+    parent.insertBefore(marker.firstChild, marker);
+  }
+  parent.removeChild(marker);
+}
+
+function clearStaleLinkDrafts() {
+  document.querySelectorAll<HTMLElement>(`.wysiwyg-surface .${LINK_DRAFT_CLASS}`).forEach((el) => {
+    releaseLinkDraft(el);
+  });
+}
+
 export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
   saveRichTextSelection();
+  clearStaleLinkDrafts();
   const target = anchor ?? anchorFromSelection();
-  const selectionText = window.getSelection()?.toString() ?? "";
+  if (target) {
+    linkEditorOpener?.({
+      url: target.getAttribute("href") ?? "",
+      text: target.textContent ?? "",
+      newTab: target.getAttribute("target") === "_blank",
+      isEdit: true,
+      anchor: target,
+      marker: null,
+    });
+    return;
+  }
+
+  const surface = getBoundEditorSurface();
+  const selection = window.getSelection();
+  let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+  const inSurface = Boolean(range && surface && surface.contains(range.commonAncestorContainer));
+  if (!inSurface) {
+    if (restoreRichTextSelection()) {
+      range = window.getSelection()?.getRangeAt(0) ?? null;
+    } else {
+      recordFormat(
+        "createLink",
+        false,
+        "no-selection",
+        "Select the text that should become a link (or click where it goes), then press the link button.",
+      );
+      return;
+    }
+  }
+  if (!range) {
+    recordFormat("createLink", false, "no-range", "Click in the page body, then add a link.");
+    return;
+  }
+
+  if (!range.collapsed && surface) {
+    const startBlock = nearestBlock(range.startContainer, surface);
+    const endBlock = nearestBlock(range.endContainer, surface);
+    if (startBlock && endBlock && startBlock !== endBlock) {
+      recordFormat(
+        "createLink",
+        false,
+        "cross-block",
+        "Select text within a single paragraph, heading, or list item, then add a link.",
+      );
+      return;
+    }
+  }
+
+  const selectionText = range.toString();
+  const marker = document.createElement("span");
+  marker.className = LINK_DRAFT_CLASS;
+  marker.setAttribute("data-link-draft", "true");
+  if (range.collapsed) {
+    range.insertNode(marker);
+  } else {
+    try {
+      range.surroundContents(marker);
+    } catch {
+      marker.appendChild(range.extractContents());
+      range.insertNode(marker);
+    }
+  }
+
   linkEditorOpener?.({
-    url: target?.getAttribute("href") ?? "",
-    text: target ? target.textContent ?? "" : selectionText,
-    newTab: target?.getAttribute("target") === "_blank",
-    isEdit: Boolean(target),
-    anchor: target ?? null,
+    url: "",
+    text: selectionText,
+    newTab: false,
+    isEdit: false,
+    anchor: null,
+    marker,
   });
 }
 
@@ -205,14 +310,33 @@ function persistFromAnchor(anchor: HTMLElement) {
   notifyMutation();
 }
 
+// Forgiving URL entry: prepend https:// for bare domains ("www.wsu.edu") and
+// mailto: for plain email addresses. Already-schemed, relative, and anchor
+// URLs pass through untouched.
+export function normalizeLinkUrl(raw: string): string {
+  const url = raw.trim();
+  if (!url || /^(https?:|mailto:|\/|#)/i.test(url)) {
+    return url;
+  }
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(url)) {
+    return `mailto:${url}`;
+  }
+  if (/^[\w-]+(\.[\w-]+)+(:\d+)?([/?#]|$)/.test(url)) {
+    return `https://${url}`;
+  }
+  return url;
+}
+
 export function commitLink(request: {
   url: string;
   text: string;
   newTab: boolean;
   anchor: HTMLAnchorElement | null;
+  marker?: HTMLElement | null;
 }): boolean {
-  const url = request.url.trim();
+  const url = normalizeLinkUrl(request.url);
   if (!url) {
+    releaseLinkDraft(request.marker ?? null);
     return false;
   }
   const text = request.text.trim();
@@ -233,6 +357,39 @@ export function commitLink(request: {
     return true;
   }
 
+  const marker = request.marker ?? null;
+  if (marker && marker.isConnected) {
+    const anchor = document.createElement("a");
+    anchor.setAttribute("href", url);
+    if (request.newTab) {
+      anchor.setAttribute("target", "_blank");
+      anchor.setAttribute("rel", "noopener noreferrer");
+    }
+    const markerText = (marker.textContent ?? "").trim();
+    if (marker.childNodes.length > 0 && (!text || text === markerText)) {
+      // Keep the original nodes so inline formatting inside the selection survives.
+      while (marker.firstChild) {
+        anchor.appendChild(marker.firstChild);
+      }
+    } else {
+      anchor.textContent = text || url;
+    }
+    marker.replaceWith(anchor);
+    const selection = window.getSelection();
+    if (selection) {
+      const caret = document.createRange();
+      caret.setStartAfter(anchor);
+      caret.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(caret);
+    }
+    persistFromAnchor(anchor);
+    recordFormat("createLink", true, request.newTab ? `${url} (new tab)` : url);
+    return true;
+  }
+
+  // Fallback when the marker was lost (e.g. the surface was rebuilt while the
+  // dialog was open): try inserting at the last saved selection.
   const label = escapeHtml(text || url);
   const targetAttr = request.newTab ? ' target="_blank"' : "";
   const relAttr = request.newTab ? ' rel="noopener noreferrer"' : "";
@@ -662,6 +819,190 @@ export function handleEditorTabKey(event: {
   event.preventDefault();
   saveRichTextSelection();
   return event.shiftKey ? applyOutdent() : applyIndent();
+}
+
+function isHeadingElement(el: Element | null): boolean {
+  return el instanceof HTMLElement && /^H[23]$/.test(el.tagName);
+}
+
+function isEmptyBlock(el: HTMLElement): boolean {
+  return (el.textContent ?? "").trim() === "" && !el.querySelector("img, figure, table");
+}
+
+function rangeIsAtBlockEdge(block: HTMLElement, container: Node, offset: number, edge: "start" | "end"): boolean {
+  const probe = document.createRange();
+  if (edge === "start") {
+    probe.setStart(block, 0);
+    probe.setEnd(container, offset);
+  } else {
+    probe.setStart(container, offset);
+    probe.setEnd(block, block.childNodes.length);
+  }
+  if (probe.toString().trim() !== "") {
+    return false;
+  }
+  return !probe.cloneContents().querySelector("img, figure, table");
+}
+
+function siblingElement(block: HTMLElement, direction: "prev" | "next"): HTMLElement | null {
+  let node: Node | null = direction === "prev" ? block.previousSibling : block.nextSibling;
+  while (node) {
+    if (node instanceof HTMLElement) {
+      return node;
+    }
+    if ((node.textContent ?? "").trim()) {
+      return null;
+    }
+    node = direction === "prev" ? node.previousSibling : node.nextSibling;
+  }
+  return null;
+}
+
+function placeCaretAtStart(el: HTMLElement) {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  const caret = document.createRange();
+  caret.setStart(el, 0);
+  caret.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(caret);
+}
+
+// Browsers merge blocks on Backspace/Delete using the FIRST block's tag, so
+// deleting up to (or the blank line above) a heading silently demotes it to a
+// paragraph. Intercept the cases where a heading would lose its tag and keep it.
+export function guardHeadingMerge(event: { key: string; preventDefault: () => void }): boolean {
+  if (event.key !== "Backspace" && event.key !== "Delete") {
+    return false;
+  }
+  const surface = getBoundEditorSurface();
+  const selection = window.getSelection();
+  if (!surface || !selection || selection.rangeCount === 0) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  if (!surface.contains(range.commonAncestorContainer)) {
+    return false;
+  }
+
+  if (!range.collapsed) {
+    // Selection spanning from a paragraph into a heading: the browser would
+    // merge the heading's remainder into the paragraph. When the paragraph is
+    // consumed entirely, delete manually and let the heading survive.
+    const startBlock = nearestBlock(range.startContainer, surface);
+    const endBlock = nearestBlock(range.endContainer, surface);
+    if (!startBlock || !endBlock || startBlock === endBlock) {
+      return false;
+    }
+    if (isHeadingElement(startBlock) || !isHeadingElement(endBlock)) {
+      return false;
+    }
+    if (!rangeIsAtBlockEdge(startBlock, range.startContainer, range.startOffset, "start")) {
+      return false;
+    }
+    event.preventDefault();
+    range.deleteContents();
+    if (startBlock.isConnected && isEmptyBlock(startBlock)) {
+      startBlock.remove();
+    }
+    if (endBlock.isConnected) {
+      placeCaretAtStart(endBlock);
+    }
+    saveRichTextSelection();
+    surface.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    recordFormat("headingMergeGuard", true, "kept heading through range delete");
+    return true;
+  }
+
+  const block = nearestBlock(range.startContainer, surface);
+  if (!block) {
+    return false;
+  }
+
+  if (event.key === "Backspace") {
+    // Backspace at the start of a heading with an empty paragraph above it:
+    // remove the paragraph instead of merging the heading into it.
+    if (!isHeadingElement(block)) {
+      return false;
+    }
+    if (!rangeIsAtBlockEdge(block, range.startContainer, range.startOffset, "start")) {
+      return false;
+    }
+    const prev = siblingElement(block, "prev");
+    if (!prev || isHeadingElement(prev) || prev.tagName !== "P" || !isEmptyBlock(prev)) {
+      return false;
+    }
+    event.preventDefault();
+    prev.remove();
+    placeCaretAtStart(block);
+    saveRichTextSelection();
+    surface.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    recordFormat("headingMergeGuard", true, "removed empty paragraph above heading");
+    return true;
+  }
+
+  // Forward Delete at the end of an empty paragraph right before a heading:
+  // remove the paragraph instead of pulling the heading's text into it.
+  if (block.tagName !== "P" || !isEmptyBlock(block)) {
+    return false;
+  }
+  if (!rangeIsAtBlockEdge(block, range.endContainer, range.endOffset, "end")) {
+    return false;
+  }
+  const next = siblingElement(block, "next");
+  if (!next || !isHeadingElement(next)) {
+    return false;
+  }
+  event.preventDefault();
+  placeCaretAtStart(next);
+  block.remove();
+  saveRichTextSelection();
+  surface.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  recordFormat("headingMergeGuard", true, "removed empty paragraph before heading");
+  return true;
+}
+
+// Single keydown entry point for editor surfaces: list Tab handling, Ctrl/Cmd+K
+// for links, and the heading-merge guard for Backspace/Delete.
+export function handleEditorKeyDown(event: {
+  key: string;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  preventDefault: () => void;
+}): boolean {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    openLinkEditor();
+    return true;
+  }
+  if (event.key === "Backspace" || event.key === "Delete") {
+    return guardHeadingMerge(event);
+  }
+  return handleEditorTabKey(event);
+}
+
+// Outline H3s that appear before the document's first H2, mirroring how images
+// missing alt text are outlined, so the heading-order issue points at the
+// offending headings instead of leaving authors to hunt for them.
+export function markHeadingOrderProblems(): number {
+  let count = 0;
+  let seenH2 = false;
+  document.querySelectorAll<HTMLElement>(".wysiwyg-surface h2, .wysiwyg-surface h3").forEach((heading) => {
+    if (heading.tagName === "H2") {
+      seenH2 = true;
+      heading.classList.remove("doc-heading--order-problem");
+      return;
+    }
+    const problem = !seenH2;
+    heading.classList.toggle("doc-heading--order-problem", problem);
+    if (problem) {
+      count += 1;
+    }
+  });
+  return count;
 }
 
 export function insertEditorHtml(html: string): boolean {

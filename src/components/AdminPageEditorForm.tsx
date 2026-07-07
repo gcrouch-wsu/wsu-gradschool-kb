@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { StatusModal } from "@/components/StatusModal";
-import { markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
+import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
@@ -432,7 +432,7 @@ export function AdminPageEditorForm({
 
     const blockIssues = countBlockIssues(blocks);
     if (blockIssues.h3BeforeH2) {
-      next.push("Fix heading order: use an H2 before any H3.");
+      next.push("Fix heading order: use an H2 before any H3 (offending headings are outlined in the editor).");
     }
     if (blockIssues.imagesMissingAlt > 0) {
       next.push(
@@ -452,6 +452,7 @@ export function AdminPageEditorForm({
   }, [blocks, contactEmail, lastReviewedDate, ownerLabel, summary, title]);
   useEffect(() => {
     markProblemLinks();
+    markHeadingOrderProblems();
   }, [readinessIssues]);
 
   async function setLifecycleStatus(status: PageStatus) {

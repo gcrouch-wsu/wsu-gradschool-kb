@@ -20,7 +20,7 @@ import {
   bindPageEditor,
   commitLink,
   commitNote,
-  handleEditorTabKey,
+  handleEditorKeyDown,
   handleImageControlClick,
   insertEditorHtml,
   openNoteEditor,
@@ -28,6 +28,7 @@ import {
   registerFormatIssueReporter,
   registerLinkEditor,
   registerNoteEditor,
+  releaseLinkDraft,
   removeLink,
   removeNote,
   saveEditorSelection,
@@ -312,13 +313,17 @@ export function PageDocumentEditor({
 
       {linkRequest && (
         <LinkDialog
-          onClose={() => setLinkRequest(null)}
+          onClose={() => {
+            releaseLinkDraft(linkRequest.marker);
+            setLinkRequest(null);
+          }}
           onRemove={() => {
             if (linkRequest.anchor) removeLink(linkRequest.anchor);
+            releaseLinkDraft(linkRequest.marker);
             setLinkRequest(null);
           }}
           onSubmit={(result) => {
-            commitLink({ ...result, anchor: linkRequest.anchor });
+            commitLink({ ...result, anchor: linkRequest.anchor, marker: linkRequest.marker });
             setLinkRequest(null);
           }}
           request={linkRequest}
@@ -487,7 +492,7 @@ function SectionEditor({
           onClick={handleImageControlClick}
           onFocus={bindThisSurface}
           onInput={(e) => onUpdateFlow(e.currentTarget.innerHTML, false)}
-          onKeyDown={handleEditorTabKey}
+          onKeyDown={handleEditorKeyDown}
           onKeyUp={() => saveEditorSelection()}
           onMouseUp={() => saveEditorSelection()}
           ref={attachSurface}
@@ -595,7 +600,7 @@ function SectionEditor({
               const clean = sanitizePageDocument(e.currentTarget.innerHTML);
               onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
             }}
-            onKeyDown={handleEditorTabKey}
+            onKeyDown={handleEditorKeyDown}
             onKeyUp={() => saveEditorSelection()}
             onMouseUp={() => saveEditorSelection()}
             ref={(node) => {
@@ -657,7 +662,7 @@ function SectionEditor({
               const clean = sanitizePageDocument(e.currentTarget.innerHTML);
               onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
             }}
-            onKeyDown={handleEditorTabKey}
+            onKeyDown={handleEditorKeyDown}
             onKeyUp={() => saveEditorSelection()}
             onMouseUp={() => saveEditorSelection()}
             ref={(node) => {

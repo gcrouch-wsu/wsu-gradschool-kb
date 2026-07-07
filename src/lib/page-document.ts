@@ -130,6 +130,54 @@ function safeImageSrc(raw: string | undefined): string | null {
   return src;
 }
 
+// Headings must keep their size under theme control. Editing accidents (e.g.
+// restoring a demoted heading) can leave inline font-size spans behind that
+// freeze the heading at a pasted size; drop just the font-size declaration and
+// unwrap spans that end up with no style left.
+function stripHeadingSizeOverrides(html: string): string {
+  if (!/font-size/i.test(html)) {
+    return html;
+  }
+  const root = parse(html);
+  for (const span of root.querySelectorAll("span[style]")) {
+    const style = span.getAttribute("style") ?? "";
+    const kept = style
+      .split(";")
+      .map((part) => part.trim())
+      .filter((part) => part && !/^font-size\s*:/i.test(part));
+    if (kept.length > 0) {
+      span.setAttribute("style", kept.join("; "));
+    } else {
+      span.replaceWith(span.innerHTML);
+    }
+  }
+  return root.toString();
+}
+
+// Editing operations (e.g. splitting a list by typing a paragraph in the
+// middle) can leave two blocks carrying the same data-block-id, which breaks
+// anchors and makes saves flaky. Keep the first occurrence, re-mint the rest.
+function dedupeBlockIds(html: string): string {
+  const root = parse(html);
+  const seen = new Set<string>();
+  let changed = false;
+  for (const node of root.querySelectorAll("[data-block-id]")) {
+    const id = node.getAttribute("data-block-id") ?? "";
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      continue;
+    }
+    const fresh = newBlockId();
+    if (node.getAttribute("id") === id) {
+      node.setAttribute("id", fresh);
+    }
+    node.setAttribute("data-block-id", fresh);
+    seen.add(fresh);
+    changed = true;
+  }
+  return changed ? root.toString() : html;
+}
+
 function inlineFields(node: HTMLElement, listItem = false) {
   const html = listItem
     ? sanitizeListItemHtml(node.innerHTML, { keepNotes: true })
@@ -357,7 +405,7 @@ function serializeDocumentNode(node: Node): string {
   }
 
   if (tag === "h2" || tag === "h3") {
-    const inner = sanitizeRichText(node.innerHTML, { keepNotes: true });
+    const inner = stripHeadingSizeOverrides(sanitizeRichText(node.innerHTML, { keepNotes: true }));
     return `<${tag} class="anchor-heading" data-block-id="${escapeHtml(blockId)}" id="${escapeHtml(blockId)}"${alignStyleAttr(readTextAlign(node))}>${inner}</${tag}>`;
   }
 
@@ -389,7 +437,8 @@ export function sanitizePageDocument(html: string) {
     return `<p data-block-id="${newBlockId()}"><br></p>`;
   }
   const root = parse(html);
-  return root.childNodes.map(serializeDocumentNode).join("") || `<p data-block-id="${newBlockId()}"><br></p>`;
+  const clean = root.childNodes.map(serializeDocumentNode).join("");
+  return clean ? dedupeBlockIds(clean) : `<p data-block-id="${newBlockId()}"><br></p>`;
 }
 
 const MAX_NESTING_DEPTH = 3;

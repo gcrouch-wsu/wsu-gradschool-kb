@@ -3310,6 +3310,19 @@ article li > ol {
   outline-offset: 2px;
 }
 
+/* Text being turned into a link while the link dialog is open. */
+.wysiwyg-surface .doc-link-draft {
+  background: color-mix(in srgb, #2f6fed 22%, transparent);
+  outline: 1px dashed #2f6fed;
+  outline-offset: 1px;
+}
+
+/* H3 that appears before the document's first H2. */
+.wysiwyg-surface .doc-heading--order-problem {
+  outline: 2px solid var(--wsu-crimson);
+  outline-offset: 3px;
+}
+
 .input--error {
   border-color: var(--wsu-crimson) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--wsu-crimson) 18%, transparent);
