@@ -1,7 +1,7 @@
 "use client";
 
-import { CreditCard, ImagePlus, Rows3, Table2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CreditCard, ImagePlus, Link as LinkIcon, Redo2, Rows3, Table2, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { RichTextToolbar } from "@/components/RichTextToolbar";
 import type { EditorPalette } from "@/lib/kb-theme";
 import {
@@ -10,11 +10,22 @@ import {
   applyList,
   applyOrderedListStart,
   applyOutdent,
+  copyHeadingAnchor,
+  performEditorRedo,
+  performEditorUndo,
   queryEditorFormatting,
   saveEditorSelection,
   toolbarPrepare,
   type EditorFormatting,
 } from "@/lib/page-editor-format";
+
+const KEYBOARD_SHORTCUTS: { keys: string; action: string }[] = [
+  { keys: "Ctrl+B / Ctrl+I / Ctrl+U", action: "Bold / italic / underline" },
+  { keys: "Ctrl+K", action: "Insert or edit a link" },
+  { keys: "Tab / Shift+Tab", action: "Indent / outdent a list item" },
+  { keys: "Ctrl+Z / Ctrl+Y", action: "Undo / redo" },
+  { keys: "Ctrl+C / Ctrl+V", action: "Copy / paste (Word and web content is cleaned automatically)" },
+];
 
 export function DocumentToolbar({
   editorPalette,
@@ -25,6 +36,7 @@ export function DocumentToolbar({
   onAddCard,
   onAddProcedureSection,
   onInsertSectionBreak,
+  pageUrl,
 }: {
   editorPalette?: EditorPalette;
   onInsertMedia: () => void;
@@ -34,6 +46,7 @@ export function DocumentToolbar({
   onAddCard: () => void;
   onAddProcedureSection: () => void;
   onInsertSectionBreak: () => void;
+  pageUrl?: string;
 }) {
   const [formatting, setFormatting] = useState<EditorFormatting>({
     bold: false,
@@ -51,6 +64,9 @@ export function DocumentToolbar({
     orderedListStart: null,
   });
 
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const shortcutsRef = useRef<HTMLSpanElement>(null);
+
   useEffect(() => {
     const onSelectionChange = () => {
       setFormatting(queryEditorFormatting());
@@ -59,10 +75,44 @@ export function DocumentToolbar({
     return () => document.removeEventListener("selectionchange", onSelectionChange);
   }, []);
 
+  useEffect(() => {
+    if (!shortcutsOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!shortcutsRef.current?.contains(event.target as Node)) {
+        setShortcutsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [shortcutsOpen]);
+
   const buttonClass = "rich-text-toolbar__button";
 
   return (
     <div className="document-toolbar">
+      <div className="document-toolbar__history" role="group" aria-label="Undo and redo">
+        <button
+          aria-label="Undo"
+          className={`${buttonClass} rich-text-toolbar__button--icon`}
+          onMouseDown={(event) => toolbarPrepare(event)}
+          onClick={() => performEditorUndo()}
+          title="Undo (Ctrl+Z)"
+          type="button"
+        >
+          <Undo2 aria-hidden size={16} strokeWidth={1.75} />
+        </button>
+        <button
+          aria-label="Redo"
+          className={`${buttonClass} rich-text-toolbar__button--icon`}
+          onMouseDown={(event) => toolbarPrepare(event)}
+          onClick={() => performEditorRedo()}
+          title="Redo (Ctrl+Y)"
+          type="button"
+        >
+          <Redo2 aria-hidden size={16} strokeWidth={1.75} />
+        </button>
+      </div>
+      <span className="rich-text-toolbar__divider" aria-hidden="true" />
       <div className="document-toolbar__structure" role="group" aria-label="Block style">
         <button
           aria-label="Paragraph"
@@ -150,6 +200,18 @@ export function DocumentToolbar({
         >
           ←
         </button>
+        {(formatting.h2 || formatting.h3) && (
+          <button
+            aria-label="Copy a link to this heading"
+            className={buttonClass}
+            onMouseDown={(event) => toolbarPrepare(event)}
+            onClick={() => copyHeadingAnchor(pageUrl)}
+            title="Copy a link that jumps straight to this heading"
+            type="button"
+          >
+            <LinkIcon aria-hidden size={14} strokeWidth={1.75} /> Anchor
+          </button>
+        )}
       </div>
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
       <RichTextToolbar editorPalette={editorPalette} />
@@ -225,6 +287,33 @@ export function DocumentToolbar({
         >
           Editor note
         </button>
+        <span className="toolbar-popover-wrap" ref={shortcutsRef}>
+          <button
+            aria-expanded={shortcutsOpen}
+            aria-label="Keyboard shortcuts"
+            className={buttonClass}
+            onClick={() => setShortcutsOpen((open) => !open)}
+            title="Keyboard shortcuts"
+            type="button"
+          >
+            ?
+          </button>
+          {shortcutsOpen && (
+            <div className="toolbar-popover shortcuts-popover" role="dialog" aria-label="Keyboard shortcuts">
+              <strong>Keyboard shortcuts</strong>
+              <dl className="shortcuts-popover__list">
+                {KEYBOARD_SHORTCUTS.map((item) => (
+                  <div className="shortcuts-popover__row" key={item.keys}>
+                    <dt>
+                      <kbd>{item.keys}</kbd>
+                    </dt>
+                    <dd>{item.action}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+        </span>
       </div>
     </div>
   );

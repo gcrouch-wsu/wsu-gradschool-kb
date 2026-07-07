@@ -86,12 +86,10 @@ export function indentListItem(li: HTMLLIElement): boolean {
     return true;
   }
 
-  const nested = document.createElement(parentList.tagName);
-  while (li.firstChild) {
-    nested.appendChild(li.firstChild);
-  }
-  li.appendChild(nested);
-  return true;
+  // The first item has no previous sibling to nest under; indenting it would
+  // produce list markup with no parent item (invalid HTML that the sanitizer
+  // strips, losing the text). Match Word/Docs behavior: not allowed.
+  return false;
 }
 
 export function outdentListItem(li: HTMLLIElement): boolean {

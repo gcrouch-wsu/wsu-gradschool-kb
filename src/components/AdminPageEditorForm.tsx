@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { DraftPreviewModal } from "@/components/DraftPreviewModal";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { StatusModal } from "@/components/StatusModal";
@@ -316,6 +317,7 @@ export function AdminPageEditorForm({
   const [savedStatus, setSavedStatus] = useState<PageStatus>(page.status);
   const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
 
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [expiryNoticeOpen, setExpiryNoticeOpen] = useState(false);
@@ -420,6 +422,100 @@ export function AdminPageEditorForm({
   });
   const [savedSnapshot, setSavedSnapshot] = useState(currentSnapshot);
   const dirty = currentSnapshot !== savedSnapshot;
+
+  // ----- Work protection: leave-page warning + local draft backup -----
+  const backupKey = `kb-editor-backup:${page.id}`;
+  const [backupNotice, setBackupNotice] = useState<{ savedAt: string } | null>(null);
+  // Bumped when a backup is restored so the document editor remounts with the
+  // restored blocks (it keeps its own internal state after mount).
+  const [editorEpoch, setEditorEpoch] = useState(0);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  // Offer to restore a backup left behind by a crash, timeout, or closed tab.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(backupKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { savedAt?: string; snapshot?: string };
+      if (!parsed.snapshot || parsed.snapshot === savedSnapshot) {
+        localStorage.removeItem(backupKey);
+        return;
+      }
+      setBackupNotice({ savedAt: parsed.savedAt ?? "" });
+    } catch {
+      // Corrupt or inaccessible storage — nothing to restore.
+    }
+    // Run once per page; savedSnapshot here is intentionally the initial value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backupKey]);
+
+  // Continuously stash unsaved work locally (debounced) so it survives
+  // crashes and session timeouts. Cleared on successful save.
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          backupKey,
+          JSON.stringify({ savedAt: new Date().toISOString(), snapshot: currentSnapshot }),
+        );
+      } catch {
+        // Storage full or unavailable; the beforeunload warning still applies.
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [backupKey, currentSnapshot, dirty]);
+
+  function clearBackup() {
+    try {
+      localStorage.removeItem(backupKey);
+    } catch {
+      // ignore
+    }
+    setBackupNotice(null);
+  }
+
+  function restoreBackup() {
+    try {
+      const raw = localStorage.getItem(backupKey);
+      if (!raw) {
+        setBackupNotice(null);
+        return;
+      }
+      const parsed = JSON.parse(raw) as { snapshot?: string };
+      if (!parsed.snapshot) {
+        clearBackup();
+        return;
+      }
+      const data = JSON.parse(parsed.snapshot) as Record<string, unknown>;
+      if (typeof data.title === "string") setTitle(data.title);
+      if (typeof data.slug === "string") setSlug(data.slug);
+      if (typeof data.summary === "string") setSummary(data.summary);
+      if (data.visibility === "public" || data.visibility === "staff") setVisibility(data.visibility);
+      if (typeof data.parentPath === "string") setParentPath(data.parentPath);
+      if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
+      if (typeof data.contactEmail === "string") setContactEmail(data.contactEmail);
+      if (typeof data.lastReviewedDate === "string") setLastReviewedDate(data.lastReviewedDate);
+      if (typeof data.showToc === "boolean") setShowToc(data.showToc);
+      if (typeof data.tocDepth === "number") setTocDepth(data.tocDepth);
+      if (typeof data.showSummary === "boolean") setShowSummary(data.showSummary);
+      if (typeof data.showPrintButton === "boolean") setShowPrintButton(data.showPrintButton);
+      if (Array.isArray(data.blocks)) setBlocks(data.blocks as ContentBlock[]);
+      setEditorEpoch((n) => n + 1);
+    } catch {
+      // Corrupt backup: leave current content untouched.
+    }
+    setBackupNotice(null);
+  }
   const readinessIssues = useMemo(() => {
     const next: string[] = [];
     if (!title.trim()) next.push("Add a page title.");
@@ -558,6 +654,7 @@ export function AdminPageEditorForm({
       setSavedStatus(status);
       setSavedUrl(data.url ?? null);
       setSavedSnapshot(currentSnapshot);
+      clearBackup();
       markSessionActive();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save the page.");
@@ -654,6 +751,9 @@ export function AdminPageEditorForm({
           />
         </>
       )}
+      <button className="button button--ghost" onClick={() => setPreviewOpen(true)} type="button">
+        Preview draft
+      </button>
       {/* Plain anchor: leaving the admin shell needs a full page load so the public
           layout (header/footer/scrolling) is applied. */}
       <a className="button button--ghost" href={previewUrl}>
@@ -689,6 +789,33 @@ export function AdminPageEditorForm({
         title="Session expired"
         variant="error"
       />
+
+      {previewOpen && (
+        <DraftPreviewModal
+          blocks={blocks}
+          kbSlug={kb.slug}
+          onClose={() => setPreviewOpen(false)}
+          showSummary={showSummary}
+          summary={summary}
+          title={title}
+        />
+      )}
+
+      {backupNotice && (
+        <div className="alert" role="alert" style={{ marginBottom: "2rem" }}>
+          <strong>Unsaved draft found.</strong> This browser has edits to this page
+          {backupNotice.savedAt ? ` from ${formatTimestamp(backupNotice.savedAt)}` : ""} that were never saved to
+          the server (for example after a closed tab or session timeout).
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
+            <button className="button button--small" onClick={restoreBackup} type="button">
+              Restore draft
+            </button>
+            <button className="button button--small button--ghost" onClick={clearBackup} type="button">
+              Discard it
+            </button>
+          </div>
+        </div>
+      )}
 
       <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
         {error && <p className="error">{error}</p>}
@@ -868,8 +995,9 @@ export function AdminPageEditorForm({
             editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
             kbId={kb.id}
             kbSlug={kb.slug}
-            key={page.id}
+            key={`${page.id}:${editorEpoch}`}
             onChange={setBlocks}
+            pageUrl={previewUrl}
           />
         </fieldset>
 

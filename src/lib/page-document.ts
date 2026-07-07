@@ -404,9 +404,12 @@ function serializeDocumentNode(node: Node): string {
     return `<p data-block-id="${escapeHtml(blockId)}"${alignStyleAttr(readTextAlign(node))}>${inner || "<br>"}</p>`;
   }
 
-  if (tag === "h2" || tag === "h3") {
+  if (/^h[1-6]$/.test(tag)) {
+    // The page model supports two heading levels. Map pasted H1s to H2 and
+    // H4-H6 to H3 instead of silently demoting them to paragraphs.
+    const mapped = tag === "h1" || tag === "h2" ? "h2" : "h3";
     const inner = stripHeadingSizeOverrides(sanitizeRichText(node.innerHTML, { keepNotes: true }));
-    return `<${tag} class="anchor-heading" data-block-id="${escapeHtml(blockId)}" id="${escapeHtml(blockId)}"${alignStyleAttr(readTextAlign(node))}>${inner}</${tag}>`;
+    return `<${mapped} class="anchor-heading" data-block-id="${escapeHtml(blockId)}" id="${escapeHtml(blockId)}"${alignStyleAttr(readTextAlign(node))}>${inner}</${mapped}>`;
   }
 
   if (tag === "ul" || tag === "ol") {

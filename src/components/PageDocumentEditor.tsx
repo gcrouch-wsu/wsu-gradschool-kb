@@ -20,7 +20,9 @@ import {
   bindPageEditor,
   commitLink,
   commitNote,
+  handleEditorDrop,
   handleEditorKeyDown,
+  handleEditorPaste,
   handleImageControlClick,
   insertEditorHtml,
   openNoteEditor,
@@ -37,6 +39,7 @@ import {
   type LinkEditRequest,
   type NoteEditRequest,
 } from "@/lib/page-editor-format";
+import { noteEditorInput } from "@/lib/page-editor-undo";
 import { textToRichText } from "@/lib/rich-text";
 import type { EditorPalette } from "@/lib/kb-theme";
 import type { ContentBlock } from "@/lib/types";
@@ -51,12 +54,14 @@ export function PageDocumentEditor({
   kbId,
   kbSlug,
   onChange,
+  pageUrl,
 }: {
   blocks: ContentBlock[];
   editorPalette?: EditorPalette;
   kbId: string;
   kbSlug: string;
   onChange: (blocks: ContentBlock[]) => void;
+  pageUrl?: string;
 }) {
   const initialSections = blocksToSections(blocks);
   // Always present at least one editable flow surface — otherwise an empty
@@ -285,6 +290,7 @@ export function PageDocumentEditor({
             onAddCard={addCard}
             onAddProcedureSection={addProcedureSection}
             onInsertSectionBreak={handleInsertSectionBreak}
+            pageUrl={pageUrl}
           />
         )}
         {formatHint && <p className="alert editor-format-hint">{formatHint}</p>}
@@ -370,6 +376,7 @@ export function PageDocumentEditor({
             index={index}
             isFirst={index === 0}
             isLast={index === sections.length - 1}
+            kbId={kbId}
             key={section.type === "flow" ? `flow-${index}` : section.block.blockId}
             kbSlug={kbSlug}
             onMove={moveSection}
@@ -394,6 +401,7 @@ function SectionEditor({
   index,
   isFirst,
   isLast,
+  kbId,
   kbSlug,
   onMove,
   onRemove,
@@ -407,6 +415,7 @@ function SectionEditor({
   index: number;
   isFirst: boolean;
   isLast: boolean;
+  kbId: string;
   kbSlug: string;
   onMove: (index: number, direction: -1 | 1) => void;
   onRemove: () => void;
@@ -490,11 +499,19 @@ function SectionEditor({
           contentEditable
           onBlur={(e) => onUpdateFlow(e.currentTarget.innerHTML, true)}
           onClick={handleImageControlClick}
+          onDragOver={(e) => {
+            if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+          }}
+          onDrop={(e) => handleEditorDrop(e, kbId)}
           onFocus={bindThisSurface}
-          onInput={(e) => onUpdateFlow(e.currentTarget.innerHTML, false)}
+          onInput={(e) => {
+            noteEditorInput(e.nativeEvent as InputEvent);
+            onUpdateFlow(e.currentTarget.innerHTML, false);
+          }}
           onKeyDown={handleEditorKeyDown}
           onKeyUp={() => saveEditorSelection()}
           onMouseUp={() => saveEditorSelection()}
+          onPaste={(e) => handleEditorPaste(e, kbId)}
           ref={attachSurface}
           suppressContentEditableWarning
         />
@@ -589,6 +606,10 @@ function SectionEditor({
               onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
             }}
             onClick={handleImageControlClick}
+            onDragOver={(e) => {
+              if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+            }}
+            onDrop={(e) => handleEditorDrop(e, kbId)}
             onFocus={(e) => {
               const target = e.currentTarget;
               bindPageEditor(target, () => {
@@ -597,10 +618,12 @@ function SectionEditor({
               });
             }}
             onInput={(e) => {
+              noteEditorInput(e.nativeEvent as InputEvent);
               const clean = sanitizePageDocument(e.currentTarget.innerHTML);
               onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
             }}
             onKeyDown={handleEditorKeyDown}
+            onPaste={(e) => handleEditorPaste(e, kbId)}
             onKeyUp={() => saveEditorSelection()}
             onMouseUp={() => saveEditorSelection()}
             ref={(node) => {
@@ -651,6 +674,10 @@ function SectionEditor({
               onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
             }}
             onClick={handleImageControlClick}
+            onDragOver={(e) => {
+              if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+            }}
+            onDrop={(e) => handleEditorDrop(e, kbId)}
             onFocus={(e) => {
               const target = e.currentTarget;
               bindPageEditor(target, () => {
@@ -659,10 +686,12 @@ function SectionEditor({
               });
             }}
             onInput={(e) => {
+              noteEditorInput(e.nativeEvent as InputEvent);
               const clean = sanitizePageDocument(e.currentTarget.innerHTML);
               onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
             }}
             onKeyDown={handleEditorKeyDown}
+            onPaste={(e) => handleEditorPaste(e, kbId)}
             onKeyUp={() => saveEditorSelection()}
             onMouseUp={() => saveEditorSelection()}
             ref={(node) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Eraser, Link2, Link2Off } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RICH_TEXT_COLORS } from "@/lib/rich-text";
 import type { EditorPalette } from "@/lib/kb-theme";
 import {
@@ -10,6 +10,7 @@ import {
   applyFontFamily,
   applyFontSize,
   applyInlineFormat,
+  insertEditorText,
   openLinkEditor,
   queryEditorFormatting,
   RICH_TEXT_FONT_FAMILIES,
@@ -18,6 +19,13 @@ import {
   toolbarPrepare,
   type EditorFormatting,
 } from "@/lib/page-editor-format";
+
+const SYMBOLS = [
+  "—", "–", "…", "©", "®", "™", "§", "¶", "°", "±",
+  "×", "÷", "≤", "≥", "≠", "≈", "½", "⅓", "¼", "¾",
+  "→", "←", "↑", "↓", "•", "·", "✓", "✗", "€", "£",
+  "¢", "¥", "“", "”", "‘", "’", "«", "»", "†", "‡",
+];
 
 export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalette }) {
 
@@ -40,6 +48,9 @@ export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalet
     orderedListStart: null,
   });
 
+  const [symbolsOpen, setSymbolsOpen] = useState(false);
+  const symbolsRef = useRef<HTMLSpanElement>(null);
+
   useEffect(() => {
     const onSelectionChange = () => {
       saveEditorSelection();
@@ -48,6 +59,17 @@ export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalet
     document.addEventListener("selectionchange", onSelectionChange);
     return () => document.removeEventListener("selectionchange", onSelectionChange);
   }, []);
+
+  useEffect(() => {
+    if (!symbolsOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!symbolsRef.current?.contains(event.target as Node)) {
+        setSymbolsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [symbolsOpen]);
 
   const buttonClass = "rich-text-toolbar__button";
   const selectClass = "rich-text-toolbar__select";
@@ -238,6 +260,37 @@ export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalet
       >
         <Eraser aria-hidden size={16} strokeWidth={1.75} />
       </button>
+      <span className="toolbar-popover-wrap" ref={symbolsRef}>
+        <button
+          aria-expanded={symbolsOpen}
+          aria-label="Insert a symbol"
+          className={buttonClass}
+          onMouseDown={(event) => toolbarPrepare(event)}
+          onClick={() => setSymbolsOpen((open) => !open)}
+          title="Insert a special character"
+          type="button"
+        >
+          Ω
+        </button>
+        {symbolsOpen && (
+          <div className="toolbar-popover symbol-palette" role="menu" aria-label="Special characters">
+            {SYMBOLS.map((symbol) => (
+              <button
+                className="symbol-palette__item"
+                key={symbol}
+                onMouseDown={(event) => toolbarPrepare(event)}
+                onClick={() => {
+                  insertEditorText(symbol);
+                  setSymbolsOpen(false);
+                }}
+                type="button"
+              >
+                {symbol}
+              </button>
+            ))}
+          </div>
+        )}
+      </span>
     </div>
   );
 }

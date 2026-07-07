@@ -8,7 +8,9 @@ import {
   setOrderedListStart,
   suggestedOrderedListStart,
 } from "@/lib/page-editor-list";
-import { escapeHtml, RICH_TEXT_FONT_FAMILIES, RICH_TEXT_FONT_SIZES } from "@/lib/rich-text";
+import { blocksToDocumentHtml, sanitizePageDocument } from "@/lib/page-document";
+import { redoStructural, snapshotStructuralChange, undoStructural } from "@/lib/page-editor-undo";
+import { escapeHtml, RICH_TEXT_FONT_FAMILIES, RICH_TEXT_FONT_SIZES, sanitizeRichText } from "@/lib/rich-text";
 import {
   applyToRichTextSelection,
   bindEditorSurface,
@@ -17,6 +19,7 @@ import {
   runEditorCommand,
   saveRichTextSelection,
 } from "@/lib/rich-text-selection";
+import type { ContentBlock } from "@/lib/types";
 
 let onDocumentMutate: (() => void) | null = null;
 let onFormatIssue: ((message: string | null) => void) | null = null;
@@ -280,6 +283,9 @@ export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
   }
 
   const selectionText = range.toString();
+  // Snapshot before the marker goes in, so undoing a committed link restores
+  // the original text with no marker and no anchor.
+  snapshotStructuralChange();
   const marker = document.createElement("span");
   marker.className = LINK_DRAFT_CLASS;
   marker.setAttribute("data-link-draft", "true");
@@ -342,6 +348,7 @@ export function commitLink(request: {
   const text = request.text.trim();
 
   if (request.anchor) {
+    snapshotStructuralChange();
     request.anchor.setAttribute("href", url);
     if (request.newTab) {
       request.anchor.setAttribute("target", "_blank");
@@ -409,6 +416,7 @@ export function removeLink(anchor: HTMLAnchorElement): boolean {
   if (!parent) {
     return false;
   }
+  snapshotStructuralChange();
   while (anchor.firstChild) {
     parent.insertBefore(anchor.firstChild, anchor);
   }
@@ -493,6 +501,7 @@ export function commitNote(request: { body: string; span: HTMLElement | null }):
   }
 
   let created = false;
+  snapshotStructuralChange();
   const ok = applyToRichTextSelection(() => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -539,6 +548,7 @@ export function removeNote(span: HTMLElement): boolean {
   if (!parent) {
     return false;
   }
+  snapshotStructuralChange();
   while (span.firstChild) {
     parent.insertBefore(span.firstChild, span);
   }
@@ -605,6 +615,7 @@ function openAltEditor(figure: HTMLElement) {
 }
 
 export function applyAltText(figure: HTMLElement, alt: string, decorative: boolean, captionText = ""): boolean {
+  snapshotStructuralChange();
   const value = alt.trim();
   const img = figure.querySelector("img");
   img?.setAttribute("alt", decorative ? "" : value);
@@ -695,6 +706,7 @@ export function handleImageControlClick(event: {
     return true;
   }
   const currentWidth = Number(figure.getAttribute("data-width")) || IMAGE_MAX_WIDTH;
+  snapshotStructuralChange();
   switch (action) {
     case "align-left":
     case "align-center":
@@ -751,7 +763,12 @@ export function applyOrderedListStart(start: number): boolean {
   }
   restoreRichTextSelection();
   const list = orderedListFromSelection(surface);
-  if (!list || !setOrderedListStart(list, start)) {
+  if (!list) {
+    recordFormat("listStart", false, "not-in-ordered-list", "Place the cursor in a numbered list first.");
+    return false;
+  }
+  snapshotStructuralChange();
+  if (!setOrderedListStart(list, start)) {
     recordFormat("listStart", false, "not-in-ordered-list", "Place the cursor in a numbered list first.");
     return false;
   }
@@ -762,11 +779,13 @@ export function applyOrderedListStart(start: number): boolean {
 }
 
 function mutateListItem(li: HTMLLIElement, action: "indent" | "outdent"): boolean {
+  const preHtml = getBoundEditorSurface()?.innerHTML;
   const changed = action === "indent" ? indentListItem(li) : outdentListItem(li);
   if (!changed) {
     recordFormat(action, false, "cannot-nest", "Cannot indent/outdent this line further.");
     return false;
   }
+  snapshotStructuralChange(preHtml);
   const surface = li.closest(".wysiwyg-surface");
   surface?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   notifyMutation();
@@ -903,6 +922,7 @@ export function guardHeadingMerge(event: { key: string; preventDefault: () => vo
       return false;
     }
     event.preventDefault();
+    snapshotStructuralChange();
     range.deleteContents();
     if (startBlock.isConnected && isEmptyBlock(startBlock)) {
       startBlock.remove();
@@ -935,6 +955,7 @@ export function guardHeadingMerge(event: { key: string; preventDefault: () => vo
       return false;
     }
     event.preventDefault();
+    snapshotStructuralChange();
     prev.remove();
     placeCaretAtStart(block);
     saveRichTextSelection();
@@ -956,6 +977,7 @@ export function guardHeadingMerge(event: { key: string; preventDefault: () => vo
     return false;
   }
   event.preventDefault();
+  snapshotStructuralChange();
   placeCaretAtStart(next);
   block.remove();
   saveRichTextSelection();
@@ -965,7 +987,7 @@ export function guardHeadingMerge(event: { key: string; preventDefault: () => vo
 }
 
 // Single keydown entry point for editor surfaces: list Tab handling, Ctrl/Cmd+K
-// for links, and the heading-merge guard for Backspace/Delete.
+// for links, structural undo/redo, and the heading-merge guard.
 export function handleEditorKeyDown(event: {
   key: string;
   shiftKey: boolean;
@@ -973,15 +995,45 @@ export function handleEditorKeyDown(event: {
   metaKey: boolean;
   preventDefault: () => void;
 }): boolean {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+  const mod = event.ctrlKey || event.metaKey;
+  const key = event.key.toLowerCase();
+  if (mod && key === "k") {
     event.preventDefault();
     openLinkEditor();
     return true;
+  }
+  if (mod && key === "z" && !event.shiftKey) {
+    if (undoStructural()) {
+      event.preventDefault();
+      return true;
+    }
+    return false;
+  }
+  if (mod && (key === "y" || (key === "z" && event.shiftKey))) {
+    if (redoStructural()) {
+      event.preventDefault();
+      return true;
+    }
+    return false;
   }
   if (event.key === "Backspace" || event.key === "Delete") {
     return guardHeadingMerge(event);
   }
   return handleEditorTabKey(event);
+}
+
+export function performEditorUndo(): boolean {
+  if (undoStructural()) {
+    return true;
+  }
+  return applyEditorCommand("undo");
+}
+
+export function performEditorRedo(): boolean {
+  if (redoStructural()) {
+    return true;
+  }
+  return applyEditorCommand("redo");
 }
 
 // Outline H3s that appear before the document's first H2, mirroring how images
@@ -1011,6 +1063,182 @@ export function insertEditorHtml(html: string): boolean {
     notifyMutation();
   }
   return ok;
+}
+
+export function insertEditorText(text: string): boolean {
+  const ok = runEditorCommand("insertText", text);
+  if (!ok) {
+    recordFormat("insertText", false, "no-selection", "Click in the page body, then insert a symbol.");
+    return false;
+  }
+  notifyMutation();
+  recordFormat("insertText", true, text);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Paste & drop: keep the surface truthful. Clipboard HTML is run through the
+// same sanitizer that runs on save, so what appears after pasting is exactly
+// what will publish. Image data is uploaded to the asset library and inserted
+// as a proper doc-image figure (with alt/align/size controls) instead of the
+// browser's default bare <img>, which the sanitizer would silently drop.
+// ---------------------------------------------------------------------------
+
+const BLOCK_LEVEL_HTML = /<\/?(p|div|h[1-6]|ul|ol|li|table|thead|tbody|tr|blockquote|section|article|figure|pre)[\s>]/i;
+
+function cleanClipboardHtml(html: string): string {
+  if (BLOCK_LEVEL_HTML.test(html)) {
+    return sanitizePageDocument(html);
+  }
+  return sanitizeRichText(html, { keepNotes: true });
+}
+
+async function uploadImageFigureHtml(file: File, kbId: string): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("kbId", kbId);
+  const res = await fetch("/api/admin/assets/images", { method: "POST", body: formData });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as { message?: string }).message ?? "Image upload failed.");
+  }
+  const payload = data as { asset?: { id?: string; title?: string }; url?: string };
+  const block: ContentBlock = {
+    blockId: `block-${crypto.randomUUID()}`,
+    type: "image",
+    assetId: payload.asset?.id,
+    url: payload.url ?? undefined,
+    alt: "",
+    widthPercent: 100,
+  };
+  return blocksToDocumentHtml([block]);
+}
+
+async function insertImagesFromFiles(files: File[], kbId: string) {
+  reportFormatIssue(files.length === 1 ? "Uploading pasted image…" : `Uploading ${files.length} pasted images…`);
+  try {
+    for (const file of files) {
+      const html = await uploadImageFigureHtml(file, kbId);
+      if (!insertEditorHtml(html)) {
+        // Selection was lost while uploading — append at the end of the
+        // surface rather than dropping an already-uploaded image.
+        const surface = getBoundEditorSurface();
+        if (surface) {
+          surface.insertAdjacentHTML("beforeend", html);
+          surface.dispatchEvent(new InputEvent("input", { bubbles: true }));
+        }
+      }
+    }
+    onFormatIssue?.(null);
+    recordFormat("pasteImage", true, `${files.length} uploaded`);
+  } catch (caught) {
+    recordFormat(
+      "pasteImage",
+      false,
+      "upload-failed",
+      caught instanceof Error ? caught.message : "Image upload failed. Try the Insert media button instead.",
+    );
+  }
+}
+
+export function handleEditorPaste(
+  event: { clipboardData: DataTransfer | null; preventDefault: () => void },
+  kbId: string,
+): boolean {
+  const clipboard = event.clipboardData;
+  if (!clipboard) {
+    return false;
+  }
+  const imageFiles = Array.from(clipboard.files ?? []).filter((file) => file.type.startsWith("image/"));
+  if (imageFiles.length > 0) {
+    event.preventDefault();
+    saveRichTextSelection();
+    void insertImagesFromFiles(imageFiles, kbId);
+    return true;
+  }
+  const html = clipboard.getData("text/html");
+  if (html && html.trim()) {
+    event.preventDefault();
+    saveRichTextSelection();
+    const clean = cleanClipboardHtml(html);
+    if (clean.trim()) {
+      snapshotStructuralChange();
+      runEditorCommand("insertHTML", clean);
+      notifyMutation();
+      recordFormat("pasteHtml", true, `${clean.length} chars sanitized`);
+    }
+    return true;
+  }
+  // Plain text: the browser's default insertion is already safe.
+  return false;
+}
+
+function caretRangeFromPoint(x: number, y: number): Range | null {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof doc.caretRangeFromPoint === "function") {
+    return doc.caretRangeFromPoint(x, y);
+  }
+  const position = doc.caretPositionFromPoint?.(x, y);
+  if (!position) {
+    return null;
+  }
+  const range = document.createRange();
+  range.setStart(position.offsetNode, position.offset);
+  range.collapse(true);
+  return range;
+}
+
+export function handleEditorDrop(
+  event: { dataTransfer: DataTransfer | null; clientX: number; clientY: number; preventDefault: () => void },
+  kbId: string,
+): boolean {
+  const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
+  if (files.length === 0) {
+    return false;
+  }
+  event.preventDefault();
+  const range = caretRangeFromPoint(event.clientX, event.clientY);
+  const selection = window.getSelection();
+  if (range && selection) {
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  saveRichTextSelection();
+  void insertImagesFromFiles(files, kbId);
+  return true;
+}
+
+// Copy a shareable link to the heading the caret is in. Headings carry stable
+// ids that double as public URL anchors.
+export function copyHeadingAnchor(pageUrl?: string): boolean {
+  const surface = getBoundEditorSurface();
+  const selection = window.getSelection();
+  if (!surface || !selection || selection.rangeCount === 0) {
+    recordFormat("copyAnchor", false, "no-selection", "Click inside a heading, then copy its anchor link.");
+    return false;
+  }
+  const node = selection.getRangeAt(0).commonAncestorContainer;
+  const element = node.nodeType === 1 ? (node as Element) : node.parentElement;
+  const heading = element?.closest("h2, h3") as HTMLElement | null;
+  if (!heading || !surface.contains(heading)) {
+    recordFormat("copyAnchor", false, "not-in-heading", "Click inside a heading, then copy its anchor link.");
+    return false;
+  }
+  const id = heading.getAttribute("id") ?? heading.getAttribute("data-block-id");
+  if (!id) {
+    recordFormat("copyAnchor", false, "no-id", "This heading has no anchor yet — save the page first.");
+    return false;
+  }
+  const link = `${pageUrl ?? ""}#${id}`;
+  navigator.clipboard
+    ?.writeText(link)
+    .then(() => reportFormatIssue(`Anchor link copied: ${link}`))
+    .catch(() => reportFormatIssue(`Anchor link (copy manually): ${link}`));
+  recordFormat("copyAnchor", true, link);
+  return true;
 }
 
 export function watchEditorSelectionForDebug(): () => void {

@@ -84,6 +84,12 @@ describe("page-document", () => {
     expect(paragraph).toContain("font-size");
   });
 
+  it("maps pasted H1 to H2 and H4-H6 to H3 instead of demoting to paragraphs", () => {
+    const pasted = "<h1>Top</h1><h4>Deep</h4><h6>Deeper</h6>";
+    const blocks = documentHtmlToBlocks(pasted);
+    expect(blocks.map((b) => (b.type === "heading" ? `h${b.level}` : b.type))).toEqual(["h2", "h3", "h3"]);
+  });
+
   it("drops scripts and event handlers pasted into the HTML source", () => {
     const pasted =
       '<p data-block-id="p1">Hi<script>alert(1)</script></p><div onclick="evil()">x</div>';
