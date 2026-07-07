@@ -117,7 +117,7 @@ export function AdminStagedImportReview({
       const response = await fetch(`/api/admin/import/staged/${detail.import.id}/commit`, {
         method: "POST",
       });
-      const data = await parseJsonResponse<{ message?: string; url?: string }>(
+      const data = await parseJsonResponse<{ message?: string; url?: string; pageId?: string }>(
         response,
         "Could not commit the import.",
       );
