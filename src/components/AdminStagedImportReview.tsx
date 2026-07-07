@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { parseJsonResponse } from "@/lib/http";
 import type { ContentBlock, StagedImportDetail, StagedImportMedia } from "@/lib/types";
 
 export interface ImportKbOption {
@@ -95,7 +96,10 @@ export function AdminStagedImportReview({
         })),
       }),
     });
-    const data = await response.json();
+    const data = await parseJsonResponse<StagedImportDetail & { message?: string }>(
+      response,
+      "Could not save review.",
+    );
     if (!response.ok) {
       throw new Error(data.message ?? "Could not save review.");
     }
@@ -113,7 +117,10 @@ export function AdminStagedImportReview({
       const response = await fetch(`/api/admin/import/staged/${detail.import.id}/commit`, {
         method: "POST",
       });
-      const data = await response.json();
+      const data = await parseJsonResponse<{ message?: string; url?: string; pageId?: string }>(
+        response,
+        "Could not commit the import.",
+      );
       if (!response.ok) {
         throw new Error(data.message ?? "Could not commit the import.");
       }
@@ -136,7 +143,7 @@ export function AdminStagedImportReview({
       const response = await fetch(`/api/admin/import/staged/${detail.import.id}`, {
         method: "DELETE",
       });
-      const data = await response.json();
+      const data = await parseJsonResponse<{ message?: string }>(response, "Could not delete staged import.");
       if (!response.ok) {
         throw new Error(data.message ?? "Could not delete staged import.");
       }
@@ -277,6 +284,7 @@ export function AdminStagedImportReview({
               {media.map((row) => (
                 <li key={row.id} style={{ marginBottom: "1rem" }}>
                   <div className="meta">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       alt=""
                       src={row.temporaryUrl}
@@ -367,7 +375,7 @@ export function AdminStagedImportReview({
             <h3>Thumbnails</h3>
             <div className="import-thumbs">
               {imageUrls.map((url, index) => (
-
+                // eslint-disable-next-line @next/next/no-img-element
                 <img alt="" key={`${url}-${index}`} src={url} />
               ))}
             </div>

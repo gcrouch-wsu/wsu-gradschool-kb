@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { HOME_KB_PAGE_SIZE, KbListPagination } from "@/components/KbListPagination";
 import { PageBlocks } from "@/components/PageBlocks";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { getPublishedKbs } from "@/lib/kb-store";
@@ -39,17 +40,27 @@ async function getHomeKbs(): Promise<HomeKb[]> {
     }
   }
 
-  return list;
+  return list.sort((a, b) => b.updatedOn.localeCompare(a.updatedOn));
 }
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ kbPage?: string }>;
+}) {
+  const { kbPage } = await searchParams;
   const [settings, kbs] = await Promise.all([loadSiteSettings(), getHomeKbs()]);
+  const requestedPage = Math.max(1, Number.parseInt(kbPage ?? "1", 10) || 1);
+  const totalPages = Math.max(1, Math.ceil(kbs.length / HOME_KB_PAGE_SIZE));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const pageStart = (currentPage - 1) * HOME_KB_PAGE_SIZE;
+  const pageKbs = kbs.slice(pageStart, pageStart + HOME_KB_PAGE_SIZE);
   const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
 
   const themeVars: CSSProperties = {
     ...(themeToCssVars(globalTheme) as CSSProperties),
     ...(settings.contentWidth ? { "--content-width": `${settings.contentWidth}px` } : {}),
-  };
+  };  
 
   const heroAlignClass =
     settings.heroAlignment === "center"
@@ -95,20 +106,27 @@ export default async function HomePage() {
                   <p>No knowledge bases are published yet. Check back soon for guides and resources.</p>
                 </div>
               ) : (
-                <ul className="kb-list">
-                  {kbs.map((kb) => (
-                    <li className="kb-list__item" key={kb.id}>
-                      <div className="kb-list__main">
-                        <h3 className="kb-list__title">
-                          <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
-                          {kb.isDraft && <span className="badge badge--draft">Draft</span>}
-                        </h3>
-                        {kb.description && <p className="kb-list__desc">{kb.description}</p>}
-                      </div>
-                      <p className="kb-list__meta meta">Updated {formatDate(kb.updatedOn)}</p>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="kb-list">
+                    {pageKbs.map((kb) => (
+                      <li className="kb-list__item" key={kb.id}>
+                        <div className="kb-list__main">
+                          <h3 className="kb-list__title">
+                            <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
+                            {kb.isDraft && <span className="badge badge--draft">Draft</span>}
+                          </h3>
+                          {kb.description && <p className="kb-list__desc">{kb.description}</p>}
+                        </div>
+                        <p className="kb-list__meta meta">Updated {formatDate(kb.updatedOn)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <KbListPagination
+                    currentPage={currentPage}
+                    totalItems={kbs.length}
+                    totalPages={totalPages}
+                  />
+                </>
               )}
             </>
           )}

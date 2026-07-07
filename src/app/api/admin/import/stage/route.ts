@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createStagedImportFromDocx } from "@/lib/staged-imports";
+import { createStagedImportFromUpload } from "@/lib/staged-imports";
 import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 
@@ -15,7 +15,10 @@ export async function POST(request: Request) {
   const file = formData?.get("file");
   const kbId = formData?.get("kbId");
   if (!(file instanceof File) || typeof kbId !== "string" || !kbId.trim()) {
-    return NextResponse.json({ message: "Knowledge base and .docx file are required." }, { status: 400 });
+    return NextResponse.json(
+      { message: "Knowledge base and a .docx or .doc file are required." },
+      { status: 400 },
+    );
   }
 
   const denied = await requireKbAccess(guard.session, kbId.trim());
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const detail = await createStagedImportFromDocx(kbId.trim(), file, guard.email);
+    const detail = await createStagedImportFromUpload(kbId.trim(), file, guard.email);
     return NextResponse.json({
       ok: true,
       stagedImportId: detail.import.id,

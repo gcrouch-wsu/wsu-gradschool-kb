@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
 import {
   DEFAULT_THEME,
   HEADING_FONT_STYLES,
@@ -45,6 +46,15 @@ const PROCEDURE_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: str
 
 const FONT_KEYS = Object.keys(SAFE_FONTS);
 const HEADING_LEVELS: HeadingLevel[] = ["h1", "h2", "h3", "h4"];
+const FONT_OPTIONS = FONT_KEYS.map((key) => ({
+  label: SAFE_FONTS[key].label,
+  value: key,
+}));
+const HEADING_FONT_OPTIONS = [{ label: "Use heading font", value: "" }, ...FONT_OPTIONS];
+const HEADING_WEIGHT_OPTIONS = HEADING_WEIGHTS.map((weight) => ({ label: weight, value: weight }));
+const HEADING_STYLE_OPTIONS = HEADING_FONT_STYLES.map((style) => ({ label: style, value: style }));
+const HEADING_DECORATION_OPTIONS = HEADING_TEXT_DECORATIONS.map((decoration) => ({ label: decoration, value: decoration }));
+const HEADING_TRANSFORM_OPTIONS = HEADING_TEXT_TRANSFORMS.map((transform) => ({ label: transform, value: transform }));
 
 const TYPO_FIELDS: {
   key: keyof KbTheme["typography"];
@@ -278,41 +288,37 @@ export function ThemeEditor({
 
         <fieldset className="fieldset">
           <legend>Fonts</legend>
-          <div className="field-row">
-            <label>
-              <span className="meta">Body font</span>
-              <select className="input" onChange={(e) => setFont("body", e.target.value)} value={theme.fonts.body}>
-                {FONT_KEYS.map((k) => (
-                  <option key={k} value={k}>
-                    {SAFE_FONTS[k].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="meta">Heading font</span>
-              <select className="input" onChange={(e) => setFont("heading", e.target.value)} value={theme.fonts.heading}>
-                {FONT_KEYS.map((k) => (
-                  <option key={k} value={k}>
-                    {SAFE_FONTS[k].label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="field-row theme-editor__font-row">
+            <div>
+              <DropdownSelect
+                label="Body font"
+                onChange={(value) => setFont("body", value)}
+                options={FONT_OPTIONS}
+                searchable={false}
+                value={theme.fonts.body}
+              />
+            </div>
+            <div>
+              <DropdownSelect
+                label="Heading font"
+                onChange={(value) => setFont("heading", value)}
+                options={FONT_OPTIONS}
+                searchable={false}
+                value={theme.fonts.heading}
+              />
+            </div>
           </div>
-          <div className="theme-heading-grid" style={{ marginTop: "1rem" }}>
+          <div className="theme-heading-grid theme-editor__heading-fonts">
             {HEADING_LEVELS.map((level) => (
-              <label key={level}>
-                <span className="meta">{level.toUpperCase()} font</span>
-                <select className="input" onChange={(e) => setFont(level, e.target.value)} value={theme.fonts[level]}>
-                  <option value="">Use heading font</option>
-                  {FONT_KEYS.map((k) => (
-                    <option key={k} value={k}>
-                      {SAFE_FONTS[k].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div key={level}>
+                <DropdownSelect
+                  label={`${level.toUpperCase()} font`}
+                  onChange={(value) => setFont(level, value)}
+                  options={HEADING_FONT_OPTIONS}
+                  searchable={false}
+                  value={theme.fonts[level]}
+                />
+              </div>
             ))}
           </div>
         </fieldset>
@@ -342,64 +348,34 @@ export function ThemeEditor({
             {HEADING_LEVELS.map((level) => (
               <div className="theme-heading-style" key={level}>
                 <span className="meta">{level.toUpperCase()}</span>
-                <label>
-                  <span className="meta">Weight</span>
-                  <select
-                    className="input"
-                    onChange={(e) => setHeadingStyle(level, "weight", e.target.value)}
-                    value={theme.headingStyles[level].weight}
-                  >
-                    {HEADING_WEIGHTS.map((weight) => (
-                      <option key={weight} value={weight}>
-                        {weight}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="meta">Style</span>
-                  <select
-                    className="input"
-                    onChange={(e) => setHeadingStyle(level, "style", e.target.value as ThemeHeadingStyle["style"])}
-                    value={theme.headingStyles[level].style}
-                  >
-                    {HEADING_FONT_STYLES.map((style) => (
-                      <option key={style} value={style}>
-                        {style}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="meta">Decoration</span>
-                  <select
-                    className="input"
-                    onChange={(e) =>
-                      setHeadingStyle(level, "decoration", e.target.value as ThemeHeadingStyle["decoration"])
-                    }
-                    value={theme.headingStyles[level].decoration}
-                  >
-                    {HEADING_TEXT_DECORATIONS.map((decoration) => (
-                      <option key={decoration} value={decoration}>
-                        {decoration}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="meta">Case</span>
-                  <select
-                    className="input"
-                    onChange={(e) => setHeadingStyle(level, "transform", e.target.value as ThemeHeadingStyle["transform"])}
-                    value={theme.headingStyles[level].transform}
-                  >
-                    {HEADING_TEXT_TRANSFORMS.map((transform) => (
-                      <option key={transform} value={transform}>
-                        {transform}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <DropdownSelect
+                  label="Weight"
+                  onChange={(value) => setHeadingStyle(level, "weight", value)}
+                  options={HEADING_WEIGHT_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].weight}
+                />
+                <DropdownSelect
+                  label="Style"
+                  onChange={(value) => setHeadingStyle(level, "style", value as ThemeHeadingStyle["style"])}
+                  options={HEADING_STYLE_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].style}
+                />
+                <DropdownSelect
+                  label="Decoration"
+                  onChange={(value) => setHeadingStyle(level, "decoration", value as ThemeHeadingStyle["decoration"])}
+                  options={HEADING_DECORATION_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].decoration}
+                />
+                <DropdownSelect
+                  label="Case"
+                  onChange={(value) => setHeadingStyle(level, "transform", value as ThemeHeadingStyle["transform"])}
+                  options={HEADING_TRANSFORM_OPTIONS}
+                  searchable={false}
+                  value={theme.headingStyles[level].transform}
+                />
               </div>
             ))}
           </div>
@@ -463,7 +439,7 @@ export function ThemeEditor({
           </div>
         </fieldset>
 
-        <div className="admin-actions">
+        <div className="admin-actions theme-editor__actions">
           <button className="button" disabled={saving || !dbEnabled} onClick={save} type="button">
             {saving ? "Saving…" : "Save styles"}
           </button>

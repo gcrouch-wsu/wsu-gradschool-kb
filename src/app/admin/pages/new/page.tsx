@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { BookOpen } from "lucide-react";
 import type { KnowledgeBase } from "@/lib/types";
 import Link from "next/link";
+import { DropdownSelect } from "@/components/DropdownSelect";
+import { PageLoader } from "@/components/PageLoader";
 
 export default function NewPageScreen() {
   const router = useRouter();
@@ -58,7 +61,7 @@ export default function NewPageScreen() {
     }
   }
 
-  if (loading) return <div className="page-shell"><p>Loading...</p></div>;
+  if (loading) return <PageLoader label="Loading page form" />;
 
   return (
     <div className="page-shell">
@@ -69,14 +72,18 @@ export default function NewPageScreen() {
       <form className="form card" onSubmit={handleSubmit}>
         {error && <p className="alert alert--error">{error}</p>}
 
-        <label>
-          <span className="meta">Knowledge Base</span>
-          <select className="input" required value={kbId} onChange={e => setKbId(e.target.value)}>
-            {kbs.map(kb => (
-              <option key={kb.id} value={kb.id}>{kb.title}</option>
-            ))}
-          </select>
-        </label>
+        <DropdownSelect
+          label="Knowledge Base"
+          onChange={setKbId}
+          options={kbs.map((kb) => ({
+            icon: <BookOpen aria-hidden size={18} strokeWidth={1.75} />,
+            label: kb.title,
+            searchText: kb.slug,
+            value: kb.id,
+          }))}
+          searchLabel="Search knowledge bases"
+          value={kbId}
+        />
 
         <label>
           <span className="meta">Title</span>

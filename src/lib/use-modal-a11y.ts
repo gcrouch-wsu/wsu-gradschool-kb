@@ -13,7 +13,9 @@ export function useModalA11y<T extends HTMLElement = HTMLDivElement>(onClose: ()
   const ref = useRef<T>(null);
 
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;

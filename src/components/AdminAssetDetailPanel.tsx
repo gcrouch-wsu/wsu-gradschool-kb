@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FileUploadPicker } from "@/components/FileUploadPicker";
 import type { AssetUsage, AssetVersion } from "@/lib/types";
 
 export function AdminAssetDetailPanel({
@@ -28,6 +29,34 @@ export function AdminAssetDetailPanel({
   const [message, setMessage] = useState<string | null>(null);
 
   const draft = versions.find((version) => version.status === "draft");
+  const currentMimeType = versions[0]?.mimeType?.toLowerCase() ?? "";
+  const isImageAsset = currentMimeType.startsWith("image/");
+  const acceptedReplacementTypes = isImageAsset
+    ? ".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/jpg,image/gif,image/webp"
+    : ".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+
+  function validateReplacementFile(nextFile: File) {
+    const normalizedType = nextFile.type.toLowerCase();
+    const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]);
+    const allowedDocumentTypes = new Set([
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
+    ]);
+    const isAllowed = isImageAsset
+      ? allowedImageTypes.has(normalizedType)
+      : allowedDocumentTypes.has(normalizedType);
+    if (!isAllowed) {
+      return isImageAsset
+        ? "Choose an image file (PNG, JPG, GIF, or WEBP)."
+        : "Choose a PDF, Word, or text file.";
+    }
+    if (nextFile.size > 25 * 1024 * 1024) {
+      return "Choose a file that is 25 MB or smaller.";
+    }
+    return null;
+  }
 
   async function handleReplace(event: React.FormEvent) {
     event.preventDefault();
@@ -150,7 +179,28 @@ export function AdminAssetDetailPanel({
   return (
     <div className="import-grid">
       <section className="card">
-        <h2>Replace file</h2>
+        <div className="asset-replace__header">
+          <h2>Replace file</h2>
+          {assetStatus === "archived" ? (
+            <button
+              className="button asset-replace__status-action"
+              disabled={busy}
+              onClick={() => handleStatusChange("active")}
+              type="button"
+            >
+              {busy ? "Restoring..." : "Restore (make active)"}
+            </button>
+          ) : (
+            <button
+              className="button button--ghost asset-replace__status-action"
+              disabled={busy}
+              onClick={() => handleStatusChange("archived")}
+              type="button"
+            >
+              {busy ? "Archiving..." : "Archive asset"}
+            </button>
+          )}
+        </div>
         <p className="meta">
           Upload a replacement. It is saved as a draft version until you activate it. The public
           slug does not change.
@@ -163,29 +213,10 @@ export function AdminAssetDetailPanel({
             Public URL: <a href={publicUrl}>{publicUrl}</a>
           </p>
         )}
-        <div className="admin-actions" style={{ marginTop: "0.75rem" }}>
-          {assetStatus === "archived" ? (
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => handleStatusChange("active")}
-              type="button"
-            >
-              {busy ? "Restoring..." : "Restore (make active)"}
-            </button>
-          ) : (
-            <button
-              className="button button--ghost"
-              disabled={busy}
-              onClick={() => handleStatusChange("archived")}
-              type="button"
-            >
-              {busy ? "Archiving..." : "Archive asset"}
-            </button>
-          )}
+        <div className="admin-actions asset-replace__actions">
           {canDelete && assetStatus === "archived" && usages.length === 0 && (
             <button
-              className="button button--ghost"
+              className="button button--ghost asset-replace__delete-action"
               disabled={busy}
               onClick={handleDelete}
               style={{ color: "var(--wsu-crimson)" }}
@@ -198,10 +229,20 @@ export function AdminAssetDetailPanel({
         {error && <p className="alert">{error}</p>}
         {message && <p className="alert">{message}</p>}
         <form className="form" onSubmit={handleReplace}>
-          <label>
-            <span className="meta">Replacement file</span>
-            <input onChange={(e) => setFile(e.target.files?.[0] ?? null)} type="file" />
-          </label>
+          <FileUploadPicker
+            accept={acceptedReplacementTypes}
+            file={file}
+            helperText={
+              isImageAsset
+                ? "PNG, JPG, GIF, or WEBP up to 25 MB"
+                : "PDF, Word, or text document up to 25 MB"
+            }
+            id={`replacement-file-${assetId}`}
+            label="Replacement file"
+            onError={setError}
+            onFileChange={setFile}
+            validateFile={validateReplacementFile}
+          />
           <button className="button" disabled={busy || !file} type="submit">
             {busy ? "Uploading…" : "Upload draft replacement"}
           </button>

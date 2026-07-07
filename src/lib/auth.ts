@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual, scryptSync, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS } from "@/lib/session-constants";
-import type { User, UserRole } from "@/lib/types";
+import type { UserRole } from "@/lib/types";
 import { loadUserByEmail, loadUserById, isUserAssignedToKb, listUserAssignments } from "@/lib/db-users";
 
 export { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS };

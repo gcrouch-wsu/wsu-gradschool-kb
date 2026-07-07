@@ -144,7 +144,7 @@ export type ContentBlock =
     };
 
 export type StagedImportStatus = "uploaded" | "parsed" | "needs_review" | "failed";
-export type StagedImportSourceType = "docx";
+export type StagedImportSourceType = "docx" | "doc";
 export type StagedImportMediaReviewStatus = "pending" | "approved" | "rejected";
 
 export interface StagedImport {

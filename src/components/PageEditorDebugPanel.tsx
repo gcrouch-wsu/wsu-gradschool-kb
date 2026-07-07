@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import {
   getPageEditorDebugSnapshot,
   isPageEditorDebugEnabled,
@@ -19,14 +19,11 @@ function row(label: string, value: string | boolean) {
   );
 }
 
-export function PageEditorDebugPanel() {
-  const [enabled, setEnabled] = useState(false);
-  const [snap, setSnap] = useState(getPageEditorDebugSnapshot);
+const getServerSnapshot = () => false;
 
-  useEffect(() => {
-    setEnabled(isPageEditorDebugEnabled());
-    return subscribePageEditorDebug(() => setSnap(getPageEditorDebugSnapshot()));
-  }, []);
+export function PageEditorDebugPanel() {
+  const enabled = useSyncExternalStore(subscribePageEditorDebug, isPageEditorDebugEnabled, getServerSnapshot);
+  const snap = useSyncExternalStore(subscribePageEditorDebug, getPageEditorDebugSnapshot, getPageEditorDebugSnapshot);
 
   if (!enabled) {
     return null;

@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { DropdownSelect } from "@/components/DropdownSelect";
+import { FileUploadPicker } from "@/components/FileUploadPicker";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
+import { PageLoader } from "@/components/PageLoader";
 import { ThemeEditor } from "@/components/ThemeEditor";
 import { DEFAULT_THEME, SAFE_FONTS } from "@/lib/kb-theme";
 import {
@@ -14,7 +17,22 @@ import {
   type SiteSettings,
 } from "@/lib/site-settings";
 
+const acceptedLogoTypes = "image/png,image/jpeg,image/gif,image/webp";
+const maxLogoSizeBytes = 5 * 1024 * 1024;
+
 export default function AdminSettingsPage() {
+  const logoUploadFieldId = useId();
+  const brandWeightOptions = BRAND_TEXT_WEIGHTS.map((weight) => ({
+    label: weight === "" ? "Default" : weight,
+    value: weight,
+  }));
+  const brandFontOptions = [
+    { label: "Default", value: "" },
+    ...Object.entries(SAFE_FONTS).map(([key, font]) => ({
+      label: font.label,
+      value: key,
+    })),
+  ];
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -22,6 +40,7 @@ export default function AdminSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [dbEnabled, setDbEnabled] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [activeTab, setActiveTab] = useState<"general" | "branding" | "home" | "styling">("general");
 
   useEffect(() => {
@@ -47,6 +66,7 @@ export default function AdminSettingsPage() {
         throw new Error(data.message || "Failed to upload logo");
       }
       update("logoUrl", data.url);
+      setLogoFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error uploading logo");
     } finally {
@@ -54,7 +74,25 @@ export default function AdminSettingsPage() {
     }
   }
 
-  function update(field: keyof SiteSettings, value: any) {
+  function validateLogoFile(file: File) {
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
+      return "Use a PNG, JPG, GIF, or WebP image.";
+    }
+    if (file.size > maxLogoSizeBytes) {
+      return "Logo is larger than 5 MB.";
+    }
+    return null;
+  }
+
+  function handleLogoFileChange(file: File | null) {
+    setError(null);
+    setLogoFile(file);
+    if (file) {
+      void handleLogoUpload(file);
+    }
+  }
+
+  function update<K extends keyof SiteSettings>(field: K, value: SiteSettings[K]) {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
     setSaved(false);
   }
@@ -110,7 +148,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  if (loading) return <div className="page-shell"><p>Loading settings…</p></div>;
+  if (loading) return <PageLoader label="Loading settings" />;
 
   return (
     <div className="page-shell">
@@ -151,9 +189,9 @@ export default function AdminSettingsPage() {
       </div>
 
       {settings && activeTab === "general" && (
-        <form className="form" onSubmit={handleSave}>
-          <div className="grid grid--two">
-            <section className="card">
+        <form className="form form--wide" onSubmit={handleSave}>
+          <div className="settings-general__layout">
+            <section className="card settings-general__hero">
               <h2>Home Page Hero</h2>
               <p className="meta">The main heading and introduction on the site home page.</p>
               <label>
@@ -184,7 +222,7 @@ export default function AdminSettingsPage() {
               </label>
             </section>
 
-            <section className="card">
+            <section className="card settings-general__header">
               <h2>Site Header</h2>
               <div className="field-group">
                 <span className="meta">Navigation Links</span>
@@ -217,29 +255,25 @@ export default function AdminSettingsPage() {
                 </button>
               </div>
             </section>
-          </div>
 
-          <section className="card" style={{ marginTop: "2rem" }}>
-            <h2>Site Footer</h2>
-            <div className="grid grid--two">
-              <div>
-                <label>
-                  <span className="meta">Copyright/Brand Text</span>
-                  <input
-                    className="input"
-                    value={settings.footerText}
-                    onChange={(e) => update("footerText", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span className="meta">Contact Information</span>
-                  <input
-                    className="input"
-                    value={settings.contactInfo}
-                    onChange={(e) => update("contactInfo", e.target.value)}
-                  />
-                </label>
-              </div>
+            <section className="card settings-general__footer">
+              <h2>Site Footer</h2>
+              <label>
+                <span className="meta">Copyright/Brand Text</span>
+                <input
+                  className="input"
+                  value={settings.footerText}
+                  onChange={(e) => update("footerText", e.target.value)}
+                />
+              </label>
+              <label>
+                <span className="meta">Contact Information</span>
+                <input
+                  className="input"
+                  value={settings.contactInfo}
+                  onChange={(e) => update("contactInfo", e.target.value)}
+                />
+              </label>
               <div className="field-group">
                 <span className="meta">Footer Links</span>
                 {settings.footerLinks.map((link, i) => (
@@ -270,10 +304,10 @@ export default function AdminSettingsPage() {
                   + Add Link
                 </button>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
 
-          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+          <div className="admin-actions settings-form__actions settings-general__actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save general settings"}
             </button>
@@ -282,8 +316,8 @@ export default function AdminSettingsPage() {
       )}
 
       {settings && activeTab === "branding" && (
-        <form className="form" onSubmit={handleSave}>
-          <div className="grid grid--two">
+        <form className="form form--wide" onSubmit={handleSave}>
+          <div className="grid settings-branding__layout">
             <section className="card">
               <h2>Site Logo</h2>
               <p className="meta">
@@ -317,19 +351,17 @@ export default function AdminSettingsPage() {
                 <p className="meta">No logo set.</p>
               )}
 
-              <label>
-                <span className="meta">Upload an image (PNG, JPG, GIF, WebP — max 5 MB)</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp"
-                  disabled={logoUploading}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleLogoUpload(file);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+              <FileUploadPicker
+                accept={acceptedLogoTypes}
+                disabled={logoUploading}
+                file={logoFile}
+                helperText="PNG, JPG, GIF, or WebP up to 5 MB"
+                id={logoUploadFieldId}
+                label="Upload an image"
+                onError={setError}
+                onFileChange={handleLogoFileChange}
+                validateFile={validateLogoFile}
+              />
               {logoUploading && <p className="meta">Uploading…</p>}
 
               <label>
@@ -397,66 +429,47 @@ export default function AdminSettingsPage() {
                   </label>
                 </div>
                 <div className="field-row">
-                  <label style={{ flex: 1 }}>
-                    <span className="meta">Weight</span>
-                    <select
-                      className="input"
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Weight"
+                      onChange={(value) => update("brandTextWeight", value as BrandTextWeight)}
+                      options={brandWeightOptions}
+                      searchable={false}
                       value={settings.brandTextWeight}
-                      onChange={(e) => update("brandTextWeight", e.target.value as BrandTextWeight)}
-                    >
-                      {BRAND_TEXT_WEIGHTS.map((w) => (
-                        <option key={w || "default"} value={w}>
-                          {w === "" ? "Default" : w}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={{ flex: 1 }}>
-                    <span className="meta">Font</span>
-                    <select
-                      className="input"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Font"
+                      onChange={(value) => update("brandTextFont", value)}
+                      options={brandFontOptions}
+                      searchable={false}
                       value={settings.brandTextFont}
-                      onChange={(e) => update("brandTextFont", e.target.value)}
-                    >
-                      <option value="">Default</option>
-                      {Object.entries(SAFE_FONTS).map(([key, font]) => (
-                        <option key={key} value={key}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    />
+                  </div>
                 </div>
               </div>
 
-              <label>
-                <span className="meta">Header alignment</span>
-                <select
-                  className="input"
-                  value={settings.headerAlignment}
-                  onChange={(e) => update("headerAlignment", e.target.value as Alignment)}
-                >
-                  {ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a.charAt(0).toUpperCase() + a.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span className="meta">Home hero text alignment</span>
-                <select
-                  className="input"
-                  value={settings.heroAlignment}
-                  onChange={(e) => update("heroAlignment", e.target.value as Alignment)}
-                >
-                  {ALIGNMENTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a.charAt(0).toUpperCase() + a.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <DropdownSelect
+                label="Header alignment"
+                onChange={(value) => update("headerAlignment", value as Alignment)}
+                options={ALIGNMENTS.map((alignment) => ({
+                  label: alignment.charAt(0).toUpperCase() + alignment.slice(1),
+                  value: alignment,
+                }))}
+                searchable={false}
+                value={settings.headerAlignment}
+              />
+              <DropdownSelect
+                label="Home hero text alignment"
+                onChange={(value) => update("heroAlignment", value as Alignment)}
+                options={ALIGNMENTS.map((alignment) => ({
+                  label: alignment.charAt(0).toUpperCase() + alignment.slice(1),
+                  value: alignment,
+                }))}
+                searchable={false}
+                value={settings.heroAlignment}
+              />
               <label>
                 <span className="meta">Max content width in pixels (leave 0 for default 1320)</span>
                 <input
@@ -471,7 +484,7 @@ export default function AdminSettingsPage() {
             </section>
           </div>
 
-          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+          <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save logo & layout"}
             </button>
@@ -480,105 +493,96 @@ export default function AdminSettingsPage() {
       )}
 
       {settings && activeTab === "home" && (
-        <form className="form" onSubmit={handleSave}>
-          <section className="card" style={{ marginBottom: "2rem" }}>
-            <h2>Home Page Rich Content</h2>
-            <p className="lead">
-              Use the block editor to add custom content below the hero section.
-            </p>
-            <PageDocumentEditor
-              blocks={settings.homeBlocks}
-              kbId="global"
-              kbSlug="global"
-              onChange={(blocks) => update("homeBlocks", blocks)}
-            />
-          </section>
-
-          <section className="card">
-            <h2>Knowledge Base List Section</h2>
-            <p className="meta">Control how the list of published knowledge bases appears.</p>
-            <label className="checkbox-inline" style={{ marginBottom: "1rem" }}>
-              <input
-                type="checkbox"
-                checked={settings.showKbList}
-                onChange={(e) => update("showKbList", e.target.checked)}
+        <form className="form form--wide" onSubmit={handleSave}>
+          <div className="grid settings-home__layout">
+            <section className="card">
+              <h2>Home Page Rich Content</h2>
+              <p className="lead">
+                Use the block editor to add custom content below the hero section.
+              </p>
+              <PageDocumentEditor
+                blocks={settings.homeBlocks}
+                kbId="global"
+                kbSlug="global"
+                onChange={(blocks) => update("homeBlocks", blocks)}
               />
-              <span>Show the list of published knowledge bases</span>
-            </label>
-            <label>
-              <span className="meta">Section Heading</span>
-              <input
-                className="input"
-                value={settings.kbListTitle}
-                onChange={(e) => update("kbListTitle", e.target.value)}
-              />
-            </label>
+            </section>
 
-            <div className="field-group" style={{ marginTop: "1rem" }}>
-              <span className="meta">Section heading style (leave any field at default to inherit)</span>
-              <div className="field-row">
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Color</span>
-                  <div className="theme-color__inputs">
-                    <input
-                      aria-label="Section heading color"
-                      type="color"
-                      value={settings.kbListTitleColor || "#1d1a1b"}
-                      onChange={(e) => update("kbListTitleColor", e.target.value)}
-                    />
+            <section className="card">
+              <h2>Knowledge Base List Section</h2>
+              <p className="meta">Control how the list of published knowledge bases appears.</p>
+              <label className="checkbox-inline" style={{ marginBottom: "1rem" }}>
+                <input
+                  type="checkbox"
+                  checked={settings.showKbList}
+                  onChange={(e) => update("showKbList", e.target.checked)}
+                />
+                <span>Show the list of published knowledge bases</span>
+              </label>
+              <label>
+                <span className="meta">Section Heading</span>
+                <input
+                  className="input"
+                  value={settings.kbListTitle}
+                  onChange={(e) => update("kbListTitle", e.target.value)}
+                />
+              </label>
+
+              <div className="field-group" style={{ marginTop: "1rem" }}>
+                <span className="meta">Section heading style (leave any field at default to inherit)</span>
+                <div className="field-row">
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Color</span>
+                    <div className="theme-color__inputs">
+                      <input
+                        aria-label="Section heading color"
+                        type="color"
+                        value={settings.kbListTitleColor || "#1d1a1b"}
+                        onChange={(e) => update("kbListTitleColor", e.target.value)}
+                      />
+                      <input
+                        className="input"
+                        placeholder="Default"
+                        value={settings.kbListTitleColor}
+                        onChange={(e) => update("kbListTitleColor", e.target.value)}
+                      />
+                    </div>
+                  </label>
+                  <label style={{ flex: 1 }}>
+                    <span className="meta">Size (e.g. 1.75rem or 28px)</span>
                     <input
                       className="input"
                       placeholder="Default"
-                      value={settings.kbListTitleColor}
-                      onChange={(e) => update("kbListTitleColor", e.target.value)}
+                      value={settings.kbListTitleSize}
+                      onChange={(e) => update("kbListTitleSize", e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="field-row">
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Weight"
+                      onChange={(value) => update("kbListTitleWeight", value as BrandTextWeight)}
+                      options={brandWeightOptions}
+                      searchable={false}
+                      value={settings.kbListTitleWeight}
                     />
                   </div>
-                </label>
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Size (e.g. 1.75rem or 28px)</span>
-                  <input
-                    className="input"
-                    placeholder="Default"
-                    value={settings.kbListTitleSize}
-                    onChange={(e) => update("kbListTitleSize", e.target.value)}
-                  />
-                </label>
+                  <div style={{ flex: 1 }}>
+                    <DropdownSelect
+                      label="Font"
+                      onChange={(value) => update("kbListTitleFont", value)}
+                      options={brandFontOptions}
+                      searchable={false}
+                      value={settings.kbListTitleFont}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="field-row">
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Weight</span>
-                  <select
-                    className="input"
-                    value={settings.kbListTitleWeight}
-                    onChange={(e) => update("kbListTitleWeight", e.target.value as BrandTextWeight)}
-                  >
-                    {BRAND_TEXT_WEIGHTS.map((w) => (
-                      <option key={w || "default"} value={w}>
-                        {w === "" ? "Default" : w}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label style={{ flex: 1 }}>
-                  <span className="meta">Font</span>
-                  <select
-                    className="input"
-                    value={settings.kbListTitleFont}
-                    onChange={(e) => update("kbListTitleFont", e.target.value)}
-                  >
-                    <option value="">Default</option>
-                    {Object.entries(SAFE_FONTS).map(([key, font]) => (
-                      <option key={key} value={key}>
-                        {font.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </div>
-          </section>
+            </section>
+          </div>
 
-          <div className="admin-actions" style={{ marginTop: "2rem" }}>
+          <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
             <button className="button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save home page content"}
             </button>
@@ -587,8 +591,8 @@ export default function AdminSettingsPage() {
       )}
 
       {settings && activeTab === "styling" && (
-        <section>
-          <div className="card" style={{ marginBottom: "2rem" }}>
+        <section className="settings-styling">
+          <div className="card settings-styling__intro">
             <h2>Global Default Styling</h2>
             <p className="lead">
               Adjust the default brand colors and fonts for the entire platform. Individual knowledge bases

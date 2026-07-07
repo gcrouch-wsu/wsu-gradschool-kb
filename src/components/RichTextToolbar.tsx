@@ -1,5 +1,6 @@
 "use client";
 
+import { Eraser, Link2, Link2Off } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RICH_TEXT_COLORS } from "@/lib/rich-text";
 import type { EditorPalette } from "@/lib/kb-theme";
@@ -209,33 +210,33 @@ export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalet
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
       <button
         aria-label="Insert or edit link"
-        className={buttonClass}
+        className={`${buttonClass} rich-text-toolbar__button--icon`}
         onMouseDown={(event) => toolbarPrepare(event)}
         onClick={() => openLinkEditor()}
         title="Insert or edit a link"
         type="button"
       >
-        Link
+        <Link2 aria-hidden size={16} strokeWidth={1.75} />
       </button>
       <button
         aria-label="Remove link"
-        className={buttonClass}
+        className={`${buttonClass} rich-text-toolbar__button--icon`}
         onMouseDown={(event) => toolbarPrepare(event)}
         onClick={() => applyEditorCommand("unlink")}
         title="Remove link"
         type="button"
       >
-        Unlink
+        <Link2Off aria-hidden size={16} strokeWidth={1.75} />
       </button>
       <button
         aria-label="Clear formatting"
-        className={buttonClass}
+        className={`${buttonClass} rich-text-toolbar__button--icon`}
         onMouseDown={(event) => toolbarPrepare(event)}
         onClick={() => applyEditorCommand("removeFormat")}
         title="Clear formatting"
         type="button"
       >
-        Clear
+        <Eraser aria-hidden size={16} strokeWidth={1.75} />
       </button>
     </div>
   );
