@@ -12,17 +12,25 @@ export interface ImportKbOption {
   title: string;
 }
 
-const acceptedImportTypes = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const acceptedImportTypes = [
+  ".docx",
+  ".doc",
+  ".pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "application/pdf",
+].join(",");
 const importMaxFileSize = 25 * 1024 * 1024;
 const macroEnabledWordExtensions = [".docm", ".dotm", ".dot"];
+const allowedImportExtensions = [".docx", ".doc", ".pdf"];
 
 function validateImportFile(file: File) {
   const fileName = file.name.toLowerCase();
   if (macroEnabledWordExtensions.some((extension) => fileName.endsWith(extension)) || file.type.includes("macroEnabled")) {
     return "Macro-enabled Word files are not allowed. Save as a plain .docx and try again.";
   }
-  if (!fileName.endsWith(".docx") && file.type !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-    return "Please upload a .docx file.";
+  if (!allowedImportExtensions.some((extension) => fileName.endsWith(extension))) {
+    return "Please upload a .docx, .doc, or .pdf file.";
   }
   if (file.size === 0) return "That file is empty.";
   if (file.size > importMaxFileSize) return "File is larger than 25 MB.";
@@ -45,7 +53,7 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!file || !kbId) {
-      setError("Choose a knowledge base and .docx file.");
+      setError("Choose a knowledge base and a .docx, .doc, or .pdf file.");
       return;
     }
     setBusy(true);
@@ -72,7 +80,7 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
       <form className="form card" onSubmit={handleSubmit}>
         <h2>Start a new import</h2>
         <p className="meta">
-          Upload a .docx file (up to 25 MB). It is parsed and saved as a <strong>staged import</strong>{" "}
+          Upload a .docx, .doc, or .pdf file (up to 25 MB). It is parsed and saved as a <strong>staged import</strong>{" "}
           so you can review content and images before creating a draft page.
         </p>
         {error && <p className="alert">{error}</p>}
@@ -91,9 +99,9 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
           accept={acceptedImportTypes}
           disabled={busy}
           file={file}
-          helperText="Word document (.docx) up to 25 MB"
+          helperText="Word or PDF document (.docx, .doc, .pdf) up to 25 MB"
           id={fileFieldId}
-          label="Word document (.docx)"
+          label="Document (.docx, .doc, .pdf)"
           onError={setError}
           onFileChange={handleFileChange}
           validateFile={validateImportFile}
