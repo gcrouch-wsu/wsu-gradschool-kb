@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { FileUploadPicker } from "@/components/FileUploadPicker";
+import { parseJsonResponse } from "@/lib/http";
 import { PILOT_IMPORT_TARGETS } from "@/lib/pilot-imports";
 
 export interface ImportKbOption {
@@ -12,17 +13,23 @@ export interface ImportKbOption {
   title: string;
 }
 
-const acceptedImportTypes = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const acceptedImportTypes = [
+  ".docx",
+  ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+].join(",");
 const importMaxFileSize = 25 * 1024 * 1024;
 const macroEnabledWordExtensions = [".docm", ".dotm", ".dot"];
+const allowedImportExtensions = [".docx", ".doc"];
 
 function validateImportFile(file: File) {
   const fileName = file.name.toLowerCase();
   if (macroEnabledWordExtensions.some((extension) => fileName.endsWith(extension)) || file.type.includes("macroEnabled")) {
     return "Macro-enabled Word files are not allowed. Save as a plain .docx and try again.";
   }
-  if (!fileName.endsWith(".docx") && file.type !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-    return "Please upload a .docx file.";
+  if (!allowedImportExtensions.some((extension) => fileName.endsWith(extension))) {
+    return "Please upload a .docx or .doc file.";
   }
   if (file.size === 0) return "That file is empty.";
   if (file.size > importMaxFileSize) return "File is larger than 25 MB.";
@@ -45,7 +52,7 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!file || !kbId) {
-      setError("Choose a knowledge base and .docx file.");
+      setError("Choose a knowledge base and a .docx or .doc file.");
       return;
     }
     setBusy(true);
@@ -55,7 +62,10 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
       formData.append("file", file);
       formData.append("kbId", kbId);
       const response = await fetch("/api/admin/import/stage", { method: "POST", body: formData });
-      const data = await response.json();
+      const data = await parseJsonResponse<{ message?: string; reviewUrl?: string; stagedImportId?: string }>(
+        response,
+        "Could not stage the import.",
+      );
       if (!response.ok) {
         throw new Error(data.message ?? "Could not stage the import.");
       }
@@ -72,7 +82,7 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
       <form className="form card" onSubmit={handleSubmit}>
         <h2>Start a new import</h2>
         <p className="meta">
-          Upload a .docx file (up to 25 MB). It is parsed and saved as a <strong>staged import</strong>{" "}
+          Upload a .docx or .doc file (up to 25 MB). It is parsed and saved as a <strong>staged import</strong>{" "}
           so you can review content and images before creating a draft page.
         </p>
         {error && <p className="alert">{error}</p>}
@@ -91,9 +101,9 @@ export function AdminImportUpload({ kbOptions }: { kbOptions: ImportKbOption[] }
           accept={acceptedImportTypes}
           disabled={busy}
           file={file}
-          helperText="Word document (.docx) up to 25 MB"
+          helperText="Word document (.docx, .doc) up to 25 MB"
           id={fileFieldId}
-          label="Word document (.docx)"
+          label="Word document (.docx, .doc)"
           onError={setError}
           onFileChange={handleFileChange}
           validateFile={validateImportFile}

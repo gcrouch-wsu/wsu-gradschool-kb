@@ -20,7 +20,8 @@
     "next": "^16.0.0",
     "node-html-parser": "^7.1.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "word-extractor": "^1.0.4"
   },
   "overrides": {
     "postcss": "^8.5.15"
