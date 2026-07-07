@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
+import { StatusModal } from "@/components/StatusModal";
 import { markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
@@ -317,12 +317,36 @@ export function AdminPageEditorForm({
   const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
 
   const [lockError, setLockError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [expiryNoticeOpen, setExpiryNoticeOpen] = useState(false);
+  const wasExpired = useRef(false);
   const missedHeartbeats = useRef(0);
+  const signInHref = `/admin/sign-in?next=${encodeURIComponent(`/admin/pages/${page.id}`)}`;
+
+  function markSessionExpired() {
+    setSessionExpired(true);
+    if (!wasExpired.current) {
+      wasExpired.current = true;
+      setExpiryNoticeOpen(true);
+    }
+  }
+
+  function markSessionActive() {
+    if (wasExpired.current) {
+      wasExpired.current = false;
+      setSessionExpired(false);
+      setExpiryNoticeOpen(false);
+    }
+  }
 
   useEffect(() => {
     async function heartbeatLock() {
       try {
         const res = await fetch(`/api/admin/pages/${page.id}/lock`, { method: "POST" });
+        if (res.status === 401) {
+          markSessionExpired();
+          return;
+        }
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           missedHeartbeats.current += 1;
@@ -332,6 +356,7 @@ export function AdminPageEditorForm({
         } else {
           missedHeartbeats.current = 0;
           setLockError(null);
+          markSessionActive();
         }
       } catch {
         missedHeartbeats.current += 1;
@@ -518,6 +543,10 @@ export function AdminPageEditorForm({
           nextReviewDate,
         }),
       });
+      if (response.status === 401) {
+        markSessionExpired();
+        throw new Error("Your session has expired. Sign back in, then save again — your edits are still here.");
+      }
       const data = await response.json();
       if (!response.ok) {
         if (Array.isArray(data.issues) && data.issues.length > 0) {
@@ -528,6 +557,7 @@ export function AdminPageEditorForm({
       setSavedStatus(status);
       setSavedUrl(data.url ?? null);
       setSavedSnapshot(currentSnapshot);
+      markSessionActive();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save the page.");
     } finally {
@@ -623,9 +653,11 @@ export function AdminPageEditorForm({
           />
         </>
       )}
-      <Link className="button button--ghost" href={previewUrl}>
+      {/* Plain anchor: leaving the admin shell needs a full page load so the public
+          layout (header/footer/scrolling) is applied. */}
+      <a className="button button--ghost" href={previewUrl}>
         View current page
-      </Link>
+      </a>
     </div>
   );
 
@@ -637,6 +669,25 @@ export function AdminPageEditorForm({
           You cannot save changes to this page until the lock expires.
         </div>
       )}
+
+      {sessionExpired && (
+        <div className="alert alert--error" role="alert" style={{ marginBottom: "2rem" }}>
+          <strong>Signed out:</strong> your session has timed out, so changes cannot be saved right now.{" "}
+          <a href={signInHref} rel="noopener" target="_blank">
+            Sign in again in a new tab
+          </a>
+          , then return here and save — your edits are still in this window.
+        </div>
+      )}
+
+      <StatusModal
+        confirmLabel="Got it"
+        message="Your sign-in session has timed out, so this page can no longer be saved. Sign in again in a new tab (use the link in the red banner), then come back to this window and save — your edits have not been lost."
+        onClose={() => setExpiryNoticeOpen(false)}
+        open={expiryNoticeOpen}
+        title="Session expired"
+        variant="error"
+      />
 
       <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
         {error && <p className="error">{error}</p>}
@@ -659,7 +710,7 @@ export function AdminPageEditorForm({
         {lifecycleMessage && <p className="alert alert--success">{lifecycleMessage}</p>}
         {savedUrl && (
           <p className="alert alert--success">
-            Saved as <strong>{savedStatus}</strong>. <Link href={savedUrl}>View page</Link>
+            Saved as <strong>{savedStatus}</strong>. <a href={savedUrl}>View page</a>
           </p>
         )}
         {actionButtons}

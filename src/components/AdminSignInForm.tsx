@@ -1,10 +1,9 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 export function AdminSignInForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedNext = searchParams.get("next") || "/admin";
   const next =
@@ -32,8 +31,9 @@ export function AdminSignInForm() {
         return;
       }
 
-      router.replace(next);
-      router.refresh();
+      // Full page load: the admin shell and the sign-in page use different
+      // root layouts, so a soft navigation would keep the wrong shell.
+      window.location.assign(next);
     } catch {
       setError("Unable to sign in.");
     } finally {

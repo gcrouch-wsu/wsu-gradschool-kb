@@ -319,7 +319,9 @@ export default function AdminKbsPage() {
                     ? [
                         {
                           label: "View public",
-                          onSelect: () => router.push(`/kb/${kb.slug}`),
+                          // Full page load: leaving the admin shell via soft navigation
+                          // keeps the admin layout classes and breaks scrolling.
+                          onSelect: () => window.location.assign(`/kb/${kb.slug}`),
                         },
                         {
                           label: statusBusyId === kb.id ? "Updating..." : "Unpublish",

@@ -1995,21 +1995,20 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
 }
 
 .editor-form .import-actions > a.button--ghost {
-  background: transparent;
-  border: 0;
+  background: var(--paper);
+  border: 1.5px solid #bdb8b3;
   box-shadow: none;
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 700;
   margin-left: auto;
   order: 3;
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
 }
 
 .editor-form .import-actions > a.button--ghost:hover {
-  background: transparent;
-  color: var(--wsu-crimson);
-  text-decoration: underline;
+  background: #ece8e3;
+  border-color: #a5a09a;
+  color: var(--ink);
+  text-decoration: none;
 }
 
 .editor-form .import-actions > button.button--ghost {
@@ -5232,6 +5231,7 @@ html.admin-app body.admin-app-body {
 
 .admin-app-main {
   height: 100vh;
+  height: 100dvh;
   margin: 0;
   padding: 0;
   max-width: none;
@@ -5241,18 +5241,22 @@ html.admin-app body.admin-app-body {
 .admin-shell {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--admin-surface-muted);
   color: var(--admin-text);
   font-weight: 400;
 }
 
+/* 100dvh (not vh) so the pinned bottom nav (Settings / Audit log) is never
+   pushed below the visible viewport by browser chrome. */
 .admin-shell__sidebar {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   width: var(--admin-sidebar-width);
   height: 100vh;
+  height: 100dvh;
   background: var(--admin-crimson);
   color: #fff;
   transition: width 0.2s ease;
@@ -5402,6 +5406,7 @@ html.admin-app body.admin-app-body {
   flex-direction: column;
   min-width: 0;
   height: 100vh;
+  height: 100dvh;
 }
 
 .admin-shell__topbar {
@@ -6010,6 +6015,7 @@ html.admin-app body.admin-app-body {
   .admin-shell__sidebar {
     box-shadow: 18px 0 40px rgba(29, 26, 27, 0.22);
     height: 100vh;
+    height: 100dvh;
     left: 0;
     position: absolute;
     top: 0;
@@ -6033,6 +6039,7 @@ html.admin-app body.admin-app-body {
 
   .admin-shell__main {
     height: 100vh;
+    height: 100dvh;
     min-height: 0;
     width: 100%;
   }

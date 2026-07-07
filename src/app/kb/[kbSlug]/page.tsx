@@ -69,9 +69,10 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             </p>
             {isStaff && (
               <p className="admin-inline-actions">
-                <Link className="button button--small" href={`/admin/pages/${homepagePage.id}`}>
+                {/* Plain anchor: entering the admin shell needs a full page load. */}
+                <a className="button button--small" href={`/admin/pages/${homepagePage.id}`}>
                   Edit homepage
-                </Link>
+                </a>
               </p>
             )}
             <h1>{homepagePage.title}</h1>

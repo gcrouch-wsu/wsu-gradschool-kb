@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import type { CSSProperties } from "react";
+import { AdminAppClassSync } from "@/components/AdminAppClassSync";
 import { hasSiteBrand, SiteBrand } from "@/components/SiteBrand";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { loadSiteSettings } from "@/lib/db";
@@ -43,6 +44,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html className={`kb-theme-root${isAdminShell ? " admin-app" : ""}`} lang="en" style={themeVars}>
       <body className={isAdminShell ? "admin-app-body" : undefined}>
+        <AdminAppClassSync />
         {!isAdminShell && (
           <a className="skip-link" href="#main">
             Skip to content
@@ -59,9 +61,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     {link.label}
                   </a>
                 ))}
-                <Link href={session ? "/admin" : "/admin/sign-in?next=%2Fadmin"} prefetch={false}>
-                  Admin
-                </Link>
+                {/* Plain anchor: entering the admin shell needs a full page load. */}
+                <a href={session ? "/admin" : "/admin/sign-in?next=%2Fadmin"}>Admin</a>
                 {session && (
                   <span className="nav-user" title={`Signed in as ${session.email}`}>
                     <span className="nav-user__name">{session.email}</span>

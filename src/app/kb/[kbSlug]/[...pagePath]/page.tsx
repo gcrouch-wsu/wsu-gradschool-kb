@@ -125,9 +125,10 @@ export default async function KbArticlePage({
           </p>
           {isStaff && (
             <p className="admin-inline-actions">
-              <Link className="button button--small" href={`/admin/pages/${page.id}`}>
+              {/* Plain anchor: entering the admin shell needs a full page load. */}
+              <a className="button button--small" href={`/admin/pages/${page.id}`}>
                 Edit page
-              </Link>
+              </a>
             </p>
           )}
           <h1>{page.title}</h1>
