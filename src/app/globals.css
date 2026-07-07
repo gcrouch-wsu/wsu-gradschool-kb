@@ -68,11 +68,11 @@
   --space-after-heading: 0.5rem;
   --space-list-item: 0.4rem;
   --indent-list: 1.75rem;
-  --measure: 72ch;
+  --measure: 100%;
 
   /* Layout column widths — owner-controllable via the theme. */
-  --nav-width: 280px;
-  --toc-width: 260px;
+  --nav-width: 260px;
+  --toc-width: 240px;
 }
 
 * {
@@ -158,7 +158,7 @@ textarea:focus-visible,
 
 .site-header__inner,
 .page-shell {
-  width: min(var(--content-width, 1320px), calc(100% - 2rem));
+  width: min(var(--content-width, 1720px), calc(100% - 2rem));
   margin: 0 auto;
 }
 
@@ -3873,7 +3873,7 @@ article li > ol {
 }
 
 .site-footer__inner {
-  width: min(1320px, calc(100% - 2rem));
+  width: min(var(--content-width, 1720px), calc(100% - 2rem));
   margin: 0 auto;
   padding: 2.5rem 0;
   display: flex;

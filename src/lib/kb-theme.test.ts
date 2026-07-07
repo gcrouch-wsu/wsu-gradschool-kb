@@ -66,7 +66,10 @@ describe("kb-theme", () => {
     const unlimited = mergeTheme({ typography: { measure: "0ch" } });
     expect(unlimited.typography.measure).toBe("0ch");
     expect(themeToCssVars(unlimited)["--measure"]).toBe("100%");
-    expect(themeToCssVars(DEFAULT_THEME)["--measure"]).toBe("72ch");
+
+    // Default is no limit; explicit values pass through.
+    expect(themeToCssVars(DEFAULT_THEME)["--measure"]).toBe("100%");
+    expect(themeToCssVars(mergeTheme({ typography: { measure: "72ch" } }))["--measure"]).toBe("72ch");
   });
 
   it("fills, clamps, and emits layout column widths", () => {

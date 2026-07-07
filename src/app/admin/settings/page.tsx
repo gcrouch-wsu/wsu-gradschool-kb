@@ -590,16 +590,17 @@ export default function AdminSettingsPage() {
           </div>
           <ThemeEditor
             contentWidthField={
-              <label>
-                <span className="meta">Max page width in pixels (0 = default 1320)</span>
+              <label className="theme-scale" title="Overall page width shared by all three columns (and the header/footer)">
+                <span className="meta">Max page width</span>
                 <input
-                  className="input"
-                  type="number"
-                  min={0}
+                  type="range"
+                  min={960}
                   max={2400}
-                  value={settings.contentWidth || ""}
-                  onChange={(e) => update("contentWidth", Number(e.target.value) || 0)}
+                  step={20}
+                  value={settings.contentWidth || 1720}
+                  onChange={(e) => update("contentWidth", Number(e.target.value))}
                 />
+                <span className="theme-scale__value">{settings.contentWidth || 1720}px</span>
               </label>
             }
             dbEnabled={dbEnabled}

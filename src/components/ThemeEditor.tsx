@@ -92,7 +92,7 @@ const PX_PER_CH = 8;
 // .layout grid gaps (3rem each) and .article horizontal padding (3.5rem each side).
 const LAYOUT_GAPS_PX = 96;
 const ARTICLE_PADDING_PX = 112;
-const DEFAULT_CONTENT_WIDTH = 1320;
+const DEFAULT_CONTENT_WIDTH = 1720;
 
 function remToNumber(value: string): number {
   return Number(value.replace("rem", "")) || 0;

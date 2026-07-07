@@ -25,7 +25,7 @@ export interface SiteSettings {
   // Layout / placement
   headerAlignment: Alignment;
   heroAlignment: Alignment;
-  contentWidth: number; // px; 0 = theme default (1320)
+  contentWidth: number; // px; 0 = theme default (1720)
   // Home page
   homeEyebrow: string;
   homeTitle: string;

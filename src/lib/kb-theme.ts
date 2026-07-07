@@ -145,11 +145,11 @@ export const DEFAULT_THEME: KbTheme = {
     spaceAfterHeading: "0.5rem",
     listItemSpacing: "0.4rem",
     listIndent: "1.75rem",
-    measure: "72ch",
+    measure: "0ch",
   },
   layout: {
-    navWidth: "280px",
-    tocWidth: "260px",
+    navWidth: "260px",
+    tocWidth: "240px",
   },
   editor: {
     fonts: [
