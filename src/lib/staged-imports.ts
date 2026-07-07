@@ -1,5 +1,5 @@
 import { isBlobEnabled, uploadAssetBlob, uploadImportImage } from "@/lib/blob";
-import { convertDocxToBlocks, type ImageUploader } from "@/lib/docx-import";
+import { convertDocxToBlocks, type ImageUploader, type ParsedDocx } from "@/lib/docx-import";
 import { commitImportWithImagePromotion } from "@/lib/import-commit";
 import { isDatabaseEnabled } from "@/lib/db";
 import { getKbById } from "@/lib/kb-store";
@@ -11,12 +11,48 @@ import type {
   StagedImportDetail,
   StagedImportMedia,
   StagedImportMediaReviewStatus,
+  StagedImportSourceType,
 } from "@/lib/types";
 
 const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOC_CONTENT_TYPE = "application/msword";
 const MACRO_EXTENSIONS = [".docm", ".dotm", ".dot"];
 
 export const STAGED_IMPORT_MAX_BYTES = 25 * 1024 * 1024;
+
+function detectSourceType(file: File): StagedImportSourceType | null {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".docx") || file.type === DOCX_CONTENT_TYPE) {
+    return "docx";
+  }
+  if (lowerName.endsWith(".doc") || file.type === DOC_CONTENT_TYPE) {
+    return "doc";
+  }
+  return null;
+}
+
+const SOURCE_CONTENT_TYPE: Record<StagedImportSourceType, string> = {
+  docx: DOCX_CONTENT_TYPE,
+  doc: DOC_CONTENT_TYPE,
+};
+
+const SOURCE_EXTENSION: Record<StagedImportSourceType, RegExp> = {
+  docx: /\.docx$/i,
+  doc: /\.doc$/i,
+};
+
+async function parseUpload(
+  sourceType: StagedImportSourceType,
+  buffer: Buffer,
+  fallbackTitle: string,
+  uploadImage: ImageUploader | undefined,
+): Promise<ParsedDocx> {
+  if (sourceType === "docx") {
+    return convertDocxToBlocks(buffer, { uploadImage });
+  }
+  const { convertDocToBlocks } = await import("@/lib/doc-import");
+  return convertDocToBlocks(buffer, fallbackTitle);
+}
 
 const globalRuntime = globalThis as unknown as {
   __kbRuntimeStagedImports?: StagedImport[];
@@ -153,14 +189,13 @@ async function listStagedImportRecords(kbId?: string): Promise<StagedImport[]> {
   return kbId ? rows.filter((row) => row.kbId === kbId) : [...rows];
 }
 
-export function validateDocxUpload(file: File) {
+export function validateImportUpload(file: File) {
   const lowerName = file.name.toLowerCase();
   if (MACRO_EXTENSIONS.some((ext) => lowerName.endsWith(ext)) || file.type.includes("macroEnabled")) {
     return "Macro-enabled Word files are not allowed. Save as a plain .docx and try again.";
   }
-  const isDocx = lowerName.endsWith(".docx") || file.type === DOCX_CONTENT_TYPE;
-  if (!isDocx) {
-    return "Please upload a .docx file.";
+  if (!detectSourceType(file)) {
+    return "Please upload a .docx or .doc file.";
   }
   if (file.size === 0) {
     return "That file is empty.";
@@ -171,7 +206,10 @@ export function validateDocxUpload(file: File) {
   return null;
 }
 
-export async function createStagedImportFromDocx(
+/** @deprecated Use {@link validateImportUpload}. Kept for backwards compatibility. */
+export const validateDocxUpload = validateImportUpload;
+
+export async function createStagedImportFromUpload(
   kbId: string,
   file: File,
   createdBy: string,
@@ -181,30 +219,36 @@ export async function createStagedImportFromDocx(
     throw new Error("Knowledge base not found.");
   }
 
-  const validation = validateDocxUpload(file);
+  const validation = validateImportUpload(file);
   if (validation) {
     throw new Error(validation);
+  }
+
+  const sourceType = detectSourceType(file);
+  if (!sourceType) {
+    throw new Error("Please upload a .docx or .doc file.");
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   let sourceBlobUrl = "";
   if (isBlobEnabled()) {
-    const url = await uploadAssetBlob(buffer, DOCX_CONTENT_TYPE, "kb-imports/sources");
+    const url = await uploadAssetBlob(buffer, SOURCE_CONTENT_TYPE[sourceType], "kb-imports/sources");
     if (url) {
       sourceBlobUrl = url;
     }
   }
 
   const uploadImage: ImageUploader | undefined = isBlobEnabled() ? uploadImportImage : undefined;
-  const parsed = await convertDocxToBlocks(buffer, { uploadImage });
-  const derivedTitle = parsed.title ?? file.name.replace(/\.docx$/i, "");
+  const derivedFallbackTitle = file.name.replace(SOURCE_EXTENSION[sourceType], "");
+  const parsed = await parseUpload(sourceType, buffer, derivedFallbackTitle, uploadImage);
+  const derivedTitle = parsed.title ?? derivedFallbackTitle;
   const now = todayIso();
   const id = `staged-import-${crypto.randomUUID()}`;
 
   const record: StagedImport = {
     id,
     kbId,
-    sourceType: "docx",
+    sourceType,
     originalFilename: file.name,
     sourceBlobUrl,
     status: "needs_review",
@@ -226,6 +270,9 @@ export async function createStagedImportFromDocx(
 
   return { import: record, media, kbSlug: kb.slug };
 }
+
+/** @deprecated Use {@link createStagedImportFromUpload}. Kept for backwards compatibility. */
+export const createStagedImportFromDocx = createStagedImportFromUpload;
 
 export async function listStagedImportsForAdmin(kbId?: string): Promise<StagedImport[]> {
   const rows = await listStagedImportRecords(kbId);

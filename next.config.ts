@@ -6,6 +6,7 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: ["word-extractor", "mammoth"],
   turbopack: {
     root: projectRoot,
   },
