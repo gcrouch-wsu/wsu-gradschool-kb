@@ -2,6 +2,7 @@ import { parse, type HTMLElement, type Node } from "node-html-parser";
 import {
   escapeHtml,
   richTextToPlainText,
+  sanitizeCalloutHtml,
   sanitizeListItemHtml,
   sanitizeRichText,
   textToRichText,
@@ -222,6 +223,12 @@ function inlineFields(node: HTMLElement, listItem = false) {
   return { html, text };
 }
 
+function alertFields(node: HTMLElement) {
+  const html = sanitizeCalloutHtml(node.innerHTML, { keepNotes: true });
+  const text = collapseWhitespace(richTextToPlainText(html) || node.text);
+  return { html, text };
+}
+
 export function blocksToDocumentHtml(blocks: ContentBlock[], kbSlug?: string): string {
   return blocks.map((block) => blockToHtml(block, kbSlug)).join("");
 }
@@ -278,7 +285,7 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
       return `<${tag}${startAttr} data-block-id="${id}">${items}</${tag}>`;
     }
     case "alert": {
-      const inner = block.html ?? textToRichText(block.text);
+      const inner = block.html ? sanitizeCalloutHtml(block.html, { keepNotes: true }) : textToRichText(block.text);
       return `<aside class="doc-alert doc-alert--info" data-block-id="${id}" data-variant="info" role="note">${inner}</aside>`;
     }
     case "image": {
@@ -407,7 +414,7 @@ function serializeDocumentNode(node: Node): string {
   }
 
   if (tag === "aside" && hasClass(node, "doc-alert")) {
-    const inner = sanitizeRichText(node.innerHTML, { keepNotes: true });
+    const inner = sanitizeCalloutHtml(node.innerHTML, { keepNotes: true });
     return `<aside class="doc-alert doc-alert--info" data-block-id="${escapeHtml(blockId)}" data-variant="info" role="note">${inner}</aside>`;
   }
 
@@ -580,8 +587,8 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
     }
 
     if (tag === "aside" && hasClass(node, "doc-alert")) {
-      const { html: blockHtml, text } = inlineFields(node);
-      if (text) {
+      const { html: blockHtml, text } = alertFields(node);
+      if (text || blockHtml.includes("<")) {
 
         blocks.push({
           blockId: blockIdFrom(node),

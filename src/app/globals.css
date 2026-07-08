@@ -970,6 +970,14 @@ p {
   margin-bottom: 0;
 }
 
+.callout-rich-text > :first-child {
+  margin-top: 0;
+}
+
+.callout-rich-text > :last-child {
+  margin-bottom: 0;
+}
+
 .alert--warning {
   border-left-color: var(--warning);
   background: var(--warning-wash);

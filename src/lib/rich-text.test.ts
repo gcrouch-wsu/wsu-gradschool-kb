@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   escapeHtml,
   richTextToPlainText,
+  sanitizeCalloutHtml,
   sanitizeListItemHtml,
   sanitizeRichText,
   textToRichText,
@@ -148,6 +149,26 @@ describe("sanitizeListItemHtml", () => {
   it("keeps nested lists inside a list item", () => {
     const out = sanitizeListItemHtml('Item <ul><li>Nested</li></ul>');
     expect(out).toBe("Item <ul><li>Nested</li></ul>");
+  });
+});
+
+describe("sanitizeCalloutHtml", () => {
+  it("keeps inline formatting and nested lists", () => {
+    const out = sanitizeCalloutHtml(
+      '<h2>Heading</h2><strong>Read</strong><ol start="2"><li>First<ul><li>Nested</li></ul></li></ol>',
+    );
+    expect(out).toContain("Heading");
+    expect(out).not.toContain("<h2");
+    expect(out).toContain("<strong>Read</strong>");
+    expect(out).toContain('<ol start="2"><li>First<ul><li>Nested</li></ul></li></ol>');
+  });
+
+  it("drops structural content that should not live inside info boxes", () => {
+    const out = sanitizeCalloutHtml('<table><tr><td>Cell</td></tr></table><figure><img src="/x.png"></figure>');
+    expect(out).toContain("Cell");
+    expect(out).not.toContain("<table");
+    expect(out).not.toContain("<figure");
+    expect(out).not.toContain("<img");
   });
 });
 

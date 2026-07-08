@@ -205,19 +205,21 @@ describe("page-document", () => {
     expect((parsed[0] as { html?: string }).html).toContain("#981e32");
   });
 
-  it("round-trips inline rich text inside info boxes without preserving headings", () => {
+  it("round-trips simple rich text inside info boxes without preserving headings", () => {
     const parsed = documentHtmlToBlocks(
-      '<aside class="doc-alert doc-alert--info" data-block-id="a1" role="note"><h2>Do not keep heading</h2><strong>Bold</strong> <span style="color: #981e32">red</span></aside>',
+      '<aside class="doc-alert doc-alert--info" data-block-id="a1" role="note"><h2>Do not keep heading</h2><strong>Bold</strong> <span style="color: #981e32">red</span><ol start="3"><li>First<ul><li>Nested</li></ul></li></ol></aside>',
     );
     expect(parsed[0]).toMatchObject({
       type: "alert",
-      text: "Do not keep heading Bold red",
+      text: "Do not keep heading Bold red First Nested",
     });
     const alert = parsed[0] as Extract<ContentBlock, { type: "alert" }>;
     expect(alert.html).toContain("Do not keep heading");
     expect(alert.html).not.toContain("<h2");
     expect(alert.html).toContain("<strong>Bold</strong>");
     expect(alert.html).toContain("color: #981e32");
+    expect(alert.html).toContain('<ol start="3"><li>First<ul><li>Nested</li></ul></li></ol>');
+    expect(blocksToDocumentHtml(parsed)).toContain('<ol start="3"><li>First<ul><li>Nested</li></ul></li></ol>');
   });
 
   it("round-trips text alignment on paragraphs and headings", () => {

@@ -91,7 +91,7 @@ export function DocumentToolbar({
   const isTableCell = formatting.surfaceKind === "table-cell";
   const isCallout = formatting.surfaceKind === "callout";
   const textOnlyContext = isTableCell || isCallout;
-  const contextLabel = isTableCell ? "Table cell: text tools only" : "Info box: text tools only";
+  const contextLabel = isTableCell ? "Table cell: text tools only" : "Info box: text and list tools only";
   const indentDisabled = !formatting.inList;
   const outdentDisabled = !formatting.inList;
   const indentTitle = !formatting.inList
@@ -104,6 +104,99 @@ export function DocumentToolbar({
     : formatting.canOutdentListItem
       ? "Move this item up one list level (Shift+Tab)"
       : "This list item is already at the top level";
+  const listControls = (
+    <>
+      <button
+        aria-label="Bulleted list"
+        aria-pressed={formatting.unorderedList}
+        className={buttonClass}
+        onMouseDown={(event) => toolbarPrepare(event)}
+        onClick={() => applyList("insertUnorderedList")}
+        type="button"
+      >
+        • List
+      </button>
+      <button
+        aria-label="Numbered list"
+        aria-pressed={formatting.orderedList}
+        className={buttonClass}
+        onMouseDown={(event) => toolbarPrepare(event)}
+        onClick={() => applyList("insertOrderedList")}
+        type="button"
+      >
+        1. List
+      </button>
+      {formatting.orderedListStart !== null && (
+        <span className="toolbar-popover-wrap" ref={listSettingsRef}>
+          <button
+            aria-expanded={listSettingsOpen}
+            aria-label="Numbered list settings"
+            className={buttonClass}
+            onMouseDown={(event) => toolbarPrepare(event)}
+            onClick={() => setListSettingsOpen((open) => !open)}
+            title={`Numbered list settings. Current list starts at ${formatting.orderedListStart}.`}
+            type="button"
+          >
+            #
+          </button>
+          {listSettingsOpen && (
+            <div
+              aria-label="Numbered list settings"
+              className="toolbar-popover toolbar-popover--anchored-right list-settings-popover"
+              role="dialog"
+            >
+              <label className="toolbar-popover__field">
+                <span>Start at</span>
+                <input
+                  className="rich-text-toolbar__number"
+                  defaultValue={formatting.orderedListStart}
+                  min={1}
+                  onBlur={(event) => applyOrderedListStart(Number(event.currentTarget.value))}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") {
+                      return;
+                    }
+                    event.preventDefault();
+                    applyOrderedListStart(Number(event.currentTarget.value));
+                    setListSettingsOpen(false);
+                  }}
+                  onMouseDown={() => saveEditorSelection()}
+                  type="number"
+                />
+              </label>
+              {formatting.inList && (
+                <p className="toolbar-popover__note">
+                  Tab indents item 2 or later. Shift+Tab moves nested items back out.
+                </p>
+              )}
+            </div>
+          )}
+        </span>
+      )}
+      <button
+        disabled={indentDisabled}
+        aria-label="Indent list item"
+        className={buttonClass}
+        onMouseDown={(event) => toolbarPrepare(event)}
+        onClick={() => applyIndent()}
+        title={indentTitle}
+        type="button"
+      >
+        →
+      </button>
+      <button
+        disabled={outdentDisabled}
+        aria-label="Outdent list item"
+        className={buttonClass}
+        onMouseDown={(event) => toolbarPrepare(event)}
+        onClick={() => applyOutdent()}
+        title={outdentTitle}
+        type="button"
+      >
+        ←
+      </button>
+    </>
+  );
 
   return (
     <div className="document-toolbar">
@@ -131,9 +224,16 @@ export function DocumentToolbar({
       </div>
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
       {textOnlyContext ? (
-        <div className="document-toolbar__context" aria-label="Editing context">
-          {contextLabel}
-        </div>
+        <>
+          <div className="document-toolbar__context" aria-label="Editing context">
+            {contextLabel}
+          </div>
+          {isCallout && (
+            <div className="document-toolbar__structure" role="group" aria-label="Info box lists">
+              {listControls}
+            </div>
+          )}
+        </>
       ) : (
       <div className="document-toolbar__structure" role="group" aria-label="Block style and lists">
         <button
@@ -169,95 +269,7 @@ export function DocumentToolbar({
         >
           H3
         </button>
-        <button
-          aria-label="Bulleted list"
-          aria-pressed={formatting.unorderedList}
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={() => applyList("insertUnorderedList")}
-          type="button"
-        >
-          • List
-        </button>
-        <button
-          aria-label="Numbered list"
-          aria-pressed={formatting.orderedList}
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={() => applyList("insertOrderedList")}
-          type="button"
-        >
-          1. List
-        </button>
-        {formatting.orderedListStart !== null && (
-          <span className="toolbar-popover-wrap" ref={listSettingsRef}>
-            <button
-              aria-expanded={listSettingsOpen}
-              aria-label="Numbered list settings"
-              className={buttonClass}
-              onMouseDown={(event) => toolbarPrepare(event)}
-              onClick={() => setListSettingsOpen((open) => !open)}
-              title={`Numbered list settings. Current list starts at ${formatting.orderedListStart}.`}
-              type="button"
-            >
-              #
-            </button>
-            {listSettingsOpen && (
-              <div
-                aria-label="Numbered list settings"
-                className="toolbar-popover toolbar-popover--anchored-right list-settings-popover"
-                role="dialog"
-              >
-                <label className="toolbar-popover__field">
-                  <span>Start at</span>
-                  <input
-                    className="rich-text-toolbar__number"
-                    defaultValue={formatting.orderedListStart}
-                    min={1}
-                    onBlur={(event) => applyOrderedListStart(Number(event.currentTarget.value))}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter") {
-                        return;
-                      }
-                      event.preventDefault();
-                      applyOrderedListStart(Number(event.currentTarget.value));
-                      setListSettingsOpen(false);
-                    }}
-                    onMouseDown={() => saveEditorSelection()}
-                    type="number"
-                  />
-                </label>
-                {formatting.inList && (
-                  <p className="toolbar-popover__note">
-                    Tab indents item 2 or later. Shift+Tab moves nested items back out.
-                  </p>
-                )}
-              </div>
-            )}
-          </span>
-        )}
-        <button
-          disabled={indentDisabled}
-          aria-label="Indent list item"
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={() => applyIndent()}
-          title={indentTitle}
-          type="button"
-        >
-          →
-        </button>
-        <button
-          disabled={outdentDisabled}
-          aria-label="Outdent list item"
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={() => applyOutdent()}
-          title={outdentTitle}
-          type="button"
-        >
-          ←
-        </button>
+        {listControls}
         {(formatting.h2 || formatting.h3) && (
           <button
             aria-label="Copy a link to this heading"

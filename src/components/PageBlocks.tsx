@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
-import { sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
+import { sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 
 function assertNever(x: never): never {
@@ -19,6 +19,11 @@ function ListItemRichText({ html, text }: { html?: string; text?: string }) {
     return <div className="list-item-rich-text" dangerouslySetInnerHTML={{ __html: clean }} />;
   }
   return <span dangerouslySetInnerHTML={{ __html: clean }} />;
+}
+
+function CalloutRichText({ html, text }: { html?: string; text?: string }) {
+  const clean = html ? sanitizeCalloutHtml(html) : textToRichText(text || "");
+  return <div className="callout-rich-text" dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 
 async function AssetLink({ assetId }: { assetId: string }) {
@@ -234,7 +239,7 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
                   </svg>
                 </div>
                 <div>
-                  <RichText html={block.html} text={block.text} />
+                  <CalloutRichText html={block.html} text={block.text} />
                 </div>
               </aside>
             );

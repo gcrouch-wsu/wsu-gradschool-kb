@@ -102,7 +102,7 @@ const FLATTENED_BLOCK_TAGS = new Set([
   "ul",
 ]);
 
-type RichTextMode = "inline" | "list-item";
+type RichTextMode = "callout" | "inline" | "list-item";
 
 export function escapeHtml(value: string) {
   return value
@@ -288,7 +288,7 @@ function tagAllowed(tag: string, mode: RichTextMode): boolean {
   if (ALLOWED_TAGS.has(tag)) {
     return true;
   }
-  return mode === "list-item" && LIST_ITEM_TAGS.has(tag);
+  return mode !== "inline" && LIST_ITEM_TAGS.has(tag);
 }
 
 function serializeChildren(node: HTMLElement, mode: RichTextMode): string {
@@ -298,7 +298,7 @@ function serializeChildren(node: HTMLElement, mode: RichTextMode): string {
 function flattenUnsupportedElement(node: HTMLElement, mode: RichTextMode): string {
   const inner = serializeChildren(node, mode);
   const tag = node.tagName?.toLowerCase();
-  return tag && FLATTENED_BLOCK_TAGS.has(tag) && inner ? `${inner} ` : inner;
+  return tag && FLATTENED_BLOCK_TAGS.has(tag) && inner ? ` ${inner} ` : inner;
 }
 
 function serializeListElement(node: HTMLElement, tag: "ul" | "ol", mode: RichTextMode): string {
@@ -337,14 +337,14 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
   }
 
   if (tag === "ul" || tag === "ol") {
-    if (mode !== "list-item") {
+    if (mode === "inline") {
       return flattenUnsupportedElement(node, mode);
     }
     return serializeListElement(node, tag, mode);
   }
 
   if (tag === "li") {
-    if (mode !== "list-item") {
+    if (mode === "inline") {
       return flattenUnsupportedElement(node, mode);
     }
     const inner = serializeChildren(node, mode);
@@ -412,7 +412,24 @@ export function sanitizeRichText(value: string, opts?: SanitizeOptions) {
     return root.childNodes
       .map((child) => serializeNode(child, "inline"))
       .join("")
-      .replace(/[ \t]+$/g, "");
+      .replace(/^[ \t]+|[ \t]+$/g, "");
+  } finally {
+    preserveNotes = previous;
+  }
+}
+
+export function sanitizeCalloutHtml(value: string, opts?: SanitizeOptions) {
+  if (!value) {
+    return "";
+  }
+  const previous = preserveNotes;
+  preserveNotes = opts?.keepNotes ?? false;
+  try {
+    const root = parse(value);
+    return root.childNodes
+      .map((child) => serializeNode(child, "callout"))
+      .join("")
+      .replace(/^[ \t]+|[ \t]+$/g, "");
   } finally {
     preserveNotes = previous;
   }
@@ -429,7 +446,7 @@ export function sanitizeListItemHtml(value: string, opts?: SanitizeOptions) {
     return root.childNodes
       .map((child) => serializeNode(child, "list-item"))
       .join("")
-      .replace(/[ \t]+$/g, "");
+      .replace(/^[ \t]+|[ \t]+$/g, "");
   } finally {
     preserveNotes = previous;
   }
