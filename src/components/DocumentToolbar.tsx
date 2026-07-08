@@ -89,6 +89,9 @@ export function DocumentToolbar({
 
   const buttonClass = "rich-text-toolbar__button";
   const isTableCell = formatting.surfaceKind === "table-cell";
+  const isCallout = formatting.surfaceKind === "callout";
+  const textOnlyContext = isTableCell || isCallout;
+  const contextLabel = isTableCell ? "Table cell: text tools only" : "Info box: text tools only";
   const indentDisabled = !formatting.inList;
   const outdentDisabled = !formatting.inList;
   const indentTitle = !formatting.inList
@@ -127,9 +130,9 @@ export function DocumentToolbar({
         </button>
       </div>
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
-      {isTableCell ? (
+      {textOnlyContext ? (
         <div className="document-toolbar__context" aria-label="Editing context">
-          Table cell: text tools only
+          {contextLabel}
         </div>
       ) : (
       <div className="document-toolbar__structure" role="group" aria-label="Block style and lists">
@@ -271,7 +274,7 @@ export function DocumentToolbar({
       )}
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
       <RichTextToolbar editorPalette={editorPalette} />
-      {!isTableCell && (
+      {!textOnlyContext && (
         <>
           <span className="rich-text-toolbar__divider" aria-hidden="true" />
           <div className="document-toolbar__insert" role="group" aria-label="Insert">
@@ -284,6 +287,7 @@ export function DocumentToolbar({
               type="button"
             >
               <Rows3 aria-hidden size={16} strokeWidth={1.75} />
+              Divider
             </button>
             <button
               aria-label="Insert procedure section"
@@ -293,7 +297,7 @@ export function DocumentToolbar({
               title="Insert a structural procedure section"
               type="button"
             >
-              Procedure
+              Procedure section
             </button>
             <button
               aria-label="Insert table"
@@ -333,7 +337,7 @@ export function DocumentToolbar({
               title="Insert an info box that is visible to readers"
               type="button"
             >
-              Info
+              Info box
             </button>
           </div>
           <span className="rich-text-toolbar__divider" aria-hidden="true" />

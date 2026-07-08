@@ -215,8 +215,10 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
   flag. Add/edit/remove via `NoteDialog` + `commitNote`/`removeNote`.
 - **Procedure sections**: top-level structural panels for complex procedures. Default to H2, can be
   H3, appear in the public TOC, and contain fully mixed content.
-- **Info boxes**: the single reader-visible info-style alert block (`role="note"`); toolbar label is
-  "Info box". (Legacy warning variants were removed.)
+- **Info boxes**: the single reader-visible info-style alert block (`role="note"`). Content is inline
+  rich text (bold/italic/links/color/size) and intentionally does not preserve nested H2/H3/list block
+  structure inside the callout. When focused, the toolbar should behave like table-cell mode: text tools
+  only, no page-structure or insert controls. (Legacy warning variants were removed.)
 - **Publishing readiness**: `AdminPageEditorForm` shows a live client-side checklist for common
   accessibility/governance blockers before the server publish gate runs.
 
@@ -951,11 +953,16 @@ Items are ordered by recommended priority.
   editing, provide explicit Promote/Demote controls with disabled states and short inline feedback,
   preserve Tab/Shift+Tab, and show nested ordered-list levels as 1./a./i. in both editor and preview.
   For table cells, limit unavailable structural controls or move table actions into a local table
-  toolbar. Keep the existing `ContentBlock` model and `page-document.ts` serializer boundary.
+  toolbar. Keep the existing `ContentBlock` model and `page-document.ts` serializer boundary. Restore
+  discoverable insert labels for reader-visible structure: "Divider" for horizontal section breaks and
+  "Procedure section" for top-level page sections; keep "Info box" visibly labeled as a callout insert.
+  Treat Info-box focus as text-only toolbar context, and keep callout content body-sized even if pasted
+  source contains heading tags.
 - **Touch points:** `src/components/DocumentToolbar.tsx`, `src/components/RichTextToolbar.tsx`,
   `src/components/PageDocumentEditor.tsx`, `src/components/TableBlockEditor.tsx`,
   `src/lib/page-editor-format.ts`, `src/app/globals.css`.
 - **Acceptance:** (1) an editor can create a three-level ordered list with mouse or keyboard without
   source mode; (2) unavailable commands are disabled or explain why they cannot run; (3) table-cell
-  formatting does not show misleading page-structure controls; (4) browser regression tests cover the
-  list and table-cell workflows from FB-25.
+  and Info-box formatting do not show misleading page-structure controls; (4) Divider, Procedure
+  section, and Info box remain discoverable at common desktop and laptop widths; (5) browser regression
+  tests cover the list, table-cell, Info-box, and insert-control workflows from FB-25.

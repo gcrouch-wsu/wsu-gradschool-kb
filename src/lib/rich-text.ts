@@ -69,6 +69,38 @@ function clampRem(rem: number): string | null {
 }
 
 const LIST_ITEM_TAGS = new Set(["ul", "ol", "li"]);
+const FLATTENED_BLOCK_TAGS = new Set([
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "dd",
+  "div",
+  "dl",
+  "dt",
+  "figcaption",
+  "figure",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
+]);
 
 type RichTextMode = "inline" | "list-item";
 
@@ -263,6 +295,12 @@ function serializeChildren(node: HTMLElement, mode: RichTextMode): string {
   return node.childNodes.map((child) => serializeNode(child, mode)).join("");
 }
 
+function flattenUnsupportedElement(node: HTMLElement, mode: RichTextMode): string {
+  const inner = serializeChildren(node, mode);
+  const tag = node.tagName?.toLowerCase();
+  return tag && FLATTENED_BLOCK_TAGS.has(tag) && inner ? `${inner} ` : inner;
+}
+
 function serializeListElement(node: HTMLElement, tag: "ul" | "ol", mode: RichTextMode): string {
   const type = node.getAttribute("type");
   const start = node.getAttribute("start");
@@ -300,22 +338,21 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
 
   if (tag === "ul" || tag === "ol") {
     if (mode !== "list-item") {
-      return serializeChildren(node, mode);
+      return flattenUnsupportedElement(node, mode);
     }
     return serializeListElement(node, tag, mode);
   }
 
   if (tag === "li") {
     if (mode !== "list-item") {
-      return serializeChildren(node, mode);
+      return flattenUnsupportedElement(node, mode);
     }
     const inner = serializeChildren(node, mode);
     return inner ? `<li>${inner}</li>` : "";
   }
 
   if (!tagAllowed(tag, mode)) {
-
-    return serializeChildren(node, mode);
+    return flattenUnsupportedElement(node, mode);
   }
 
   if (tag === "br") {
@@ -372,7 +409,10 @@ export function sanitizeRichText(value: string, opts?: SanitizeOptions) {
   preserveNotes = opts?.keepNotes ?? false;
   try {
     const root = parse(value);
-    return root.childNodes.map((child) => serializeNode(child, "inline")).join("");
+    return root.childNodes
+      .map((child) => serializeNode(child, "inline"))
+      .join("")
+      .replace(/[ \t]+$/g, "");
   } finally {
     preserveNotes = previous;
   }
@@ -386,7 +426,10 @@ export function sanitizeListItemHtml(value: string, opts?: SanitizeOptions) {
   preserveNotes = opts?.keepNotes ?? false;
   try {
     const root = parse(value);
-    return root.childNodes.map((child) => serializeNode(child, "list-item")).join("");
+    return root.childNodes
+      .map((child) => serializeNode(child, "list-item"))
+      .join("")
+      .replace(/[ \t]+$/g, "");
   } finally {
     preserveNotes = previous;
   }

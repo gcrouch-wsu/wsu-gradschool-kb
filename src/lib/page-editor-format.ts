@@ -1104,6 +1104,67 @@ export function insertEditorHtml(html: string): boolean {
   return ok;
 }
 
+function insertionAnchorFromRange(range: Range, surface: HTMLElement): HTMLElement | null {
+  const block = nearestBlock(range.commonAncestorContainer, surface);
+  if (!block) {
+    return null;
+  }
+  if (block instanceof HTMLLIElement) {
+    const list = block.closest("ol, ul");
+    return list instanceof HTMLElement && surface.contains(list) ? list : block;
+  }
+  return block;
+}
+
+export function insertEditorBlockHtml(html: string): boolean {
+  const surface = getBoundEditorSurface();
+  if (!surface || !restoreRichTextSelection()) {
+    return false;
+  }
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  if (!range || !surface.contains(range.commonAncestorContainer)) {
+    return false;
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = html.trim();
+  const nodes = Array.from(template.content.childNodes);
+  if (nodes.length === 0) {
+    return false;
+  }
+
+  snapshotStructuralChange();
+  const anchor = insertionAnchorFromRange(range, surface);
+  let lastInserted: Node | null = null;
+  if (anchor?.parentNode) {
+    const reference = anchor.nextSibling;
+    for (const node of nodes) {
+      anchor.parentNode.insertBefore(node, reference);
+      lastInserted = node;
+    }
+  } else {
+    range.deleteContents();
+    for (const node of nodes) {
+      range.insertNode(node);
+      range.setStartAfter(node);
+      range.collapse(true);
+      lastInserted = node;
+    }
+  }
+
+  if (lastInserted) {
+    const caret = document.createRange();
+    caret.setStartAfter(lastInserted);
+    caret.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(caret);
+  }
+  surface.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  notifyMutation();
+  return true;
+}
+
 export function insertEditorText(text: string): boolean {
   const ok = runEditorCommand("insertText", text);
   if (!ok) {
@@ -1308,7 +1369,7 @@ export interface EditorFormatting {
   listLevel: number | null;
   listMarkerLabel: string | null;
   orderedListStart: number | null;
-  surfaceKind: "document" | "none" | "table-cell";
+  surfaceKind: "callout" | "document" | "none" | "table-cell";
 }
 
 export const EMPTY_EDITOR_FORMATTING: EditorFormatting = {
@@ -1343,9 +1404,11 @@ export function queryEditorFormatting(): EditorFormatting {
   const li = surface && selectionInSurface ? listItemFromSelection(surface) : null;
   const surfaceKind = surface?.classList.contains("wysiwyg-table-cell")
     ? "table-cell"
-    : surface
-      ? "document"
-      : "none";
+    : surface && selectionInSurface && element?.closest(".doc-alert")
+      ? "callout"
+      : surface
+        ? "document"
+        : "none";
   const commandState = (command: string) => {
     try {
       return document.queryCommandState(command);

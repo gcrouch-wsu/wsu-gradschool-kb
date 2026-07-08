@@ -205,6 +205,21 @@ describe("page-document", () => {
     expect((parsed[0] as { html?: string }).html).toContain("#981e32");
   });
 
+  it("round-trips inline rich text inside info boxes without preserving headings", () => {
+    const parsed = documentHtmlToBlocks(
+      '<aside class="doc-alert doc-alert--info" data-block-id="a1" role="note"><h2>Do not keep heading</h2><strong>Bold</strong> <span style="color: #981e32">red</span></aside>',
+    );
+    expect(parsed[0]).toMatchObject({
+      type: "alert",
+      text: "Do not keep heading Bold red",
+    });
+    const alert = parsed[0] as Extract<ContentBlock, { type: "alert" }>;
+    expect(alert.html).toContain("Do not keep heading");
+    expect(alert.html).not.toContain("<h2");
+    expect(alert.html).toContain("<strong>Bold</strong>");
+    expect(alert.html).toContain("color: #981e32");
+  });
+
   it("round-trips text alignment on paragraphs and headings", () => {
     const blocks: ContentBlock[] = [
       { blockId: "p1", type: "paragraph", text: "Centered", html: "Centered", align: "center" },

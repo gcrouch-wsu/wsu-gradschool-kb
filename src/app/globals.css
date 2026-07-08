@@ -953,6 +953,23 @@ p {
   color: var(--info-box-ink, var(--ink));
 }
 
+.alert--info > div:last-child,
+.wysiwyg-surface .doc-alert {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.65;
+}
+
+.alert--info > div:last-child > :first-child,
+.wysiwyg-surface .doc-alert > :first-child {
+  margin-top: 0;
+}
+
+.alert--info > div:last-child > :last-child,
+.wysiwyg-surface .doc-alert > :last-child {
+  margin-bottom: 0;
+}
+
 .alert--warning {
   border-left-color: var(--warning);
   background: var(--warning-wash);
@@ -3047,6 +3064,18 @@ article li > ol {
   margin: 1.5rem 0;
   padding: 1.25rem 1.5rem;
   border-radius: var(--radius-sm);
+}
+
+.wysiwyg-surface .doc-alert h1,
+.wysiwyg-surface .doc-alert h2,
+.wysiwyg-surface .doc-alert h3,
+.wysiwyg-surface .doc-alert h4,
+.wysiwyg-surface .doc-alert h5,
+.wysiwyg-surface .doc-alert h6 {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.65;
+  margin: 0;
 }
 
 .doc.card { min-width: 0; 

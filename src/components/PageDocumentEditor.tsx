@@ -24,6 +24,7 @@ import {
   handleEditorKeyDown,
   handleEditorPaste,
   handleImageControlClick,
+  insertEditorBlockHtml,
   insertEditorHtml,
   openNoteEditor,
   registerAltEditor,
@@ -151,14 +152,14 @@ export function PageDocumentEditor({
   function handleInsertInfoBox() {
     const placeholder = "Replace with the message readers should see.";
     const html = `<aside class="doc-alert doc-alert--info" data-block-id="${newBlockId()}" data-variant="info" role="note">${textToRichText(placeholder)}</aside>`;
-    if (!insertEditorHtml(html)) {
+    if (!insertEditorBlockHtml(html)) {
       addBlockToFirstFlow({ type: "alert", blockId: newBlockId(), variant: "info", text: placeholder });
     }
   }
 
   function handleInsertSectionBreak() {
     const html = `<div class="doc-section-break" contenteditable="false" data-block-id="${newBlockId()}" role="separator" aria-label="Section break"></div>`;
-    if (!insertEditorHtml(html)) {
+    if (!insertEditorBlockHtml(html)) {
       addBlockToFirstFlow({ type: "section_divider", blockId: newBlockId() });
     }
   }
