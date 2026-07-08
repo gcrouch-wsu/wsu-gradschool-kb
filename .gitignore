@@ -13,6 +13,7 @@ vercel.json.local
 
 # Internal planning / source content (not part of the deployable app)
 .claude/
+HTML.md
 *.doc
 *.docx
 *.doc.docx

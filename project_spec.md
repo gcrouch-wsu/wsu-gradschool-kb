@@ -176,8 +176,9 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
   the shared toolbar can format/link selected text inside a cell. If a new rich-text sub-editor is
   added, it must bind through the same selection pipeline or toolbar commands will act stale.
 - Toolbar state is surface-aware: when editing a table cell, page-structure/list controls collapse to
-  a "Table cell: text tools only" context badge; when editing a list item, the toolbar shows the
-  current list level/marker and disables impossible indent/outdent actions.
+  a "Table cell: text tools only" context badge; when editing an Info box, the toolbar shows text
+  formatting plus list controls only; when editing a list item, the toolbar disables impossible
+  indent/outdent actions.
 - **Keydown pipeline** (`handleEditorKeyDown`): Tab/Shift+Tab list nesting, **Ctrl/Cmd+K** link
   dialog, structural undo/redo (below), and a **heading-merge guard** that stops Backspace/Delete
   from silently demoting H2/H3s when deleting empty lines next to a heading or range-deleting into one.
@@ -218,8 +219,9 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 - **Info boxes**: the single reader-visible info-style alert block (`role="note"`). Content is simple
   rich text: inline formatting plus bulleted/numbered lists, including nested list items. Info boxes
   intentionally do not preserve headings, tables, media, dividers, or procedure sections inside the
-  callout. When focused, the toolbar should show text and list tools, but no page-structure or insert
-  controls. (Legacy warning variants were removed.)
+  callout. Save/load and public rendering use `sanitizeCalloutHtml` so real `<ul>/<ol>/<li>` markup
+  survives inside the colored callout. When focused, the toolbar shows text and list tools, but no
+  page-structure or insert controls. (Legacy warning variants were removed.)
 - **Publishing readiness**: `AdminPageEditorForm` shows a live client-side checklist for common
   accessibility/governance blockers before the server publish gate runs.
 
@@ -399,6 +401,10 @@ manual redirect persistence, and the single-active-version DB invariant.
 - **Nested list items may contain block children.** `itemHtml` can include nested `<ul>`/`<ol>` markup.
   Public rendering must not wrap that HTML in an inline-only element (`<span>`), or nested lists become
   invalid/misleading. Use the `list-item-rich-text` block wrapper path when nested lists are present.
+- **Info-box content is simple rich text, not inline-only text.** Use `sanitizeCalloutHtml` for alert
+  storage/rendering so nested `<ul>/<ol>/<li>` survive, but headings/tables/media/sections are flattened
+  or dropped. Public rendering must use the `callout-rich-text` block wrapper, not the inline `RichText`
+  span path.
 - **CSP is per-request in `src/proxy.ts`, not `next.config.ts`** — Next emits inline bootstrap
   scripts that need a per-request nonce + `strict-dynamic`. Don't move CSP to static headers, and
   don't add inline `<script>` without the nonce.
@@ -424,7 +430,7 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 9. Current feature status
 
-**Working & verified (unit + live-DB):**
+**Working & verified (unit/type/build/public axe smoke; live-DB where configured):**
 - Multi-KB public site, configurable KB homepage pages, 3-column docs layout, hierarchical page-tree
   navigation, depth-controlled right-rail TOC.
 - Block editor (rich text, alignment, links, media picker, cards, tables, video, info boxes,
@@ -437,7 +443,9 @@ manual redirect persistence, and the single-active-version DB invariant.
   heading anchor copy; shortcuts popover; `beforeunload` guard + localStorage draft backup/restore;
   draft preview modal. **2026-07-08 follow-up:** source-mode edits now save/preview without switching
   back to Visual; table-cell rich text binds to the shared toolbar; nested list public HTML is valid;
-  review-date changes are included in the draft snapshot; list/table toolbar context is clearer.
+  review-date changes are included in the draft snapshot; list/table toolbar context is clearer;
+  Info boxes preserve simple rich text and nested semantic lists through save and public render; Divider,
+  Procedure section, and Info box insert controls are visibly labeled.
   **Unit-tested and built, but only lightly verified in a real browser — treat as needing manual QA
   (see §10).**
 - Managed assets with stable links + versions; managed video model + public YouTube/Vimeo embeds
@@ -476,10 +484,10 @@ manual redirect persistence, and the single-active-version DB invariant.
 - **The contenteditable editor still needs release-grade QA.** It is custom, and complex selection
   edge cases keep surfacing in real use (heading demotion on delete, list splits with duplicate ids,
   lost pasted images, touchy link insertion, stale HTML-source saves, table-cell toolbar binding, and
-  nested-list rendering were all found by editors/review in 2026-07 and patched point-by-point). Every
-  editor change needs manual verification in a real browser (Chrome + Firefox at minimum), and further
-  reports should be expected. FB-09 (migrating the flow surfaces to a maintained framework) remains the
-  structural fix; FB-25/FB-26 define the release gate and UX pass.
+  nested-list / Info-box callout rendering were all found by editors/review in 2026-07 and patched
+  point-by-point). Every editor change needs manual verification in a real browser (Chrome + Firefox at
+  minimum), and further reports should be expected. FB-09 (migrating the flow surfaces to a maintained
+  framework) remains the structural fix; FB-25 defines the release-grade browser/a11y gate.
 - **No revision history**: a bad save permanently overwrites page content; there is no per-save
   snapshot or restore. The audit log records *that* a change happened, not the content. This is the
   biggest missing trust feature for multi-author use — see FB-24.
@@ -493,8 +501,8 @@ manual redirect persistence, and the single-active-version DB invariant.
 Narrative backlog; the actionable, tagged version is §12.
 
 - **Editor**: **page revision history with restore (FB-24 — next priority)**; production editor
-  regression/a11y release gate (FB-25); focused editor UX pass for lists/toolbars (FB-26); positioned
-  margin/comment rail (true Word-style), comment threads/resolve, and a hardened editor core
+  regression/a11y release gate (FB-25, including the FB-26 editor workflows); positioned margin/comment
+  rail (true Word-style), comment threads/resolve, and a hardened editor core
   (a maintained rich-text framework — FB-09) since contenteditable selection bugs keep surfacing.
 - **Public experience**: home search/filter + pagination as KB count grows; TOC scroll-spy;
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
@@ -923,8 +931,9 @@ Items are ordered by recommended priority.
 - **Suggested approach:** add a Playwright editor regression suite in CI (using installed browsers)
   for the high-risk authoring paths: Visual ↔ HTML source save/preview; ordered-list create + Tab /
   Shift+Tab + toolbar indent/outdent; nested ordered-list public render (1./a./i.); table-cell
-  formatting/link insertion; image alt/edit controls; local draft backup/restore including
-  `nextReviewDate`; note stripping from public/search. Pair this with a manual WCAG 2.1 AA audit
+  formatting/link insertion; Info-box simple rich text with nested lists saving and rendering inside
+  the callout; image alt/edit controls; local draft backup/restore including `nextReviewDate`; note
+  stripping from public/search. Pair this with a manual WCAG 2.1 AA audit
   checklist covering public pages and admin/editor workflows: keyboard-only operation, focus order,
   visible focus, labels/names, headings/landmarks, color contrast, zoom/reflow, table headers, image
   alternatives, video captions/transcripts, and mobile layouts.
@@ -940,26 +949,22 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-26  priority:high  area:editor-ux  effort:M  status:in-progress`
 
-- **PARTIAL (2026-07-08):** toolbar state now exposes focused-surface context and publishes a formatting
-  context event whenever the bound editor surface changes. Table-cell focus switches the shared toolbar to
-  text-only mode: page structure, list, insert, and editor-note controls are hidden behind a "Table cell:
-  text tools only" badge. List focus shows current list level/marker and disables impossible
-  indent/outdent actions. Tab/Shift+Tab now report specific messages for first-item indent and top-level
-  outdent failures.
+- **IMPLEMENTED IN BUILD (2026-07-08), pending browser-regression coverage:** toolbar state now exposes
+  focused-surface context and publishes a formatting context event whenever the bound editor surface
+  changes. Table-cell focus switches the shared toolbar to text-only mode. Info-box focus switches to a
+  simple rich-text mode: text formatting plus bulleted/numbered/nested lists, with page structure,
+  insert, and editor-note controls hidden. List focus disables impossible indent/outdent actions.
+  Tab/Shift+Tab report specific messages for first-item indent and top-level outdent failures. Divider,
+  Procedure section, and Info box insert controls are visibly labeled, and Info boxes preserve callout
+  list markup through save and public render.
 
-- **Finding:** the editor can now represent nested ordered lists correctly, but authoring remains too
-  awkward: the single toolbar exposes controls that do not always make sense for the focused surface,
-  first-item indentation feels like a no-op, and list nesting is not visually explained while editing.
-- **Suggested approach:** make the toolbar context-aware by focused surface and selection type. For list
-  editing, provide explicit Promote/Demote controls with disabled states and short inline feedback,
-  preserve Tab/Shift+Tab, and show nested ordered-list levels as 1./a./i. in both editor and preview.
-  For table cells, limit unavailable structural controls or move table actions into a local table
-  toolbar. Keep the existing `ContentBlock` model and `page-document.ts` serializer boundary. Restore
-  discoverable insert labels for reader-visible structure: "Divider" for horizontal section breaks and
-  "Procedure section" for top-level page sections; keep "Info box" visibly labeled as a callout insert.
-  Treat Info-box focus as a simple rich-text context: allow text formatting and nested lists, preserve
-  the callout block through save/public render, and keep callout content body-sized even if pasted source
-  contains heading tags.
+- **Remaining finding:** the editor UX behavior is implemented, but it is still backed by custom
+  `contentEditable` code and needs automated browser coverage plus a manual Chrome/Firefox pass before
+  calling the editor production-ready.
+- **Remaining approach:** fold these workflows into FB-25's Playwright editor suite: nested ordered-list
+  creation and Tab/Shift+Tab nesting; toolbar indent/outdent disabled states; table-cell text-only
+  context; Info-box text/list context; Divider/Procedure/Info insert discoverability; and Info-box
+  save/public-render persistence.
 - **Touch points:** `src/components/DocumentToolbar.tsx`, `src/components/RichTextToolbar.tsx`,
   `src/components/PageDocumentEditor.tsx`, `src/components/TableBlockEditor.tsx`,
   `src/lib/page-editor-format.ts`, `src/app/globals.css`.
