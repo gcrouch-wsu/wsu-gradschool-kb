@@ -2221,7 +2221,8 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
     overflow-x: visible;
   }
 
-  .editor-form .editor-toolbar-sticky .rich-text-toolbar {
+  .editor-form .editor-toolbar-sticky > .rich-text-toolbar,
+  .editor-form .document-toolbar > .rich-text-toolbar {
     flex-wrap: wrap;
     min-width: 0;
     width: 100%;
@@ -2465,6 +2466,7 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   background: var(--wash);
   border: 1.5px solid var(--line);
   border-radius: var(--radius-md);
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
@@ -2472,18 +2474,24 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
 }
 
 .rich-text-toolbar__button {
+  align-items: center;
   background: var(--paper);
   border: 1px solid var(--line-strong);
   border-radius: 6px;
+  box-sizing: border-box;
   color: var(--ink);
   cursor: pointer;
+  display: inline-flex;
   font: inherit;
   font-size: 0.85rem;
   font-weight: 700;
+  justify-content: center;
+  line-height: 1;
   min-height: 2.25rem;
   min-width: 2.5rem;
   padding: 0.35rem 0.6rem;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .rich-text-toolbar__button:hover {
@@ -2501,14 +2509,13 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
 }
 
 .rich-text-toolbar__button--icon {
-  align-items: center;
-  display: inline-flex;
-  justify-content: center;
   padding: 0.35rem 0.5rem;
 }
 
 .rich-text-toolbar__field {
+  align-items: center;
   display: inline-flex;
+  min-height: 2.25rem;
 }
 
 .rich-text-toolbar__field--inline {
@@ -2520,9 +2527,10 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   background: var(--paper);
   border: 1px solid var(--line-strong);
   border-radius: 6px;
+  box-sizing: border-box;
   color: var(--ink);
   font: inherit;
-  min-height: 2rem;
+  min-height: 2.25rem;
   padding: 0.25rem 0.4rem;
   width: 4.5rem;
 }
@@ -2531,6 +2539,7 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   background: var(--paper);
   border: 1px solid var(--line-strong);
   border-radius: 6px;
+  box-sizing: border-box;
   color: var(--ink);
   cursor: pointer;
   font: inherit;
@@ -2547,8 +2556,10 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
 }
 
 .rich-text-toolbar__divider {
-  align-self: stretch;
+  align-self: center;
   background: var(--line-strong);
+  flex: 0 0 1.5px;
+  height: 2.25rem;
   margin: 0 0.25rem;
   width: 1.5px;
 }
@@ -2927,6 +2938,7 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .document-toolbar__structure,
@@ -2936,6 +2948,7 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  min-height: 2.25rem;
 }
 
 .document-toolbar__context,
@@ -2948,8 +2961,10 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   display: inline-flex;
   font-size: 0.82rem;
   font-weight: 700;
+  line-height: 1.15;
   min-height: 2.25rem;
   padding: 0.35rem 0.6rem;
+  white-space: nowrap;
 }
 
 .editor-readiness {
@@ -3128,6 +3143,7 @@ article li > ol {
   align-items: center;
   display: inline-flex;
   gap: 0.35rem;
+  min-height: 2.25rem;
 }
 
 .rich-text-toolbar__color-swatch {
@@ -3196,11 +3212,20 @@ article li > ol {
   box-shadow: 0 0 0 4px rgba(166, 15, 45, 0.08);
 }
 
-.editor-toolbar-sticky .rich-text-toolbar {
+.editor-toolbar-sticky > .rich-text-toolbar,
+.document-toolbar > .rich-text-toolbar {
   background: transparent;
   border: 0;
   padding: 0;
+}
+
+.editor-toolbar-sticky > .rich-text-toolbar,
+.editor-toolbar-sticky > .document-toolbar {
   flex: 1 1 auto;
+}
+
+.document-toolbar > .rich-text-toolbar {
+  flex: 0 1 auto;
 }
 
 .rich-text-toolbar {
@@ -3208,9 +3233,11 @@ article li > ol {
   background: var(--wash);
   border: 1.5px solid var(--line);
   border-radius: var(--radius-md);
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  max-width: 100%;
   padding: 0.5rem;
 }
 

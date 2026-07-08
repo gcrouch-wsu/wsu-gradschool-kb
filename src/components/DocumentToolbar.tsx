@@ -80,11 +80,13 @@ export function DocumentToolbar({
 
   const buttonClass = "rich-text-toolbar__button";
   const isTableCell = formatting.surfaceKind === "table-cell";
+  const indentDisabled = !formatting.inList;
+  const outdentDisabled = !formatting.inList;
   const indentTitle = !formatting.inList
     ? "Place the cursor in a list item to indent"
     : formatting.canIndentListItem
       ? "Nest this item under the previous item (Tab)"
-      : "Add a list item above this one before nesting it";
+      : "Indent works on item 2 or later; press Enter to add the next item, then indent that item";
   const outdentTitle = !formatting.inList
     ? "Place the cursor in a nested list item to outdent"
     : formatting.canOutdentListItem
@@ -191,10 +193,11 @@ export function DocumentToolbar({
         {formatting.inList && (
           <span className="rich-text-toolbar__status" title="Current list level">
             Level {formatting.listLevel}: {formatting.listMarkerLabel}
+            {!formatting.canIndentListItem && " · indent item 2+"}
           </span>
         )}
         <button
-          disabled={!formatting.canIndentListItem}
+          disabled={indentDisabled}
           aria-label="Indent list item"
           className={buttonClass}
           onMouseDown={(event) => toolbarPrepare(event)}
@@ -205,7 +208,7 @@ export function DocumentToolbar({
           →
         </button>
         <button
-          disabled={!formatting.canOutdentListItem}
+          disabled={outdentDisabled}
           aria-label="Outdent list item"
           className={buttonClass}
           onMouseDown={(event) => toolbarPrepare(event)}

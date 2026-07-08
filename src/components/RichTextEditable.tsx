@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import { bindPageEditor, handleEditorKeyDown } from "@/lib/page-editor-format";
+import { bindPageEditor, handleEditorKeyDown, refreshEditorFormatting } from "@/lib/page-editor-format";
 import { richTextToPlainText, sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import { saveRichTextSelection } from "@/lib/rich-text-selection";
 
@@ -60,10 +60,13 @@ export function RichTextEditable({
       contentEditable
       onBlur={(event) => syncFromSurface(event.currentTarget, true)}
       onFocus={(event) => bindSurface(event.currentTarget)}
-      onInput={(event) => syncFromSurface(event.currentTarget, false)}
+      onInput={(event) => {
+        syncFromSurface(event.currentTarget, false);
+        refreshEditorFormatting();
+      }}
       onKeyDown={handleEditorKeyDown}
-      onKeyUp={() => saveRichTextSelection()}
-      onMouseUp={() => saveRichTextSelection()}
+      onKeyUp={() => refreshEditorFormatting()}
+      onMouseUp={() => refreshEditorFormatting()}
       ref={(node: HTMLElement | null) => {
         surfaceRef.current = node;
       }}

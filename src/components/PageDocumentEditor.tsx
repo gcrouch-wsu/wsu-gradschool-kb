@@ -30,10 +30,10 @@ import {
   registerFormatIssueReporter,
   registerLinkEditor,
   registerNoteEditor,
+  refreshEditorFormatting,
   releaseLinkDraft,
   removeLink,
   removeNote,
-  saveEditorSelection,
   watchEditorSelectionForDebug,
   type AltEditRequest,
   type LinkEditRequest,
@@ -512,10 +512,11 @@ function SectionEditor({
           onInput={(e) => {
             noteEditorInput(e.nativeEvent as InputEvent);
             onUpdateFlow(e.currentTarget.innerHTML, false);
+            refreshEditorFormatting();
           }}
           onKeyDown={handleEditorKeyDown}
-          onKeyUp={() => saveEditorSelection()}
-          onMouseUp={() => saveEditorSelection()}
+          onKeyUp={() => refreshEditorFormatting()}
+          onMouseUp={() => refreshEditorFormatting()}
           onPaste={(e) => handleEditorPaste(e, kbId)}
           ref={attachSurface}
           suppressContentEditableWarning
@@ -626,11 +627,12 @@ function SectionEditor({
               noteEditorInput(e.nativeEvent as InputEvent);
               const clean = sanitizePageDocument(e.currentTarget.innerHTML);
               onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
+              refreshEditorFormatting();
             }}
             onKeyDown={handleEditorKeyDown}
             onPaste={(e) => handleEditorPaste(e, kbId)}
-            onKeyUp={() => saveEditorSelection()}
-            onMouseUp={() => saveEditorSelection()}
+            onKeyUp={() => refreshEditorFormatting()}
+            onMouseUp={() => refreshEditorFormatting()}
             ref={(node) => {
               if (node && !node.innerHTML.trim()) {
                 node.innerHTML = blocksToDocumentHtml(section.block.blocks, kbSlug);
@@ -694,11 +696,12 @@ function SectionEditor({
               noteEditorInput(e.nativeEvent as InputEvent);
               const clean = sanitizePageDocument(e.currentTarget.innerHTML);
               onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
+              refreshEditorFormatting();
             }}
             onKeyDown={handleEditorKeyDown}
             onPaste={(e) => handleEditorPaste(e, kbId)}
-            onKeyUp={() => saveEditorSelection()}
-            onMouseUp={() => saveEditorSelection()}
+            onKeyUp={() => refreshEditorFormatting()}
+            onMouseUp={() => refreshEditorFormatting()}
             ref={(node) => {
               if (node && !node.innerHTML.trim()) {
                 node.innerHTML = blocksToDocumentHtml(section.block.blocks, kbSlug);

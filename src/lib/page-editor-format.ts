@@ -95,6 +95,11 @@ export function subscribeEditorFormatting(listener: () => void): () => void {
   return () => document.removeEventListener(FORMAT_CONTEXT_EVENT, listener);
 }
 
+export function refreshEditorFormatting() {
+  saveRichTextSelection();
+  notifyFormattingContext();
+}
+
 export const saveEditorSelection = saveRichTextSelection;
 
 export function toolbarPrepare(event?: { preventDefault: () => void }) {
@@ -807,7 +812,7 @@ function mutateListItem(li: HTMLLIElement, action: "indent" | "outdent"): boolea
   if (!allowed) {
     const message =
       action === "indent"
-        ? "Add a list item above this one before nesting it."
+        ? "Indent works on item 2 or later. Press Enter to add the next item, then indent that item."
         : "This list item is already at the top level.";
     recordFormat(action, false, action === "indent" ? "first-item" : "top-level", message);
     return false;
