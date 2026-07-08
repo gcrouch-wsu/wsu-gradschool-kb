@@ -2951,8 +2951,7 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   min-height: 2.25rem;
 }
 
-.document-toolbar__context,
-.rich-text-toolbar__status {
+.document-toolbar__context {
   align-items: center;
   background: var(--paper);
   border: 1px solid var(--line);
@@ -3397,18 +3396,49 @@ article ol ol ol {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
+  box-sizing: border-box;
   box-shadow: var(--shadow-md);
   left: 0;
+  max-height: min(24rem, calc(100vh - 7rem));
+  max-width: calc(100vw - 2rem);
+  overflow: auto;
   padding: 0.6rem;
   position: absolute;
   top: calc(100% + 0.35rem);
-  z-index: 40;
+  z-index: 80;
+}
+
+.toolbar-popover--anchored-right {
+  left: auto;
+  right: 0;
+}
+
+.toolbar-popover__field {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  white-space: nowrap;
+}
+
+.toolbar-popover__field span {
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.toolbar-popover__note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  margin: 0.55rem 0 0;
 }
 
 .symbol-palette {
   display: grid;
   gap: 0.15rem;
-  grid-template-columns: repeat(8, 1.9rem);
+  grid-template-columns: repeat(auto-fit, minmax(1.8rem, 1fr));
+  width: min(18rem, calc(100vw - 3.25rem));
 }
 
 .symbol-palette__item {
@@ -3428,9 +3458,12 @@ article ol ol ol {
 }
 
 .shortcuts-popover {
-  left: auto;
-  min-width: 21rem;
-  right: 0;
+  min-width: min(21rem, calc(100vw - 2rem));
+  width: min(28rem, calc(100vw - 2rem));
+}
+
+.list-settings-popover {
+  min-width: min(14rem, calc(100vw - 2rem));
 }
 
 .shortcuts-popover__list {
@@ -3462,6 +3495,27 @@ article ol ol ol {
 .shortcuts-popover__row dd {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+@media (max-width: 560px) {
+  .toolbar-popover {
+    bottom: 1rem;
+    left: 1rem;
+    max-height: calc(100vh - 2rem);
+    right: 1rem;
+    top: auto;
+    width: auto;
+  }
+
+  .symbol-palette {
+    grid-template-columns: repeat(auto-fit, minmax(2rem, 1fr));
+    width: auto;
+  }
+
+  .shortcuts-popover__row {
+    gap: 0.15rem;
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Draft preview modal */

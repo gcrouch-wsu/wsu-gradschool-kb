@@ -265,7 +265,11 @@ export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalet
           Ω
         </button>
         {symbolsOpen && (
-          <div className="toolbar-popover symbol-palette" role="menu" aria-label="Special characters">
+          <div
+            className="toolbar-popover toolbar-popover--anchored-right symbol-palette"
+            role="menu"
+            aria-label="Special characters"
+          >
             {SYMBOLS.map((symbol) => (
               <button
                 className="symbol-palette__item"

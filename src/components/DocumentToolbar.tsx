@@ -53,11 +53,17 @@ export function DocumentToolbar({
   const [formatting, setFormatting] = useState<EditorFormatting>(EMPTY_EDITOR_FORMATTING);
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [listSettingsOpen, setListSettingsOpen] = useState(false);
   const shortcutsRef = useRef<HTMLSpanElement>(null);
+  const listSettingsRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const updateFormatting = () => {
-      setFormatting(queryEditorFormatting());
+      const nextFormatting = queryEditorFormatting();
+      setFormatting(nextFormatting);
+      if (nextFormatting.orderedListStart === null) {
+        setListSettingsOpen(false);
+      }
     };
     document.addEventListener("selectionchange", updateFormatting);
     const unsubscribeFormatting = subscribeEditorFormatting(updateFormatting);
@@ -68,15 +74,18 @@ export function DocumentToolbar({
   }, []);
 
   useEffect(() => {
-    if (!shortcutsOpen) return;
+    if (!shortcutsOpen && !listSettingsOpen) return;
     const close = (event: MouseEvent) => {
       if (!shortcutsRef.current?.contains(event.target as Node)) {
         setShortcutsOpen(false);
       }
+      if (!listSettingsRef.current?.contains(event.target as Node)) {
+        setListSettingsOpen(false);
+      }
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
-  }, [shortcutsOpen]);
+  }, [listSettingsOpen, shortcutsOpen]);
 
   const buttonClass = "rich-text-toolbar__button";
   const isTableCell = formatting.surfaceKind === "table-cell";
@@ -178,22 +187,50 @@ export function DocumentToolbar({
           1. List
         </button>
         {formatting.orderedListStart !== null && (
-          <label className="rich-text-toolbar__field rich-text-toolbar__field--inline">
-            <span className="meta">Starts at</span>
-            <input
-              className="rich-text-toolbar__number"
-              min={1}
-              onChange={(event) => applyOrderedListStart(Number(event.target.value))}
-              onMouseDown={() => saveEditorSelection()}
-              type="number"
-              value={formatting.orderedListStart}
-            />
-          </label>
-        )}
-        {formatting.inList && (
-          <span className="rich-text-toolbar__status" title="Current list level">
-            Level {formatting.listLevel}: {formatting.listMarkerLabel}
-            {!formatting.canIndentListItem && " · indent item 2+"}
+          <span className="toolbar-popover-wrap" ref={listSettingsRef}>
+            <button
+              aria-expanded={listSettingsOpen}
+              aria-label="Numbered list settings"
+              className={buttonClass}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={() => setListSettingsOpen((open) => !open)}
+              title={`Numbered list settings. Current list starts at ${formatting.orderedListStart}.`}
+              type="button"
+            >
+              #
+            </button>
+            {listSettingsOpen && (
+              <div
+                aria-label="Numbered list settings"
+                className="toolbar-popover toolbar-popover--anchored-right list-settings-popover"
+                role="dialog"
+              >
+                <label className="toolbar-popover__field">
+                  <span>Start at</span>
+                  <input
+                    className="rich-text-toolbar__number"
+                    defaultValue={formatting.orderedListStart}
+                    min={1}
+                    onBlur={(event) => applyOrderedListStart(Number(event.currentTarget.value))}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") {
+                        return;
+                      }
+                      event.preventDefault();
+                      applyOrderedListStart(Number(event.currentTarget.value));
+                      setListSettingsOpen(false);
+                    }}
+                    onMouseDown={() => saveEditorSelection()}
+                    type="number"
+                  />
+                </label>
+                {formatting.inList && (
+                  <p className="toolbar-popover__note">
+                    Tab indents item 2 or later. Shift+Tab moves nested items back out.
+                  </p>
+                )}
+              </div>
+            )}
           </span>
         )}
         <button
@@ -249,13 +286,14 @@ export function DocumentToolbar({
               <Rows3 aria-hidden size={16} strokeWidth={1.75} />
             </button>
             <button
+              aria-label="Insert procedure section"
               className={buttonClass}
               onMouseDown={(event) => toolbarPrepare(event)}
               onClick={onAddProcedureSection}
               title="Insert a structural procedure section"
               type="button"
             >
-              Procedure section
+              Procedure
             </button>
             <button
               aria-label="Insert table"
@@ -288,13 +326,14 @@ export function DocumentToolbar({
               <ImagePlus aria-hidden size={16} strokeWidth={1.75} />
             </button>
             <button
+              aria-label="Insert info box"
               className={buttonClass}
               onMouseDown={(event) => toolbarPrepare(event)}
               onClick={onInsertInfoBox}
               title="Insert an info box that is visible to readers"
               type="button"
             >
-              Info box
+              Info
             </button>
           </div>
           <span className="rich-text-toolbar__divider" aria-hidden="true" />
@@ -320,7 +359,11 @@ export function DocumentToolbar({
                 ?
               </button>
               {shortcutsOpen && (
-                <div className="toolbar-popover shortcuts-popover" role="dialog" aria-label="Keyboard shortcuts">
+                <div
+                  className="toolbar-popover toolbar-popover--anchored-right shortcuts-popover"
+                  role="dialog"
+                  aria-label="Keyboard shortcuts"
+                >
                   <strong>Keyboard shortcuts</strong>
                   <dl className="shortcuts-popover__list">
                     {KEYBOARD_SHORTCUTS.map((item) => (
