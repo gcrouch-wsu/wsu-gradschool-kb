@@ -1,7 +1,11 @@
 import { isPageEditorDebugEnabled, publishPageEditorDebug } from "@/lib/page-editor-debug";
 import {
+  canIndentListItem,
+  canOutdentListItem,
   indentListItem,
+  listLevelForItem,
   listItemFromSelection,
+  listMarkerLabelForItem,
   orderedListFromSelection,
   orderedListStartFromSelection,
   outdentListItem,
@@ -23,6 +27,8 @@ import type { ContentBlock } from "@/lib/types";
 
 let onDocumentMutate: (() => void) | null = null;
 let onFormatIssue: ((message: string | null) => void) | null = null;
+
+const FORMAT_CONTEXT_EVENT = "kb-editor-formatting-change";
 
 const FONT_FACE_FOR_EXEC: Record<string, string> = {
   "Arial, Helvetica, sans-serif": "Arial",
@@ -56,11 +62,20 @@ function recordFormat(action: string, ok: boolean, detail: string, userMessage?:
 function notifyMutation() {
   onFormatIssue?.(null);
   onDocumentMutate?.();
+  notifyFormattingContext();
+}
+
+function notifyFormattingContext() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.dispatchEvent(new Event(FORMAT_CONTEXT_EVENT));
 }
 
 export function bindPageEditor(surface: HTMLElement | null, onMutate: () => void) {
   bindEditorSurface(surface);
   onDocumentMutate = onMutate;
+  notifyFormattingContext();
   publishPageEditorDebug({
     lastAction: surface ? "bind" : "unbind",
     lastResult: "ok",
@@ -70,6 +85,14 @@ export function bindPageEditor(surface: HTMLElement | null, onMutate: () => void
 
 export function registerFormatIssueReporter(report: (message: string | null) => void) {
   onFormatIssue = report;
+}
+
+export function subscribeEditorFormatting(listener: () => void): () => void {
+  if (typeof document === "undefined") {
+    return () => {};
+  }
+  document.addEventListener(FORMAT_CONTEXT_EVENT, listener);
+  return () => document.removeEventListener(FORMAT_CONTEXT_EVENT, listener);
 }
 
 export const saveEditorSelection = saveRichTextSelection;
@@ -779,14 +802,23 @@ export function applyOrderedListStart(start: number): boolean {
 }
 
 function mutateListItem(li: HTMLLIElement, action: "indent" | "outdent"): boolean {
-  const preHtml = getBoundEditorSurface()?.innerHTML;
+  const surface = getBoundEditorSurface();
+  const allowed = action === "indent" ? canIndentListItem(li) : canOutdentListItem(li);
+  if (!allowed) {
+    const message =
+      action === "indent"
+        ? "Add a list item above this one before nesting it."
+        : "This list item is already at the top level.";
+    recordFormat(action, false, action === "indent" ? "first-item" : "top-level", message);
+    return false;
+  }
+  const preHtml = surface?.innerHTML;
   const changed = action === "indent" ? indentListItem(li) : outdentListItem(li);
   if (!changed) {
     recordFormat(action, false, "cannot-nest", "Cannot indent/outdent this line further.");
     return false;
   }
   snapshotStructuralChange(preHtml);
-  const surface = li.closest(".wysiwyg-surface");
   surface?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   notifyMutation();
   recordFormat(action, true, "dom");
@@ -796,6 +828,7 @@ function mutateListItem(li: HTMLLIElement, action: "indent" | "outdent"): boolea
 export function applyIndent(): boolean {
   const surface = getBoundEditorSurface();
   if (!surface) {
+    recordFormat("indent", false, "no-surface", "Click in the editor, then indent a list item.");
     return false;
   }
   const li = listItemFromSelection(surface);
@@ -809,6 +842,7 @@ export function applyIndent(): boolean {
 export function applyOutdent(): boolean {
   const surface = getBoundEditorSurface();
   if (!surface) {
+    recordFormat("outdent", false, "no-surface", "Click in the editor, then outdent a nested list item.");
     return false;
   }
   const li = listItemFromSelection(surface);
@@ -1263,37 +1297,81 @@ export interface EditorFormatting {
   alignLeft: boolean;
   alignCenter: boolean;
   alignRight: boolean;
+  canIndentListItem: boolean;
+  canOutdentListItem: boolean;
+  inList: boolean;
+  listLevel: number | null;
+  listMarkerLabel: string | null;
   orderedListStart: number | null;
+  surfaceKind: "document" | "none" | "table-cell";
 }
 
+export const EMPTY_EDITOR_FORMATTING: EditorFormatting = {
+  bold: false,
+  italic: false,
+  underline: false,
+  strikeThrough: false,
+  orderedList: false,
+  unorderedList: false,
+  h2: false,
+  h3: false,
+  p: false,
+  alignLeft: false,
+  alignCenter: false,
+  alignRight: false,
+  canIndentListItem: false,
+  canOutdentListItem: false,
+  inList: false,
+  listLevel: null,
+  listMarkerLabel: null,
+  orderedListStart: null,
+  surfaceKind: "none",
+};
+
 export function queryEditorFormatting(): EditorFormatting {
+  const surface = getBoundEditorSurface();
+  const selection = window.getSelection();
+  const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+  const node = range?.commonAncestorContainer ?? null;
+  const element = node ? (node.nodeType === 1 ? (node as Element) : node.parentElement) : null;
+  const selectionInSurface = Boolean(surface && node && surface.contains(node));
+  const li = surface && selectionInSurface ? listItemFromSelection(surface) : null;
+  const surfaceKind = surface?.classList.contains("wysiwyg-table-cell")
+    ? "table-cell"
+    : surface
+      ? "document"
+      : "none";
+  const commandState = (command: string) => {
+    try {
+      return document.queryCommandState(command);
+    } catch {
+      return false;
+    }
+  };
   const isBlock = (tag: string) => {
-    const surface = getBoundEditorSurface();
-    if (!surface) return false;
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return false;
-    const node = selection.getRangeAt(0).commonAncestorContainer;
-    const element = node.nodeType === 1 ? (node as Element) : node.parentElement;
-    return !!element?.closest(tag);
+    return Boolean(selectionInSurface && element?.closest(tag));
   };
 
   return {
-    bold: document.queryCommandState("bold"),
-    italic: document.queryCommandState("italic"),
-    underline: document.queryCommandState("underline"),
-    strikeThrough: document.queryCommandState("strikeThrough"),
-    orderedList: document.queryCommandState("insertOrderedList"),
-    unorderedList: document.queryCommandState("insertUnorderedList"),
+    bold: commandState("bold"),
+    italic: commandState("italic"),
+    underline: commandState("underline"),
+    strikeThrough: commandState("strikeThrough"),
+    orderedList: commandState("insertOrderedList"),
+    unorderedList: commandState("insertUnorderedList"),
     h2: isBlock("h2"),
     h3: isBlock("h3"),
     p: isBlock("p") && !isBlock("h2") && !isBlock("h3") && !isBlock("li"),
-    alignLeft: document.queryCommandState("justifyLeft"),
-    alignCenter: document.queryCommandState("justifyCenter"),
-    alignRight: document.queryCommandState("justifyRight"),
-    orderedListStart: (() => {
-      const surface = getBoundEditorSurface();
-      return surface ? orderedListStartFromSelection(surface) : null;
-    })(),
+    alignLeft: commandState("justifyLeft"),
+    alignCenter: commandState("justifyCenter"),
+    alignRight: commandState("justifyRight"),
+    canIndentListItem: li ? canIndentListItem(li) : false,
+    canOutdentListItem: li ? canOutdentListItem(li) : false,
+    inList: Boolean(li),
+    listLevel: li && surface ? listLevelForItem(li, surface) : null,
+    listMarkerLabel: li && surface ? listMarkerLabelForItem(li, surface) : null,
+    orderedListStart: surface ? orderedListStartFromSelection(surface) : null,
+    surfaceKind,
   };
 }
 

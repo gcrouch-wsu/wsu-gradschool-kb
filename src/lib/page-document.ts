@@ -110,6 +110,40 @@ function collapseWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+const LIST_ITEM_TEXT_BREAK_TAGS = new Set(["br", "div", "li", "ol", "p", "table", "tr", "ul"]);
+
+function listItemPlainText(html: string) {
+  const root = parse(html);
+  const parts: string[] = [];
+  const appendBreak = () => {
+    if (parts.length > 0 && parts[parts.length - 1] !== " ") {
+      parts.push(" ");
+    }
+  };
+  const visit = (node: Node) => {
+    if (!isElement(node)) {
+      if (node.text) {
+        parts.push(node.text);
+      }
+      return;
+    }
+    const tag = node.tagName.toLowerCase();
+    if (tag === "br") {
+      appendBreak();
+      return;
+    }
+    if (tag === "ol" || tag === "ul") {
+      appendBreak();
+    }
+    node.childNodes.forEach(visit);
+    if (LIST_ITEM_TEXT_BREAK_TAGS.has(tag)) {
+      appendBreak();
+    }
+  };
+  root.childNodes.forEach(visit);
+  return collapseWhitespace(parts.join(""));
+}
+
 function newBlockId() {
   return `block-${crypto.randomUUID()}`;
 }
@@ -182,9 +216,9 @@ function inlineFields(node: HTMLElement, listItem = false) {
   const html = listItem
     ? sanitizeListItemHtml(node.innerHTML, { keepNotes: true })
     : sanitizeRichText(node.innerHTML, { keepNotes: true });
-  const text = collapseWhitespace(
-    listItem ? parse(html || node.innerHTML).text : richTextToPlainText(html) || node.text,
-  );
+  const text = listItem
+    ? listItemPlainText(html || node.innerHTML)
+    : collapseWhitespace(richTextToPlainText(html) || node.text);
   return { html, text };
 }
 

@@ -169,6 +169,22 @@ describe("page-document", () => {
     expect((blocks[0] as { itemHtml?: string[] }).itemHtml?.[0]).toContain("<ul>");
   });
 
+  it("preserves nested ordered lists so public CSS can show alpha and roman sub-levels", () => {
+    const html = sanitizePageDocument(
+      '<ol data-block-id="l1"><li>Parent<ol><li>Child<ol><li>Grandchild</li></ol></li></ol></li></ol>',
+    );
+    expect(html).toContain("<ol><li>Child<ol><li>Grandchild</li></ol></li></ol>");
+
+    const blocks = documentHtmlToBlocks(html);
+    expect(blocks[0]).toMatchObject({ type: "list", ordered: true, items: ["Parent Child Grandchild"] });
+    const itemHtml = (blocks[0] as { itemHtml?: string[] }).itemHtml?.[0] ?? "";
+    expect(itemHtml).toContain("<ol>");
+    expect(itemHtml).toContain("Grandchild");
+
+    const source = blocksToSourceHtml(blocks);
+    expect(source).toContain("<ol><li>Child<ol><li>Grandchild</li></ol></li></ol>");
+  });
+
   it("preserves px font sizes after sync", () => {
     const html = sanitizePageDocument(
       '<p data-block-id="p1"><span style="font-size: 14px">Small</span></p>',

@@ -10,12 +10,14 @@ import {
   applyFontFamily,
   applyFontSize,
   applyInlineFormat,
+  EMPTY_EDITOR_FORMATTING,
   insertEditorText,
   openLinkEditor,
   queryEditorFormatting,
   RICH_TEXT_FONT_FAMILIES,
   RICH_TEXT_FONT_SIZES,
   saveEditorSelection,
+  subscribeEditorFormatting,
   toolbarPrepare,
   type EditorFormatting,
 } from "@/lib/page-editor-format";
@@ -32,32 +34,22 @@ export function RichTextToolbar({ editorPalette }: { editorPalette?: EditorPalet
   const fonts = editorPalette?.fonts ?? RICH_TEXT_FONT_FAMILIES;
   const sizes = editorPalette?.sizes ?? RICH_TEXT_FONT_SIZES;
   const colors = editorPalette?.colors ?? RICH_TEXT_COLORS;
-  const [formatting, setFormatting] = useState<EditorFormatting>({
-    bold: false,
-    italic: false,
-    underline: false,
-    strikeThrough: false,
-    orderedList: false,
-    unorderedList: false,
-    h2: false,
-    h3: false,
-    p: false,
-    alignLeft: false,
-    alignCenter: false,
-    alignRight: false,
-    orderedListStart: null,
-  });
+  const [formatting, setFormatting] = useState<EditorFormatting>(EMPTY_EDITOR_FORMATTING);
 
   const [symbolsOpen, setSymbolsOpen] = useState(false);
   const symbolsRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const onSelectionChange = () => {
+    const updateFormatting = () => {
       saveEditorSelection();
       setFormatting(queryEditorFormatting());
     };
-    document.addEventListener("selectionchange", onSelectionChange);
-    return () => document.removeEventListener("selectionchange", onSelectionChange);
+    document.addEventListener("selectionchange", updateFormatting);
+    const unsubscribeFormatting = subscribeEditorFormatting(updateFormatting);
+    return () => {
+      document.removeEventListener("selectionchange", updateFormatting);
+      unsubscribeFormatting();
+    };
   }, []);
 
   useEffect(() => {

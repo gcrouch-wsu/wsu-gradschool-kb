@@ -99,6 +99,11 @@ export function PageDocumentEditor({
     setViewMode("visual");
   }
 
+  function updateHtmlDraft(value: string) {
+    setHtmlDraft(value);
+    onChangeRef.current(documentHtmlToBlocks(value));
+  }
+
   useEffect(() => {
     registerFormatIssueReporter(setFormatHint);
     registerLinkEditor(setLinkRequest);
@@ -302,7 +307,7 @@ export function PageDocumentEditor({
           <textarea
             aria-label="Document HTML source"
             className="html-source__area"
-            onChange={(e) => setHtmlDraft(e.target.value)}
+            onChange={(e) => updateHtmlDraft(e.target.value)}
             spellCheck={false}
             value={htmlDraft}
           />

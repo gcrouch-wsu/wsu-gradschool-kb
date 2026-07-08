@@ -15,6 +15,9 @@ function RichText({ html, text }: { html?: string; text?: string }) {
 
 function ListItemRichText({ html, text }: { html?: string; text?: string }) {
   const clean = html ? sanitizeListItemHtml(html) : textToRichText(text || "");
+  if (/<(?:ol|ul)\b/i.test(clean)) {
+    return <div className="list-item-rich-text" dangerouslySetInnerHTML={{ __html: clean }} />;
+  }
   return <span dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 

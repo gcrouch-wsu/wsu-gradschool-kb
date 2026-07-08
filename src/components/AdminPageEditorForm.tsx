@@ -405,21 +405,26 @@ export function AdminPageEditorForm({
     }
   }, [altError, issues]);
 
-  const currentSnapshot = JSON.stringify({
-    title,
-    slug,
-    summary,
-    visibility,
-    parentPath,
-    ownerLabel,
-    contactEmail,
-    lastReviewedDate,
-    showToc,
-    tocDepth,
-    showSummary,
-    showPrintButton,
-    blocks,
-  });
+  function buildSnapshot(overrides: { nextReviewDate?: string } = {}) {
+    return JSON.stringify({
+      title,
+      slug,
+      summary,
+      visibility,
+      parentPath,
+      ownerLabel,
+      contactEmail,
+      lastReviewedDate,
+      nextReviewDate: overrides.nextReviewDate ?? nextReviewDate,
+      showToc,
+      tocDepth,
+      showSummary,
+      showPrintButton,
+      blocks,
+    });
+  }
+
+  const currentSnapshot = buildSnapshot();
   const [savedSnapshot, setSavedSnapshot] = useState(currentSnapshot);
   const dirty = currentSnapshot !== savedSnapshot;
 
@@ -442,6 +447,7 @@ export function AdminPageEditorForm({
 
   // Offer to restore a backup left behind by a crash, timeout, or closed tab.
   useEffect(() => {
+    let notice: { savedAt: string } | null = null;
     try {
       const raw = localStorage.getItem(backupKey);
       if (!raw) return;
@@ -450,10 +456,14 @@ export function AdminPageEditorForm({
         localStorage.removeItem(backupKey);
         return;
       }
-      setBackupNotice({ savedAt: parsed.savedAt ?? "" });
+      notice = { savedAt: parsed.savedAt ?? "" };
     } catch {
       // Corrupt or inaccessible storage — nothing to restore.
     }
+    if (!notice) return;
+    const pendingNotice = notice;
+    const timer = window.setTimeout(() => setBackupNotice(pendingNotice), 0);
+    return () => window.clearTimeout(timer);
     // Run once per page; savedSnapshot here is intentionally the initial value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backupKey]);
@@ -505,6 +515,7 @@ export function AdminPageEditorForm({
       if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
       if (typeof data.contactEmail === "string") setContactEmail(data.contactEmail);
       if (typeof data.lastReviewedDate === "string") setLastReviewedDate(data.lastReviewedDate);
+      if (typeof data.nextReviewDate === "string") setNextReviewDate(data.nextReviewDate);
       if (typeof data.showToc === "boolean") setShowToc(data.showToc);
       if (typeof data.tocDepth === "number") setTocDepth(data.tocDepth);
       if (typeof data.showSummary === "boolean") setShowSummary(data.showSummary);
@@ -600,9 +611,13 @@ export function AdminPageEditorForm({
       if (!response.ok) {
         throw new Error(data.message ?? "Could not verify page.");
       }
+      const verifiedNextReviewDate = typeof data.nextReviewDate === "string" ? data.nextReviewDate : "";
       setVerifiedAt(data.verifiedAt);
       setVerifiedBy(data.verifiedBy);
-      setNextReviewDate(data.nextReviewDate);
+      setNextReviewDate(verifiedNextReviewDate);
+      if (!dirty) {
+        setSavedSnapshot(buildSnapshot({ nextReviewDate: verifiedNextReviewDate }));
+      }
       setLifecycleMessage("Page verified and review clock reset (6 months).");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not verify page.");

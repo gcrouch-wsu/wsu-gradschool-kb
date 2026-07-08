@@ -165,9 +165,19 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 - The editor groups blocks into **sections**; a run of inline blocks renders as one
   `contentEditable` "flow" surface, round-tripped through `page-document.ts` on input/blur. Tables,
   procedure sections, cards, videos, and asset links are their own section editors.
+- **HTML source mode** is not just a view toggle: textarea edits are parsed through
+  `documentHtmlToBlocks` as the user types so Save/Preview use the source draft even if the editor
+  never switches back to Visual. Switching back to Visual re-parses the same draft and rebuilds the
+  section list.
 - Toolbar formatting, links, alt text, and editor notes live in `src/lib/page-editor-format.ts`
   (selection save/restore + `document.execCommand`, plus DOM helpers). Selection plumbing is in
   `src/lib/rich-text-selection.ts`.
+- Table cells use `RichTextEditable`; on focus they bind themselves as the active editor surface so
+  the shared toolbar can format/link selected text inside a cell. If a new rich-text sub-editor is
+  added, it must bind through the same selection pipeline or toolbar commands will act stale.
+- Toolbar state is surface-aware: when editing a table cell, page-structure/list controls collapse to
+  a "Table cell: text tools only" context badge; when editing a list item, the toolbar shows the
+  current list level/marker and disables impossible indent/outdent actions.
 - **Keydown pipeline** (`handleEditorKeyDown`): Tab/Shift+Tab list nesting, **Ctrl/Cmd+K** link
   dialog, structural undo/redo (below), and a **heading-merge guard** that stops Backspace/Delete
   from silently demoting H2/H3s when deleting empty lines next to a heading or range-deleting into one.
@@ -185,15 +195,18 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
   Ctrl+Z / the toolbar Undo–Redo buttons reverse them; typing hands control back to native undo.
 - **Work protection** (`AdminPageEditorForm`): `beforeunload` warning when dirty, plus a debounced
   **localStorage draft backup** (`kb-editor-backup:{pageId}`) with a "Restore draft / Discard"
-  banner on reopen; cleared on successful save.
+  banner on reopen; cleared on successful save. The backup snapshot includes lifecycle metadata such
+  as `nextReviewDate`, not only body blocks.
 - **Draft preview** (`DraftPreviewModal`): renders current unsaved blocks with public article styling
   via `blocksToSourceHtml`; videos/file links appear as placeholders (they resolve server-side).
 - **Sanitizer guards** (`page-document.ts`): duplicate `data-block-id`s are re-minted on every
   sanitize (split lists used to share an id → flaky saves); inline `font-size` spans are stripped
   from headings so theme control wins.
 - Toolbar extras: **symbol palette** (Ω), **Copy anchor** button when the caret is in a heading,
-  keyboard-shortcuts popover, "Starts at" ordered-list control. Nested `<ol>`s render 1./a./i.
-  Offending H3-before-H2 headings are outlined by `markHeadingOrderProblems` (like missing alt).
+  keyboard-shortcuts popover, "Starts at" ordered-list control. Nested `<ol>`s stay semantic ordered
+  lists and render 1./a./i.; the public renderer emits block-level list-item content when a list item
+  contains nested lists so the HTML is valid. Offending H3-before-H2 headings are outlined by
+  `markHeadingOrderProblems` (like missing alt).
 - **Notes are Word-style anchored comments**: a selected-text note wraps the text in an inline
   `<span class="doc-note" data-note-body="…">`; a cursor-position note inserts an empty
   `doc-note doc-note--point` span. They render as a highlight/pin in the editor and are **stripped
@@ -376,6 +389,13 @@ manual redirect persistence, and the single-active-version DB invariant.
   `DATABASE_URL`.
 - **The editor surface binds once** (stable ref callback in `PageDocumentEditor`); re-creating the
   ref each render previously thrashed selection/caret. Keep callbacks stable / behind refs.
+- **Any rich-text sub-editor must bind the shared toolbar target.** Flow, card, procedure, and table
+  cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
+  binding the active surface makes toolbar commands fail because the selection is treated as outside
+  the editor.
+- **Nested list items may contain block children.** `itemHtml` can include nested `<ul>`/`<ol>` markup.
+  Public rendering must not wrap that HTML in an inline-only element (`<span>`), or nested lists become
+  invalid/misleading. Use the `list-item-rich-text` block wrapper path when nested lists are present.
 - **CSP is per-request in `src/proxy.ts`, not `next.config.ts`** — Next emits inline bootstrap
   scripts that need a per-request nonce + `strict-dynamic`. Don't move CSP to static headers, and
   don't add inline `<script>` without the nonce.
@@ -412,8 +432,11 @@ manual redirect persistence, and the single-active-version DB invariant.
   Word/web HTML; heading-merge guard; duplicate block-id re-minting; heading font-size stripping;
   first-item list-indent fix + nested ordered-list numbering; structural undo/redo; symbol palette;
   heading anchor copy; shortcuts popover; `beforeunload` guard + localStorage draft backup/restore;
-  draft preview modal. **Unit-tested and built, but only lightly verified in a real browser — treat
-  as needing manual QA (see §10).**
+  draft preview modal. **2026-07-08 follow-up:** source-mode edits now save/preview without switching
+  back to Visual; table-cell rich text binds to the shared toolbar; nested list public HTML is valid;
+  review-date changes are included in the draft snapshot; list/table toolbar context is clearer.
+  **Unit-tested and built, but only lightly verified in a real browser — treat as needing manual QA
+  (see §10).**
 - Managed assets with stable links + versions; managed video model + public YouTube/Vimeo embeds
   (CSP `frame-src` allowlisted); per-image alt text.
 - Postgres FTS with staff-visibility prune and punctuation safety.
@@ -443,15 +466,17 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 10. Known limitations
 
-- **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Public table
-  cells also lack `scope` attributes today.
+- **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Do not describe
+  the product as ADA/WCAG certified until a manual audit passes. Public table cells also lack `scope`
+  attributes today.
 - No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
-- **The contenteditable editor is still buggy.** It is custom, and complex selection edge cases keep
-  surfacing in real use (heading demotion on delete, list splits with duplicate ids, lost pasted
-  images, and touchy link insertion were all found by editors in 2026-07). The hardening round above
-  addresses those specific reports, but every editor change needs manual verification in a real
-  browser (Chrome + Firefox at minimum), and further reports should be expected. FB-09 (migrating
-  the flow surfaces to a maintained framework) remains the structural fix.
+- **The contenteditable editor still needs release-grade QA.** It is custom, and complex selection
+  edge cases keep surfacing in real use (heading demotion on delete, list splits with duplicate ids,
+  lost pasted images, touchy link insertion, stale HTML-source saves, table-cell toolbar binding, and
+  nested-list rendering were all found by editors/review in 2026-07 and patched point-by-point). Every
+  editor change needs manual verification in a real browser (Chrome + Firefox at minimum), and further
+  reports should be expected. FB-09 (migrating the flow surfaces to a maintained framework) remains the
+  structural fix; FB-25/FB-26 define the release gate and UX pass.
 - **No revision history**: a bad save permanently overwrites page content; there is no per-save
   snapshot or restore. The audit log records *that* a change happened, not the content. This is the
   biggest missing trust feature for multi-author use — see FB-24.
@@ -464,7 +489,8 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 Narrative backlog; the actionable, tagged version is §12.
 
-- **Editor**: **page revision history with restore (FB-24 — next priority)**; positioned
+- **Editor**: **page revision history with restore (FB-24 — next priority)**; production editor
+  regression/a11y release gate (FB-25); focused editor UX pass for lists/toolbars (FB-26); positioned
   margin/comment rail (true Word-style), comment threads/resolve, and a hardened editor core
   (a maintained rich-text framework — FB-09) since contenteditable selection bugs keep surfacing.
 - **Public experience**: home search/filter + pagination as KB count grows; TOC scroll-spy;
@@ -473,7 +499,8 @@ Narrative backlog; the actionable, tagged version is §12.
   navigation options); bulk page operations; trash/restore; scheduled publish.
 - **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact view.
 - **Governance & ops**: wire audit-log retention; per-KB activity feed from the audit log; per-PR
-  ephemeral Neon DB tests; broader integration + a11y coverage; a real rate-limit load test.
+  ephemeral Neon DB tests; broader integration + a11y coverage; a real rate-limit load test; production
+  monitoring/log review and rollback checklist.
 
 ---
 
@@ -881,3 +908,54 @@ Items are ordered by recommended priority.
   (2) an editor can view any listed revision and restore it without data loss (restore = new
   revision); (3) revision writes do not break the edit-lock batch semantics (§5 Edit locks, §8
   abort-guard gotcha); (4) retention cleanup verified against a live DB.
+
+### FB-25 — Production release gate: WCAG audit + editor browser regressions
+
+`[AI-AGENT-TASK] id:FB-25  priority:high  area:qa-a11y-release  effort:M  status:open`
+
+- **Finding:** the app is accessibility-oriented and has a publish gate plus public axe smoke tests,
+  but it should not be called ADA/WCAG compliant until a full manual audit and cross-browser workflow
+  pass are complete. The page editor has historically failed in browser-only ways that unit tests do
+  not catch.
+- **Suggested approach:** add a Playwright editor regression suite in CI (using installed browsers)
+  for the high-risk authoring paths: Visual ↔ HTML source save/preview; ordered-list create + Tab /
+  Shift+Tab + toolbar indent/outdent; nested ordered-list public render (1./a./i.); table-cell
+  formatting/link insertion; image alt/edit controls; local draft backup/restore including
+  `nextReviewDate`; note stripping from public/search. Pair this with a manual WCAG 2.1 AA audit
+  checklist covering public pages and admin/editor workflows: keyboard-only operation, focus order,
+  visible focus, labels/names, headings/landmarks, color contrast, zoom/reflow, table headers, image
+  alternatives, video captions/transcripts, and mobile layouts.
+- **Touch points:** `tests/a11y`, new `tests/editor`, `playwright.a11y.config.ts`, CI workflow,
+  `src/components/PageDocumentEditor.tsx`, `src/components/AdminPageEditorForm.tsx`,
+  `src/components/PageBlocks.tsx`, `project_spec.md`.
+- **Acceptance:** (1) CI runs unit, type-check, lint, build, public axe smoke, and editor Playwright
+  regressions on Chrome; (2) a documented manual pass covers Chrome + Firefox and mobile widths; (3)
+  public sample pages pass the WCAG checklist or have tracked exceptions; (4) release notes clearly
+  state the accessibility status without over-claiming ADA certification.
+
+### FB-26 — Page editor UX pass for lists, toolbar context, and author feedback
+
+`[AI-AGENT-TASK] id:FB-26  priority:high  area:editor-ux  effort:M  status:in-progress`
+
+- **PARTIAL (2026-07-08):** toolbar state now exposes focused-surface context and publishes a formatting
+  context event whenever the bound editor surface changes. Table-cell focus switches the shared toolbar to
+  text-only mode: page structure, list, insert, and editor-note controls are hidden behind a "Table cell:
+  text tools only" badge. List focus shows current list level/marker and disables impossible
+  indent/outdent actions. Tab/Shift+Tab now report specific messages for first-item indent and top-level
+  outdent failures.
+
+- **Finding:** the editor can now represent nested ordered lists correctly, but authoring remains too
+  awkward: the single toolbar exposes controls that do not always make sense for the focused surface,
+  first-item indentation feels like a no-op, and list nesting is not visually explained while editing.
+- **Suggested approach:** make the toolbar context-aware by focused surface and selection type. For list
+  editing, provide explicit Promote/Demote controls with disabled states and short inline feedback,
+  preserve Tab/Shift+Tab, and show nested ordered-list levels as 1./a./i. in both editor and preview.
+  For table cells, limit unavailable structural controls or move table actions into a local table
+  toolbar. Keep the existing `ContentBlock` model and `page-document.ts` serializer boundary.
+- **Touch points:** `src/components/DocumentToolbar.tsx`, `src/components/RichTextToolbar.tsx`,
+  `src/components/PageDocumentEditor.tsx`, `src/components/TableBlockEditor.tsx`,
+  `src/lib/page-editor-format.ts`, `src/app/globals.css`.
+- **Acceptance:** (1) an editor can create a three-level ordered list with mouse or keyboard without
+  source mode; (2) unavailable commands are disabled or explain why they cannot run; (3) table-cell
+  formatting does not show misleading page-structure controls; (4) browser regression tests cover the
+  list and table-cell workflows from FB-25.

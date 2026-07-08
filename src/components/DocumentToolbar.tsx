@@ -11,10 +11,12 @@ import {
   applyOrderedListStart,
   applyOutdent,
   copyHeadingAnchor,
+  EMPTY_EDITOR_FORMATTING,
   performEditorRedo,
   performEditorUndo,
   queryEditorFormatting,
   saveEditorSelection,
+  subscribeEditorFormatting,
   toolbarPrepare,
   type EditorFormatting,
 } from "@/lib/page-editor-format";
@@ -48,31 +50,21 @@ export function DocumentToolbar({
   onInsertSectionBreak: () => void;
   pageUrl?: string;
 }) {
-  const [formatting, setFormatting] = useState<EditorFormatting>({
-    bold: false,
-    italic: false,
-    underline: false,
-    strikeThrough: false,
-    orderedList: false,
-    unorderedList: false,
-    h2: false,
-    h3: false,
-    p: false,
-    alignLeft: false,
-    alignCenter: false,
-    alignRight: false,
-    orderedListStart: null,
-  });
+  const [formatting, setFormatting] = useState<EditorFormatting>(EMPTY_EDITOR_FORMATTING);
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const shortcutsRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const onSelectionChange = () => {
+    const updateFormatting = () => {
       setFormatting(queryEditorFormatting());
     };
-    document.addEventListener("selectionchange", onSelectionChange);
-    return () => document.removeEventListener("selectionchange", onSelectionChange);
+    document.addEventListener("selectionchange", updateFormatting);
+    const unsubscribeFormatting = subscribeEditorFormatting(updateFormatting);
+    return () => {
+      document.removeEventListener("selectionchange", updateFormatting);
+      unsubscribeFormatting();
+    };
   }, []);
 
   useEffect(() => {
@@ -87,6 +79,17 @@ export function DocumentToolbar({
   }, [shortcutsOpen]);
 
   const buttonClass = "rich-text-toolbar__button";
+  const isTableCell = formatting.surfaceKind === "table-cell";
+  const indentTitle = !formatting.inList
+    ? "Place the cursor in a list item to indent"
+    : formatting.canIndentListItem
+      ? "Nest this item under the previous item (Tab)"
+      : "Add a list item above this one before nesting it";
+  const outdentTitle = !formatting.inList
+    ? "Place the cursor in a nested list item to outdent"
+    : formatting.canOutdentListItem
+      ? "Move this item up one list level (Shift+Tab)"
+      : "This list item is already at the top level";
 
   return (
     <div className="document-toolbar">
@@ -113,7 +116,12 @@ export function DocumentToolbar({
         </button>
       </div>
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
-      <div className="document-toolbar__structure" role="group" aria-label="Block style">
+      {isTableCell ? (
+        <div className="document-toolbar__context" aria-label="Editing context">
+          Table cell: text tools only
+        </div>
+      ) : (
+      <div className="document-toolbar__structure" role="group" aria-label="Block style and lists">
         <button
           aria-label="Paragraph"
           aria-pressed={formatting.p}
@@ -180,22 +188,29 @@ export function DocumentToolbar({
             />
           </label>
         )}
+        {formatting.inList && (
+          <span className="rich-text-toolbar__status" title="Current list level">
+            Level {formatting.listLevel}: {formatting.listMarkerLabel}
+          </span>
+        )}
         <button
+          disabled={!formatting.canIndentListItem}
           aria-label="Indent list item"
           className={buttonClass}
           onMouseDown={(event) => toolbarPrepare(event)}
           onClick={() => applyIndent()}
-          title="Indent list item (Tab)"
+          title={indentTitle}
           type="button"
         >
           →
         </button>
         <button
+          disabled={!formatting.canOutdentListItem}
           aria-label="Outdent list item"
           className={buttonClass}
           onMouseDown={(event) => toolbarPrepare(event)}
           onClick={() => applyOutdent()}
-          title="Outdent list item (Shift+Tab)"
+          title={outdentTitle}
           type="button"
         >
           ←
@@ -213,108 +228,113 @@ export function DocumentToolbar({
           </button>
         )}
       </div>
+      )}
       <span className="rich-text-toolbar__divider" aria-hidden="true" />
       <RichTextToolbar editorPalette={editorPalette} />
-      <span className="rich-text-toolbar__divider" aria-hidden="true" />
-      <div className="document-toolbar__insert" role="group" aria-label="Insert">
-        <button
-          aria-label="Insert divider"
-          className={`${buttonClass} rich-text-toolbar__button--icon`}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onInsertSectionBreak}
-          title="Insert a section divider"
-          type="button"
-        >
-          <Rows3 aria-hidden size={16} strokeWidth={1.75} />
-        </button>
-        <button
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onAddProcedureSection}
-          title="Insert a structural procedure section"
-          type="button"
-        >
-          Procedure section
-        </button>
-        <button
-          aria-label="Insert table"
-          className={`${buttonClass} rich-text-toolbar__button--icon`}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onAddTable}
-          title="Insert an accessible table section"
-          type="button"
-        >
-          <Table2 aria-hidden size={16} strokeWidth={1.75} />
-        </button>
-        <button
-          aria-label="Insert card section"
-          className={`${buttonClass} rich-text-toolbar__button--icon`}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onAddCard}
-          title="Insert a highlighted card section"
-          type="button"
-        >
-          <CreditCard aria-hidden size={16} strokeWidth={1.75} />
-        </button>
-        <button
-          aria-label="Insert media"
-          className={`${buttonClass} rich-text-toolbar__button--icon`}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onInsertMedia}
-          title="Insert an image, video, or file from the asset library"
-          type="button"
-        >
-          <ImagePlus aria-hidden size={16} strokeWidth={1.75} />
-        </button>
-        <button
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onInsertInfoBox}
-          title="Insert an info box that is visible to readers"
-          type="button"
-        >
-          Info box
-        </button>
-      </div>
-      <span className="rich-text-toolbar__divider" aria-hidden="true" />
-      <div className="document-toolbar__review" role="group" aria-label="Review">
-        <button
-          className={buttonClass}
-          onMouseDown={(event) => toolbarPrepare(event)}
-          onClick={onAddNote}
-          title="Add an editor-only note at the cursor or on selected text"
-          type="button"
-        >
-          Editor note
-        </button>
-        <span className="toolbar-popover-wrap" ref={shortcutsRef}>
-          <button
-            aria-expanded={shortcutsOpen}
-            aria-label="Keyboard shortcuts"
-            className={buttonClass}
-            onClick={() => setShortcutsOpen((open) => !open)}
-            title="Keyboard shortcuts"
-            type="button"
-          >
-            ?
-          </button>
-          {shortcutsOpen && (
-            <div className="toolbar-popover shortcuts-popover" role="dialog" aria-label="Keyboard shortcuts">
-              <strong>Keyboard shortcuts</strong>
-              <dl className="shortcuts-popover__list">
-                {KEYBOARD_SHORTCUTS.map((item) => (
-                  <div className="shortcuts-popover__row" key={item.keys}>
-                    <dt>
-                      <kbd>{item.keys}</kbd>
-                    </dt>
-                    <dd>{item.action}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
-        </span>
-      </div>
+      {!isTableCell && (
+        <>
+          <span className="rich-text-toolbar__divider" aria-hidden="true" />
+          <div className="document-toolbar__insert" role="group" aria-label="Insert">
+            <button
+              aria-label="Insert divider"
+              className={`${buttonClass} rich-text-toolbar__button--icon`}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onInsertSectionBreak}
+              title="Insert a section divider"
+              type="button"
+            >
+              <Rows3 aria-hidden size={16} strokeWidth={1.75} />
+            </button>
+            <button
+              className={buttonClass}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onAddProcedureSection}
+              title="Insert a structural procedure section"
+              type="button"
+            >
+              Procedure section
+            </button>
+            <button
+              aria-label="Insert table"
+              className={`${buttonClass} rich-text-toolbar__button--icon`}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onAddTable}
+              title="Insert an accessible table section"
+              type="button"
+            >
+              <Table2 aria-hidden size={16} strokeWidth={1.75} />
+            </button>
+            <button
+              aria-label="Insert card section"
+              className={`${buttonClass} rich-text-toolbar__button--icon`}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onAddCard}
+              title="Insert a highlighted card section"
+              type="button"
+            >
+              <CreditCard aria-hidden size={16} strokeWidth={1.75} />
+            </button>
+            <button
+              aria-label="Insert media"
+              className={`${buttonClass} rich-text-toolbar__button--icon`}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onInsertMedia}
+              title="Insert an image, video, or file from the asset library"
+              type="button"
+            >
+              <ImagePlus aria-hidden size={16} strokeWidth={1.75} />
+            </button>
+            <button
+              className={buttonClass}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onInsertInfoBox}
+              title="Insert an info box that is visible to readers"
+              type="button"
+            >
+              Info box
+            </button>
+          </div>
+          <span className="rich-text-toolbar__divider" aria-hidden="true" />
+          <div className="document-toolbar__review" role="group" aria-label="Review">
+            <button
+              className={buttonClass}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onAddNote}
+              title="Add an editor-only note at the cursor or on selected text"
+              type="button"
+            >
+              Editor note
+            </button>
+            <span className="toolbar-popover-wrap" ref={shortcutsRef}>
+              <button
+                aria-expanded={shortcutsOpen}
+                aria-label="Keyboard shortcuts"
+                className={buttonClass}
+                onClick={() => setShortcutsOpen((open) => !open)}
+                title="Keyboard shortcuts"
+                type="button"
+              >
+                ?
+              </button>
+              {shortcutsOpen && (
+                <div className="toolbar-popover shortcuts-popover" role="dialog" aria-label="Keyboard shortcuts">
+                  <strong>Keyboard shortcuts</strong>
+                  <dl className="shortcuts-popover__list">
+                    {KEYBOARD_SHORTCUTS.map((item) => (
+                      <div className="shortcuts-popover__row" key={item.keys}>
+                        <dt>
+                          <kbd>{item.keys}</kbd>
+                        </dt>
+                        <dd>{item.action}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

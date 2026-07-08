@@ -69,6 +69,46 @@ export function setOrderedListStart(list: HTMLOListElement, start: number): bool
   return true;
 }
 
+function isListElement(element: Element | null): element is HTMLOListElement | HTMLUListElement {
+  return element instanceof HTMLOListElement || element instanceof HTMLUListElement;
+}
+
+export function canIndentListItem(li: HTMLLIElement): boolean {
+  return isListElement(li.parentElement) && li.previousElementSibling instanceof HTMLLIElement;
+}
+
+export function canOutdentListItem(li: HTMLLIElement): boolean {
+  const parentList = li.parentElement;
+  return isListElement(parentList) && parentList.parentElement instanceof HTMLLIElement;
+}
+
+export function listLevelForItem(li: HTMLLIElement, surface: HTMLElement): number {
+  let level = 0;
+  let current: HTMLElement | null = li.parentElement;
+  while (current && surface.contains(current)) {
+    if (isListElement(current)) {
+      level += 1;
+    }
+    current = current.parentElement;
+  }
+  return level;
+}
+
+export function listMarkerLabelForItem(li: HTMLLIElement, surface: HTMLElement): string {
+  const parentList = li.parentElement;
+  if (parentList instanceof HTMLUListElement) {
+    return "bullet";
+  }
+  const level = listLevelForItem(li, surface);
+  if (level <= 1) {
+    return "1.";
+  }
+  if (level === 2) {
+    return "a.";
+  }
+  return "i.";
+}
+
 export function indentListItem(li: HTMLLIElement): boolean {
   const parentList = li.parentElement;
   if (!parentList || (parentList.tagName !== "UL" && parentList.tagName !== "OL")) {
@@ -76,20 +116,17 @@ export function indentListItem(li: HTMLLIElement): boolean {
   }
 
   const previous = li.previousElementSibling;
-  if (previous instanceof HTMLLIElement) {
-    let nested = previous.querySelector(":scope > ul, :scope > ol");
-    if (!(nested instanceof HTMLElement)) {
-      nested = document.createElement(parentList.tagName);
-      previous.appendChild(nested);
-    }
-    nested.appendChild(li);
-    return true;
+  if (!(previous instanceof HTMLLIElement)) {
+    return false;
   }
 
-  // The first item has no previous sibling to nest under; indenting it would
-  // produce list markup with no parent item (invalid HTML that the sanitizer
-  // strips, losing the text). Match Word/Docs behavior: not allowed.
-  return false;
+  let nested = previous.querySelector(":scope > ul, :scope > ol");
+  if (!(nested instanceof HTMLElement)) {
+    nested = document.createElement(parentList.tagName);
+    previous.appendChild(nested);
+  }
+  nested.appendChild(li);
+  return true;
 }
 
 export function outdentListItem(li: HTMLLIElement): boolean {

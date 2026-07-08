@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
+import { bindPageEditor, handleEditorKeyDown } from "@/lib/page-editor-format";
 import { richTextToPlainText, sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import { saveRichTextSelection } from "@/lib/rich-text-selection";
 
@@ -48,12 +49,19 @@ export function RichTextEditable({
     onChange(cleanHtml, richTextToPlainText(cleanHtml));
   }
 
+  function bindSurface(surface: HTMLElement) {
+    bindPageEditor(surface, () => syncFromSurface(surface, false));
+    saveRichTextSelection();
+  }
+
   return (
     <Tag
       className={className}
       contentEditable
       onBlur={(event) => syncFromSurface(event.currentTarget, true)}
+      onFocus={(event) => bindSurface(event.currentTarget)}
       onInput={(event) => syncFromSurface(event.currentTarget, false)}
+      onKeyDown={handleEditorKeyDown}
       onKeyUp={() => saveRichTextSelection()}
       onMouseUp={() => saveRichTextSelection()}
       ref={(node: HTMLElement | null) => {
