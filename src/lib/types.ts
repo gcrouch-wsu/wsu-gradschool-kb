@@ -76,6 +76,46 @@ export interface KbPage {
   verifiedBy?: string | null;
 }
 
+export type PageRevisionAction = "save" | "restore";
+
+// The full, restorable snapshot of a page as it was at one save. Mirrors the
+// editable fields of KbPage (not derived/runtime fields like locks).
+export interface PageRevisionSnapshot {
+  title: string;
+  slug: string;
+  path: string[];
+  summary: string;
+  status: PageStatus;
+  visibility: PageVisibility;
+  ownerLabel: string;
+  contactEmail: string;
+  lastReviewedDate: string;
+  blocks: ContentBlock[];
+  relatedPageIds: string[];
+  relatedAssetIds: string[];
+  showToc: boolean;
+  tocDepth: number;
+  showSummary?: boolean;
+  showPrintButton?: boolean;
+  nextReviewDate?: string | null;
+}
+
+export interface PageRevision extends PageRevisionSnapshot {
+  id: string;
+  pageId: string;
+  kbId: string;
+  revisionNumber: number;
+  authorEmail: string;
+  action: PageRevisionAction;
+  createdAt: string;
+}
+
+// List-panel metadata (no blocks/snapshot payload).
+export type PageRevisionSummary = Pick<
+  PageRevision,
+  "id" | "pageId" | "kbId" | "revisionNumber" | "title" | "status" | "authorEmail" | "action" | "createdAt"
+>;
+
 export type PageMoveTarget = { kbId: string; parentPath: string[] };
 
 export interface PageTreeNode {

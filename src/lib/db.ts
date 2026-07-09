@@ -4,7 +4,29 @@ import { mergeTheme, type KbTheme } from "@/lib/kb-theme";
 import { runMigrations } from "@/lib/migrations";
 import { parseVideoUrl } from "@/lib/video";
 import { DEFAULT_SITE_SETTINGS, normalizeSiteSettings, type SiteSettings } from "@/lib/site-settings";
-import type { Asset, AssetVersion, KbDataset, KbPage, KbRedirect, KnowledgeBase } from "@/lib/types";
+import type {
+  Asset,
+  AssetVersion,
+  KbDataset,
+  KbPage,
+  KbRedirect,
+  KnowledgeBase,
+  PageRevision,
+  PageRevisionSummary,
+} from "@/lib/types";
+
+// A revision to be written inside the same transaction as the page update, so a
+// save and its history entry commit (or roll back) together.
+export interface PageRevisionWrite {
+  id: string;
+  pageId: string;
+  kbId: string;
+  title: string;
+  authorEmail: string;
+  action: PageRevision["action"];
+  snapshot: import("@/lib/types").PageRevisionSnapshot;
+  createdAt: string;
+}
 
 function getDatabaseUrl() {
   return process.env.DATABASE_URL?.trim() || null;
@@ -409,10 +431,26 @@ function mapAsset(row: AssetRow): Asset {
   };
 }
 
-export async function insertPage(page: KbPage): Promise<void> {
+// Shared revision INSERT used by both the create (insertPage) and update
+// (updatePages) paths, so revision_number is always computed the same way and
+// in-statement (correct under a transaction).
+function revisionInsertQuery(sql: ReturnType<typeof getSql>, revision: PageRevisionWrite) {
+  return sql`
+    INSERT INTO kb_page_revisions (
+      id, page_id, kb_id, revision_number, title, author_email, action, snapshot, created_at
+    )
+    SELECT
+      ${revision.id}, ${revision.pageId}, ${revision.kbId},
+      COALESCE((SELECT MAX(revision_number) FROM kb_page_revisions WHERE page_id = ${revision.pageId}), 0) + 1,
+      ${revision.title}, ${revision.authorEmail}, ${revision.action},
+      ${JSON.stringify(revision.snapshot)}::jsonb, ${revision.createdAt}::timestamptz
+  `;
+}
+
+export async function insertPage(page: KbPage, revision?: PageRevisionWrite): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`
+  const pageInsert = sql`
     INSERT INTO kb_pages (
       id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
@@ -428,6 +466,13 @@ export async function insertPage(page: KbPage): Promise<void> {
       ${page.nextReviewDate ?? null}, ${page.verifiedAt ?? null}, ${page.verifiedBy ?? null}
     )
   `;
+  // Create the page and its initial revision together so the page is never
+  // stored without a recoverable baseline.
+  if (revision) {
+    await sql.transaction([pageInsert, revisionInsertQuery(sql, revision)]);
+  } else {
+    await pageInsert;
+  }
 }
 
 export async function insertAsset(asset: Asset): Promise<void> {
@@ -450,7 +495,11 @@ export async function insertAsset(asset: Asset): Promise<void> {
 
 const PG_DIVISION_BY_ZERO = "22012";
 
-export async function updatePages(pages: KbPage[], editorEmail?: string): Promise<void> {
+export async function updatePages(
+  pages: KbPage[],
+  editorEmail?: string,
+  revisions?: PageRevisionWrite[],
+): Promise<void> {
   if (pages.length === 0) {
     return;
   }
@@ -524,6 +573,14 @@ export async function updatePages(pages: KbPage[], editorEmail?: string): Promis
       WHERE id = ${page.id}
     `;
   });
+
+  // Append revision inserts to the SAME transaction. If the lock-guard query
+  // above aborts (division-by-zero on a locked page), these roll back too, so a
+  // rejected save never leaves an orphan history entry. revision_number is
+  // computed in-statement so it stays correct under the transaction.
+  for (const revision of revisions ?? []) {
+    queries.push(revisionInsertQuery(sql, revision));
+  }
 
   try {
     await sql.transaction(queries);
@@ -604,7 +661,10 @@ export async function releasePageLock(pageId: string, userEmail: string): Promis
 export async function deletePage(pageId: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM kb_pages WHERE id = ${pageId}`;
+  await sql.transaction([
+    sql`DELETE FROM kb_page_revisions WHERE page_id = ${pageId}`,
+    sql`DELETE FROM kb_pages WHERE id = ${pageId}`,
+  ]);
 }
 
 export async function deleteAsset(assetId: string): Promise<void> {
@@ -620,6 +680,7 @@ export async function deleteKb(kbId: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
+  await sql`DELETE FROM kb_page_revisions WHERE kb_id = ${kbId}`;
   await sql`DELETE FROM kb_pages WHERE kb_id = ${kbId}`;
   await sql`DELETE FROM kb_asset_versions WHERE asset_id IN (SELECT id FROM kb_assets WHERE home_kb_id = ${kbId})`;
   await sql`DELETE FROM kb_assets WHERE home_kb_id = ${kbId}`;
@@ -636,6 +697,108 @@ export async function loadPageById(pageId: string): Promise<KbPage | null> {
   `) as unknown as PageRow[];
   const row = rows[0];
   return row ? mapPage(row) : null;
+}
+
+interface PageRevisionRow {
+  id: string;
+  page_id: string;
+  kb_id: string;
+  revision_number: number;
+  title: string;
+  author_email: string;
+  action: string;
+  snapshot: unknown;
+  created_at: string;
+}
+
+function mapRevision(row: PageRevisionRow): PageRevision {
+  const snapshot =
+    row.snapshot && typeof row.snapshot === "object"
+      ? (row.snapshot as PageRevisionWrite["snapshot"])
+      : ({} as PageRevisionWrite["snapshot"]);
+  return {
+    ...snapshot,
+    id: row.id,
+    pageId: row.page_id,
+    kbId: row.kb_id,
+    revisionNumber: row.revision_number,
+    authorEmail: row.author_email,
+    action: (row.action as PageRevision["action"]) ?? "save",
+    createdAt: typeof row.created_at === "string" ? row.created_at : new Date(row.created_at).toISOString(),
+  };
+}
+
+export async function listPageRevisionsFromDb(pageId: string, limit = 50): Promise<PageRevisionSummary[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT id, page_id, kb_id, revision_number, title, author_email, action,
+           snapshot->>'status' AS status, created_at
+    FROM kb_page_revisions
+    WHERE page_id = ${pageId}
+    ORDER BY revision_number DESC
+    LIMIT ${limit}
+  `) as unknown as Array<PageRevisionRow & { status: string | null }>;
+  return rows.map((row) => ({
+    id: row.id,
+    pageId: row.page_id,
+    kbId: row.kb_id,
+    revisionNumber: row.revision_number,
+    title: row.title,
+    status: (row.status as PageRevisionSummary["status"]) ?? "draft",
+    authorEmail: row.author_email,
+    action: (row.action as PageRevisionSummary["action"]) ?? "save",
+    createdAt:
+      typeof row.created_at === "string" ? row.created_at : new Date(row.created_at).toISOString(),
+  }));
+}
+
+export async function getPageRevisionFromDb(revisionId: string): Promise<PageRevision | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT * FROM kb_page_revisions WHERE id = ${revisionId} LIMIT 1
+  `) as unknown as PageRevisionRow[];
+  const row = rows[0];
+  return row ? mapRevision(row) : null;
+}
+
+// Retention: keep the newest `keepPerPage` revisions per page. Mirrors the
+// audit-log purge; intended to run from a cron route.
+export async function cleanupPageRevisionsInDb(keepPerPage = 50): Promise<number> {
+  await ensureSchema();
+  const sql = getSql();
+  const result = await sql`
+    DELETE FROM kb_page_revisions
+    WHERE id IN (
+      SELECT id FROM (
+        SELECT id, row_number() OVER (PARTITION BY page_id ORDER BY revision_number DESC) AS rn
+        FROM kb_page_revisions
+      ) ranked
+      WHERE ranked.rn > ${keepPerPage}
+    )
+    RETURNING id
+  `;
+  return result.length;
+}
+
+export async function cleanupPageRevisionsForPageInDb(pageId: string, keepPerPage = 50): Promise<number> {
+  await ensureSchema();
+  const sql = getSql();
+  const result = await sql`
+    DELETE FROM kb_page_revisions
+    WHERE page_id = ${pageId}
+      AND id IN (
+        SELECT id FROM (
+          SELECT id, row_number() OVER (ORDER BY revision_number DESC) AS rn
+          FROM kb_page_revisions
+          WHERE page_id = ${pageId}
+        ) ranked
+        WHERE ranked.rn > ${keepPerPage}
+      )
+    RETURNING id
+  `;
+  return result.length;
 }
 
 export async function loadDatasetFromDb(): Promise<KbDataset> {

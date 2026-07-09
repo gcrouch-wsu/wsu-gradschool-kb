@@ -252,10 +252,18 @@ export function releaseLinkDraft(marker: HTMLElement | null) {
   parent.removeChild(marker);
 }
 
+// Editable surfaces the link tools operate on: the main flow surface and the
+// standalone table-cell editors (which are NOT inside a `.wysiwyg-surface`).
+const EDITABLE_SURFACE_SELECTOR = ".wysiwyg-surface, .wysiwyg-table-cell";
+
 function clearStaleLinkDrafts() {
-  document.querySelectorAll<HTMLElement>(`.wysiwyg-surface .${LINK_DRAFT_CLASS}`).forEach((el) => {
-    releaseLinkDraft(el);
-  });
+  document
+    .querySelectorAll<HTMLElement>(
+      `.wysiwyg-surface .${LINK_DRAFT_CLASS}, .wysiwyg-table-cell .${LINK_DRAFT_CLASS}`,
+    )
+    .forEach((el) => {
+      releaseLinkDraft(el);
+    });
 }
 
 export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
@@ -339,7 +347,9 @@ export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
 }
 
 function persistFromAnchor(anchor: HTMLElement) {
-  const surface = anchor.closest(".wysiwyg-surface") as HTMLElement | null;
+  // Include table cells: their editor is not inside `.wysiwyg-surface`, so
+  // without this the cell's onInput never fires and the link is dropped on save.
+  const surface = anchor.closest(EDITABLE_SURFACE_SELECTOR) as HTMLElement | null;
   surface?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   notifyMutation();
 }

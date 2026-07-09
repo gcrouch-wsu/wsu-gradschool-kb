@@ -22,6 +22,11 @@ import {
   updatePages,
   updatePageStatusColumn,
   updatePageLifecycle,
+  listPageRevisionsFromDb,
+  getPageRevisionFromDb,
+  cleanupPageRevisionsInDb,
+  cleanupPageRevisionsForPageInDb,
+  type PageRevisionWrite,
 } from "@/lib/db";
 import { seedDataset } from "@/lib/demo-data";
 import {
@@ -41,6 +46,10 @@ import type {
   KbPage,
   KbRedirect,
   KnowledgeBase,
+  PageRevision,
+  PageRevisionAction,
+  PageRevisionSnapshot,
+  PageRevisionSummary,
   PageStatus,
   PageTreeNode,
   PageVisibility,
@@ -52,9 +61,17 @@ const globalForRuntime = globalThis as unknown as {
   __kbRuntimeVersions?: Map<string, AssetVersion[]>;
   __kbRuntimeRedirects?: KbRedirect[];
   __kbRuntimeKbHomepages?: Map<string, string | null>;
+  __kbRuntimePageRevisions?: PageRevision[];
   __kbDeletedAssetIds?: Set<string>;
   __kbDeletedPageIds?: Set<string>;
 };
+
+function runtimePageRevisions(): PageRevision[] {
+  if (!globalForRuntime.__kbRuntimePageRevisions) {
+    globalForRuntime.__kbRuntimePageRevisions = [];
+  }
+  return globalForRuntime.__kbRuntimePageRevisions;
+}
 
 function runtimeVersions(): Map<string, AssetVersion[]> {
   if (!globalForRuntime.__kbRuntimeVersions) {
@@ -982,6 +999,10 @@ export async function permanentlyDeletePage(pageId: string): Promise<void> {
   if (index >= 0) {
     pages.splice(index, 1);
   }
+  const revisions = runtimePageRevisions();
+  const remaining = revisions.filter((rev) => rev.pageId !== normalizedId);
+  revisions.length = 0;
+  revisions.push(...remaining);
   deletedPageIds().add(normalizedId);
 }
 
@@ -1046,6 +1067,9 @@ export interface CreatePageInput {
   tocDepth?: number;
   showSummary?: boolean;
   showPrintButton?: boolean;
+  // Attribution for the initial revision (the create snapshot). Falls back to ""
+  // when a create path has no session (e.g. seeding).
+  authorEmail?: string;
 }
 
 export async function createPage(input: CreatePageInput): Promise<KbPage> {
@@ -1120,10 +1144,15 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     showPrintButton: input.showPrintButton ?? true,
   };
 
+  // Snapshot the page at creation so the original content is recoverable even
+  // if it is never edited again (e.g. a committed import). Written atomically
+  // with the page insert.
+  const initialRevision = revisionWriteForPage(page, input.authorEmail ?? "", "save");
   if (isDatabaseEnabled()) {
-    await insertPage(page);
+    await insertPage(page, initialRevision);
   } else {
     runtimePages().push(page);
+    runtimePageRevisions().push(runtimeRevisionFromWrite(initialRevision, nextMemoryRevisionNumber(page.id)));
   }
 
   return page;
@@ -1147,6 +1176,10 @@ export interface UpdatePageInput {
   showSummary?: boolean;
   showPrintButton?: boolean;
   nextReviewDate?: string | null;
+  // Optional so ordinary editor saves (which don't touch related links) leave
+  // them untouched; revision restore passes them to restore the full snapshot.
+  relatedPageIds?: string[];
+  relatedAssetIds?: string[];
 }
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -1163,7 +1196,70 @@ function storeRuntimePage(page: KbPage) {
   }
 }
 
-export async function updatePage(input: UpdatePageInput, editorEmail?: string): Promise<KbPage> {
+function snapshotFromPage(page: KbPage): PageRevisionSnapshot {
+  return {
+    title: page.title,
+    slug: page.slug,
+    path: [...page.path],
+    summary: page.summary,
+    status: page.status,
+    visibility: page.visibility,
+    ownerLabel: page.ownerLabel,
+    contactEmail: page.contactEmail,
+    lastReviewedDate: page.lastReviewedDate,
+    blocks: structuredClone(page.blocks),
+    relatedPageIds: [...page.relatedPageIds],
+    relatedAssetIds: [...page.relatedAssetIds],
+    showToc: page.showToc,
+    tocDepth: page.tocDepth,
+    showSummary: page.showSummary,
+    showPrintButton: page.showPrintButton,
+    nextReviewDate: page.nextReviewDate ?? null,
+  };
+}
+
+function nextMemoryRevisionNumber(pageId: string): number {
+  const existing = runtimePageRevisions().filter((rev) => rev.pageId === pageId);
+  return existing.reduce((max, rev) => Math.max(max, rev.revisionNumber), 0) + 1;
+}
+
+// Build the DB revision-write payload for a page's current state.
+function revisionWriteForPage(
+  page: KbPage,
+  authorEmail: string,
+  action: PageRevisionAction,
+): PageRevisionWrite {
+  return {
+    id: `revision-${crypto.randomUUID()}`,
+    pageId: page.id,
+    kbId: page.kbId,
+    title: page.title,
+    authorEmail,
+    action,
+    snapshot: snapshotFromPage(page),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+// Materialise a runtime (in-memory) revision from a write payload.
+function runtimeRevisionFromWrite(write: PageRevisionWrite, revisionNumber: number): PageRevision {
+  return {
+    ...write.snapshot,
+    id: write.id,
+    pageId: write.pageId,
+    kbId: write.kbId,
+    revisionNumber,
+    authorEmail: write.authorEmail,
+    action: write.action,
+    createdAt: write.createdAt,
+  };
+}
+
+export async function updatePage(
+  input: UpdatePageInput,
+  editorEmail?: string,
+  revisionAction: PageRevisionAction = "save",
+): Promise<KbPage> {
   const dataset = await getDataset();
   const existing = dataset.pages.find((page) => page.id === input.pageId);
   if (!existing) {
@@ -1231,6 +1327,8 @@ export async function updatePage(input: UpdatePageInput, editorEmail?: string): 
           lastReviewedDate: input.lastReviewedDate?.trim() || page.lastReviewedDate,
           updatedDisplayDate: today,
           blocks: input.blocks,
+          relatedPageIds: input.relatedPageIds ?? page.relatedPageIds,
+          relatedAssetIds: input.relatedAssetIds ?? page.relatedAssetIds,
           showToc: input.showToc ?? page.showToc,
           tocDepth: input.tocDepth ?? page.tocDepth,
           showSummary: input.showSummary ?? page.showSummary,
@@ -1244,20 +1342,135 @@ export async function updatePage(input: UpdatePageInput, editorEmail?: string): 
       };
     });
 
-  if (isDatabaseEnabled()) {
-
-    await updatePages(changedPages, editorEmail);
-  } else {
-    changedPages.forEach(storeRuntimePage);
-  }
-
-  await recordPublishedPathRedirects(existing.kbId, pathBefore, changedPages);
-
   const updated = changedPages.find((page) => page.id === existing.id);
   if (!updated) {
     throw new Error("Could not update page.");
   }
+
+  // Snapshot the page as it will be saved. Written inside the same DB
+  // transaction as the page update (see updatePages) so a rejected/locked save
+  // never leaves an orphan revision.
+  const revisionWrite = revisionWriteForPage(updated, editorEmail ?? "", revisionAction);
+
+  if (isDatabaseEnabled()) {
+    await updatePages(changedPages, editorEmail, [revisionWrite]);
+  } else {
+    changedPages.forEach(storeRuntimePage);
+    runtimePageRevisions().push(runtimeRevisionFromWrite(revisionWrite, nextMemoryRevisionNumber(updated.id)));
+  }
+
+  await recordPublishedPathRedirects(existing.kbId, pathBefore, changedPages);
+
   return updated;
+}
+
+export async function listPageRevisions(pageId: string): Promise<PageRevisionSummary[]> {
+  const normalizedId = normalizeRecordId(pageId);
+  if (isDatabaseEnabled()) {
+    return listPageRevisionsFromDb(normalizedId);
+  }
+  return runtimePageRevisions()
+    .filter((rev) => rev.pageId === normalizedId)
+    .sort((a, b) => b.revisionNumber - a.revisionNumber)
+    .slice(0, 50)
+    .map((rev) => ({
+      id: rev.id,
+      pageId: rev.pageId,
+      kbId: rev.kbId,
+      revisionNumber: rev.revisionNumber,
+      title: rev.title,
+      status: rev.status,
+      authorEmail: rev.authorEmail,
+      action: rev.action,
+      createdAt: rev.createdAt,
+    }));
+}
+
+export async function getPageRevision(revisionId: string): Promise<PageRevision | null> {
+  const normalizedId = normalizeRecordId(revisionId);
+  if (isDatabaseEnabled()) {
+    return getPageRevisionFromDb(normalizedId);
+  }
+  return runtimePageRevisions().find((rev) => rev.id === normalizedId) ?? null;
+}
+
+// Restore = a NEW save from a past snapshot (never a history rewrite), so it
+// goes through updatePage and creates its own revision with action "restore".
+// Edit-lock semantics are preserved because updatePage/updatePages enforce them.
+export async function restorePageRevision(revisionId: string, editorEmail: string): Promise<KbPage> {
+  const revision = await getPageRevision(revisionId);
+  if (!revision) {
+    throw new Error("Revision not found.");
+  }
+  const page = await getPageByIdForAdmin(revision.pageId);
+  if (!page) {
+    throw new Error("Page not found.");
+  }
+  return updatePage(
+    {
+      pageId: revision.pageId,
+      title: revision.title,
+      slug: revision.slug,
+      parentPath: revision.path.slice(0, -1),
+      summary: revision.summary,
+      visibility: revision.visibility,
+      status: revision.status,
+      blocks: revision.blocks,
+      ownerLabel: revision.ownerLabel,
+      contactEmail: revision.contactEmail,
+      lastReviewedDate: revision.lastReviewedDate,
+      relatedPageIds: revision.relatedPageIds,
+      relatedAssetIds: revision.relatedAssetIds,
+      showToc: revision.showToc,
+      tocDepth: revision.tocDepth,
+      showSummary: revision.showSummary,
+      showPrintButton: revision.showPrintButton,
+      nextReviewDate: revision.nextReviewDate ?? null,
+    },
+    editorEmail,
+    "restore",
+  );
+}
+
+// Retention: keep the newest 50 revisions per page.
+export async function cleanupPageRevisions(keepPerPage = 50): Promise<number> {
+  if (isDatabaseEnabled()) {
+    return cleanupPageRevisionsInDb(keepPerPage);
+  }
+  const all = runtimePageRevisions();
+  const byPage = new Map<string, PageRevision[]>();
+  for (const rev of all) {
+    byPage.set(rev.pageId, [...(byPage.get(rev.pageId) ?? []), rev]);
+  }
+  const keep = new Set<string>();
+  for (const revs of byPage.values()) {
+    revs
+      .sort((a, b) => b.revisionNumber - a.revisionNumber)
+      .slice(0, keepPerPage)
+      .forEach((rev) => keep.add(rev.id));
+  }
+  const removed = all.length - keep.size;
+  const kept = all.filter((rev) => keep.has(rev.id));
+  all.length = 0;
+  all.push(...kept);
+  return removed;
+}
+
+export async function cleanupPageRevisionsForPage(pageId: string, keepPerPage = 50): Promise<number> {
+  const normalizedId = normalizeRecordId(pageId);
+  if (isDatabaseEnabled()) {
+    return cleanupPageRevisionsForPageInDb(normalizedId, keepPerPage);
+  }
+  const all = runtimePageRevisions();
+  const pageRevisions = all
+    .filter((rev) => rev.pageId === normalizedId)
+    .sort((a, b) => b.revisionNumber - a.revisionNumber);
+  const keep = new Set(pageRevisions.slice(0, keepPerPage).map((rev) => rev.id));
+  const before = all.length;
+  const kept = all.filter((rev) => rev.pageId !== normalizedId || keep.has(rev.id));
+  all.length = 0;
+  all.push(...kept);
+  return before - kept.length;
 }
 
 export async function updatePageStatus(pageId: string, status: PageStatus): Promise<KbPage> {

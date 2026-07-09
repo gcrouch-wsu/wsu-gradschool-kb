@@ -136,7 +136,8 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 - **Security headers**: static ones (HSTS, nosniff, Referrer-Policy, Permissions-Policy) in
   `next.config.ts`; the per-request CSP with a unique script nonce is set in `src/proxy.ts` (the App
   Router middleware).
-- **Tests**: Vitest (unit) + Playwright/axe (a11y). **CI**: GitHub Actions (`.github/workflows/ci.yml`).
+- **Tests**: Vitest (unit) + Playwright/axe (a11y) + Playwright editor regressions (`tests/editor`,
+  runs against a production server). **CI**: GitHub Actions (`.github/workflows/ci.yml`).
 
 ---
 
@@ -348,8 +349,19 @@ npm run build      # production build
 npm run check      # tsc --noEmit
 npm test           # Vitest unit suite (in-memory; live-DB tests self-skip)
 npm run test:a11y  # Playwright + axe smoke tests for public pages
+npm run test:editor # Playwright editor regression suite (builds + starts prod server; see below)
 npm run test:db    # live-DB integration suite against DATABASE_URL (reads .env.local)
 ```
+
+**Editor Playwright suite (`npm run test:editor`, `tests/editor/`)** covers the authenticated
+admin page editor. Unlike the a11y suite it must run against a **production server**
+(`next build` + `next start`), which the Playwright config starts automatically: the per-request
+CSP in `src/proxy.ts` (nonce + `strict-dynamic`) does not hydrate the editor's client handlers under
+the `next dev` HMR/eval runtime, so `next dev` leaves the contentEditable surfaces non-interactive.
+The config injects bootstrap admin env vars and an empty `DATABASE_URL`, so the suite is hermetic
+(in-memory seed dataset, no external database). A one-time sign-in (`auth.setup.ts`) posts to
+`/api/admin/session` and shares the cookie via `storageState`; it runs single-worker because tests
+share the page lock and the process-global in-memory store.
 
 **Environment** (`.env.local`; see `.env.example`):
 - `KB_ADMIN_EMAIL` / `KB_ADMIN_PASSWORD` / `KB_ADMIN_SESSION_SECRET` — bootstrap owner + cookie
@@ -446,8 +458,8 @@ manual redirect persistence, and the single-active-version DB invariant.
   review-date changes are included in the draft snapshot; list/table toolbar context is clearer;
   Info boxes preserve simple rich text and nested semantic lists through save and public render; Divider,
   Procedure section, and Info box insert controls are visibly labeled.
-  **Unit-tested and built, but only lightly verified in a real browser — treat as needing manual QA
-  (see §10).**
+  **Covered by focused Chromium editor regressions, but still needing manual Chrome/Firefox/mobile QA
+  before a production claim (see §10).**
 - Managed assets with stable links + versions; managed video model + public YouTube/Vimeo embeds
   (CSP `frame-src` allowlisted); per-image alt text.
 - Postgres FTS with staff-visibility prune and punctuation safety.
@@ -478,8 +490,8 @@ manual redirect persistence, and the single-active-version DB invariant.
 ## 10. Known limitations
 
 - **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Do not describe
-  the product as ADA/WCAG certified until a manual audit passes. Public table cells also lack `scope`
-  attributes today.
+  the product as ADA/WCAG certified until a manual audit passes. Public article tables now emit
+  `scope="col"` / `scope="row"` on header cells, but this does not replace the manual audit.
 - No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
 - **The contenteditable editor still needs release-grade QA.** It is custom, and complex selection
   edge cases keep surfacing in real use (heading demotion on delete, list splits with duplicate ids,
@@ -488,9 +500,11 @@ manual redirect persistence, and the single-active-version DB invariant.
   point-by-point). Every editor change needs manual verification in a real browser (Chrome + Firefox at
   minimum), and further reports should be expected. FB-09 (migrating the flow surfaces to a maintained
   framework) remains the structural fix; FB-25 defines the release-grade browser/a11y gate.
-- **No revision history**: a bad save permanently overwrites page content; there is no per-save
-  snapshot or restore. The audit log records *that* a change happened, not the content. This is the
-  biggest missing trust feature for multi-author use — see FB-24.
+- **Revision history is per-save snapshots, not a diff/branch model** (FB-24, delivered): every page
+  create and save writes a full `kb_page_revisions` snapshot, and editors can view/restore any of the
+  newest 50 per page from the History panel. There is no side-by-side diff view, no field-level
+  restore, and retention is a hard 50/page cap (older revisions are purged by the daily cron). Restore
+  is itself a new save, so history is never rewritten.
 - Rate limiting falls back to in-memory only when `DATABASE_URL` is unset; production Neon mode uses a
   shared `kb_rate_limits` table (§12 FB-02).
 
@@ -500,10 +514,11 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 Narrative backlog; the actionable, tagged version is §12.
 
-- **Editor**: **page revision history with restore (FB-24 — next priority)**; production editor
-  regression/a11y release gate (FB-25, including the FB-26 editor workflows); positioned margin/comment
-  rail (true Word-style), comment threads/resolve, and a hardened editor core
-  (a maintained rich-text framework — FB-09) since contenteditable selection bugs keep surfacing.
+- **Editor**: **production editor regression/a11y release gate (FB-25, including the FB-26 editor
+  workflows) — next priority**; page revision history with restore is delivered (FB-24) — remaining
+  enhancements there are a diff view and configurable retention; positioned margin/comment rail (true
+  Word-style), comment threads/resolve, and a hardened editor core (a maintained rich-text framework —
+  FB-09) since contenteditable selection bugs keep surfacing.
 - **Public experience**: home search/filter + pagination as KB count grows; TOC scroll-spy;
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
 - **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
@@ -897,8 +912,53 @@ Items are ordered by recommended priority.
 
 ### FB-24 — Page revision history with restore
 
-`[AI-AGENT-TASK] id:FB-24  priority:high  area:editor  effort:L  status:open`
+`[AI-AGENT-TASK] id:FB-24  priority:high  area:editor  effort:L  status:in-progress`
 
+- **DELIVERED (2026-07-08) — smallest production-safe version:**
+  - Migration `027_page_revisions` adds `kb_page_revisions` (page id, kb id, revision number,
+    title, author, action, full `snapshot` JSONB, `created_at`) with a unique `(page_id,
+    revision_number)` index.
+  - Every content save (`updatePage`) writes a revision **inside the same transaction** as the page
+    update (`updatePages(pages, editorEmail, revisions)`), so a lock-rejected save (the division-by-zero
+    abort-guard) never leaves an orphan revision. `revision_number` is computed in-statement. In-memory
+    mode mirrors this via a runtime store.
+  - `createPage` also snapshots the initial content as revision 1, atomically with the page insert
+    (`insertPage(page, revision)`), so imported/committed pages are recoverable even if never edited
+    again. Author attribution threads through the create + import-commit routes.
+  - Read/restore/cleanup live in `kb-store.ts`: `listPageRevisions`, `getPageRevision`,
+    `restorePageRevision` (restore = a **new** save with `action:"restore"`, routed through
+    `updatePage` so edit-lock semantics hold), `cleanupPageRevisions` (keep newest 50/page).
+  - **Review-round hardening (2026-07-09):** (a) migration 027 backfills a baseline revision 1 for
+    every pre-existing page (`backfillBaselineRevisions`, idempotent via NOT EXISTS + a deterministic
+    id; snapshot mirrors `PageRevisionSnapshot`, live-DB tested). (b) Restore re-checks the **publish
+    gate**: restoring a `published` revision runs `validateRevisionForRestore` and returns **422 with
+    issues** (like the save route) — catching e.g. a since-archived referenced asset. (c) Restore is a
+    **full** snapshot restore: `relatedPageIds`/`relatedAssetIds` are now restored too (added to
+    `UpdatePageInput`; round-trip tested).
+  - API: `GET /api/admin/pages/[pageId]/revisions`, `GET …/revisions/[revisionId]`,
+    `POST …/revisions/[revisionId]/restore` (audit event `page.restored`); cron purge at
+    `GET /api/admin/cron/revision-cleanup` (mirrors audit-cleanup, `CRON_SECRET`), scheduled daily at
+    `30 4 * * *` in `vercel.json` (30 min after the audit purge).
+  - UI: `PageHistoryPanel` (History fieldset on `/admin/pages/[pageId]`) lists revisions with
+    author/time/status, previews any revision read-only via `DraftPreviewModal`, and restores with a
+    confirm; restore reloads the editor. Restore is disabled while the page lock is held. View and
+    restore track independent busy states (previewing never flips restore into "Working…"); refresh
+    disables while loading; errors surface in an `aria-live="assertive"` region.
+  - Tests: `page-revisions.test.ts` (in-memory: counting, snapshot round-trip, restore-as-new,
+    retention) and `page-revisions.db.test.ts` (live-DB: atomic write, restore, **lock-rejected save
+    writes no revision**, retention). `tests/editor/history-panel.spec.ts` covers the panel (save
+    records a revision; preview leaves restore idle). Verified end-to-end over HTTP against the
+    production server (save→list→view→restore, 401/404 guards).
+- **Still open:** acceptance (4) live-DB retention (and the backfill idempotency) are covered by
+  `page-revisions.db.test.ts` but only run under `npm run test:db` with a real `DATABASE_URL`
+  (self-skips otherwise). The retention assertion now uses a page-scoped cleanup helper, so it does not
+  prune unrelated revision history if someone accidentally points the DB suite at a shared database;
+  the preferred path is still the opt-in ephemeral Neon PR workflow. In-memory mode (dev/test only) has
+  no baseline for seed pages until their first save — production backfills via migration 027; this
+  first-save behavior is documented by test. Status-only lifecycle changes (publish/unpublish/archive
+  via the `/status` route) do not snapshot — content is unchanged, so this is intentional. No diff view,
+  no field-level restore, and retention is a fixed 50/page cap (not yet configurable) — tracked as
+  future enhancements, not gaps.
 - **Finding:** every save permanently overwrites page content — there is no per-save snapshot,
   diff, or restore. The audit log (`src/lib/audit-log.ts`) records that a change happened, not the
   content. The 2026-07 hardening round added *client-side* protection only (a `localStorage` draft
@@ -922,22 +982,69 @@ Items are ordered by recommended priority.
 
 ### FB-25 — Production release gate: WCAG audit + editor browser regressions
 
-`[AI-AGENT-TASK] id:FB-25  priority:high  area:qa-a11y-release  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-25  priority:high  area:qa-a11y-release  effort:M  status:in-progress`
 
+- **DELIVERED (2026-07-08) — editor regression suite:** `tests/editor/` (run via `npm run test:editor`,
+  config `playwright.editor.config.ts`) now covers the highest-risk Info-box authoring paths on Chromium:
+  (1) an Info box authored with bold text plus bulleted, numbered, and nested lists survives the
+  HTML-source → Visual round-trip, saves & publishes, and renders on the public page inside the colored
+  callout (`aside.alert--info`) as semantic nested `<ul>/<ol>/<li>` with the heading flattened out;
+  (2) toolbar-driven list creation and nesting inside an Info box (Bulleted list + toolbar indent);
+  (3) surface-aware toolbar context — Info box shows text + list tools and hides page-structure/insert
+  controls, table cell shows text-only tools and hides list/structure controls, and the document body
+  keeps Divider/Procedure/Info box discoverable. Auth reuses a shared session cookie
+  (`auth.setup.ts`); the suite is hermetic (in-memory seed data). **Must run against the production
+  server** — see the "Editor Playwright suite" note in §Running locally for why `next dev` cannot host it.
+- **DELIVERED (2026-07-09) — more editor coverage + a real bug fix:**
+  - `list-nesting.spec.ts`: builds a three-level ordered list with **keyboard** Tab/Shift+Tab, asserts
+    the nested `<ol>/<li>` in the editor DOM, and that save → public render preserves the nesting with
+    the intended 1./a./i. marker styles; plus a test that first-item indent and top-level outdent
+    surface explanatory hints instead of acting.
+  - `table-cell.spec.ts`: focus a table cell, apply **bold** and insert a **link** via the dialog,
+    confirm list/page-structure controls stay hidden, and verify the public table renders the cell
+    content (bold preserved; the link appears exactly once). Public article table headers now emit
+    `scope="col"` / `scope="row"`, with a regression assertion on the default header-row table.
+  - **Bug fixed (lists):** the keyboard test surfaced a real data-loss bug — Chromium's
+    `insertOrderedList` leaves the new list wrapped in a `<p>` (`<p><ol>…</ol></p>`), and
+    `serializeDocumentNode`'s paragraph branch flattened it on save, so a list created in the flow
+    surface was silently lost on publish. The `<p>` branch now splits out block-level `<ol>/<ul>`
+    children (unit-tested in `page-document.test.ts`).
+  - **Bug fixed (table-cell links):** inserting a link inside a table cell dropped the link or
+    duplicated the cell text. Root cause: the link machinery (`persistFromAnchor`,
+    `clearStaleLinkDrafts`) only recognised `.wysiwyg-surface`, not the standalone `.wysiwyg-table-cell`
+    editors, and `RichTextEditable` re-serialized its DOM on blur/re-render (the dialog blurs the cell),
+    stripping the in-progress `doc-link-draft` marker. Fixed by teaching the link helpers about table
+    cells and skipping the cell's blur/layout re-sync while a draft marker is present — without
+    weakening the text-only toolbar context. Covered by `table-cell.spec.ts`.
+- **DELIVERED (2026-07-09) — closing more release-gate automation gaps:**
+  - `image-alt.spec.ts` drives an image from HTML source → Visual editor → **Alt** dialog → save →
+    public render, asserting the missing-alt marker clears and public `img[alt]` + caption survive.
+  - `work-protection.spec.ts` seeds `localStorage` before the editor mounts and verifies **Restore
+    draft** restores both body content and lifecycle metadata (`nextReviewDate`). The same spec verifies
+    editor-only note spans remain in editor storage but are stripped from public article HTML and from
+    public search results.
+- **Still open (manual QA / follow-up automation):**
+  - **Cross-browser / responsive:** the suite runs Chromium only, so **Firefox and mobile-width passes
+    remain manual** before a production claim.
+  - **CI wiring**: `npm run test:editor` now runs in `.github/workflows/ci.yml` (after the axe smoke
+    step, reusing the installed Chromium). Its Playwright config starts a hermetic production server, so
+    it needs no `DATABASE_URL` secret.
+  - **WCAG audit**: the manual WCAG 2.1 AA checklist below is still outstanding.
 - **Finding:** the app is accessibility-oriented and has a publish gate plus public axe smoke tests,
   but it should not be called ADA/WCAG compliant until a full manual audit and cross-browser workflow
   pass are complete. The page editor has historically failed in browser-only ways that unit tests do
   not catch.
-- **Suggested approach:** add a Playwright editor regression suite in CI (using installed browsers)
-  for the high-risk authoring paths: Visual ↔ HTML source save/preview; ordered-list create + Tab /
-  Shift+Tab + toolbar indent/outdent; nested ordered-list public render (1./a./i.); table-cell
-  formatting/link insertion; Info-box simple rich text with nested lists saving and rendering inside
-  the callout; image alt/edit controls; local draft backup/restore including `nextReviewDate`; note
-  stripping from public/search. Pair this with a manual WCAG 2.1 AA audit
+- **Suggested approach:** keep the Playwright editor regression suite in CI and extend it when new
+  editor bugs surface. It now covers the highest-risk Chromium authoring paths: Visual ↔ HTML source,
+  ordered-list create + Tab / Shift+Tab + toolbar blocked-state feedback, nested ordered-list public
+  render (1./a./i.), table-cell formatting/link insertion, Info-box simple rich text with nested lists,
+  image alt/edit controls, local draft backup/restore including `nextReviewDate`, and note stripping
+  from public/search. Pair this with a manual WCAG 2.1 AA audit
   checklist covering public pages and admin/editor workflows: keyboard-only operation, focus order,
   visible focus, labels/names, headings/landmarks, color contrast, zoom/reflow, table headers, image
   alternatives, video captions/transcripts, and mobile layouts.
-- **Touch points:** `tests/a11y`, new `tests/editor`, `playwright.a11y.config.ts`, CI workflow,
+- **Touch points:** `tests/a11y`, `tests/editor` (delivered), `playwright.a11y.config.ts`,
+  `playwright.editor.config.ts` (delivered), `package.json` (`test:editor`), CI workflow,
   `src/components/PageDocumentEditor.tsx`, `src/components/AdminPageEditorForm.tsx`,
   `src/components/PageBlocks.tsx`, `project_spec.md`.
 - **Acceptance:** (1) CI runs unit, type-check, lint, build, public axe smoke, and editor Playwright
@@ -958,13 +1065,14 @@ Items are ordered by recommended priority.
   Procedure section, and Info box insert controls are visibly labeled, and Info boxes preserve callout
   list markup through save and public render.
 
-- **Remaining finding:** the editor UX behavior is implemented, but it is still backed by custom
-  `contentEditable` code and needs automated browser coverage plus a manual Chrome/Firefox pass before
-  calling the editor production-ready.
-- **Remaining approach:** fold these workflows into FB-25's Playwright editor suite: nested ordered-list
-  creation and Tab/Shift+Tab nesting; toolbar indent/outdent disabled states; table-cell text-only
-  context; Info-box text/list context; Divider/Procedure/Info insert discoverability; and Info-box
-  save/public-render persistence.
+- **Remaining finding:** the editor UX behavior is implemented and covered by Chromium browser
+  regressions, but it is still backed by custom `contentEditable` code and needs a manual
+  Chrome/Firefox/mobile pass before calling the editor production-ready.
+- **Remaining approach:** keep these workflows in FB-25's Playwright editor suite and extend coverage
+  whenever a new editor bug is found. Current Chromium coverage includes nested ordered-list creation
+  and Tab/Shift+Tab nesting; toolbar indent/outdent blocked states; table-cell text-only context;
+  Info-box text/list context; Divider/Procedure/Info insert discoverability; image alt editing; local
+  draft restore; and Info-box save/public-render persistence.
 - **Touch points:** `src/components/DocumentToolbar.tsx`, `src/components/RichTextToolbar.tsx`,
   `src/components/PageDocumentEditor.tsx`, `src/components/TableBlockEditor.tsx`,
   `src/lib/page-editor-format.ts`, `src/app/globals.css`.

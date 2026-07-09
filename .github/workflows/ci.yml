@@ -19,7 +19,9 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          # Node 24 (current LTS) matches @types/node 24 and the Next 16 / Vercel
+          # default production runtime, so CI validates on the same major we ship on.
+          node-version: "24"
           cache: npm
 
       - run: npm ci
@@ -41,6 +43,16 @@ jobs:
 
       - name: Public accessibility smoke tests (axe)
         run: npm run test:a11y
+
+      # Editor regression suite (FB-25). Its Playwright config starts a production
+      # server (`next build && next start`) — see playwright.editor.config.ts for why
+      # dev mode cannot host it — and forces an empty DATABASE_URL so the run stays
+      # hermetic (in-memory seed data), matching the in-memory `npm test` job above.
+      # This intentionally rebuilds rather than reusing the a11y build: the editor
+      # server needs bootstrap-admin env + empty DATABASE_URL, so sharing one build
+      # /server with the axe smoke step would be more fragile than a second build.
+      - name: Editor regression tests (Playwright, production server)
+        run: npm run test:editor
 
       # Live-database integration suite (KI-1). Runs only when a DATABASE_URL secret
       # is configured — point it at a dedicated Neon TEST branch, never production.

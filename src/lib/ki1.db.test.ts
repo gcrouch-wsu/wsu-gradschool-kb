@@ -75,7 +75,8 @@ describe("KI-1 live-DB integration", () => {
       expect(reloaded?.verifiedBy).toBe(verifier);
 
     } finally {
-      // Cleanup page
+      // Cleanup page (and its create-snapshot revision)
+      await sql`DELETE FROM kb_page_revisions WHERE page_id = ${page.id}`;
       await sql`DELETE FROM kb_pages WHERE id = ${page.id}`;
       // Cleanup temp KB if we created it
       if (isTempKb) {

@@ -25,7 +25,8 @@ jobs:
       - if: env.HAS_NEON == 'true'
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          # Keep in step with ci.yml — Node 24 matches the shipped runtime.
+          node-version: "24"
           cache: npm
 
       - if: env.HAS_NEON == 'true'

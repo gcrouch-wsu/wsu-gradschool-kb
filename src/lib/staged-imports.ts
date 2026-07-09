@@ -360,7 +360,7 @@ export async function discardStagedImport(id: string): Promise<void> {
   await deleteStagedImportRecord(id);
 }
 
-export async function commitStagedImport(id: string) {
+export async function commitStagedImport(id: string, authorEmail?: string) {
   const detail = await getStagedImportDetail(id);
   if (!detail) {
     throw new Error("Staged import not found.");
@@ -379,6 +379,7 @@ export async function commitStagedImport(id: string) {
       visibility: staged.visibility,
       parentPath: staged.parentPath,
       blocks: staged.blocks,
+      authorEmail,
     },
     media,
   );

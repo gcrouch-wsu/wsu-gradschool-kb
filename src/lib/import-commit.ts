@@ -41,6 +41,7 @@ export interface CommitDraftPageInput {
   visibility?: PageVisibility;
   parentPath?: string[];
   blocks: ContentBlock[];
+  authorEmail?: string;
 }
 
 export function applyStagedMediaToBlocks(
@@ -130,6 +131,7 @@ export async function commitDraftPageFromImport(input: CommitDraftPageInput) {
     parentPath: input.parentPath,
     status: "draft",
     blocks: input.blocks,
+    authorEmail: input.authorEmail,
   });
   const url = `/kb/${kb.slug}/${page.path.join("/")}`;
   return { page, url };

@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       visibility,
       parentPath,
       blocks,
+      authorEmail: guard.session.email,
     });
     return NextResponse.json({ ok: true, pageId: page.id, url });
   } catch (error) {

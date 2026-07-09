@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       parentPath: body.parentPath,
       summary: body.summary || "",
       blocks: [{ blockId: `block-${crypto.randomUUID()}`, type: "paragraph", text: "New page content..." }],
+      authorEmail: guard.session.email,
     });
     await recordAuditEvent({
       session: guard.session,

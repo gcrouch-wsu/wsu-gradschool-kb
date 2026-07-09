@@ -31,8 +31,9 @@ current implementation status.
   with font/size/color/weight, header/hero alignment, content width, and a **global default theme**
   (colors/fonts/type scale) that KBs inherit. Blank fields render blank-safe (no empty chrome).
 
-Test suite: `npm test` (108 in-memory tests) and `npm run test:a11y` (public-page axe smoke
-tests). Type-check: `npm run check`.
+Test suite: `npm test` (132 in-memory tests), `npm run test:a11y` (public-page axe smoke
+tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
+`npm run check`.
 
 **Live-database tests:** `npm run test:db` runs the KI-1 integration suite
 (`src/lib/ki1.db.test.ts`) against the real Neon database — edit-lock conflicts, atomic

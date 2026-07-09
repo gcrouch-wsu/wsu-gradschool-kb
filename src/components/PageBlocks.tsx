@@ -258,8 +258,10 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
                           const isHeader =
                             (block.hasHeaderRow && rowIndex === 0) || (block.hasHeaderColumn && colIndex === 0);
                           const CellTag = isHeader ? "th" : "td";
+                          const headerScope =
+                            block.hasHeaderRow && rowIndex === 0 ? "col" : block.hasHeaderColumn ? "row" : undefined;
                           return (
-                            <CellTag key={`${block.blockId}-${rowIndex}-${colIndex}`}>
+                            <CellTag key={`${block.blockId}-${rowIndex}-${colIndex}`} scope={headerScope}>
                               <RichText html={block.rowsHtml?.[rowIndex]?.[colIndex]} text={cell} />
                             </CellTag>
                           );

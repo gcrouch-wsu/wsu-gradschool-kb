@@ -7,6 +7,48 @@ interface Migration {
   up: (sql: Sql) => Promise<void>;
 }
 
+// Backfill a baseline (revision 1) for every page that has no revisions yet, so
+// pages created before revision history still have a recoverable snapshot.
+// Idempotent via NOT EXISTS + a deterministic id. The snapshot mirrors
+// PageRevisionSnapshot (camelCase keys); path is split from the stored
+// '/'-joined string back into an array. Exported so it can be exercised
+// directly by the live-DB test suite.
+export async function backfillBaselineRevisions(sql: Sql): Promise<void> {
+  await sql`
+    INSERT INTO kb_page_revisions (id, page_id, kb_id, revision_number, title, author_email, action, snapshot, created_at)
+    SELECT
+      'revision-backfill-' || p.id,
+      p.id,
+      p.kb_id,
+      1,
+      p.title,
+      'system',
+      'save',
+      jsonb_build_object(
+        'title', p.title,
+        'slug', p.slug,
+        'path', CASE WHEN COALESCE(p.path, '') = '' THEN '[]'::jsonb ELSE to_jsonb(string_to_array(p.path, '/')) END,
+        'summary', p.summary,
+        'status', p.status,
+        'visibility', p.visibility,
+        'ownerLabel', p.owner_label,
+        'contactEmail', p.contact_email,
+        'lastReviewedDate', p.last_reviewed_date,
+        'blocks', COALESCE(p.blocks, '[]'::jsonb),
+        'relatedPageIds', COALESCE(p.related_page_ids, '[]'::jsonb),
+        'relatedAssetIds', COALESCE(p.related_asset_ids, '[]'::jsonb),
+        'showToc', COALESCE(p.show_toc, true),
+        'tocDepth', COALESCE(p.toc_depth, 3),
+        'showSummary', COALESCE(p.show_summary, true),
+        'showPrintButton', COALESCE(p.show_print_button, true),
+        'nextReviewDate', p.next_review_date
+      ),
+      now()
+    FROM kb_pages p
+    WHERE NOT EXISTS (SELECT 1 FROM kb_page_revisions r WHERE r.page_id = p.id)
+  `;
+}
+
 const migrations: Migration[] = [
   {
     id: "001_initial",
@@ -582,6 +624,38 @@ const migrations: Migration[] = [
     id: "026_page_print_button",
     async up(sql) {
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS show_print_button BOOLEAN NOT NULL DEFAULT TRUE`;
+    },
+  },
+  {
+    id: "027_page_revisions",
+    async up(sql) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kb_page_revisions (
+          id TEXT PRIMARY KEY,
+          page_id TEXT NOT NULL,
+          kb_id TEXT NOT NULL,
+          revision_number INTEGER NOT NULL,
+          title TEXT NOT NULL DEFAULT '',
+          author_email TEXT NOT NULL DEFAULT '',
+          action TEXT NOT NULL DEFAULT 'save',
+          snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`
+        CREATE INDEX IF NOT EXISTS idx_kb_page_revisions_page
+        ON kb_page_revisions(page_id, revision_number DESC)
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_revisions_created ON kb_page_revisions(created_at DESC)`;
+      // One revision_number per page — the edit lock serialises writers, so a
+      // collision means a genuine concurrent save and the transaction should
+      // abort rather than silently duplicate a number.
+      await sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_kb_page_revisions_number
+        ON kb_page_revisions(page_id, revision_number)
+      `;
+      // Give every pre-existing page a baseline revision 1.
+      await backfillBaselineRevisions(sql);
     },
   },
 ];

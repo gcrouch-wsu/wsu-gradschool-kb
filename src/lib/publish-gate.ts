@@ -1,5 +1,5 @@
 import { parse } from "node-html-parser";
-import type { ContentBlock } from "@/lib/types";
+import type { ContentBlock, PageRevision } from "@/lib/types";
 
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -131,4 +131,40 @@ export async function validatePageForPublish(
   }
 
   return [...new Set(issues)];
+}
+
+// Restoring a published revision re-publishes it, so it must clear the same gate
+// as a normal publish. A revision valid when it was saved can still fail now —
+// e.g. an image/file asset it references was archived since — so this is
+// re-checked against current asset status at restore time. Draft revisions skip
+// the gate (restoring them leaves the page a draft).
+export async function validateRevisionForRestore(
+  revision: Pick<
+    PageRevision,
+    | "status"
+    | "title"
+    | "slug"
+    | "summary"
+    | "ownerLabel"
+    | "contactEmail"
+    | "lastReviewedDate"
+    | "blocks"
+  >,
+  resolveAssetStatus: AssetStatusResolver,
+): Promise<string[]> {
+  if (revision.status !== "published") {
+    return [];
+  }
+  return validatePageForPublish(
+    {
+      title: revision.title,
+      slug: revision.slug,
+      summary: revision.summary,
+      ownerLabel: revision.ownerLabel,
+      contactEmail: revision.contactEmail,
+      lastReviewedDate: revision.lastReviewedDate,
+      blocks: revision.blocks,
+    },
+    resolveAssetStatus,
+  );
 }

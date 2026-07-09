@@ -24,7 +24,7 @@ export async function POST(
   if (denied) return denied;
 
   try {
-    const { page, url } = await commitStagedImport(stagedImportId);
+    const { page, url } = await commitStagedImport(stagedImportId, guard.session.email);
     return NextResponse.json({ ok: true, pageId: page.id, url });
   } catch (error) {
     logError(error, { route: "/api/admin/import/staged/[stagedImportId]/commit", action: "commit_staged_import", stagedImportId });

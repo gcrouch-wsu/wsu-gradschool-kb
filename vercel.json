@@ -6,6 +6,10 @@
     {
       "path": "/api/admin/cron/audit-cleanup",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/admin/cron/revision-cleanup",
+      "schedule": "30 4 * * *"
     }
   ]
 }

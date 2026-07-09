@@ -67,6 +67,36 @@ describe("page-document", () => {
     expect(ids).toContain("list-3");
   });
 
+  it("preserves a list the browser wrapped inside a paragraph on save", () => {
+    // Chromium's insertOrderedList can produce <p><ol>…</ol></p>; the list must
+    // survive save (a paragraph serialize would flatten it) including nesting.
+    const html =
+      '<p data-block-id="p1"><ol><li>One<ol><li>Two<ol><li>Three</li></ol></li></ol></li></ol></p>';
+    const clean = sanitizePageDocument(html);
+    expect(clean).toContain("<ol");
+    // No paragraph wrapper remains around the list.
+    expect(clean).not.toMatch(/<p[^>]*>\s*<ol/);
+
+    const blocks = documentHtmlToBlocks(clean);
+    const list = blocks.find((block) => block.type === "list");
+    expect(list).toBeDefined();
+    const listBlock = list as Extract<ContentBlock, { type: "list" }>;
+    expect(listBlock.ordered).toBe(true);
+    // The top-level item's plain text includes its nested descendants.
+    expect(listBlock.items[0]).toContain("One");
+    // Nested ordered lists survive inside the first item's itemHtml.
+    expect(listBlock.itemHtml?.[0]).toContain("<ol");
+    expect(listBlock.itemHtml?.[0]).toContain("Three");
+  });
+
+  it("keeps inline text alongside a browser-wrapped list as its own paragraph", () => {
+    const html = '<p data-block-id="p1">Intro<ol><li>Item</li></ol></p>';
+    const clean = sanitizePageDocument(html);
+    const blocks = documentHtmlToBlocks(clean);
+    expect(blocks.some((block) => block.type === "paragraph" && block.text === "Intro")).toBe(true);
+    expect(blocks.some((block) => block.type === "list")).toBe(true);
+  });
+
   it("strips inline font-size overrides from headings but keeps other styling", () => {
     const html =
       '<h2 data-block-id="h1"><span style="font-size: 1.6rem">Title</span></h2>' +

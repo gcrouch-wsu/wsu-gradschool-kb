@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validatePageForPublish, type PublishablePage } from "@/lib/publish-gate";
+import { validatePageForPublish, validateRevisionForRestore, type PublishablePage } from "@/lib/publish-gate";
+import type { ContentBlock } from "@/lib/types";
 
 const activeResolver = async () => "active";
 
@@ -129,5 +130,35 @@ describe("validatePageForPublish", () => {
     expect(await validatePageForPublish(page, archivedResolver)).toContain(
       "A file link references an asset that is not active.",
     );
+  });
+});
+
+describe("validateRevisionForRestore", () => {
+  const activeResolver = async () => "active";
+  const archivedResolver = async () => "archived";
+
+  function publishedRevision(overrides: Partial<PublishablePage> = {}) {
+    const valid = validPage();
+    return { ...valid, status: "published" as const, ...overrides };
+  }
+
+  it("skips the gate for draft revisions (restoring leaves the page a draft)", async () => {
+    const draft = { ...validPage(), status: "draft" as const, summary: "" };
+    expect(await validateRevisionForRestore(draft, archivedResolver)).toEqual([]);
+  });
+
+  it("allows a valid published revision", async () => {
+    expect(await validateRevisionForRestore(publishedRevision(), activeResolver)).toEqual([]);
+  });
+
+  it("blocks a published revision that is missing a summary", async () => {
+    const issues = await validateRevisionForRestore(publishedRevision({ summary: "  " }), activeResolver);
+    expect(issues).toContain("Page is missing a summary.");
+  });
+
+  it("blocks a published revision whose asset has since been archived", async () => {
+    const blocks: ContentBlock[] = [{ blockId: "a", type: "asset_link", assetId: "asset-9" }];
+    const issues = await validateRevisionForRestore(publishedRevision({ blocks }), archivedResolver);
+    expect(issues).toContain("A file link references an asset that is not active.");
   });
 });

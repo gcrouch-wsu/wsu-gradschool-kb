@@ -7,6 +7,10 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["word-extractor", "mammoth"],
+  // Playwright drives the dev server via 127.0.0.1 while `next dev` reports its
+  // origin as localhost, which trips Next 16's cross-origin dev-request warning.
+  // Allow just that one loopback host (not a broad wildcard) to silence it.
+  allowedDevOrigins: ["127.0.0.1"],
   turbopack: {
     root: projectRoot,
   },

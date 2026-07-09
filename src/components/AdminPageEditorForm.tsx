@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { DraftPreviewModal } from "@/components/DraftPreviewModal";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
+import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
@@ -318,6 +319,8 @@ export function AdminPageEditorForm({
   const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
 
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Bumped after a successful save so the History panel re-fetches.
+  const [historyToken, setHistoryToken] = useState(0);
   const [lockError, setLockError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [expiryNoticeOpen, setExpiryNoticeOpen] = useState(false);
@@ -669,6 +672,7 @@ export function AdminPageEditorForm({
       setSavedStatus(status);
       setSavedUrl(data.url ?? null);
       setSavedSnapshot(currentSnapshot);
+      setHistoryToken((token) => token + 1);
       clearBackup();
       markSessionActive();
     } catch (caught) {
@@ -1013,6 +1017,17 @@ export function AdminPageEditorForm({
             key={`${page.id}:${editorEpoch}`}
             onChange={setBlocks}
             pageUrl={previewUrl}
+          />
+        </fieldset>
+
+        <fieldset className="fieldset">
+          <legend>History</legend>
+          <PageHistoryPanel
+            isLocked={isLocked}
+            kbSlug={kb.slug}
+            onRestored={() => window.location.reload()}
+            pageId={page.id}
+            reloadToken={historyToken}
           />
         </fieldset>
 

@@ -5,6 +5,7 @@ dist/
 coverage/
 playwright-report/
 test-results/
+tests/**/.auth/
 .env
 .env*.local
 *.tsbuildinfo

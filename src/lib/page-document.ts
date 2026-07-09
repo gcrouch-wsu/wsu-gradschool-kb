@@ -441,6 +441,36 @@ function serializeDocumentNode(node: Node): string {
   }
 
   if (tag === "p") {
+    // Chromium's insertOrderedList/insertUnorderedList can leave the new list
+    // wrapped inside the paragraph it converted (`<p><ol>…</ol></p>`). A plain
+    // paragraph serialize would flatten that list via inline sanitization, so
+    // split the paragraph: emit any block-level list at the top level and wrap
+    // surrounding inline content in its own paragraph(s).
+    const hasBlockList = node.childNodes.some(
+      (child) => isElement(child) && ["ol", "ul"].includes(child.tagName?.toLowerCase() ?? ""),
+    );
+    if (hasBlockList) {
+      const out: string[] = [];
+      let inlineBuffer = "";
+      const flushInline = () => {
+        const inner = sanitizeRichText(inlineBuffer, { keepNotes: true });
+        if (inner.trim()) {
+          out.push(`<p data-block-id="${newBlockId()}"${alignStyleAttr(readTextAlign(node))}>${inner}</p>`);
+        }
+        inlineBuffer = "";
+      };
+      for (const child of node.childNodes) {
+        const childTag = isElement(child) ? child.tagName?.toLowerCase() : null;
+        if (childTag === "ol" || childTag === "ul") {
+          flushInline();
+          out.push(serializeDocumentNode(child));
+        } else {
+          inlineBuffer += isElement(child) ? child.toString() : escapeHtml(child.text ?? "");
+        }
+      }
+      flushInline();
+      return out.join("");
+    }
     const inner = sanitizeRichText(node.innerHTML, { keepNotes: true });
     return `<p data-block-id="${escapeHtml(blockId)}"${alignStyleAttr(readTextAlign(node))}>${inner || "<br>"}</p>`;
   }
