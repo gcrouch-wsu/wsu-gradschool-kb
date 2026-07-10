@@ -822,6 +822,121 @@ export async function loadDatasetFromDb(): Promise<KbDataset> {
   };
 }
 
+export async function loadKnowledgeBasesFromDb(): Promise<KnowledgeBase[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`SELECT * FROM knowledge_bases`) as unknown as KbRow[];
+  return rows.map(mapKb);
+}
+
+export async function loadKnowledgeBaseBySlugFromDb(
+  slug: string,
+  includeUnpublished = false,
+): Promise<KnowledgeBase | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT * FROM knowledge_bases
+    WHERE slug = ${slug}
+      AND (${includeUnpublished} OR status = 'published')
+    LIMIT 1
+  `) as unknown as KbRow[];
+  const row = rows[0];
+  return row ? mapKb(row) : null;
+}
+
+export async function loadKnowledgeBaseByIdFromDb(id: string): Promise<KnowledgeBase | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`SELECT * FROM knowledge_bases WHERE id = ${id} LIMIT 1`) as unknown as KbRow[];
+  const row = rows[0];
+  return row ? mapKb(row) : null;
+}
+
+export async function loadPageByPathFromDb(kbId: string, path: string[]): Promise<KbPage | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT * FROM kb_pages
+    WHERE kb_id = ${kbId} AND path = ${path.join("/")}
+    LIMIT 1
+  `) as unknown as PageRow[];
+  const row = rows[0];
+  return row ? mapPage(row) : null;
+}
+
+export async function loadPagesForKbFromDb(kbId: string): Promise<KbPage[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT * FROM kb_pages
+    WHERE kb_id = ${kbId}
+  `) as unknown as PageRow[];
+  return rows.map(mapPage);
+}
+
+export async function loadPagesForKbWithoutBlocksFromDb(kbId: string): Promise<KbPage[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT
+      id, kb_id, slug, path, sort_order, title, summary, status, visibility,
+      owner_label, contact_email, last_reviewed_date, updated_display_date,
+      '[]'::jsonb AS blocks, related_page_ids, related_asset_ids,
+      show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
+      next_review_date, verified_at, verified_by
+    FROM kb_pages
+    WHERE kb_id = ${kbId}
+  `) as unknown as PageRow[];
+  return rows.map(mapPage);
+}
+
+export async function loadAssetByIdFromDb(assetId: string): Promise<Asset | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
+      file_size_bytes, status, owner_label, last_reviewed_date,
+      updated_display_date, version_id, '' AS body,
+      alt_text, video_provider, video_external_id, video_url
+    FROM kb_assets
+    WHERE id = ${assetId}
+    LIMIT 1
+  `) as unknown as AssetRow[];
+  const row = rows[0];
+  return row ? mapAsset(row) : null;
+}
+
+export async function loadAssetBySlugFromDb(homeKbId: string, slug: string): Promise<Asset | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
+      file_size_bytes, status, owner_label, last_reviewed_date,
+      updated_display_date, version_id, '' AS body,
+      alt_text, video_provider, video_external_id, video_url
+    FROM kb_assets
+    WHERE home_kb_id = ${homeKbId} AND slug = ${slug}
+    LIMIT 1
+  `) as unknown as AssetRow[];
+  const row = rows[0];
+  return row ? mapAsset(row) : null;
+}
+
+export async function loadAssetsForKbFromDb(kbId?: string): Promise<Asset[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
+      file_size_bytes, status, owner_label, last_reviewed_date,
+      updated_display_date, version_id, '' AS body,
+      alt_text, video_provider, video_external_id, video_url
+    FROM kb_assets
+    WHERE (${kbId ?? null}::text IS NULL OR home_kb_id = ${kbId ?? null})
+  `) as unknown as AssetRow[];
+  return rows.map(mapAsset);
+}
+
 interface VersionRow {
   id: string;
   asset_id: string;

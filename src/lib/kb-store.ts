@@ -9,9 +9,18 @@ import {
   loadActiveRedirect,
   loadRedirectsForKb,
   deleteRedirectById,
+  loadAssetByIdFromDb,
+  loadAssetBySlugFromDb,
   loadAssetForDelivery,
+  loadAssetsForKbFromDb,
   loadDatasetFromDb,
+  loadKnowledgeBaseByIdFromDb,
+  loadKnowledgeBaseBySlugFromDb,
+  loadKnowledgeBasesFromDb,
   loadPageById,
+  loadPageByPathFromDb,
+  loadPagesForKbFromDb,
+  loadPagesForKbWithoutBlocksFromDb,
   loadVersionsForAsset,
   replaceVersionsForAsset,
   deleteAsset as deleteAssetFromDb,
@@ -225,6 +234,17 @@ const getDataset = cache(async (): Promise<KbDataset> => {
   };
 });
 
+const getDbKnowledgeBases = cache(loadKnowledgeBasesFromDb);
+const getDbKnowledgeBaseBySlug = cache(loadKnowledgeBaseBySlugFromDb);
+const getDbKnowledgeBaseById = cache(loadKnowledgeBaseByIdFromDb);
+const getDbPageById = cache(loadPageById);
+const getDbPageByPath = cache(loadPageByPathFromDb);
+const getDbPagesForKb = cache(loadPagesForKbFromDb);
+const getDbPageSummariesForKb = cache(loadPagesForKbWithoutBlocksFromDb);
+const getDbAssetById = cache(loadAssetByIdFromDb);
+const getDbAssetBySlug = cache(loadAssetBySlugFromDb);
+const getDbAssetsForKb = cache(loadAssetsForKbFromDb);
+
 function pathKey(path: string[]) {
   return path.join("/");
 }
@@ -274,12 +294,49 @@ function visiblePages(dataset: KbDataset, kbId: string, includeStaff: boolean) {
   return published.filter((page) => !isStaffOnly(published, page));
 }
 
+function visiblePageList(pages: KbPage[], kbId: string, includeStaff: boolean) {
+  return visiblePages({ knowledgeBases: [], pages, assets: [] }, kbId, includeStaff);
+}
+
+function buildTreeFromPages(visible: KbPage[]): PageTreeNode[] {
+  const nodes = new Map<string, PageTreeNode>();
+  visible.forEach((page) => nodes.set(pathKey(page.path), { page, children: [] }));
+
+  const roots: PageTreeNode[] = [];
+  visible.forEach((page) => {
+    const node = nodes.get(pathKey(page.path))!;
+    const parent = page.path.length > 1 ? nodes.get(pathKey(page.path.slice(0, -1))) : undefined;
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  const sortNodes = (list: PageTreeNode[]) => {
+    list.sort(
+      (a, b) =>
+        a.page.sortOrder - b.page.sortOrder ||
+        a.page.title.localeCompare(b.page.title),
+    );
+    list.forEach((child) => sortNodes(child.children));
+  };
+  sortNodes(roots);
+  return roots;
+}
+
 export async function getPublishedKbs(): Promise<KnowledgeBase[]> {
+  if (isDatabaseEnabled()) {
+    return (await getDbKnowledgeBases()).filter((kb) => kb.status === "published");
+  }
   const dataset = await getDataset();
   return dataset.knowledgeBases.filter((kb) => kb.status === "published");
 }
 
 export async function getKbBySlug(slug: string, includeUnpublished = false): Promise<KnowledgeBase | null> {
+  if (isDatabaseEnabled()) {
+    return getDbKnowledgeBaseBySlug(slug, includeUnpublished);
+  }
   const dataset = await getDataset();
   return (
     dataset.knowledgeBases.find(
@@ -289,11 +346,34 @@ export async function getKbBySlug(slug: string, includeUnpublished = false): Pro
 }
 
 export async function getKbById(id: string): Promise<KnowledgeBase | null> {
+  if (isDatabaseEnabled()) {
+    return getDbKnowledgeBaseById(id);
+  }
   const dataset = await getDataset();
   return dataset.knowledgeBases.find((kb) => kb.id === id) ?? null;
 }
 
 export async function getKbHomepagePage(kbId: string, includeStaff: boolean): Promise<KbPage | null> {
+  if (isDatabaseEnabled()) {
+    const kb = await getDbKnowledgeBaseById(kbId);
+    if (!kb?.homepagePageId) {
+      return null;
+    }
+    const page = await getDbPageById(kb.homepagePageId);
+    if (!page || page.kbId !== kbId) {
+      return null;
+    }
+    if (includeStaff) {
+      return page.status === "published" || page.status === "draft" ? page : null;
+    }
+    if (page.status !== "published") {
+      return null;
+    }
+    const summaries = await getDbPageSummariesForKb(kbId);
+    const published = summaries.filter((candidate) => candidate.status === "published");
+    const summaryPage = published.find((candidate) => candidate.id === page.id) ?? page;
+    return isStaffOnly(published, summaryPage) ? null : page;
+  }
   const dataset = await getDataset();
   const kb = dataset.knowledgeBases.find((candidate) => candidate.id === kbId);
   if (!kb?.homepagePageId) {
@@ -336,37 +416,20 @@ export async function setKbHomepagePage(kbId: string, pageId: string | null): Pr
 }
 
 export async function getVisiblePagesForKb(kbId: string, includeStaff: boolean): Promise<KbPage[]> {
+  if (isDatabaseEnabled()) {
+    return visiblePageList(await getDbPagesForKb(kbId), kbId, includeStaff);
+  }
   const dataset = await getDataset();
   return visiblePages(dataset, kbId, includeStaff);
 }
 
 export async function buildPageTree(kbId: string, includeStaff: boolean): Promise<PageTreeNode[]> {
+  if (isDatabaseEnabled()) {
+    return buildTreeFromPages(visiblePageList(await getDbPageSummariesForKb(kbId), kbId, includeStaff));
+  }
   const dataset = await getDataset();
   const visible = visiblePages(dataset, kbId, includeStaff);
-  const nodes = new Map<string, PageTreeNode>();
-  visible.forEach((page) => nodes.set(pathKey(page.path), { page, children: [] }));
-
-  const roots: PageTreeNode[] = [];
-  visible.forEach((page) => {
-    const node = nodes.get(pathKey(page.path))!;
-    const parent = page.path.length > 1 ? nodes.get(pathKey(page.path.slice(0, -1))) : undefined;
-    if (parent) {
-      parent.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  });
-
-  const sortNodes = (list: PageTreeNode[]) => {
-    list.sort(
-      (a, b) =>
-        a.page.sortOrder - b.page.sortOrder ||
-        a.page.title.localeCompare(b.page.title),
-    );
-    list.forEach((child) => sortNodes(child.children));
-  };
-  sortNodes(roots);
-  return roots;
+  return buildTreeFromPages(visible);
 }
 
 export async function getBreadcrumbs(
@@ -374,8 +437,9 @@ export async function getBreadcrumbs(
   path: string[],
   includeStaff: boolean,
 ): Promise<KbPage[]> {
-  const dataset = await getDataset();
-  const visible = visiblePages(dataset, kbId, includeStaff);
+  const visible = isDatabaseEnabled()
+    ? visiblePageList(await getDbPageSummariesForKb(kbId), kbId, includeStaff)
+    : visiblePages(await getDataset(), kbId, includeStaff);
   const crumbs: KbPage[] = [];
   for (let depth = 1; depth <= path.length; depth += 1) {
     const subPath = path.slice(0, depth).join("/");
@@ -392,6 +456,22 @@ export async function getPageByPath(
   path: string[],
   includeStaff: boolean,
 ): Promise<KbPage | null> {
+  if (isDatabaseEnabled()) {
+    const page = await getDbPageByPath(kbId, path);
+    if (!page) {
+      return null;
+    }
+    if (includeStaff) {
+      return page.status === "published" || page.status === "draft" ? page : null;
+    }
+    if (page.status !== "published") {
+      return null;
+    }
+    const summaries = await getDbPageSummariesForKb(kbId);
+    const published = summaries.filter((candidate) => candidate.status === "published");
+    const summaryPage = published.find((candidate) => candidate.id === page.id) ?? page;
+    return isStaffOnly(published, summaryPage) ? null : page;
+  }
   const dataset = await getDataset();
   const page = dataset.pages.find((candidate) => {
     if (candidate.kbId !== kbId || pathKey(candidate.path) !== pathKey(path)) {
@@ -412,6 +492,10 @@ export async function getPageByPath(
 }
 
 export async function getAssetBySlug(homeKbId: string, slug: string): Promise<Asset | null> {
+  if (isDatabaseEnabled()) {
+    const asset = await getDbAssetBySlug(homeKbId, slug);
+    return asset?.status === "active" ? asset : null;
+  }
   const dataset = await getDataset();
   return (
     dataset.assets.find(
@@ -421,23 +505,41 @@ export async function getAssetBySlug(homeKbId: string, slug: string): Promise<As
 }
 
 export async function getAssetById(assetId: string): Promise<Asset | null> {
+  if (isDatabaseEnabled()) {
+    const asset = await getDbAssetById(assetId);
+    return asset?.status === "active" ? asset : null;
+  }
   const dataset = await getDataset();
   return dataset.assets.find((asset) => asset.id === assetId && asset.status === "active") ?? null;
 }
 
 export async function getAssetStatusById(assetId: string): Promise<string | null> {
+  if (isDatabaseEnabled()) {
+    return (await getDbAssetById(assetId))?.status ?? null;
+  }
   const dataset = await getDataset();
   return dataset.assets.find((asset) => asset.id === assetId)?.status ?? null;
 }
 
 export async function getAssetHomeKbId(assetId: string): Promise<string | null> {
+  if (isDatabaseEnabled()) {
+    return (await getDbAssetById(normalizeRecordId(assetId)))?.homeKbId ?? null;
+  }
   const dataset = await getDataset();
   return dataset.assets.find((asset) => asset.id === normalizeRecordId(assetId))?.homeKbId ?? null;
 }
 
 export async function getAssetUsages(assetId: string): Promise<AssetUsage[]> {
+  const normalizedId = normalizeRecordId(assetId);
+  if (isDatabaseEnabled()) {
+    const asset = await getDbAssetById(normalizedId);
+    if (!asset) {
+      return [];
+    }
+    return extractAssetUsages(await getDbPagesForKb(asset.homeKbId), normalizedId);
+  }
   const dataset = await getDataset();
-  return extractAssetUsages(dataset.pages, assetId);
+  return extractAssetUsages(dataset.pages, normalizedId);
 }
 
 export async function getAssetForDelivery(homeKbId: string, slug: string): Promise<Asset | null> {
@@ -572,6 +674,9 @@ export interface AssetAdminDetail {
 }
 
 export async function getAllAssetsForAdmin(kbId?: string): Promise<Asset[]> {
+  if (isDatabaseEnabled()) {
+    return (await getDbAssetsForKb(kbId)).sort((a, b) => a.title.localeCompare(b.title));
+  }
   const dataset = await getDataset();
   return dataset.assets
     .filter((asset) => (kbId ? asset.homeKbId === kbId : true))
@@ -579,6 +684,21 @@ export async function getAllAssetsForAdmin(kbId?: string): Promise<Asset[]> {
 }
 
 export async function getAssetAdminDetail(assetId: string): Promise<AssetAdminDetail | null> {
+  if (isDatabaseEnabled()) {
+    const asset = await getDbAssetById(assetId);
+    if (!asset) {
+      return null;
+    }
+    const versions = await loadVersions(assetId);
+    const synced = versions.length > 0 ? applyActiveVersionToAsset(asset, versions) : asset;
+    const [kb, pages] = await Promise.all([getDbKnowledgeBaseById(asset.homeKbId), getDbPagesForKb(asset.homeKbId)]);
+    return {
+      asset: synced,
+      versions,
+      usages: extractAssetUsages(pages, assetId),
+      publicUrl: kb && asset.status === "active" ? `/kb/${kb.slug}/files/${asset.slug}` : null,
+    };
+  }
   const dataset = await getDataset();
   const asset = dataset.assets.find((candidate) => candidate.id === assetId);
   if (!asset) {
@@ -1022,13 +1142,26 @@ export async function permanentlyDeleteAsset(assetId: string): Promise<void> {
 }
 
 export async function getAllKbsForAdmin(): Promise<KnowledgeBase[]> {
+  if (isDatabaseEnabled()) {
+    return [...(await getDbKnowledgeBases())].sort((a, b) => a.title.localeCompare(b.title));
+  }
   const dataset = await getDataset();
   return [...dataset.knowledgeBases].sort((a, b) => a.title.localeCompare(b.title));
 }
 
 export async function getAllPagesForAdmin(kbId: string): Promise<KbPage[]> {
+  if (isDatabaseEnabled()) {
+    return orderPagesForTree(await getDbPagesForKb(kbId));
+  }
   const dataset = await getDataset();
   return orderPagesForTree(dataset.pages.filter((page) => page.kbId === kbId));
+}
+
+export async function getAllPageSummariesForAdmin(kbId: string): Promise<KbPage[]> {
+  if (isDatabaseEnabled()) {
+    return orderPagesForTree(await getDbPageSummariesForKb(kbId));
+  }
+  return getAllPagesForAdmin(kbId);
 }
 
 function normalizeRecordId(id: string) {

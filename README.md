@@ -49,11 +49,11 @@ Remaining production-readiness work:
   WCAG/ADA compliance claim.
 - Keep extending the editor Playwright suite whenever a new browser-only editor bug is found.
 
-Future enhancements are tracked in `project_spec.md`: a maintained rich-text editor framework
+Future enhancements are tracked in `project_backlog.md`: a maintained rich-text editor framework
 migration, SSO after WSU ITS engagement, public reading polish, proposed-edits workflow, public API,
 KB templates/advanced settings, large-file asset handling, and richer operational monitoring.
 
-Test suite: `npm test` (132 in-memory tests), `npm run test:a11y` (public-page axe smoke
+Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page axe smoke
 tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
 `npm run check`.
 

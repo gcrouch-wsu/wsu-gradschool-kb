@@ -1,11 +1,14 @@
 import type { NeonQueryFunction } from "@neondatabase/serverless";
 
 type Sql = NeonQueryFunction<false, false>;
+type Query = ReturnType<Sql>;
 
 interface Migration {
   id: string;
   up: (sql: Sql) => Promise<void>;
 }
+
+const MIGRATION_ADVISORY_LOCK_ID = 705_202_601;
 
 // Backfill a baseline (revision 1) for every page that has no revisions yet, so
 // pages created before revision history still have a recoverable snapshot.
@@ -661,12 +664,15 @@ const migrations: Migration[] = [
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {
-  await sql`
-    CREATE TABLE IF NOT EXISTS _schema_migrations (
-      id TEXT PRIMARY KEY,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(${MIGRATION_ADVISORY_LOCK_ID})`,
+    sql`
+      CREATE TABLE IF NOT EXISTS _schema_migrations (
+        id TEXT PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `,
+  ]);
   for (const migration of migrations) {
     const applied = (await sql`
       SELECT id FROM _schema_migrations WHERE id = ${migration.id} LIMIT 1
@@ -674,7 +680,21 @@ export async function runMigrations(sql: Sql): Promise<void> {
     if (applied.length > 0) {
       continue;
     }
-    await migration.up(sql);
-    await sql`INSERT INTO _schema_migrations (id) VALUES (${migration.id})`;
+    const queries = await collectMigrationQueries(sql, migration);
+    await sql.transaction([
+      sql`SELECT pg_advisory_xact_lock(${MIGRATION_ADVISORY_LOCK_ID})`,
+      ...queries,
+      sql`INSERT INTO _schema_migrations (id) VALUES (${migration.id}) ON CONFLICT (id) DO NOTHING`,
+    ]);
   }
+}
+
+async function collectMigrationQueries(sql: Sql, migration: Migration): Promise<Query[]> {
+  const queries: Query[] = [];
+  const collector = ((strings: TemplateStringsArray, ...params: unknown[]) => {
+    queries.push(sql(strings, ...params));
+    return Promise.resolve([]) as unknown as Query;
+  }) as Sql;
+  await migration.up(collector);
+  return queries;
 }

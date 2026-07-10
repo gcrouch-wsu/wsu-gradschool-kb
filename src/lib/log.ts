@@ -15,10 +15,15 @@ export function logError(error: unknown, fields: LogFields = {}) {
   if (process.env.NODE_ENV === "test") {
     return;
   }
+  const normalized = normalizeError(error);
+  const stack = "stack" in normalized ? normalized.stack : undefined;
   console.error(JSON.stringify({
-    level: "error",
-    time: new Date().toISOString(),
-    error: normalizeError(error),
+    timestamp: new Date().toISOString(),
+    severity: "error",
+    route: typeof fields.route === "string" ? fields.route : undefined,
+    message: normalized.message,
+    stack,
+    error: normalized,
     ...fields,
   }));
 }
