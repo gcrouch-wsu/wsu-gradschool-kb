@@ -327,12 +327,15 @@ queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `024_kb_list_title_style`.** Migrations after `018_rate_limits` add content
+  backfills. **Current head: `027_page_revisions`.** Migrations after `018_rate_limits` add content
   lifecycle columns (`019`: `next_review_date` / `verified_at` / `verified_by`), the global default
   site theme (`020`), home content blocks + KB-list controls (`021`), branding/logo + layout columns
   (`022`: `brand_text`, `logo_url`, `logo_width`, `header_alignment`, `hero_alignment`,
-  `content_width`), brand-text style columns (`023`: color/size/weight/font), and KB-list
-  section-heading style columns (`024`: `kb_list_title_color/size/weight/font`).
+  `content_width`), brand-text style columns (`023`: color/size/weight/font), KB-list
+  section-heading style columns (`024`: `kb_list_title_color/size/weight/font`), KB homepage page
+  assignment (`025`: `knowledge_bases.home_page_id`), per-page print-button visibility
+  (`026`: `kb_pages.show_print_button`), and page revision history (`027`: `kb_page_revisions` plus
+  a baseline revision backfill for pre-existing pages).
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`.
@@ -370,13 +373,14 @@ share the page lock and the process-global in-memory store.
   work; not durable). Set = Neon (schema auto-creates/seeds).
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob; without it, DOCX import skips images and uploads fall back
   to data-backed assets.
-- `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup`.
+- `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup` and
+  `/api/admin/cron/revision-cleanup`.
 
-**CI** (`.github/workflows/ci.yml`): on every push/PR runs type-check, unit tests, production build,
-and public-page axe smoke tests against the in-memory seed dataset. It runs `npm run test:db` **only
-when a `DATABASE_URL` repo secret is set** (point it at a dedicated Neon **test** branch — the suite
-writes/deletes data). The live-DB step sets `DATABASE_URL` per-step, never job-wide, so the
-in-memory run never sees a database.
+**CI** (`.github/workflows/ci.yml`): on pushes to `main` and on PRs, runs type-check, lint, unit
+tests, production build, public-page axe smoke tests, and the Chromium editor regression suite against
+the in-memory seed dataset. It runs `npm run test:db` **only when a `DATABASE_URL` repo secret is set**
+(point it at a dedicated Neon **test** branch — the suite writes/deletes data). The live-DB step sets
+`DATABASE_URL` per-step, never job-wide, so the in-memory run never sees a database.
 
 **Per-PR live-DB (`.github/workflows/db-pr.yml`):** an opt-in workflow creates a throwaway Neon branch
 per pull request, runs `npm run test:db` against it, and deletes it. Every step is gated on `HAS_NEON`,
@@ -424,6 +428,10 @@ manual redirect persistence, and the single-active-version DB invariant.
   `<iframe>`s; the CSP in `src/proxy.ts` allowlists those hosts. If you add a provider in
   `src/components/PageBlocks.tsx` (or `src/lib/video.ts`), add its host to `frame-src` too, or the
   embed silently fails to load. Do **not** add hosts to `script-src`.
+- **Print-to-PDF image loading is deliberate.** `PrintPdfButton` eagerly waits for `.article img`
+  elements to finish loading/decoding, with a bounded timeout, before calling `window.print()`. Keep
+  that preparation path if the button or print flow moves; otherwise browser PDF export can capture
+  before lazy/managed images have painted, producing PDFs with missing screenshots.
 - **Apply a KB-scope guard on every new editor-reachable route AND page.** Scoping is per-route, not
   global middleware: API routes use `requireKbAccess`, admin list views use `filterKbsForSession` /
   `accessibleKbIds`, and detail/edit server components use `canAccessKb(...) → notFound()`. A new admin
@@ -442,7 +450,8 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 9. Current feature status
 
-**Working & verified (unit/type/build/public axe smoke; live-DB where configured):**
+**Working & verified (type/lint/unit/build/public axe smoke/editor Chromium regressions; live-DB where
+configured):**
 - Multi-KB public site, configurable KB homepage pages, 3-column docs layout, hierarchical page-tree
   navigation, depth-controlled right-rail TOC.
 - Block editor (rich text, alignment, links, media picker, cards, tables, video, info boxes,
@@ -471,12 +480,17 @@ manual redirect persistence, and the single-active-version DB invariant.
   all blank-safe.
 - DOCX staged import; auto-redirects.
 - Edit locks with atomic multi-row writes; print-to-PDF export; publishing gate.
+- Page revision history with restore: every create/save snapshots the page, restores are new saves,
+  baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
-- CI (type-check + unit + build + public axe smoke always; live-DB when the secret is configured).
+- CI (type-check + lint + unit + build + public axe smoke + Chromium editor regressions always;
+  live-DB when the secret is configured).
 
 **Built but with known caveats (verify before relying on):**
 - **"Accessible PDF"**: this is the browser's *print-to-PDF* over semantic HTML (`PrintPdfButton` +
   print CSS), which yields a clean, structured print — **not** a server-side tagged-PDF generator (FB-14).
+  The export button now waits for article images to load/decode before opening the print dialog, so
+  screenshot-heavy KB pages should not lose managed images during PDF export.
 - **Accessibility**: enforced by the publish gate + axe **smoke** tests, not a full WCAG 2.1 AA audit.
 
 **Thin / partial:**
@@ -484,8 +498,7 @@ manual redirect persistence, and the single-active-version DB invariant.
 - Asset library: table + media picker + alt/description editing; **no advanced file management or
   direct-to-blob large uploads**.
 - Notes UX: inline highlight + point pin only (no positioned margin rail).
-- TOC: no scroll-spy active-section highlighting.
-- Audit-log retention: 30-day purge is scheduled through Vercel Cron (§12 FB-01).
+- Audit-log retention is a fixed 30-day purge scheduled through Vercel Cron (§12 FB-01).
 
 ## 10. Known limitations
 
@@ -519,7 +532,7 @@ Narrative backlog; the actionable, tagged version is §12.
   enhancements there are a diff view and configurable retention; positioned margin/comment rail (true
   Word-style), comment threads/resolve, and a hardened editor core (a maintained rich-text framework —
   FB-09) since contenteditable selection bugs keep surfacing.
-- **Public experience**: home search/filter + pagination as KB count grows; TOC scroll-spy;
+- **Public experience**: home search/filter + pagination as KB count grows; reader-facing
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
 - **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
   navigation options); bulk page operations; trash/restore; scheduled publish.
@@ -785,6 +798,9 @@ Items are ordered by recommended priority.
   former representations (print block, on-screen badge tooltip, editor confirmation) onto one helper.
   The verified badge now carries an `aria-label` with the glyph marked `aria-hidden`, and empty
   governance lines are no longer printed.
+- **Image export hardening (2026-07-09):** `PrintPdfButton` now eagerly prepares `.article img`
+  elements before `window.print()`: it forces eager loading, waits for load/decode where possible, and
+  uses a bounded timeout so screenshot-heavy KB pages do not export before managed images have painted.
 
 ---
 
@@ -1023,12 +1039,12 @@ Items are ordered by recommended priority.
     draft** restores both body content and lifecycle metadata (`nextReviewDate`). The same spec verifies
     editor-only note spans remain in editor storage but are stripped from public article HTML and from
     public search results.
+- **CI wiring (2026-07-09):** `npm run test:editor` now runs in `.github/workflows/ci.yml` after the
+  axe smoke step, reusing the installed Chromium. Its Playwright config starts a hermetic production
+  server, so it needs no `DATABASE_URL` secret.
 - **Still open (manual QA / follow-up automation):**
   - **Cross-browser / responsive:** the suite runs Chromium only, so **Firefox and mobile-width passes
     remain manual** before a production claim.
-  - **CI wiring**: `npm run test:editor` now runs in `.github/workflows/ci.yml` (after the axe smoke
-    step, reusing the installed Chromium). Its Playwright config starts a hermetic production server, so
-    it needs no `DATABASE_URL` secret.
   - **WCAG audit**: the manual WCAG 2.1 AA checklist below is still outstanding.
 - **Finding:** the app is accessibility-oriented and has a publish gate plus public axe smoke tests,
   but it should not be called ADA/WCAG compliant until a full manual audit and cross-browser workflow
@@ -1056,7 +1072,7 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-26  priority:high  area:editor-ux  effort:M  status:in-progress`
 
-- **IMPLEMENTED IN BUILD (2026-07-08), pending browser-regression coverage:** toolbar state now exposes
+- **IMPLEMENTED IN BUILD (2026-07-08), covered by Chromium browser regressions:** toolbar state now exposes
   focused-surface context and publishes a formatting context event whenever the bound editor surface
   changes. Table-cell focus switches the shared toolbar to text-only mode. Info-box focus switches to a
   simple rich-text mode: text formatting plus bulleted/numbered/nested lists, with page structure,
