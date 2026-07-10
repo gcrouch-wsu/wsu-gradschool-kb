@@ -36,11 +36,12 @@ describe("page revision history (live-DB)", () => {
     let isTempKb = false;
     if (!kb) {
       const testId = `test-kb-${crypto.randomUUID()}`;
+      const testSlug = testId;
       await sql`
         INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
-        VALUES (${testId}, 'test-kb', 'Test KB', 'Temp KB for CI', 'published', now())
+        VALUES (${testId}, ${testSlug}, 'Test KB', 'Temp KB for CI', 'published', now())
       `;
-      kb = await getKbBySlug("test-kb");
+      kb = await getKbBySlug(testSlug);
       isTempKb = true;
     }
     if (!kb) throw new Error("Could not find or create a test KB");

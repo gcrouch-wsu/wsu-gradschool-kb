@@ -35,11 +35,12 @@ describe("KI-1 live-DB integration", () => {
     if (!kb) {
       // If seed data is missing, create a temp KB to allow the test to proceed
       const testId = `test-kb-${crypto.randomUUID()}`;
+      const testSlug = testId;
       await sql`
         INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
-        VALUES (${testId}, 'test-kb', 'Test KB', 'Temp KB for CI', 'published', now())
+        VALUES (${testId}, ${testSlug}, 'Test KB', 'Temp KB for CI', 'published', now())
       `;
-      kb = await getKbBySlug("test-kb");
+      kb = await getKbBySlug(testSlug);
       isTempKb = true;
     }
 
