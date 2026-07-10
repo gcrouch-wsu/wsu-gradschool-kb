@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canExportKb, buildKbExport } from "@/lib/kb-export";
+import { buildKbExport, buildKbExportStream, canExportKb } from "@/lib/kb-export";
 import { getAllKbsForAdmin } from "@/lib/kb-store";
 
 const decoder = new TextDecoder();
@@ -51,5 +51,38 @@ describe("KB export", () => {
     const manifest = JSON.parse(entries.get("kb.json")!);
     expect(manifest.knowledgeBase.id).toBe(kb.id);
     expect(manifest.pages.length).toBeGreaterThan(0);
+  });
+
+  it("streams the same archive shape the route serves", async () => {
+    const [kb] = await getAllKbsForAdmin();
+    const archive = await buildKbExportStream(kb.id);
+
+    expect(archive).not.toBeNull();
+    const reader = archive!.stream.getReader();
+    const chunks: Uint8Array[] = [];
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    expect(chunks.length).toBeGreaterThan(2);
+
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const body = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const entries = readZipEntries(body);
+    expect(entries.has("kb.json")).toBe(true);
+    const manifest = JSON.parse(entries.get("kb.json")!);
+    expect(manifest.knowledgeBase.id).toBe(kb.id);
+  });
+
+  it("returns null for a missing KB in both buffered and streamed paths", async () => {
+    expect(await buildKbExport("missing-kb-id")).toBeNull();
+    expect(await buildKbExportStream("missing-kb-id")).toBeNull();
   });
 });

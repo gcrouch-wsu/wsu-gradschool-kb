@@ -41,7 +41,7 @@
 - Public KB list renders without loading draft-only content.
 - Article pages render blocks, related assets, table of contents, and PDF controls where configured.
 - Asset delivery works for a known image/document asset.
-- Test owner KB export on a media-heavy KB before relying on it operationally; the current ZIP export is buffered in memory and should become streamed or Blob-backed before very large exports are routine.
+- Test owner KB export on a media-heavy KB after deploy. The ZIP response is streamed and asset bytes are loaded one entry at a time; if an asset fetch fails mid-stream the download is truncated and a structured `kb-export` error is logged, so verify the downloaded ZIP opens cleanly.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
 - `/admin/usage` loads aggregate view counts when `DATABASE_URL` is configured.
 - Logs are structured JSON and suitable for forwarding through Vercel log drains.

@@ -535,7 +535,7 @@ integration tests when `DATABASE_URL` is configured.
   `docs/OPERATIONS.md`.
 - Weekly review-date digest cron (`/api/admin/cron/review-digest`) for managed DB users, with HTTP
   email-provider delivery when configured and structured JSON fallback when email is unconfigured.
-- Owner-only bulk KB export (`/api/admin/kbs/[kbId]/export`) as a ZIP containing `kb.json`,
+- Owner-only bulk KB export (`/api/admin/kbs/[kbId]/export`) as a streamed ZIP containing `kb.json`,
   standalone semantic page HTML, and active asset-version bytes. The owner-only `kb.json` is a
   full-fidelity backup and can include raw editor-note metadata preserved in stored blocks.
 - Privacy-light usage analytics (`kb_page_views`) for published public article/homepage renders,

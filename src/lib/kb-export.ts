@@ -7,13 +7,20 @@ import {
   getKbById,
 } from "@/lib/kb-store";
 import { escapeHtml, sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
-import { createZipArchive, type ZipEntry } from "@/lib/zip";
+import { logError } from "@/lib/log";
+import { collectZipArchive, zipArchiveStream, type ZipEntry } from "@/lib/zip";
 import type { AssetVersion, ContentBlock, KbPage } from "@/lib/types";
 
 export interface KbExportResult {
   filename: string;
   contentType: "application/zip";
   body: Uint8Array;
+}
+
+export interface KbExportStreamResult {
+  filename: string;
+  contentType: "application/zip";
+  stream: ReadableStream<Uint8Array>;
 }
 
 export function canExportKb(session: Pick<AdminSession, "role"> | null) {
@@ -144,11 +151,11 @@ async function bytesFromBody(body: string): Promise<Uint8Array> {
   return new TextEncoder().encode(trimmed);
 }
 
-async function assetEntry(assetId: string, version: AssetVersion): Promise<{
+function assetEntry(assetId: string, version: AssetVersion): {
   assetId: string;
   entry: ZipEntry;
   pagePath: string;
-}> {
+} {
   const extension = version.originalFilename.includes(".")
     ? ""
     : version.mimeType === "application/pdf"
@@ -161,14 +168,21 @@ async function assetEntry(assetId: string, version: AssetVersion): Promise<{
     assetId,
     entry: {
       path: `assets/${name}`,
-      data: await bytesFromBody(version.body),
+      data: async () => {
+        try {
+          return await bytesFromBody(version.body);
+        } catch (error) {
+          logError(error, { route: "kb-export", action: "asset_bytes", assetId, versionId: version.id });
+          throw error;
+        }
+      },
       modifiedAt: new Date(version.uploadedAt),
     },
     pagePath: `../assets/${name}`,
   };
 }
 
-export async function buildKbExport(kbId: string): Promise<KbExportResult | null> {
+async function prepareKbExport(kbId: string): Promise<{ filename: string; entries: ZipEntry[] } | null> {
   const kb = await getKbById(kbId);
   if (!kb) {
     return null;
@@ -198,7 +212,7 @@ export async function buildKbExport(kbId: string): Promise<KbExportResult | null
       },
     ];
   });
-  const assetEntries = await Promise.all(activeVersions.map((version) => assetEntry(version.assetId, version)));
+  const assetEntries = activeVersions.map((version) => assetEntry(version.assetId, version));
   const assetPaths = new Map(assetEntries.map((asset) => [asset.assetId, asset.pagePath]));
 
   const metadata = {
@@ -229,10 +243,30 @@ export async function buildKbExport(kbId: string): Promise<KbExportResult | null
     ...assetEntries.map((asset) => asset.entry),
   ];
 
+  return { filename: `${safeSegment(kb.slug)}-export.zip`, entries };
+}
+
+export async function buildKbExportStream(kbId: string): Promise<KbExportStreamResult | null> {
+  const prepared = await prepareKbExport(kbId);
+  if (!prepared) {
+    return null;
+  }
   return {
-    filename: `${safeSegment(kb.slug)}-export.zip`,
+    filename: prepared.filename,
     contentType: "application/zip",
-    body: createZipArchive(entries),
+    stream: zipArchiveStream(prepared.entries),
+  };
+}
+
+export async function buildKbExport(kbId: string): Promise<KbExportResult | null> {
+  const prepared = await prepareKbExport(kbId);
+  if (!prepared) {
+    return null;
+  }
+  return {
+    filename: prepared.filename,
+    contentType: "application/zip",
+    body: await collectZipArchive(prepared.entries),
   };
 }
 

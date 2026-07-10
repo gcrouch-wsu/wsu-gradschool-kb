@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildKbExport, canExportKb, getExportingSession } from "@/lib/kb-export";
+import { buildKbExportStream, canExportKb, getExportingSession } from "@/lib/kb-export";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -15,11 +15,11 @@ export async function GET(_request: Request, context: { params: Promise<{ kbId: 
 
   const { kbId } = await context.params;
   try {
-    const archive = await buildKbExport(kbId);
+    const archive = await buildKbExportStream(kbId);
     if (!archive) {
       return NextResponse.json({ message: "Knowledge base not found." }, { status: 404 });
     }
-    return new Response(new Blob([archive.body as BlobPart]), {
+    return new Response(archive.stream, {
       headers: {
         "content-type": archive.contentType,
         "content-disposition": `attachment; filename="${archive.filename}"`,

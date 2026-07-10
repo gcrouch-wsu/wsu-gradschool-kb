@@ -1,6 +1,6 @@
 export interface ZipEntry {
   path: string;
-  data: Uint8Array | string;
+  data: Uint8Array | string | (() => Promise<Uint8Array | string>);
   modifiedAt?: Date;
 }
 
@@ -57,68 +57,101 @@ function concat(parts: Uint8Array[]) {
   return output;
 }
 
-export function createZipArchive(entries: ZipEntry[]): Uint8Array {
-  const localParts: Uint8Array[] = [];
-  const centralParts: Uint8Array[] = [];
-  let offset = 0;
+function buildEntryParts(entry: ZipEntry, data: Uint8Array, offset: number) {
+  const path = entry.path.replace(/\\/g, "/").replace(/^\/+/, "");
+  const name = encoder.encode(path);
+  const checksum = crc32(data);
+  const modified = dosTimestamp(entry.modifiedAt ?? new Date());
 
-  for (const entry of entries) {
-    const path = entry.path.replace(/\\/g, "/").replace(/^\/+/, "");
-    const name = encoder.encode(path);
-    const data = toBytes(entry.data);
-    const checksum = crc32(data);
-    const modified = dosTimestamp(entry.modifiedAt ?? new Date());
+  const local = new Uint8Array(30 + name.length + data.length);
+  writeUInt32(local, 0, 0x04034b50);
+  writeUInt16(local, 4, 20);
+  writeUInt16(local, 6, 0);
+  writeUInt16(local, 8, 0);
+  writeUInt16(local, 10, modified.time);
+  writeUInt16(local, 12, modified.day);
+  writeUInt32(local, 14, checksum);
+  writeUInt32(local, 18, data.length);
+  writeUInt32(local, 22, data.length);
+  writeUInt16(local, 26, name.length);
+  writeUInt16(local, 28, 0);
+  local.set(name, 30);
+  local.set(data, 30 + name.length);
 
-    const local = new Uint8Array(30 + name.length + data.length);
-    writeUInt32(local, 0, 0x04034b50);
-    writeUInt16(local, 4, 20);
-    writeUInt16(local, 6, 0);
-    writeUInt16(local, 8, 0);
-    writeUInt16(local, 10, modified.time);
-    writeUInt16(local, 12, modified.day);
-    writeUInt32(local, 14, checksum);
-    writeUInt32(local, 18, data.length);
-    writeUInt32(local, 22, data.length);
-    writeUInt16(local, 26, name.length);
-    writeUInt16(local, 28, 0);
-    local.set(name, 30);
-    local.set(data, 30 + name.length);
-    localParts.push(local);
+  const central = new Uint8Array(46 + name.length);
+  writeUInt32(central, 0, 0x02014b50);
+  writeUInt16(central, 4, 20);
+  writeUInt16(central, 6, 20);
+  writeUInt16(central, 8, 0);
+  writeUInt16(central, 10, 0);
+  writeUInt16(central, 12, modified.time);
+  writeUInt16(central, 14, modified.day);
+  writeUInt32(central, 16, checksum);
+  writeUInt32(central, 20, data.length);
+  writeUInt32(central, 24, data.length);
+  writeUInt16(central, 28, name.length);
+  writeUInt16(central, 30, 0);
+  writeUInt16(central, 32, 0);
+  writeUInt16(central, 34, 0);
+  writeUInt16(central, 36, 0);
+  writeUInt32(central, 38, 0);
+  writeUInt32(central, 42, offset);
+  central.set(name, 46);
 
-    const central = new Uint8Array(46 + name.length);
-    writeUInt32(central, 0, 0x02014b50);
-    writeUInt16(central, 4, 20);
-    writeUInt16(central, 6, 20);
-    writeUInt16(central, 8, 0);
-    writeUInt16(central, 10, 0);
-    writeUInt16(central, 12, modified.time);
-    writeUInt16(central, 14, modified.day);
-    writeUInt32(central, 16, checksum);
-    writeUInt32(central, 20, data.length);
-    writeUInt32(central, 24, data.length);
-    writeUInt16(central, 28, name.length);
-    writeUInt16(central, 30, 0);
-    writeUInt16(central, 32, 0);
-    writeUInt16(central, 34, 0);
-    writeUInt16(central, 36, 0);
-    writeUInt32(central, 38, 0);
-    writeUInt32(central, 42, offset);
-    central.set(name, 46);
-    centralParts.push(central);
+  return { local, central };
+}
 
-    offset += local.length;
-  }
-
-  const central = concat(centralParts);
+function buildEndRecord(entryCount: number, centralLength: number, centralOffset: number) {
   const end = new Uint8Array(22);
   writeUInt32(end, 0, 0x06054b50);
   writeUInt16(end, 4, 0);
   writeUInt16(end, 6, 0);
-  writeUInt16(end, 8, entries.length);
-  writeUInt16(end, 10, entries.length);
-  writeUInt32(end, 12, central.length);
-  writeUInt32(end, 16, offset);
+  writeUInt16(end, 8, entryCount);
+  writeUInt16(end, 10, entryCount);
+  writeUInt32(end, 12, centralLength);
+  writeUInt32(end, 16, centralOffset);
   writeUInt16(end, 20, 0);
+  return end;
+}
 
-  return concat([...localParts, central, end]);
+async function* zipArchiveChunks(entries: ZipEntry[]): AsyncGenerator<Uint8Array> {
+  const centralParts: Uint8Array[] = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    const data = toBytes(typeof entry.data === "function" ? await entry.data() : entry.data);
+    const { local, central } = buildEntryParts(entry, data, offset);
+    centralParts.push(central);
+    offset += local.length;
+    yield local;
+  }
+
+  const central = concat(centralParts);
+  yield central;
+  yield buildEndRecord(entries.length, central.length, offset);
+}
+
+export function zipArchiveStream(entries: ZipEntry[]): ReadableStream<Uint8Array> {
+  const iterator = zipArchiveChunks(entries)[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { value, done } = await iterator.next();
+      if (done) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(value);
+    },
+    async cancel() {
+      await iterator.return?.(undefined);
+    },
+  });
+}
+
+export async function collectZipArchive(entries: ZipEntry[]): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of zipArchiveChunks(entries)) {
+    chunks.push(chunk);
+  }
+  return concat(chunks);
 }

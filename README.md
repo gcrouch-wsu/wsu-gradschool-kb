@@ -155,8 +155,8 @@ Signed-in admins can manage files at `/admin/assets`:
 - When a **published** page is moved or renamed, an automatic redirect is recorded from the old path to the new one.
 
 Owners can export a full KB ZIP from `/admin/kbs`. The export contains `kb.json`, standalone semantic
-HTML files for every page, and active asset-version bytes under `assets/`. The current export is
-buffered in memory, so validate media-heavy KBs on a Vercel preview before depending on large exports.
+HTML files for every page, and active asset-version bytes under `assets/`. The ZIP is streamed and
+asset bytes load one entry at a time, so large media-heavy KBs do not buffer in function memory.
 
 ## Importing from Word (.docx)
 
