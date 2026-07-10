@@ -31,23 +31,42 @@ current implementation status.
   with font/size/color/weight, header/hero alignment, content width, and a **global default theme**
   (colors/fonts/type scale) that KBs inherit. Blank fields render blank-safe (no empty chrome).
 
+## Current Status
+
+As of 2026-07-10, the application is feature-complete for the current release baseline and `main`
+passes GitHub CI, including the live-DB test step when `DATABASE_URL` is configured. Completed
+release work includes the public multi-KB reader, admin/editor workflow, managed assets, imports,
+search, audit/governance surfaces, revision history with restore, print-to-PDF export, owner site
+settings/branding, and the Chromium editor regression suite.
+
+Remaining release work is QA and documentation, not core feature coding:
+
+- Complete and document manual Chrome + Firefox + mobile-width editor passes.
+- Complete a manual WCAG 2.1 AA audit of public pages and admin/editor workflows before making any
+  WCAG/ADA compliance claim.
+- Keep extending the editor Playwright suite whenever a new browser-only editor bug is found.
+
+Future enhancements are tracked in `project_spec.md`: a maintained rich-text editor framework
+migration, public reading polish, proposed-edits workflow, public API, KB templates/advanced settings,
+large-file asset handling, and richer operational monitoring.
+
 Test suite: `npm test` (132 in-memory tests), `npm run test:a11y` (public-page axe smoke
 tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
 `npm run check`.
 
-**Live-database tests:** `npm run test:db` runs the KI-1 integration suite
-(`src/lib/ki1.db.test.ts`) against the real Neon database — edit-lock conflicts, atomic
-multi-row reorder rollback, lock expiry, full-text search safety/recall, the staff-visibility
-prune, editor KB scoping, and the managed-video model. It reads `DATABASE_URL` from `.env.local`;
-the same tests self-skip during the normal `npm test` run when no database is configured. It
-creates data under unique ids and cleans up after itself, so it's safe to run against your dev
-database.
+**Live-database tests:** `npm run test:db` runs the KI-1 and page-revision integration suites
+(`src/lib/ki1.db.test.ts`, `src/lib/page-revisions.db.test.ts`) against a real Neon database —
+edit-lock conflicts, atomic multi-row reorder rollback, lock expiry, full-text search safety/recall,
+the staff-visibility prune, editor KB scoping, managed-video behavior, atomic revision writes,
+restore, baseline backfill, and revision-retention cleanup. It reads `DATABASE_URL` from `.env.local`;
+the same tests self-skip during the normal `npm test` run when no database is configured. Tests create
+data under unique ids/slugs and clean up after themselves.
 
-**CI:** `.github/workflows/ci.yml` runs the type-check, unit tests, production build, and
-public-page axe smoke tests on every push/PR. It also runs `npm run test:db` automatically **when a
-`DATABASE_URL` repository secret is set** — point that secret at a dedicated Neon **test** branch
-(GitHub repo → Settings → Secrets and variables → Actions). Without the secret, the live-DB step is
-skipped and CI still passes.
+**CI:** `.github/workflows/ci.yml` runs type-check, lint, unit tests, production build, public-page
+axe smoke tests, and authenticated Chromium editor regressions on every push/PR. It also runs
+`npm run test:db` automatically **when a `DATABASE_URL` repository secret is set** — point that secret
+at a dedicated Neon **test** branch (GitHub repo → Settings → Secrets and variables → Actions).
+Without the secret, the live-DB step is skipped and CI still passes.
 
 ## Local Development
 

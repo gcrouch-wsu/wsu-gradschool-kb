@@ -382,6 +382,9 @@ the in-memory seed dataset. It runs `npm run test:db` **only when a `DATABASE_UR
 (point it at a dedicated Neon **test** branch — the suite writes/deletes data). The live-DB step sets
 `DATABASE_URL` per-step, never job-wide, so the in-memory run never sees a database.
 
+**Current CI status (2026-07-10):** `main` passes the full configured GitHub CI workflow, including
+the live-DB `npm run test:db` step after the test fallback KB slugs were made unique per run.
+
 **Per-PR live-DB (`.github/workflows/db-pr.yml`):** an opt-in workflow creates a throwaway Neon branch
 per pull request, runs `npm run test:db` against it, and deletes it. Every step is gated on `HAS_NEON`,
 so without the `NEON_API_KEY` + `NEON_PROJECT_ID` secrets the job is a green no-op. When configured it
@@ -450,8 +453,11 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 9. Current feature status
 
-**Working & verified (type/lint/unit/build/public axe smoke/editor Chromium regressions; live-DB where
-configured):**
+**Working & verified (2026-07-10):** `main` passes GitHub CI with type-check, lint, unit tests,
+production build, public axe smoke tests, authenticated Chromium editor regressions, and live-DB
+integration tests when `DATABASE_URL` is configured.
+
+**Complete for the current release baseline:**
 - Multi-KB public site, configurable KB homepage pages, 3-column docs layout, hierarchical page-tree
   navigation, depth-controlled right-rail TOC.
 - Block editor (rich text, alignment, links, media picker, cards, tables, video, info boxes,
@@ -484,7 +490,14 @@ configured):**
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
 - CI (type-check + lint + unit + build + public axe smoke + Chromium editor regressions always;
-  live-DB when the secret is configured).
+  live-DB when the secret is configured) is green on `main` as of 2026-07-10.
+
+**Remaining before a production-compliance claim:**
+- Manual Chrome + Firefox + mobile-width editor QA, especially around the custom `contentEditable`
+  workflows covered by FB-25/FB-26.
+- Manual WCAG 2.1 AA audit of representative public pages and admin/editor workflows. Until this is
+  complete, describe the app as accessibility-oriented with publish gates and axe smoke tests, not as
+  ADA/WCAG certified.
 
 **Built but with known caveats (verify before relying on):**
 - **"Accessible PDF"**: this is the browser's *print-to-PDF* over semantic HTML (`PrintPdfButton` +
@@ -527,19 +540,20 @@ configured):**
 
 Narrative backlog; the actionable, tagged version is §12.
 
-- **Editor**: **production editor regression/a11y release gate (FB-25, including the FB-26 editor
-  workflows) — next priority**; page revision history with restore is delivered (FB-24) — remaining
-  enhancements there are a diff view and configurable retention; positioned margin/comment rail (true
-  Word-style), comment threads/resolve, and a hardened editor core (a maintained rich-text framework —
-  FB-09) since contenteditable selection bugs keep surfacing.
+- **Editor / release QA**: finish the FB-25 manual release gate — Chrome + Firefox + mobile-width editor
+  QA and a manual WCAG 2.1 AA audit. FB-26 editor UX implementation and Chromium regression coverage are
+  delivered; page revision history with restore is delivered (FB-24). Remaining editor enhancements are
+  a diff view/configurable revision retention, a positioned margin/comment rail (true Word-style),
+  comment threads/resolve, and a hardened editor core (a maintained rich-text framework — FB-09) since
+  contenteditable selection bugs keep surfacing.
 - **Public experience**: home search/filter + pagination as KB count grows; reader-facing
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
 - **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
   navigation options); bulk page operations; trash/restore; scheduled publish.
 - **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact view.
-- **Governance & ops**: wire audit-log retention; per-KB activity feed from the audit log; per-PR
-  ephemeral Neon DB tests; broader integration + a11y coverage; a real rate-limit load test; production
-  monitoring/log review and rollback checklist.
+- **Governance & ops**: per-KB activity feed from the audit log; keep GitHub/Neon CI secrets healthy;
+  broader integration + a11y coverage; a real rate-limit load test; production monitoring/log review
+  and rollback checklist.
 
 ---
 
@@ -864,9 +878,9 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-19  priority:high  area:search  effort:M  status:in-progress`
 
-- **DONE (2026-06-07):** Gap Analysis is implemented. A "Search Gap Analysis" report in the Admin Audit
-  area identifies zero-result searches, helping Owners proactively address missing content. Vector-based
-  semantic search foundation is laid.
+- **Complete (2026-06-07):** Gap Analysis is implemented. A "Search Gap Analysis" report in the Admin
+  Audit area identifies zero-result searches, helping Owners proactively address missing content.
+  Vector-based semantic search foundation is laid.
 - **Audit hardening (2026-06-07):** the original design logged *every* search to the shared
   `kb_audit_log` and filtered for zero-result rows in the page after a `LIMIT 200` — so under real
   traffic the gap report saw mostly successful searches and real admin events were crowded out of the
@@ -874,6 +888,9 @@ Items are ordered by recommended priority.
   queries, and `listAuditEvents` excludes `entity_type = 'search'` from the default admin audit list
   (both the SQL and in-memory paths) unless that entity type is explicitly filtered. The in-memory
   search path now records gaps too, for zero-config parity.
+- **Remaining:** true semantic/vector ranking is not yet productized in public search. The delivered
+  search path remains Postgres FTS + prefix/type-ahead + gap reporting; semantic hybrid ranking should
+  stay an explicit future enhancement until a human owner confirms the need.
 - **Acceptance:** Owners can identify missing content via the new `/admin/audit/search` dashboard.
 
 ### FB-20 — Content Lifecycle & Staleness Triggers
@@ -928,7 +945,7 @@ Items are ordered by recommended priority.
 
 ### FB-24 — Page revision history with restore
 
-`[AI-AGENT-TASK] id:FB-24  priority:high  area:editor  effort:L  status:in-progress`
+`[AI-AGENT-TASK] id:FB-24  priority:high  area:editor  effort:L  status:done`
 
 - **DELIVERED (2026-07-08) — smallest production-safe version:**
   - Migration `027_page_revisions` adds `kb_page_revisions` (page id, kb id, revision number,
@@ -965,23 +982,22 @@ Items are ordered by recommended priority.
     writes no revision**, retention). `tests/editor/history-panel.spec.ts` covers the panel (save
     records a revision; preview leaves restore idle). Verified end-to-end over HTTP against the
     production server (save→list→view→restore, 401/404 guards).
-- **Still open:** acceptance (4) live-DB retention (and the backfill idempotency) are covered by
-  `page-revisions.db.test.ts` but only run under `npm run test:db` with a real `DATABASE_URL`
-  (self-skips otherwise). The retention assertion now uses a page-scoped cleanup helper, so it does not
-  prune unrelated revision history if someone accidentally points the DB suite at a shared database;
-  the preferred path is still the opt-in ephemeral Neon PR workflow. In-memory mode (dev/test only) has
+- **DONE (2026-07-10):** acceptance (4) is closed. `main` CI passed `npm run test:db` with a real
+  `DATABASE_URL`; `page-revisions.db.test.ts` verifies live-DB retention and backfill idempotency. The
+  retention assertion uses a page-scoped cleanup helper, so it does not prune unrelated revision history
+  if someone accidentally points the DB suite at a shared database. In-memory mode (dev/test only) has
   no baseline for seed pages until their first save — production backfills via migration 027; this
   first-save behavior is documented by test. Status-only lifecycle changes (publish/unpublish/archive
-  via the `/status` route) do not snapshot — content is unchanged, so this is intentional. No diff view,
-  no field-level restore, and retention is a fixed 50/page cap (not yet configurable) — tracked as
-  future enhancements, not gaps.
-- **Finding:** every save permanently overwrites page content — there is no per-save snapshot,
+  via the `/status` route) do not snapshot — content is unchanged, so this is intentional.
+- **Remaining enhancements, not release gaps:** no side-by-side diff view, no field-level restore, and
+  retention is a fixed 50/page cap (not yet configurable).
+- **Original finding:** every save permanently overwrites page content — there is no per-save snapshot,
   diff, or restore. The audit log (`src/lib/audit-log.ts`) records that a change happened, not the
   content. The 2026-07 hardening round added *client-side* protection only (a `localStorage` draft
   backup in `AdminPageEditorForm` keyed `kb-editor-backup:{pageId}`, plus a `beforeunload` guard);
   that protects unsaved work on one machine but cannot recover a bad save. For a heavily used
   multi-author KB this is the biggest missing trust feature.
-- **Suggested approach:** a `kb_page_revisions` table (page id, revision number, full
+- **Delivered approach:** a `kb_page_revisions` table (page id, revision number, full
   title/summary/metadata/blocks JSON, author, timestamp) written inside the same `updatePages`
   transaction that saves the page. Keep a bounded window (e.g. last 50 revisions or 12 months) with
   a cleanup job like the audit-log purge. UI: a "History" panel on `/admin/pages/[pageId]` listing
@@ -1042,6 +1058,9 @@ Items are ordered by recommended priority.
 - **CI wiring (2026-07-09):** `npm run test:editor` now runs in `.github/workflows/ci.yml` after the
   axe smoke step, reusing the installed Chromium. Its Playwright config starts a hermetic production
   server, so it needs no `DATABASE_URL` secret.
+- **CI status (2026-07-10):** `main` passes the configured workflow, including type-check, lint, unit,
+  build, public axe smoke, Chromium editor regressions, and the live-DB test step when `DATABASE_URL`
+  is configured.
 - **Still open (manual QA / follow-up automation):**
   - **Cross-browser / responsive:** the suite runs Chromium only, so **Firefox and mobile-width passes
     remain manual** before a production claim.
@@ -1070,7 +1089,7 @@ Items are ordered by recommended priority.
 
 ### FB-26 — Page editor UX pass for lists, toolbar context, and author feedback
 
-`[AI-AGENT-TASK] id:FB-26  priority:high  area:editor-ux  effort:M  status:in-progress`
+`[AI-AGENT-TASK] id:FB-26  priority:high  area:editor-ux  effort:M  status:done`
 
 - **IMPLEMENTED IN BUILD (2026-07-08), covered by Chromium browser regressions:** toolbar state now exposes
   focused-surface context and publishes a formatting context event whenever the bound editor surface
@@ -1081,14 +1100,14 @@ Items are ordered by recommended priority.
   Procedure section, and Info box insert controls are visibly labeled, and Info boxes preserve callout
   list markup through save and public render.
 
-- **Remaining finding:** the editor UX behavior is implemented and covered by Chromium browser
-  regressions, but it is still backed by custom `contentEditable` code and needs a manual
-  Chrome/Firefox/mobile pass before calling the editor production-ready.
-- **Remaining approach:** keep these workflows in FB-25's Playwright editor suite and extend coverage
-  whenever a new editor bug is found. Current Chromium coverage includes nested ordered-list creation
-  and Tab/Shift+Tab nesting; toolbar indent/outdent blocked states; table-cell text-only context;
-  Info-box text/list context; Divider/Procedure/Info insert discoverability; image alt editing; local
-  draft restore; and Info-box save/public-render persistence.
+- **DONE (2026-07-10):** the editor UX implementation and Chromium regression coverage are complete for
+  this item. Current Chromium coverage includes nested ordered-list creation and Tab/Shift+Tab nesting;
+  toolbar indent/outdent blocked states; table-cell text-only context; Info-box text/list context;
+  Divider/Procedure/Info insert discoverability; image alt editing; local draft restore; and Info-box
+  save/public-render persistence.
+- **Remaining release confidence work:** because this remains custom `contentEditable` code, manual
+  Chrome/Firefox/mobile validation is still required before calling the editor production-ready. That
+  release gate is tracked under FB-25, not as an FB-26 implementation gap.
 - **Touch points:** `src/components/DocumentToolbar.tsx`, `src/components/RichTextToolbar.tsx`,
   `src/components/PageDocumentEditor.tsx`, `src/components/TableBlockEditor.tsx`,
   `src/lib/page-editor-format.ts`, `src/app/globals.css`.
