@@ -1,8 +1,9 @@
 # WSU Graduate School Knowledge Base
 
-Deployable Next.js (16 / React 19 / App Router) platform for public, accessible, multi-KB
-knowledge bases with a focused admin editor. See `project_spec.md` for the full spec and the
-current implementation status.
+Deployable Next.js (16 / React 19 / App Router) platform for accessible, multi-KB knowledge bases
+with a focused admin editor. The built baseline supports public KBs; the current product scope now
+requires first-class private KBs with owner-provisioned viewer access as the next implementation
+phase. See `project_spec.md` for the full spec and current implementation status.
 
 ## Highlights
 
@@ -33,22 +34,24 @@ current implementation status.
 
 ## Current Status
 
-As of 2026-07-10, the application is feature-complete for the current release baseline and `main`
-passes GitHub CI, including the live-DB test step when `DATABASE_URL` is configured. Completed
-release work includes the public multi-KB reader, admin/editor workflow, managed assets, imports,
-search, audit/governance surfaces, revision history with restore, print-to-PDF export, owner site
-settings/branding, and the Chromium editor regression suite.
+As of 2026-07-10, the public-KB release baseline is complete and `main` passes GitHub CI, including
+the live-DB test step when `DATABASE_URL` is configured. Completed release work includes the public
+multi-KB reader, admin/editor workflow, managed assets, imports, search, audit/governance surfaces,
+revision history with restore, print-to-PDF export, owner site settings/branding, and the Chromium
+editor regression suite.
 
-Remaining release work is QA and documentation, not core feature coding:
+Remaining production-readiness work:
 
+- Implement private KBs: KB-level public/private visibility, owner-provisioned `viewer` users,
+  read gating for every public route, and visibility-aware search/assets.
 - Complete and document manual Chrome + Firefox + mobile-width editor passes.
 - Complete a manual WCAG 2.1 AA audit of public pages and admin/editor workflows before making any
   WCAG/ADA compliance claim.
 - Keep extending the editor Playwright suite whenever a new browser-only editor bug is found.
 
 Future enhancements are tracked in `project_spec.md`: a maintained rich-text editor framework
-migration, public reading polish, proposed-edits workflow, public API, KB templates/advanced settings,
-large-file asset handling, and richer operational monitoring.
+migration, SSO after WSU ITS engagement, public reading polish, proposed-edits workflow, public API,
+KB templates/advanced settings, large-file asset handling, and richer operational monitoring.
 
 Test suite: `npm test` (132 in-memory tests), `npm run test:a11y` (public-page axe smoke
 tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:

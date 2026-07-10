@@ -1,11 +1,12 @@
 # WSU Knowledge Base — Project Spec & AI Handoff
 
-**Mission: replace Confluence with a much better, fully accessible app for public knowledge bases.**
+**Mission: replace Confluence with a much better, fully accessible app for public and private
+knowledge bases.**
 
-This is a public, multi–knowledge-base platform for Washington State University's Graduate School. It
-exists to retire public Confluence content and deliver something measurably better in its place:
-faster, cleaner, easier to navigate, and accessible to everyone — paired with a focused admin for
-pages, managed assets (images/docs/video), DOCX imports, redirects, and review.
+This is a public-and-private, multi–knowledge-base platform for Washington State University's
+Graduate School. It exists to retire Confluence content and deliver something measurably better in its
+place: faster, cleaner, easier to navigate, and accessible to the right audience — paired with a
+focused admin for pages, managed assets (images/docs/video), DOCX imports, redirects, and review.
 
 **This document is the canonical reference.** The source tree is intentionally comment-free, so the
 rationale, architecture, gotchas, and roadmap live here rather than inline. It is written to get a
@@ -21,74 +22,90 @@ git, not here.
 
 ## 1. Goal
 
-**Replace public Confluence with a much better, fully accessible KB app.** Confluence is the baseline
-to beat on every axis — readability, navigation, search, page polish, file handling, and especially
-accessibility. The platform serves multiple public KBs from a single deployment, governed by a small
-editorial team, with accessibility treated as a first-class, non-negotiable requirement. The target
-is **WCAG 2.1 AA**, enforced today by a publish-time accessibility/governance gate plus automated axe
-**smoke** tests on public routes (see §5/§7). Note the honest status: this is gate + smoke coverage,
-**not yet a full WCAG audit** (§10) — agents should not assume every page is fully certified.
+**Replace Confluence with a much better, fully accessible KB app for public and private audiences.**
+Confluence is the baseline to beat on every axis — readability, navigation, search, page polish, file
+handling, and especially accessibility. The platform serves multiple KBs from a single deployment:
+some KBs are public and anonymously readable, while private KBs require a local, owner-provisioned
+login and an explicit KB assignment. Content is governed by a small editorial team, with
+accessibility treated as a first-class, non-negotiable requirement. The target is **WCAG 2.1 AA**,
+enforced today by a publish-time accessibility/governance gate plus automated axe **smoke** tests on
+public routes (see §5/§7). Note the honest status: this is gate + smoke coverage, **not yet a full
+WCAG audit** (§10) — agents should not assume every page is fully certified.
 
 Concretely, the platform must:
 
-1. Provide cleaner, more polished, more navigable public KB front-ends than Confluence.
+1. Provide cleaner, more polished, more navigable public and private KB front-ends than Confluence.
 2. Be **accessible by construction**: semantic markup, keyboard operability, sufficient contrast, alt
    text, and correct heading/landmark structure — checked at publish time and by axe smoke tests
    (full WCAG audit coverage is still a goal, not a completed state).
-3. Serve multiple public KBs from one deployment.
+3. Serve multiple public and private KBs from one deployment.
 4. Treat images/documents/video as first-class **managed assets**, not loose attachments.
 5. Replace an asset's file without breaking its public link.
 6. Show where an asset is used before replace/archive.
-7. Offer strong search, navigation, content governance, and a smooth migration path off Confluence
-   (DOCX import + automatic redirects so existing links keep working).
+7. Offer strong visibility-aware search, navigation, content governance, and a smooth migration path
+   off Confluence (DOCX import + automatic redirects so existing links keep working).
 
 ## 2. Scope
 
-**In scope (built):** public multi-KB reading experience; a custom block/rich-text editor; managed
-assets with versioning and stable URLs; Postgres full-text search; Owner/Admin/Editor auth with
-per-KB scoping; configurable per-KB homepage pages; per-KB theming, a global default theme, and
+**In scope (built today):** public multi-KB reading experience; a custom block/rich-text editor;
+managed assets with versioning and stable URLs; Postgres full-text search; Owner/Admin/Editor auth
+with per-KB scoping; configurable per-KB homepage pages; per-KB theming, a global default theme, and
 owner-level site settings (home content, branding/logo, and layout); DOCX staged import; automatic
-redirects; DB-backed edit locks; a publish-time accessibility/governance gate; an audit log; and
-print-to-PDF export (browser print over semantic HTML — see §9 for the exact mechanism).
+redirects; DB-backed edit locks; a publish-time accessibility/governance gate; an audit log; revision
+history with restore; and print-to-PDF export (browser print over semantic HTML — see §9 for the exact
+mechanism).
+
+**In scope (required next):** first-class private KBs. A KB can be public or private; private KBs are
+readable only by signed-in users with read access. Private-KB work includes a local-password `viewer`
+role provisioned by Owners, reuse of `kb_user_assignments` for viewer/editor KB access, read gating
+for every public surface, visibility-aware asset delivery and search, and owner-facing KB/user controls
+for visibility and assignments. This is Phase 1 work and is not yet implemented in the current code.
 
 **Out of scope (intentionally, for now):** an approval/review *workflow* (editors publish directly,
-gated by the publish checks); a per-KB "manager" role tier; a public account system (the public is
-anonymous); WYSIWYG parity with Word; and real-time multi-cursor co-editing (concurrency is handled
-with locks, not CRDTs).
+gated by the publish checks); a per-KB "manager" role tier; self-service public signup — accounts are
+provisioned by Owners; SSO/OIDC/SAML, which is future work pending WSU ITS engagement; WYSIWYG parity
+with Word; and real-time multi-cursor co-editing (concurrency is handled with locks, not CRDTs).
 
 ---
 
 ## 3. Users & roles
 
-- **Public** — no login; reads published KBs.
+- **Anonymous public** — no login; reads published pages in public KBs only.
 - **Owner** — full access (KB-wide), plus user management, KB creation, theming, site settings.
 - **Admin** — KB-wide content/asset management.
-- **Editor** — scoped to assigned KBs only (`kb_user_assignments`).
+- **Editor** — scoped to assigned KBs for content management (`kb_user_assignments`); after Phase 1,
+  editors also read assigned private KBs and all public KBs.
+- **Viewer** — Phase 1 target role. Local-password account provisioned by an Owner; reads assigned
+  private KBs plus public KBs; sees no admin surfaces and can never reach mutation APIs.
 
 Role checks: `requireAdminMutation` (valid session + same-origin request) plus per-route role/scope
 checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsForSession` /
-`requireKbAccess` in `src/lib/auth.ts` + `src/lib/security.ts`.
+`requireKbAccess` in `src/lib/auth.ts` + `src/lib/security.ts`. Phase 1 adds a read-access helper
+for public/private KB visibility; use that helper for public home, KB landing/article/search, page
+tree, redirects, and asset delivery.
 
-**Intended authorization matrix** (Owner/Admin are KB-wide; Editor is limited to assigned KBs):
+**Intended authorization matrix** (Owner/Admin are KB-wide; Editor is limited to assigned KBs for
+mutations; Viewer is read-only and Phase 1):
 
-| Area | Owner | Admin | Editor | Scope mechanism |
-|------|-------|-------|--------|-----------------|
-| Pages list/edit/publish | all | all | assigned | `filterKbsForSession` + `requireKbAccess` |
-| KB homepage assignment | all | all | assigned | `requireKbAccess` |
-| Assets list/edit | all | all | assigned | `filterKbsForSession` + `requireKbAccess` |
-| Imports (list/detail/edit/delete) | all | all | assigned | `requireKbAccess` |
-| Redirects (read/create/delete) | all | all | assigned | `requireKbAccess` |
-| Review dashboard | all | all | assigned | `filterKbsForSession` |
-| Users / KB management | yes | no | no | owner-only |
-| Site settings | yes | no | no | owner-only |
-| Audit log | yes | yes | no | owner/admin-only |
+| Area | Owner | Admin | Editor | Viewer | Scope mechanism |
+|------|-------|-------|--------|--------|-----------------|
+| Public/private KB read | all | all | public + assigned private | public + assigned private | Phase 1 read-access helper |
+| Pages list/edit/publish | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
+| KB homepage assignment | all | all | assigned | no | `requireKbAccess` |
+| Assets list/edit | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
+| Imports (list/detail/edit/delete) | all | all | assigned | no | `requireKbAccess` |
+| Redirects (read/create/delete) | all | all | assigned | no | `requireKbAccess` |
+| Review dashboard | all | all | assigned | no | `filterKbsForSession` |
+| Users / KB management | yes | no | no | no | owner-only |
+| Site settings | yes | no | no | no | owner-only |
+| Audit log | yes | yes | no | no | owner/admin-only |
 
 **Authorization enforcement contract** (keep this table current when routes move or new admin
 surfaces are added):
 
 | Surface | Allowed roles | KB scoping / role gate | Implementation files |
 |---------|---------------|------------------------|----------------------|
-| `/admin` | Owner/Admin/Editor | Signed-in session only; navigation hides owner/admin-only links but is not the authorization boundary. | `src/app/admin/page.tsx` |
+| `/admin` | Owner/Admin/Editor | Signed-in session only; navigation hides owner/admin-only links but is not the authorization boundary. Phase 1 viewers must redirect to `/`. | `src/app/admin/page.tsx` |
 | `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Editors | The pages list uses `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
 | `/admin/pages/[pageId]` | Owner/Admin/assigned Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
 | Page mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | `PATCH`, status, layout, lock, and create routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/pages/**/route.ts` |
@@ -105,9 +122,21 @@ surfaces are added):
 | Auth endpoints | Public sign-in; signed-in logout/session delete | Login is rate-limited and creates signed HMAC cookies; logout/session delete clear the admin cookie. | `src/app/admin/sign-in/page.tsx`, `src/app/api/admin/session/route.ts`, `src/app/api/admin/logout/route.ts` |
 
 For APIs, `requireAdminMutation` means "valid admin session plus same-origin `Origin`/`Referer`";
-add it to any new state-changing admin route. For editor-reachable data access, add one of the KB
-scope guards: `requireKbAccess` for API routes, `filterKbsForSession`/`accessibleKbIds` for list
-queries, and `canAccessKb(...) -> notFound()` for server-rendered detail pages.
+add it to any new state-changing admin route and keep viewers out of every mutation path. For
+editor-reachable data access, add one of the KB scope guards: `requireKbAccess` for API routes,
+`filterKbsForSession`/`accessibleKbIds` for list queries, and `canAccessKb(...) -> notFound()` for
+server-rendered detail pages. For public/private read access after Phase 1, anonymous users and
+signed-in users without access must get `notFound()` rather than a private-KB existence signal.
+
+**Phase 1 public/private read-access surfaces to guard:**
+
+| Surface | Anonymous | Owner/Admin | Editor | Viewer | Required behavior |
+|---------|-----------|-------------|--------|--------|-------------------|
+| `/` KB list | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Hide private KBs without read access. |
+| `/kb/[kbSlug]` | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | `notFound()` for private KBs without access. |
+| `/kb/[kbSlug]/[...pagePath]` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Staff-only pages require KB read access; viewers never see drafts. |
+| `/kb/[kbSlug]/search` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Search must never leak private/staff results. |
+| `/kb/[kbSlug]/files/[assetSlug]` | public assets only | all readable assets | public + assigned KB assets | public + assigned public-page assets | Authorized responses use `Cache-Control: private, no-store`. |
 
 > ✅ **The matrix is enforced at the API, list-view, detail-page, and owner-only-page levels.** Closed
 > across several passes (FB-11, FB-15, FB-17, FB-18):
@@ -493,6 +522,9 @@ integration tests when `DATABASE_URL` is configured.
   live-DB when the secret is configured) is green on `main` as of 2026-07-10.
 
 **Remaining before a production-compliance claim:**
+- Phase 1 private-KB implementation: KB-level public/private visibility, owner-provisioned viewer
+  accounts, read gating for every public surface, visibility-aware asset delivery/search, and
+  live-DB/in-memory tests for the access matrix.
 - Manual Chrome + Firefox + mobile-width editor QA, especially around the custom `contentEditable`
   workflows covered by FB-25/FB-26.
 - Manual WCAG 2.1 AA audit of representative public pages and admin/editor workflows. Until this is
@@ -518,6 +550,9 @@ integration tests when `DATABASE_URL` is configured.
 - **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Do not describe
   the product as ADA/WCAG certified until a manual audit passes. Public article tables now emit
   `scope="col"` / `scope="row"` on header cells, but this does not replace the manual audit.
+- **Private KBs are required scope but not yet implemented** (FB-27). Until Phase 1 lands, KBs are
+  effectively public/draft/status-scoped rather than KB-level public/private, and public routes must not
+  be described as private-content safe.
 - No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
 - **The contenteditable editor still needs release-grade QA.** It is custom, and complex selection
   edge cases keep surfacing in real use (heading demotion on delete, list splits with duplicate ids,
@@ -540,6 +575,8 @@ integration tests when `DATABASE_URL` is configured.
 
 Narrative backlog; the actionable, tagged version is §12.
 
+- **Private KBs**: implement FB-27 first. Later production-readiness phases depend on the same
+  public/private read-access helper and visibility-aware search/asset rules.
 - **Editor / release QA**: finish the FB-25 manual release gate — Chrome + Firefox + mobile-width editor
   QA and a manual WCAG 2.1 AA audit. FB-26 editor UX implementation and Chromium regression coverage are
   delivered; page revision history with restore is delivered (FB-24). Remaining editor enhancements are
@@ -1117,3 +1154,30 @@ Items are ordered by recommended priority.
   numbered lists, and nested lists while hiding page-structure controls; (5) Divider, Procedure section,
   and Info box remain discoverable at common desktop and laptop widths; (6) browser regression tests
   cover the list, table-cell, Info-box, and insert-control workflows from FB-25.
+
+### FB-27 — Private knowledge bases and viewer read access
+
+`[AI-AGENT-TASK] id:FB-27  priority:high  area:authz-visibility  effort:L  status:open`
+
+- **Finding:** The product goal now requires both public and private KBs. The current implementation is
+  built around public KB routes plus page-level public/staff visibility; it does not yet provide a
+  KB-level `public`/`private` visibility column, a read-only `viewer` role, or a single visibility
+  helper that gates every public route, search path, page tree, redirect, and asset response.
+- **Suggested approach:** Add `knowledge_bases.visibility` (`public` default for existing rows), add a
+  local-password `viewer` role to the existing user model, reuse `kb_user_assignments` for viewer/editor
+  private-KB read access, and introduce one read-access helper beside the existing admin-scope helpers.
+  Owners/Admins can read all KBs; Editors and Viewers can read all public KBs plus assigned private KBs.
+  Viewers must be redirected away from `/admin`, rejected by every mutation API, and must never see
+  draft pages or staff-only pages. Asset delivery and search must use the same visibility semantics;
+  authorized asset responses must use `Cache-Control: private, no-store`.
+- **Touch points:** `src/lib/types.ts`, `src/lib/auth.ts`, `src/lib/security.ts`,
+  `src/lib/migrations/index.ts`, `src/lib/db.ts`, `src/lib/kb-store.ts`, public routes under
+  `src/app/kb/**`, `src/app/page.tsx`, `src/app/api/admin/kbs/**`, `src/app/admin/kbs/**`,
+  `src/app/admin/users/**`, `tests/a11y`, `tests/editor` only if UI surfaces change, and the live-DB
+  suite (`src/lib/ki1.db.test.ts` or a new `*.db.test.ts`).
+- **Acceptance:** (1) anonymous users get `notFound()` for private KB landing/article/search/asset
+  routes; (2) a viewer assigned to private KB A can read A and cannot read private KB B; (3) viewer
+  mutation attempts return 403 and viewers see no admin surfaces; (4) staff-only pages and assets are
+  only readable by users with KB read access, and public assets remain cacheable only when referenced by
+  at least one public published page; (5) public and per-KB search never return private/staff results to
+  unauthorized callers; (6) live-DB and in-memory tests cover the access matrix.
