@@ -661,6 +661,22 @@ const migrations: Migration[] = [
       await backfillBaselineRevisions(sql);
     },
   },
+  {
+    id: "028_page_views",
+    async up(sql) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kb_page_views (
+          page_id TEXT NOT NULL,
+          kb_id TEXT NOT NULL,
+          day DATE NOT NULL,
+          view_count INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (page_id, day)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_views_kb_day ON kb_page_views(kb_id, day DESC)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_views_day ON kb_page_views(day DESC)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

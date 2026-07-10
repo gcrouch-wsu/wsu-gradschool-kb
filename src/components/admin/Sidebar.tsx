@@ -2,6 +2,7 @@
 
 import {
   BookOpen,
+  BarChart3,
   FileText,
   FolderOpen,
   LayoutDashboard,
@@ -42,6 +43,7 @@ export function Sidebar({ branding, isCollapsed, session }: SidebarProps) {
           {isOwner && <SidebarLink href="/admin/kbs" icon={BookOpen} label="Knowledge bases" />}
           {isOwner && <SidebarLink href="/admin/users" icon={Users} label="Users" />}
           <SidebarLink href="/admin/import" icon={Upload} label="Imports" />
+          <SidebarLink href="/admin/usage" icon={BarChart3} label="Usage" />
         </nav>
       </div>
 

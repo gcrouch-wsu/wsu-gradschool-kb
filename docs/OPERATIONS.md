@@ -5,6 +5,8 @@
 - Confirm `npm run check`, `npm run lint`, `npm test`, and `npm run build` pass locally or in CI.
 - Confirm `npm run test:db` passes against the current Neon test branch before promoting changes that touch migrations or DB behavior.
 - Confirm Vercel has `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SESSION_SECRET`, and `CRON_SECRET` configured for the target environment.
+- If review-date email delivery is expected, confirm `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, and `EMAIL_FROM`; otherwise expect structured JSON fallback logs.
+- Confirm the Vercel plan supports the configured cron count before deploy validation; this project currently schedules audit cleanup, revision cleanup, and review digest routes.
 - For Blob-backed assets, confirm the Vercel Blob environment variables are present in the target environment.
 - Deploy through the GitHub-to-Vercel flow, then promote the successful Vercel deployment to production.
 - After deploy, visit `/`, one public KB landing page, one article page, `/admin`, `/admin/pages`, and `/admin/assets`.
@@ -31,11 +33,15 @@
 - Cron routes require `Authorization: Bearer $CRON_SECRET`.
 - Rotate `CRON_SECRET` by updating Vercel environment variables, redeploying, and confirming the scheduled routes still authorize.
 - Treat missing email/provider configuration as non-fatal unless the specific cron route documents otherwise.
+- `/api/admin/cron/review-digest` sends weekly review-date digests when an email provider is configured; without one it logs recipients/subjects as structured JSON and reports skipped deliveries.
+- `/api/admin/cron/audit-cleanup` also folds page-view rows older than 90 days into monthly totals.
 
 ## Post-Deploy Checks
 
 - Public KB list renders without loading draft-only content.
 - Article pages render blocks, related assets, table of contents, and PDF controls where configured.
 - Asset delivery works for a known image/document asset.
+- Test owner KB export on a media-heavy KB before relying on it operationally; the current ZIP export is buffered in memory and should become streamed or Blob-backed before very large exports are routine.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
+- `/admin/usage` loads aggregate view counts when `DATABASE_URL` is configured.
 - Logs are structured JSON and suitable for forwarding through Vercel log drains.

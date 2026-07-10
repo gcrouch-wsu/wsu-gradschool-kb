@@ -116,6 +116,7 @@ surfaces are added):
 | `/admin/import` and staged import APIs | Owner/Admin/assigned Editor | Import list page uses `accessibleKbIds`; collection/item/stage/commit APIs use `requireKbAccess` after resolving or receiving `kbId`. | `src/app/admin/import/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`, `src/app/api/admin/import/**/route.ts` |
 | `/admin/redirects` and redirect APIs | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; API routes use `requireKbAccess` on the target/resolved KB. | `src/app/admin/redirects/page.tsx`, `src/app/api/admin/redirects/**/route.ts` |
 | `/admin/review` | Owner/Admin/assigned Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
+| `/admin/usage` | Owner/Admin/assigned Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
 | `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
 | `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
 | `/admin/kbs/[kbId]/styles` and KB theme APIs | Owner only | Server page and theme API both require `session.role === "owner"`. | `src/app/admin/kbs/[kbId]/styles/page.tsx`, `src/app/api/admin/kbs/[kbId]/theme/route.ts` |
@@ -532,6 +533,13 @@ integration tests when `DATABASE_URL` is configured.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
 - Structured JSON error logging for Vercel log drains and an operations checklist in
   `docs/OPERATIONS.md`.
+- Weekly review-date digest cron (`/api/admin/cron/review-digest`) for managed DB users, with HTTP
+  email-provider delivery when configured and structured JSON fallback when email is unconfigured.
+- Owner-only bulk KB export (`/api/admin/kbs/[kbId]/export`) as a ZIP containing `kb.json`,
+  standalone semantic page HTML, and active asset-version bytes. The owner-only `kb.json` is a
+  full-fidelity backup and can include raw editor-note metadata preserved in stored blocks.
+- Privacy-light usage analytics (`kb_page_views`) for published public article/homepage renders,
+  scoped admin reporting at `/admin/usage`, and monthly retention folding through the daily cron.
 - CI (type-check + lint + unit + build + public axe smoke + Chromium editor regressions always;
   live-DB when the secret is configured) is green on `main` as of 2026-07-10.
 
@@ -566,7 +574,8 @@ integration tests when `DATABASE_URL` is configured.
   `scope="col"` / `scope="row"` on header cells, but this does not replace the manual audit.
 - **Private KBs are required scope but not yet implemented** (FB-27). Until Phase 1 lands, KBs are
   effectively public/draft/status-scoped rather than KB-level public/private, and public routes must not
-  be described as private-content safe.
+  be described as private-content safe. When Phase 1 lands, private KB pages/assets/search must remain
+  dynamic and uncacheable for unauthorized readers.
 - **Authentication is intentionally local for now**: owner-provisioned accounts use scrypt password
   hashes and signed HMAC cookies. There is no SSO/OIDC/SAML integration until WSU ITS engagement, and
   no server-side idle-session table or sliding idle timeout beyond the current cookie/token expiry
@@ -586,6 +595,11 @@ integration tests when `DATABASE_URL` is configured.
   is itself a new save, so history is never rewritten.
 - Rate limiting falls back to in-memory only when `DATABASE_URL` is unset; production Neon mode uses a
   shared `kb_rate_limits` table (`project_backlog.md` FB-02).
+- Review digest email delivery is pluggable HTTP-provider only today; when unconfigured, the weekly
+  cron logs structured JSON and returns a non-error skipped-delivery result. Recipients come from
+  managed DB users; a bootstrap env owner alone does not receive digest email.
+- Usage analytics are aggregate counts only; they intentionally store no cookies, IP addresses, or user
+  agents, can include bot/crawler traffic, and are skipped entirely in in-memory mode.
 
 ---
 
@@ -608,7 +622,8 @@ Narrative backlog; the actionable, tagged version is `project_backlog.md`.
 - **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact view.
 - **Governance & ops**: per-KB activity feed from the audit log; keep GitHub/Neon CI secrets healthy;
   broader integration + a11y coverage; a real rate-limit load test; production monitoring/log review
-  and rollback checklist.
+  and rollback checklist; reader feedback, SEO/discoverability, WSU SSO after ITS engagement, and
+  third-party error tracking are tracked in `project_backlog.md`.
 
 ---
 

@@ -173,6 +173,9 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-09  priority:med  area:editor  effort:L  status:open`
 
+- **PHASE 7 NOTE (2026-07-10):** this is now a committed post-launch milestone, not opportunistic
+  hardening. Run the migration as its own dedicated effort: the recurring `contentEditable` edge cases
+  are a maintenance tax, and every new custom-editor feature raises the eventual migration cost.
 - **Finding:** the editor is a custom `contentEditable` surface (`src/components/PageDocumentEditor.tsx`);
   §10 acknowledges complex selection edge cases may still surface — and they have (heading demotion
   on delete, list-split duplicate ids, dropped pasted images, fragile link insertion; all patched
@@ -598,6 +601,8 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-28  priority:med  area:observability  effort:M  status:open`
 
+- **PHASE 7 NOTE (2026-07-10):** retained as the canonical third-party error-tracking backlog item;
+  do not duplicate it under a new FB id.
 - **Finding:** `src/lib/log.ts` now emits structured JSON suitable for Vercel log drains, but there is
   no hosted error-tracking service for grouping, alerting, release correlation, or long-term incident
   triage.
@@ -609,3 +614,65 @@ Items are ordered by recommended priority.
 - **Acceptance:** (1) server-side exceptions are grouped by route/action and release commit; (2) client
   route errors include useful component-stack context without leaking sensitive data; (3) production
   alert routing is documented; (4) the app still works with the provider unconfigured in local/dev.
+
+### FB-29 — Dedicated editor-framework migration
+
+`[AI-AGENT-TASK] id:FB-29  priority:high  area:editor-architecture  effort:L  status:open`
+
+- **Finding:** FB-09 is the general hardening umbrella; the concrete migration needs its own isolated
+  effort so it does not get mixed into feature work. The current custom editable flow has required
+  repeated browser-specific fixes and remains the main maintenance risk.
+- **Suggested approach:** migrate the editable flow surfaces to a maintained rich-text framework
+  (Lexical or ProseMirror) behind the existing `src/lib/page-document.ts` block serialization boundary.
+  Preserve the `ContentBlock[]` storage model, sanitizer semantics, publish gate, source-HTML import/export,
+  and public rendering output.
+- **Touch points:** `src/components/PageDocumentEditor.tsx`, `src/components/RichTextEditable.tsx`,
+  `src/lib/page-document.ts`, `src/lib/page-editor-format.ts`, `src/lib/rich-text.ts`, `tests/editor`.
+- **Acceptance:** existing page-document round-trip tests pass unchanged; Chromium editor regressions pass;
+  a documented Chrome + Firefox manual checklist covers selection, paste, list nesting, link/note insert,
+  table-cell editing, undo/redo, and source-mode round-trips.
+
+### FB-30 — WSU SSO integration
+
+`[AI-AGENT-TASK] id:FB-30  priority:med  area:auth  effort:L  status:open`
+
+- **Finding:** all authentication is intentionally local today: owner-provisioned scrypt passwords plus
+  HMAC cookies. WSU SSO is desired, but implementation depends on WSU ITS engagement and an approved
+  protocol/application registration.
+- **Suggested approach:** after ITS engagement, add Entra ID / Azure AD OIDC or SAML as the staff and
+  private-KB viewer authentication path. Keep local owner-provisioned accounts until migration is
+  complete; when SSO lands it should cover staff and private-KB viewers, superseding local viewer
+  passwords.
+- **Touch points:** `src/lib/auth.ts`, `src/lib/security.ts`, `src/app/admin/sign-in/page.tsx`,
+  session cookie handling, user provisioning/role mapping, `.env.example`, `project_spec.md`.
+- **Acceptance:** approved WSU SSO users can sign in, map to Owner/Admin/Editor/Viewer roles, retain
+  KB assignment scoping, and local fallback behavior is explicitly documented for break-glass use.
+
+### FB-31 — SEO and discoverability
+
+`[AI-AGENT-TASK] id:FB-31  priority:med  area:seo  effort:M  status:open`
+
+- **Finding:** the public KB reader has metadata per article, but there is no sitemap, robots policy,
+  canonical URL handling, or Open Graph metadata. Private KB work makes this visibility-sensitive.
+- **Suggested approach:** add `sitemap.ts` for public KBs' public published pages only, `robots.ts` that
+  disallows private/auth/admin surfaces, canonical URLs, and Open Graph metadata. The sitemap must
+  consume the Phase 1 visibility helper so private/staff pages never appear.
+- **Touch points:** `src/app/sitemap.ts`, `src/app/robots.ts`, public KB routes, metadata helpers,
+  Phase 1 read-access helper, `tests/a11y` or a small route-level test.
+- **Acceptance:** public published pages appear in the sitemap with canonical URLs; draft, staff, private,
+  admin, asset-auth, and search-result URLs do not; metadata renders useful titles/descriptions/OG tags.
+
+### FB-32 — Reader feedback widget
+
+`[AI-AGENT-TASK] id:FB-32  priority:med  area:governance-feedback  effort:M  status:open`
+
+- **Finding:** the app records zero-result search events and has governance dashboards, but readers
+  cannot submit page-level usefulness feedback.
+- **Suggested approach:** add a lightweight "Was this page helpful?" widget on public article and KB
+  homepage pages. Store aggregate feedback without cookies, IPs, or user agents; surface trends in the
+  governance/search-gap dashboard so editors can prioritize unclear pages.
+- **Touch points:** public KB page components, new feedback API route, a small DB migration, admin review
+  dashboard, audit/search-gap surfaces, privacy notes in `project_spec.md`.
+- **Acceptance:** readers can submit yes/no plus optional short feedback; repeat submissions are handled
+  without invasive tracking; admins can see page-level feedback counts/trends; feedback submission never
+  blocks page rendering.

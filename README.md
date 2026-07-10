@@ -26,6 +26,8 @@ phase. See `project_spec.md` for the full spec and current implementation status
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
   WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over
   semantic HTML.
+- **Operations**: weekly review-date digest cron, owner-only bulk KB ZIP export, privacy-light
+  usage analytics, structured JSON error logs, and deploy/rollback runbook documentation.
 - **Importing**: DOCX staged import with style/image extraction and review.
 - **Site customization**: owner-level Site Settings for the home page (hero, rich content blocks,
   KB-list section), a site **logo** (upload + width/placement), header/footer links, **brand text**
@@ -38,7 +40,9 @@ As of 2026-07-10, the public-KB release baseline is complete and `main` passes G
 the live-DB test step when `DATABASE_URL` is configured. Completed release work includes the public
 multi-KB reader, admin/editor workflow, managed assets, imports, search, audit/governance surfaces,
 revision history with restore, print-to-PDF export, owner site settings/branding, and the Chromium
-editor regression suite.
+editor regression suite. Additional production-readiness work now delivered on the development branch:
+weekly review-date notifications, bulk KB export, privacy-light usage analytics, global cross-KB
+search, targeted public read loaders, migration concurrency locking, and structured operations docs.
 
 Remaining production-readiness work:
 
@@ -50,18 +54,20 @@ Remaining production-readiness work:
 - Keep extending the editor Playwright suite whenever a new browser-only editor bug is found.
 
 Future enhancements are tracked in `project_backlog.md`: a maintained rich-text editor framework
-migration, SSO after WSU ITS engagement, public reading polish, proposed-edits workflow, public API,
-KB templates/advanced settings, large-file asset handling, and richer operational monitoring.
+migration, SSO after WSU ITS engagement, SEO/discoverability, reader feedback, public reading polish,
+proposed-edits workflow, public API, KB templates/advanced settings, large-file asset handling, and
+third-party error tracking.
 
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page axe smoke
 tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
 `npm run check`.
 
-**Live-database tests:** `npm run test:db` runs the KI-1 and page-revision integration suites
-(`src/lib/ki1.db.test.ts`, `src/lib/page-revisions.db.test.ts`) against a real Neon database —
+**Live-database tests:** `npm run test:db` runs the KI-1, page-revision, review-digest, KB-export,
+and page-view integration suites against a real Neon database —
 edit-lock conflicts, atomic multi-row reorder rollback, lock expiry, full-text search safety/recall,
 the staff-visibility prune, editor KB scoping, managed-video behavior, atomic revision writes,
-restore, baseline backfill, and revision-retention cleanup. It reads `DATABASE_URL` from `.env.local`;
+restore, baseline backfill, revision-retention cleanup, review-date due-page queries, KB export
+manifest behavior, and page-view upsert/retention folding. It reads `DATABASE_URL` from `.env.local`;
 the same tests self-skip during the normal `npm test` run when no database is configured. Tests create
 data under unique ids/slugs and clean up after themselves.
 
@@ -118,6 +124,11 @@ The project is a standard Next.js app and can be deployed to Vercel after pushin
 npm run build
 ```
 
+Scheduled cron routes require `CRON_SECRET` in production. Review digest email delivery is optional:
+set `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, and `EMAIL_FROM` to send through an HTTP email
+provider. When the provider URL is unset, the digest cron logs structured JSON and returns a skipped
+delivery result instead of failing.
+
 ## Content Storage
 
 KB content (knowledge bases, pages, assets) is read through `src/lib/kb-store.ts`, which uses one of two backends:
@@ -142,6 +153,10 @@ Signed-in admins can manage files at `/admin/assets`:
 - Archive before permanent deletion. Only Owners/Admins can delete, and deletion is blocked while
   a page references the asset.
 - When a **published** page is moved or renamed, an automatic redirect is recorded from the old path to the new one.
+
+Owners can export a full KB ZIP from `/admin/kbs`. The export contains `kb.json`, standalone semantic
+HTML files for every page, and active asset-version bytes under `assets/`. The current export is
+buffered in memory, so validate media-heavy KBs on a Vercel preview before depending on large exports.
 
 ## Importing from Word (.docx)
 
@@ -208,6 +223,11 @@ references exist.
 The global **Audit log** (`/admin/audit`) is visible to Owners/Admins and records lightweight
 metadata plus small JSON details for page and asset creation, updates, publish/archive/delete, and
 version actions. It does not store before/after snapshots.
+
+The **Usage** page (`/admin/usage`) shows privacy-light aggregate page-view counts for published
+public article and KB-homepage renders. It stores only page id, KB id, day, and count; no cookies,
+IP addresses, or user agents are stored. Bot and crawler traffic can be counted. Counts are skipped
+in in-memory mode.
 
 **User management** (`/admin/users`, owner-only) and **KB management** (`/admin/kbs`, owner-only)
 are gated both in the UI and at the API. When creating or editing an editor, assign knowledge bases

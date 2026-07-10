@@ -27,6 +27,22 @@ export function isSupportedDocumentType(contentType: string) {
   return contentType.toLowerCase() in SUPPORTED_DOCUMENT_TYPES;
 }
 
+export function isTrustedAssetUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") {
+    return false;
+  }
+  return (
+    url.hostname === "blob.vercel-storage.com" ||
+    url.hostname.endsWith(".public.blob.vercel-storage.com")
+  );
+}
+
 function extensionFor(contentType: string): string | null {
   const normalized = contentType.toLowerCase();
   return SUPPORTED_IMAGE_TYPES[normalized] ?? SUPPORTED_DOCUMENT_TYPES[normalized] ?? null;
