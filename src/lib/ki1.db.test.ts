@@ -93,6 +93,45 @@ describe("KI-1 live-DB integration", () => {
     }
   });
 
+  it("does not return unreadable KB pages in public global search", async () => {
+    const sql = getSql();
+    const testId = `hidden-global-${crypto.randomUUID()}`;
+    const uniqueTerm = testId.replace(/-/g, "");
+
+    await sql`
+      INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
+      VALUES (${testId}, ${testId}, 'Hidden Global Search KB', 'Temp hidden KB for CI', 'draft', now())
+    `;
+    const page = await createPage({
+      kbId: testId,
+      title: `Hidden Global Search ${uniqueTerm}`,
+      blocks: [
+        {
+          type: "paragraph",
+          blockId: "p1",
+          text: `Hidden global search content ${uniqueTerm}.`,
+          html: `Hidden global search content ${uniqueTerm}.`,
+        },
+      ],
+      status: "published",
+    });
+
+    try {
+      const publicResults = await searchKb(undefined, uniqueTerm, false);
+      expect(publicResults.some((result) => result.id === page.id)).toBe(false);
+
+      const staffResults = await searchKb(undefined, uniqueTerm, true, {
+        includeAllKbs: true,
+        staffKbIds: null,
+      });
+      expect(staffResults.some((result) => result.id === page.id)).toBe(true);
+    } finally {
+      await sql`DELETE FROM kb_page_revisions WHERE page_id = ${page.id}`;
+      await sql`DELETE FROM kb_pages WHERE id = ${page.id}`;
+      await sql`DELETE FROM knowledge_bases WHERE id = ${testId}`;
+    }
+  });
+
   it("runs schema setup concurrently without duplicate migration side effects", async () => {
     const sql = getSql();
 

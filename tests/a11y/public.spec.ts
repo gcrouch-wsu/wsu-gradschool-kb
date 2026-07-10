@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 const PUBLIC_ROUTES = [
   { name: "home", path: "/" },
   { name: "knowledge base landing", path: "/kb/graduate-school" },
+  { name: "global search", path: "/search?q=fact" },
   { name: "search", path: "/kb/graduate-school/search?q=fact" },
 ];
 

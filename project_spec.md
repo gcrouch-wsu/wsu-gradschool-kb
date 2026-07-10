@@ -133,6 +133,7 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 | Surface | Anonymous | Owner/Admin | Editor | Viewer | Required behavior |
 |---------|-----------|-------------|--------|--------|-------------------|
 | `/` KB list | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Hide private KBs without read access. |
+| `/search` global search | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Group results by readable KB; never leak private/staff results. |
 | `/kb/[kbSlug]` | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | `notFound()` for private KBs without access. |
 | `/kb/[kbSlug]/[...pagePath]` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Staff-only pages require KB read access; viewers never see drafts. |
 | `/kb/[kbSlug]/search` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Search must never leak private/staff results. |
@@ -284,6 +285,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - `searchKb` ORs a `:*` prefix `to_tsquery` with `websearch_to_tsquery` and takes the greater rank;
   query tokens are reduced to alphanumerics so punctuation can never raise a syntax error.
 - A correlated `NOT EXISTS` prune hides any public page under a `staff` ancestor from public search.
+- `/search` runs the same FTS path across all KBs readable by the current requester and groups results
+  by KB. Anonymous callers are limited to published KBs' public pages under the current model; Phase 1
+  will extend that same scope object to KB-level private visibility and viewers.
 
 ### Edit locks (`src/lib/db.ts`)
 - DB-backed per-page locks: `tryAcquirePageLock`, 5-minute TTL, 60s client heartbeat, client-side
@@ -510,7 +514,8 @@ integration tests when `DATABASE_URL` is configured.
   before a production claim (see §10).**
 - Managed assets with stable links + versions; managed video model + public YouTube/Vimeo embeds
   (CSP `frame-src` allowlisted); per-image alt text.
-- Postgres FTS with staff-visibility prune and punctuation safety.
+- Global and per-KB Postgres FTS with grouped global results, staff-visibility prune, punctuation
+  safety, rate limiting, and zero-result gap logging.
 - Targeted DB read loaders for public KB/article/tree/asset paths, plus a live-DB parity guard against
   legacy `getDataset()` article lookup; migration batches run under a Postgres advisory transaction
   lock and record applied migrations conflict-safely.

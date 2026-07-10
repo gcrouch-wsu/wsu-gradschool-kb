@@ -20,8 +20,8 @@ phase. See `project_spec.md` for the full spec and current implementation status
 - **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Editor roles, KB scoping,
   header identity + **Sign out**, a global Owner/Admin **Audit log**, and DB-backed **edit locks**
   to prevent concurrent overwrites.
-- **Search**: Postgres full-text search (tsvector + GIN) with prefix/type-ahead and staff-page
-  visibility pruning.
+- **Search**: global and per-KB Postgres full-text search (tsvector + GIN) with prefix/type-ahead,
+  grouped global results, zero-result gap logging, and staff-page visibility pruning.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
   WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over

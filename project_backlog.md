@@ -333,6 +333,10 @@ Items are ordered by recommended priority.
   queries, and `listAuditEvents` excludes `entity_type = 'search'` from the default admin audit list
   (both the SQL and in-memory paths) unless that entity type is explicitly filtered. The in-memory
   search path now records gaps too, for zero-config parity.
+- **Global FTS delivered (2026-07-10):** `/search` now searches all KBs readable under the current
+  public/staff model, reuses the per-KB FTS ranking and rate limit, logs zero-result searches, groups
+  results by KB, and has public axe smoke coverage plus a live-DB guard that unpublished KBs do not
+  leak into anonymous global search. Phase 1 will extend this to KB-level private visibility/viewers.
 - **Remaining:** true semantic/vector ranking is not yet productized in public search. The delivered
   search path remains Postgres FTS + prefix/type-ahead + gap reporting; semantic hybrid ranking should
   stay an explicit future enhancement until a human owner confirms the need.

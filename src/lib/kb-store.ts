@@ -845,6 +845,12 @@ export type SearchResult =
   | { type: "page"; id: string; title: string; summary: string; path: string[]; kbId: string }
   | { type: "asset"; id: string; title: string; summary: string; slug: string; kbId: string };
 
+export interface SearchKbOptions {
+  includeAllKbs?: boolean;
+  readableKbIds?: string[];
+  staffKbIds?: string[] | null;
+}
+
 function pageBodyText(page: KbPage): string {
   return page.blocks
     .map((block) =>
@@ -885,6 +891,7 @@ export async function searchKb(
   kbId: string | undefined,
   query: string,
   includeStaff: boolean,
+  options: SearchKbOptions = {},
 ): Promise<SearchResult[]> {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
@@ -905,19 +912,66 @@ export async function searchKb(
 
     if (!searchTokens) return [];
 
-    const statusFilter = includeStaff ? sql`IN ('published', 'draft')` : sql`= 'published'`;
+    const readableKbIds = [...new Set(options.readableKbIds ?? [])];
+    const staffKbIds = options.staffKbIds === null ? null : [...new Set(options.staffKbIds ?? [])];
+    const includeAllKbs = Boolean(options.includeAllKbs);
 
-    const kbFilterPages = kbId ? sql`AND kb_id = ${kbId}` : sql``;
-    const kbFilterAssets = kbId ? sql`AND home_kb_id = ${kbId}` : sql``;
+    const kbFilterPages = kbId
+      ? sql`AND kb_pages.kb_id = ${kbId}`
+      : includeAllKbs
+        ? sql``
+        : readableKbIds.length > 0
+          ? sql`AND (
+              EXISTS (
+                SELECT 1 FROM knowledge_bases kb
+                WHERE kb.id = kb_pages.kb_id AND kb.status = 'published'
+              )
+              OR kb_pages.kb_id = ANY(${readableKbIds}::text[])
+            )`
+          : sql`AND EXISTS (
+              SELECT 1 FROM knowledge_bases kb
+              WHERE kb.id = kb_pages.kb_id AND kb.status = 'published'
+            )`;
+    const kbFilterAssets = kbId
+      ? sql`AND kb_assets.home_kb_id = ${kbId}`
+      : includeAllKbs
+        ? sql``
+        : readableKbIds.length > 0
+          ? sql`AND (
+              EXISTS (
+                SELECT 1 FROM knowledge_bases kb
+                WHERE kb.id = kb_assets.home_kb_id AND kb.status = 'published'
+              )
+              OR kb_assets.home_kb_id = ANY(${readableKbIds}::text[])
+            )`
+          : sql`AND EXISTS (
+              SELECT 1 FROM knowledge_bases kb
+              WHERE kb.id = kb_assets.home_kb_id AND kb.status = 'published'
+            )`;
 
-    const visibilityFilter = includeStaff 
-      ? sql`` 
-      : sql`AND visibility = 'public' AND NOT EXISTS (
-          SELECT 1 FROM kb_pages p2 
-          WHERE p2.kb_id = kb_pages.kb_id 
-            AND p2.visibility = 'staff' 
+    const staffPageAccess = !includeStaff
+      ? sql`FALSE`
+      : staffKbIds === null || options.staffKbIds === undefined
+        ? sql`TRUE`
+        : staffKbIds.length > 0
+          ? sql`kb_pages.kb_id = ANY(${staffKbIds}::text[])`
+          : sql`FALSE`;
+    const pageVisibilityFilter = sql`AND (
+      (
+        kb_pages.status = 'published'
+        AND kb_pages.visibility = 'public'
+        AND NOT EXISTS (
+          SELECT 1 FROM kb_pages p2
+          WHERE p2.kb_id = kb_pages.kb_id
+            AND p2.visibility = 'staff'
             AND (kb_pages.path = p2.path OR kb_pages.path LIKE p2.path || '/%')
-        )`;
+        )
+      )
+      OR (
+        ${staffPageAccess}
+        AND kb_pages.status IN ('published', 'draft')
+      )
+    )`;
 
     const pageRows = await sql`
       SELECT id, title, summary, path, kb_id,
@@ -928,9 +982,8 @@ export async function searchKb(
       FROM kb_pages
       WHERE (search_vector @@ to_tsquery('english', ${searchTokens}) 
              OR search_vector @@ websearch_to_tsquery('english', ${normalized}))
-      AND status ${statusFilter}
       ${kbFilterPages}
-      ${visibilityFilter}
+      ${pageVisibilityFilter}
       ORDER BY rank DESC
       LIMIT 20
     `;
@@ -975,7 +1028,42 @@ export async function searchKb(
   const dataset = await getDataset();
   const scored: ScoredResult[] = [];
 
-  const pagesToSearch = kbId ? visiblePages(dataset, kbId, includeStaff) : dataset.pages.filter(p => includeStaff ? (p.status === 'published' || p.status === 'draft') : p.status === 'published');
+  const readableKbIds = new Set(options.readableKbIds ?? []);
+  const staffKbIds = options.staffKbIds === null || options.staffKbIds === undefined
+    ? null
+    : new Set(options.staffKbIds);
+  const kbById = new Map(dataset.knowledgeBases.map((kb) => [kb.id, kb]));
+  const canReadKb = (candidateKbId: string) => {
+    if (kbId) {
+      return candidateKbId === kbId;
+    }
+    const kb = kbById.get(candidateKbId);
+    return Boolean(options.includeAllKbs || kb?.status === "published" || readableKbIds.has(candidateKbId));
+  };
+  const canReadStaffPages = (candidateKbId: string) =>
+    includeStaff && (staffKbIds === null || staffKbIds.has(candidateKbId));
+  const publishedPagesByKb = new Map<string, KbPage[]>();
+  for (const page of dataset.pages) {
+    if (page.status !== "published") {
+      continue;
+    }
+    publishedPagesByKb.set(page.kbId, [...(publishedPagesByKb.get(page.kbId) ?? []), page]);
+  }
+
+  const pagesToSearch = kbId
+    ? visiblePages(dataset, kbId, includeStaff)
+    : dataset.pages.filter((page) => {
+        if (!canReadKb(page.kbId)) {
+          return false;
+        }
+        if (canReadStaffPages(page.kbId)) {
+          return page.status === "published" || page.status === "draft";
+        }
+        if (page.status !== "published") {
+          return false;
+        }
+        return !isStaffOnly(publishedPagesByKb.get(page.kbId) ?? [], page);
+      });
 
   for (const page of pagesToSearch) {
     const titleScore = fieldScore(page.title, normalized, { exact: 100, prefix: 60, includes: 40 });
@@ -990,7 +1078,9 @@ export async function searchKb(
     }
   }
 
-  const assetsToSearch = kbId ? dataset.assets.filter(a => a.homeKbId === kbId) : dataset.assets;
+  const assetsToSearch = kbId
+    ? dataset.assets.filter((asset) => asset.homeKbId === kbId)
+    : dataset.assets.filter((asset) => canReadKb(asset.homeKbId));
 
   for (const asset of assetsToSearch) {
     if (asset.status !== "active") {
