@@ -352,6 +352,10 @@ export default function AdminKbsPage() {
                     label: "Styles",
                     onSelect: () => router.push(`/admin/kbs/${kb.id}/styles`),
                   },
+                  {
+                    label: "Export ZIP",
+                    onSelect: () => window.location.assign(`/api/admin/kbs/${kb.id}/export`),
+                  },
                   { divider: true, label: "" },
                   {
                     danger: true,

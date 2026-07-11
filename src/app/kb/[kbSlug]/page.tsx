@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { PageBlocks } from "@/components/PageBlocks";
@@ -11,6 +12,7 @@ import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
 import { loadSiteSettings } from "@/lib/db";
 import { hasTocEntries } from "@/lib/toc";
+import { isPageViewPrefetch, recordPageViewLater } from "@/lib/page-views";
 
 export default async function KbHomePage({ params }: { params: Promise<{ kbSlug: string }> }) {
   const { kbSlug } = await params;
@@ -20,6 +22,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
     notFound();
   }
 
+  const requestHeaders = await headers();
   const settings = await loadSiteSettings();
   const tree = await buildPageTree(kb.id, isStaff);
   const topLevel = tree.map((node) => node.page);
@@ -30,6 +33,14 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
   const themeVars = themeToCssVars(effectiveTheme) as CSSProperties;
 
   if (homepagePage) {
+    if (
+      !isStaff &&
+      !isPageViewPrefetch(requestHeaders) &&
+      homepagePage.status === "published" &&
+      homepagePage.visibility === "public"
+    ) {
+      recordPageViewLater({ pageId: homepagePage.id, kbId: kb.id });
+    }
     const relatedAssets = (
       await Promise.all(homepagePage.relatedAssetIds.map((assetId) => getAssetById(assetId)))
     ).filter((asset) => asset !== null);

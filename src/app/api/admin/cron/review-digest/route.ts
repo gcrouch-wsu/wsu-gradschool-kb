@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { cleanupAuditLog } from "@/lib/audit-log";
-import { foldOldPageViews } from "@/lib/page-views";
+import { sendReviewDigest } from "@/lib/review-digest";
 
 export const runtime = "nodejs";
 
@@ -18,6 +17,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
-  const [deleted, foldedPageViewMonths] = await Promise.all([cleanupAuditLog(), foldOldPageViews()]);
-  return NextResponse.json({ ok: true, deleted, foldedPageViewMonths });
+  const summary = await sendReviewDigest();
+  return NextResponse.json(summary);
 }

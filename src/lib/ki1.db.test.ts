@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import { getSql, ensureSchema } from "./db";
+import { getSql, ensureSchema, loadDatasetFromDb } from "./db";
 import {
   createPage,
   getKbBySlug,
@@ -75,6 +75,13 @@ describe("KI-1 live-DB integration", () => {
       expect(actual).toBe(expected);
       expect(reloaded?.verifiedBy).toBe(verifier);
 
+      const dataset = await loadDatasetFromDb();
+      const datasetPage = dataset.pages.find(
+        (candidate) => candidate.kbId === kb.id && candidate.path.join("/") === page.path.join("/"),
+      );
+      expect(reloaded?.id).toBe(datasetPage?.id);
+      expect(reloaded?.blocks).toEqual(datasetPage?.blocks);
+
     } finally {
       // Cleanup page (and its create-snapshot revision)
       await sql`DELETE FROM kb_page_revisions WHERE page_id = ${page.id}`;
@@ -84,5 +91,67 @@ describe("KI-1 live-DB integration", () => {
         await sql`DELETE FROM knowledge_bases WHERE id = ${kb.id}`;
       }
     }
+  });
+
+  it("does not return unreadable KB pages in public global search", async () => {
+    const sql = getSql();
+    const testId = `hidden-global-${crypto.randomUUID()}`;
+    const uniqueTerm = testId.replace(/-/g, "");
+
+    await sql`
+      INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
+      VALUES (${testId}, ${testId}, 'Hidden Global Search KB', 'Temp hidden KB for CI', 'draft', now())
+    `;
+    const page = await createPage({
+      kbId: testId,
+      title: `Hidden Global Search ${uniqueTerm}`,
+      blocks: [
+        {
+          type: "paragraph",
+          blockId: "p1",
+          text: `Hidden global search content ${uniqueTerm}.`,
+          html: `Hidden global search content ${uniqueTerm}.`,
+        },
+      ],
+      status: "published",
+    });
+
+    try {
+      const publicResults = await searchKb(undefined, uniqueTerm, false);
+      expect(publicResults.some((result) => result.id === page.id)).toBe(false);
+
+      const staffResults = await searchKb(undefined, uniqueTerm, true, {
+        includeAllKbs: true,
+        staffKbIds: null,
+      });
+      expect(staffResults.some((result) => result.id === page.id)).toBe(true);
+    } finally {
+      await sql`DELETE FROM kb_page_revisions WHERE page_id = ${page.id}`;
+      await sql`DELETE FROM kb_pages WHERE id = ${page.id}`;
+      await sql`DELETE FROM knowledge_bases WHERE id = ${testId}`;
+    }
+  });
+
+  it("runs schema setup concurrently without duplicate migration side effects", async () => {
+    const sql = getSql();
+
+    await Promise.all([ensureSchema(), ensureSchema()]);
+
+    const duplicateMigrations = await sql`
+      SELECT id, COUNT(*)::int AS count
+      FROM _schema_migrations
+      GROUP BY id
+      HAVING COUNT(*) > 1
+    `;
+    expect(duplicateMigrations).toHaveLength(0);
+
+    const duplicateBaselineBackfills = await sql`
+      SELECT page_id, COUNT(*)::int AS count
+      FROM kb_page_revisions
+      WHERE id LIKE 'revision-backfill-%'
+      GROUP BY page_id
+      HAVING COUNT(*) > 1
+    `;
+    expect(duplicateBaselineBackfills).toHaveLength(0);
   });
 });

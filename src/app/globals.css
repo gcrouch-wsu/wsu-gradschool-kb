@@ -4196,6 +4196,21 @@ article ol ol ol {
   gap: 0.5rem;
 }
 
+.search-groups {
+  display: grid;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.search-group {
+  display: grid;
+  gap: 1rem;
+}
+
+.search-group h3 {
+  margin: 0;
+}
+
 .empty {
   background: var(--paper);
   border: 2px dashed var(--line-strong);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { PageBlocks } from "@/components/PageBlocks";
@@ -19,6 +20,7 @@ import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
 import { loadSiteSettings } from "@/lib/db";
 import type { CSSProperties } from "react";
+import { isPageViewPrefetch, recordPageViewLater } from "@/lib/page-views";
 
 export async function generateMetadata({
   params,
@@ -70,6 +72,10 @@ export default async function KbArticlePage({
   }
   if (kb.homepagePageId === page.id) {
     permanentRedirect(`/kb/${kb.slug}`);
+  }
+  const requestHeaders = await headers();
+  if (!isStaff && !isPageViewPrefetch(requestHeaders) && page.status === "published" && page.visibility === "public") {
+    recordPageViewLater({ pageId: page.id, kbId: kb.id });
   }
 
   const settings = await loadSiteSettings();

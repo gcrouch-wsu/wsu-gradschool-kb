@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPageTreeManager } from "@/components/AdminPageTreeManager";
 import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
-import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
+import { getAllKbsForAdmin, getAllPageSummariesForAdmin } from "@/lib/kb-store";
 
 
 export default async function AdminPagesPage() {
@@ -15,7 +15,7 @@ export default async function AdminPagesPage() {
   const groups = await Promise.all(
     kbs.map(async (kb) => ({
       kb,
-      pages: await getAllPagesForAdmin(kb.id),
+      pages: await getAllPageSummariesForAdmin(kb.id),
     })),
   );
 

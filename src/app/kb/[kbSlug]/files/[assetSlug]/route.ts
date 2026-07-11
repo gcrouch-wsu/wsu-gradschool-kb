@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { NextResponse } from "next/server";
 import { getCurrentAdminSession } from "@/lib/auth";
+import { isTrustedAssetUrl } from "@/lib/blob";
 import { getAssetForDelivery, getKbBySlug } from "@/lib/kb-store";
 import { videoDeliveryUrl } from "@/lib/video";
 
@@ -29,22 +30,6 @@ function dataUriToResponseBody(dataUri: string) {
     contentType: match[1],
     body: Buffer.from(match[2], "base64"),
   };
-}
-
-function isTrustedAssetUrl(value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (url.protocol !== "https:") {
-    return false;
-  }
-  return (
-    url.hostname === "blob.vercel-storage.com" ||
-    url.hostname.endsWith(".public.blob.vercel-storage.com")
-  );
 }
 
 export async function GET(

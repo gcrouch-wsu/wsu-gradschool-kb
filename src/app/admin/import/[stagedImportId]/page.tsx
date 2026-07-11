@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminStagedImportReview, type ImportKbOption } from "@/components/AdminStagedImportReview";
 import { canAccessKb, filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
-import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
+import { getAllKbsForAdmin, getAllPageSummariesForAdmin } from "@/lib/kb-store";
 import { getStagedImportDetail } from "@/lib/staged-imports";
 
 export default async function AdminStagedImportReviewPage({
@@ -28,7 +28,7 @@ export default async function AdminStagedImportReviewPage({
   const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
   const kbOptions: ImportKbOption[] = await Promise.all(
     kbs.map(async (kb) => {
-      const pages = await getAllPagesForAdmin(kb.id);
+      const pages = await getAllPageSummariesForAdmin(kb.id);
       return {
         id: kb.id,
         title: kb.title,

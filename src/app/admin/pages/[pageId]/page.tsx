@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminPageEditorForm } from "@/components/AdminPageEditorForm";
 import { canAccessKb, getCurrentAdminSession } from "@/lib/auth";
-import { getAllPagesForAdmin, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
+import { getAllPageSummariesForAdmin, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 function hasPathPrefix(path: string[], prefix: string[]) {
   return prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment);
@@ -33,7 +33,7 @@ export default async function AdminEditPage({
     notFound();
   }
 
-  const pages = await getAllPagesForAdmin(kb.id);
+  const pages = await getAllPageSummariesForAdmin(kb.id);
   const parentOptions = pages
     .filter(
       (candidate) =>
