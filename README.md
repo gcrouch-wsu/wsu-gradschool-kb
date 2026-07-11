@@ -44,13 +44,13 @@ editor regression suite. Production-readiness work merged to `main` (2026-07-10)
 notifications, bulk KB export (streamed ZIP), privacy-light usage analytics, global cross-KB search,
 targeted public read loaders, migration concurrency locking, and structured operations docs.
 
-The two committed next builds, in order:
+Phase 1 is the committed next build and covers both:
 
-1. **Phase 1 — private knowledge bases** (`project_backlog.md` FB-27): KB-level public/private
-   visibility, owner-provisioned `viewer` users, a single read-access helper gating every public
-   route, and visibility-aware search/asset delivery.
-2. **WSU SSO** (`project_backlog.md` FB-30): Entra ID / Azure AD OIDC or SAML for staff and
-   private-KB viewers. Blocked on WSU ITS engagement; all authentication stays local
+1. **Private knowledge bases** (`project_spec.md` §12 FB-27): KB-level public/private visibility,
+   owner-provisioned `viewer` users, a single read-access helper gating every public route, and
+   visibility-aware search/asset delivery.
+2. **WSU SSO** (`project_spec.md` §12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
+   private-KB viewers. Gated on WSU ITS engagement; all authentication stays local
    (owner-provisioned) until then.
 
 Remaining QA work before a production-compliance claim:
@@ -60,10 +60,10 @@ Remaining QA work before a production-compliance claim:
   WCAG/ADA compliance claim.
 - Keep extending the editor Playwright suite whenever a new browser-only editor bug is found.
 
-Further enhancements are tracked in `project_backlog.md`: a maintained rich-text editor framework
+Further enhancements are tracked in `project_spec.md` §12: a maintained rich-text editor framework
 migration, SEO/discoverability, reader feedback, public reading polish, proposed-edits workflow,
 public API, KB templates/advanced settings, large-file asset handling, and third-party error
-tracking.
+tracking. The deploy/rollback runbook is `project_spec.md` §13.
 
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page axe smoke
 tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
