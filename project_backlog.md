@@ -578,6 +578,11 @@ Items are ordered by recommended priority.
   built around public KB routes plus page-level public/staff visibility; it does not yet provide a
   KB-level `public`/`private` visibility column, a read-only `viewer` role, or a single visibility
   helper that gates every public route, search path, page tree, redirect, and asset response.
+- **Pre-work (do before migration `029`):** run a fresh-database `ensureSchema()` bootstrap once
+  against a brand-new Neon branch (or enable `db-pr.yml` with the Neon secrets). The advisory-lock
+  collector runner introduced in the Phase 2 commit has only ever executed against databases that
+  already had schema; a fresh bootstrap exercises all 28 collected migrations end-to-end. Also read
+  the §8 migration gotcha in `project_spec.md`: `up()` must be straight-line, idempotent SQL.
 - **Suggested approach:** Add `knowledge_bases.visibility` (`public` default for existing rows), add a
   local-password `viewer` role to the existing user model, reuse `kb_user_assignments` for viewer/editor
   private-KB read access, and introduce one read-access helper beside the existing admin-scope helpers.
@@ -643,6 +648,15 @@ Items are ordered by recommended priority.
   private-KB viewer authentication path. Keep local owner-provisioned accounts until migration is
   complete; when SSO lands it should cover staff and private-KB viewers, superseding local viewer
   passwords.
+- **ITS engagement checklist (start this before any code):** (1) application/app registration in WSU's
+  Entra ID tenant with production **and** Vercel preview redirect URIs; (2) which protocol ITS supports
+  for this app class (OIDC preferred over SAML); (3) claims/groups available for mapping to
+  Owner/Admin/Editor/Viewer (or agreement that role assignment stays app-local keyed by verified
+  email); (4) token lifetime/refresh policy so the app's 8h session model can wrap the SSO identity;
+  (5) an agreed break-glass path — the local bootstrap owner must keep working when the IdP is down.
+- **Design constraints from Phase 1:** viewer identities must be modeled so an SSO subject can later
+  attach to the same `users` row and `kb_user_assignments` (match on verified email; do not key
+  assignments to password-era ids that would need rewriting).
 - **Touch points:** `src/lib/auth.ts`, `src/lib/security.ts`, `src/app/admin/sign-in/page.tsx`,
   session cookie handling, user provisioning/role mapping, `.env.example`, `project_spec.md`.
 - **Acceptance:** approved WSU SSO users can sign in, map to Owner/Admin/Editor/Viewer roles, retain

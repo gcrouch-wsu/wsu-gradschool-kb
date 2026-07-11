@@ -4,7 +4,7 @@
 
 - Confirm `npm run check`, `npm run lint`, `npm test`, and `npm run build` pass locally or in CI.
 - Confirm `npm run test:db` passes against the current Neon test branch before promoting changes that touch migrations or DB behavior.
-- Confirm Vercel has `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SESSION_SECRET`, and `CRON_SECRET` configured for the target environment.
+- Confirm Vercel has `DATABASE_URL`, `KB_ADMIN_EMAIL`, `KB_ADMIN_PASSWORD`, `KB_ADMIN_SESSION_SECRET`, and `CRON_SECRET` configured for the target environment.
 - If review-date email delivery is expected, confirm `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, and `EMAIL_FROM`; otherwise expect structured JSON fallback logs.
 - Confirm the Vercel plan supports the configured cron count before deploy validation; this project currently schedules audit cleanup, revision cleanup, and review digest routes.
 - For Blob-backed assets, confirm the Vercel Blob environment variables are present in the target environment.

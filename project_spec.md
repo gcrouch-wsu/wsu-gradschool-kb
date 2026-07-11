@@ -61,10 +61,16 @@ role provisioned by Owners, reuse of `kb_user_assignments` for viewer/editor KB 
 for every public surface, visibility-aware asset delivery and search, and owner-facing KB/user controls
 for visibility and assignments. This is Phase 1 work and is not yet implemented in the current code.
 
+**In scope (planned second, after Phase 1):** WSU SSO (FB-30) — Entra ID / Azure AD OIDC or SAML for
+staff and private-KB viewers, superseding local viewer passwords. Blocked on WSU ITS engagement (app
+registration, redirect URIs, role/claims mapping); until it lands, all authentication is local and
+owner-provisioned, and Phase 1 must be designed so viewer identities can later be backed by SSO
+without re-modeling KB assignments.
+
 **Out of scope (intentionally, for now):** an approval/review *workflow* (editors publish directly,
 gated by the publish checks); a per-KB "manager" role tier; self-service public signup — accounts are
-provisioned by Owners; SSO/OIDC/SAML, which is future work pending WSU ITS engagement; WYSIWYG parity
-with Word; and real-time multi-cursor co-editing (concurrency is handled with locks, not CRDTs).
+provisioned by Owners; WYSIWYG parity with Word; and real-time multi-cursor co-editing (concurrency is
+handled with locks, not CRDTs).
 
 ---
 
@@ -361,18 +367,19 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `027_page_revisions`.** Migrations after `018_rate_limits` add content
+  backfills. **Current head: `028_page_views`.** Migrations after `018_rate_limits` add content
   lifecycle columns (`019`: `next_review_date` / `verified_at` / `verified_by`), the global default
   site theme (`020`), home content blocks + KB-list controls (`021`), branding/logo + layout columns
   (`022`: `brand_text`, `logo_url`, `logo_width`, `header_alignment`, `hero_alignment`,
   `content_width`), brand-text style columns (`023`: color/size/weight/font), KB-list
   section-heading style columns (`024`: `kb_list_title_color/size/weight/font`), KB homepage page
   assignment (`025`: `knowledge_bases.home_page_id`), per-page print-button visibility
-  (`026`: `kb_pages.show_print_button`), and page revision history (`027`: `kb_page_revisions` plus
-  a baseline revision backfill for pre-existing pages).
+  (`026`: `kb_pages.show_print_button`), page revision history (`027`: `kb_page_revisions` plus
+  a baseline revision backfill for pre-existing pages), and page-view analytics
+  (`028`: `kb_page_views` daily counters with retention-fold indexes).
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
-  `kb_rate_limits`.
+  `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
 - Seed data: `src/lib/demo-data.ts` (used for both the no-DB in-memory mode and first-run seeding).
 
 ---
@@ -407,8 +414,11 @@ share the page lock and the process-global in-memory store.
   work; not durable). Set = Neon (schema auto-creates/seeds).
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob; without it, DOCX import skips images and uploads fall back
   to data-backed assets.
-- `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup` and
-  `/api/admin/cron/revision-cleanup`.
+- `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup`,
+  `/api/admin/cron/revision-cleanup`, and `/api/admin/cron/review-digest`.
+- `EMAIL_PROVIDER_URL` / `EMAIL_PROVIDER_TOKEN` / `EMAIL_FROM` — optional HTTP email provider for the
+  weekly review-date digest; when unset the digest cron logs structured JSON and reports skipped
+  deliveries instead of failing.
 
 **CI** (`.github/workflows/ci.yml`): on pushes to `main` and on PRs, runs type-check, lint, unit
 tests, production build, public-page axe smoke tests, and the Chromium editor regression suite against
@@ -477,6 +487,15 @@ manual redirect persistence, and the single-active-version DB invariant.
   reads use targeted loaders in `src/lib/db.ts` behind the stable `kb-store.ts` API. `getDataset()` may
   remain for admin/write paths that genuinely need broad state, but every new `isDatabaseEnabled()`
   branch needs a matching live-DB test so the in-memory and Neon paths do not drift.
+- **Migration `up()` functions must be straight-line, idempotent SQL.** `runMigrations` does not
+  execute a migration's `up()` directly: it first replays `up()` against a **collector** that records
+  each query and returns an empty result, then runs the recorded queries in one `sql.transaction`
+  under `pg_advisory_xact_lock`. Two consequences when adding a migration (Phase 1's `029` is next):
+  (1) `up()` cannot branch on query results — every awaited query resolves to `[]` during collection,
+  so conditional logic must live *inside* SQL (`IF NOT EXISTS`, `ON CONFLICT`, `WHERE NOT EXISTS`);
+  (2) the applied-check runs *before* the lock is taken, so two racing cold starts can both execute
+  the same migration — every statement must be individually idempotent, and the `_schema_migrations`
+  insert uses `ON CONFLICT DO NOTHING` for that reason.
 - **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
 - **Vertical rhythm lives in the `.flow` container, not per-block margins.** Public reading surfaces
   (`.article`, the home content wrapper, `.card__blocks`, `.procedure-section__blocks`) carry the
@@ -607,8 +626,24 @@ integration tests when `DATABASE_URL` is configured.
 
 Narrative backlog; the actionable, tagged version is `project_backlog.md`.
 
-- **Private KBs**: implement FB-27 first. Later production-readiness phases depend on the same
-  public/private read-access helper and visibility-aware search/asset rules.
+**The two committed next builds, in order — both need planning before code:**
+
+1. **Phase 1 — private knowledge bases (FB-27).** KB-level `public`/`private` visibility, a
+   local-password `viewer` role, one read-access helper (`canReadKb`-style) consumed by every public
+   surface, visibility-aware asset delivery and search. Build sequence: read-access helper + `029`
+   visibility migration first; convert the existing `isStaff = Boolean(session)` call sites (public
+   routes, search scope, page-view recording guards) to the helper as a behavior-preserving refactor;
+   then add the viewer role, asset gating, and the access-matrix test suite. Pre-work: verify a
+   **fresh-database** `ensureSchema()` bootstrap once against a new Neon branch (the advisory-lock
+   collector runner has only ever executed against databases with existing schema), and keep viewers
+   excluded from review digests and `/admin/usage`.
+2. **WSU SSO (FB-30).** Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers. Blocked on
+   WSU ITS engagement; the ITS ask list (app registration, prod + preview redirect URIs, claims/groups
+   for role mapping) is in FB-30. Local owner-provisioned accounts remain the break-glass path. Design
+   Phase 1 viewer identities so SSO can back them later without re-modeling `kb_user_assignments`.
+
+Other tracked work:
+
 - **Editor / release QA**: finish the FB-25 manual release gate — Chrome + Firefox + mobile-width editor
   QA and a manual WCAG 2.1 AA audit. FB-26 editor UX implementation and Chromium regression coverage are
   delivered; page revision history with restore is delivered (FB-24). Remaining editor enhancements are
@@ -622,8 +657,8 @@ Narrative backlog; the actionable, tagged version is `project_backlog.md`.
 - **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact view.
 - **Governance & ops**: per-KB activity feed from the audit log; keep GitHub/Neon CI secrets healthy;
   broader integration + a11y coverage; a real rate-limit load test; production monitoring/log review
-  and rollback checklist; reader feedback, SEO/discoverability, WSU SSO after ITS engagement, and
-  third-party error tracking are tracked in `project_backlog.md`.
+  and rollback checklist; reader feedback, SEO/discoverability, and third-party error tracking are
+  tracked in `project_backlog.md`.
 
 ---
 
