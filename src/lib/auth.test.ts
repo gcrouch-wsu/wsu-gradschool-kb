@@ -19,4 +19,13 @@ describe("bootstrap owner sessions", () => {
     vi.stubEnv("KB_ADMIN_PASSWORD", "second-password");
     expect(await readAdminSessionToken(token)).toBeNull();
   });
+
+  it("returns null (not a crash) for unknown emails when no database is configured", async () => {
+    vi.stubEnv("KB_ADMIN_EMAIL", "owner@example.edu");
+    vi.stubEnv("KB_ADMIN_PASSWORD", "first-password");
+    vi.stubEnv("KB_ADMIN_SESSION_SECRET", "stable-session-secret");
+    vi.stubEnv("DATABASE_URL", "");
+
+    expect(await validateAdminCredentials("someone-else@example.edu", "whatever")).toBeNull();
+  });
 });

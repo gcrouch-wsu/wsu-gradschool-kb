@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual, scryptSync, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { isDatabaseEnabled } from "@/lib/db";
 import { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS } from "@/lib/session-constants";
 import type { UserRole } from "@/lib/types";
 import { loadUserByEmail, loadUserById, isUserAssignedToKb, listUserAssignments } from "@/lib/db-users";
@@ -120,7 +121,7 @@ export async function validateAdminCredentials(email: string, password: string):
     };
   }
 
-  const user = await loadUserByEmail(email);
+  const user = isDatabaseEnabled() ? await loadUserByEmail(email) : null;
   if (user && verifyPassword(password, user.passwordHash)) {
     return {
       userId: user.id,

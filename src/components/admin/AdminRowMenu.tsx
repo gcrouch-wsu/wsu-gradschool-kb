@@ -10,6 +10,16 @@ export interface AdminRowMenuItem {
   onSelect?: () => void;
 }
 
+function menuPlacementFor(trigger: HTMLButtonElement | null) {
+  const rect = trigger?.getBoundingClientRect();
+  if (!rect) return null;
+  const right = Math.max(document.documentElement.clientWidth - rect.right, 8);
+  const spaceBelow = window.innerHeight - rect.bottom;
+  return spaceBelow < 320 && rect.top > spaceBelow
+    ? { bottom: window.innerHeight - rect.top + 6, right }
+    : { top: rect.bottom + 6, right };
+}
+
 export function AdminRowMenu({
   disabled = false,
   items,
@@ -25,6 +35,7 @@ export function AdminRowMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [placement, setPlacement] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -44,6 +55,29 @@ export function AdminRowMenu({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onViewportChange() {
+      const next = menuPlacementFor(triggerRef.current);
+      if (next) {
+        setPlacement(next);
+      }
+    }
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onViewportChange);
+    return () => {
+      window.removeEventListener("scroll", onViewportChange, true);
+      window.removeEventListener("resize", onViewportChange);
+    };
+  }, [open]);
+
+  function openMenu() {
+    const next = menuPlacementFor(triggerRef.current);
+    if (!next) return;
+    setPlacement(next);
+    setOpen(true);
+  }
+
   function closeMenu() {
     setOpen(false);
     triggerRef.current?.focus();
@@ -59,7 +93,7 @@ export function AdminRowMenu({
   function onTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      setOpen(true);
+      openMenu();
     }
   }
 
@@ -96,7 +130,7 @@ export function AdminRowMenu({
         aria-label={triggerLabel}
         className="icon-button admin-row-menu__trigger"
         disabled={disabled}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => (open ? closeMenu() : openMenu())}
         onKeyDown={onTriggerKeyDown}
         type="button"
       >
@@ -109,6 +143,17 @@ export function AdminRowMenu({
           id={menuId}
           onKeyDown={onMenuKeyDown}
           role="menu"
+          style={
+            placement
+              ? {
+                  position: "fixed",
+                  top: placement.top ?? "auto",
+                  bottom: placement.bottom ?? "auto",
+                  right: placement.right,
+                  margin: 0,
+                }
+              : undefined
+          }
         >
           {items.map((item, index) => {
             if (item.divider) {
