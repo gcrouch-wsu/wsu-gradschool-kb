@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     const safeUsers = await Promise.all(
       users.map(async ({ passwordHash: _unused, ...user }) => ({
         ...user,
-        kbAssignments: user.role === "editor" ? await listUserAssignments(user.id) : [],
+        kbAssignments: user.role === "editor" || user.role === "viewer" ? await listUserAssignments(user.id) : [],
       })),
     );
     return NextResponse.json({ users: safeUsers });
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Email and password are required." }, { status: 400 });
   }
 
-  const role: UserRole = ["owner", "admin", "editor"].includes(body.role) ? body.role : "editor";
+  const role: UserRole = ["owner", "admin", "editor", "viewer"].includes(body.role) ? body.role : "editor";
 
   try {
     const passwordHash = await hashPassword(body.password);
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       updatedAt: now,
     });
 
-    if (Array.isArray(body.kbAssignments)) {
+    if ((role === "editor" || role === "viewer") && Array.isArray(body.kbAssignments)) {
       await replaceUserAssignments(userId, body.kbAssignments);
     }
 

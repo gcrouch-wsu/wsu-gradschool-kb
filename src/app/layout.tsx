@@ -61,8 +61,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     {link.label}
                   </a>
                 ))}
-                {/* Plain anchor: entering the admin shell needs a full page load. */}
-                <a href={session ? "/admin" : "/admin/sign-in?next=%2Fadmin"}>Admin</a>
+                {session?.role !== "viewer" && (
+                  <>
+                    {/* Plain anchor: entering the admin shell needs a full page load. */}
+                    <a href={session ? "/admin" : "/admin/sign-in?next=%2Fadmin"}>Admin</a>
+                  </>
+                )}
                 {session && (
                   <span className="nav-user" title={`Signed in as ${session.email}`}>
                     <span className="nav-user__name">{session.email}</span>

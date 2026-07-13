@@ -48,25 +48,22 @@ Concretely, the platform must:
 
 ## 2. Scope
 
-**In scope (built today):** public multi-KB reading experience; a custom block/rich-text editor;
-managed assets with versioning and stable URLs; Postgres full-text search; Owner/Admin/Editor auth
-with per-KB scoping; configurable per-KB homepage pages; per-KB theming, a global default theme, and
-owner-level site settings (home content, branding/logo, and layout); DOCX staged import; automatic
-redirects; DB-backed edit locks; a publish-time accessibility/governance gate; an audit log; revision
-history with restore; and print-to-PDF export (browser print over semantic HTML — see §9 for the exact
-mechanism).
+**In scope (built today):** public and private multi-KB reading experience; a custom
+block/rich-text editor; managed assets with versioning and stable URLs; Postgres full-text search;
+Owner/Admin/Editor/Viewer auth with per-KB scoping; configurable per-KB homepage pages; per-KB
+theming, a global default theme, and owner-level site settings (home content, branding/logo, and
+layout); DOCX staged import; automatic redirects; DB-backed edit locks; a publish-time
+accessibility/governance gate; an audit log; revision history with restore; and print-to-PDF export
+(browser print over semantic HTML — see §9 for the exact mechanism). Private KBs use KB-level
+`public`/`private` visibility, owner-provisioned local-password `viewer` accounts, the existing
+`kb_user_assignments` table for viewer/editor access, read gating for every public surface, and
+visibility-aware asset delivery/search.
 
-**In scope (Phase 1 — the committed next build, not yet implemented):** private KBs and WSU SSO.
-- **Private KBs (§12 FB-27):** a KB can be public or private; private KBs are readable only by
-  signed-in users with read access. Includes a local-password `viewer` role provisioned by Owners,
-  reuse of `kb_user_assignments` for viewer/editor KB access, read gating for every public surface,
-  visibility-aware asset delivery and search, and owner-facing KB/user controls for visibility and
-  assignments.
-- **WSU SSO (§12 FB-30):** Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers,
-  superseding local viewer passwords. The SSO portion is gated on WSU ITS engagement (app
-  registration, redirect URIs, role/claims mapping) — start that conversation immediately, build the
-  private-KB portion first with local passwords as the interim path, and design viewer identities so
-  SSO can back them later without re-modeling KB assignments.
+**In scope next:** WSU SSO (§12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
+private-KB viewers, superseding local viewer passwords. The SSO portion is gated on WSU ITS
+engagement (app registration, redirect URIs, role/claims mapping). Keep local owner-provisioned
+accounts as the interim and break-glass path, and keep viewer identities keyed so SSO can back them
+later without re-modeling KB assignments.
 
 **Out of scope (intentionally, for now):** an approval/review *workflow* (editors publish directly,
 gated by the publish checks); a per-KB "manager" role tier; self-service public signup — accounts are
@@ -80,23 +77,24 @@ handled with locks, not CRDTs).
 - **Anonymous public** — no login; reads published pages in public KBs only.
 - **Owner** — full access (KB-wide), plus user management, KB creation, theming, site settings.
 - **Admin** — KB-wide content/asset management.
-- **Editor** — scoped to assigned KBs for content management (`kb_user_assignments`); after Phase 1,
-  editors also read assigned private KBs and all public KBs.
-- **Viewer** — Phase 1 target role. Local-password account provisioned by an Owner; reads assigned
-  private KBs plus public KBs; sees no admin surfaces and can never reach mutation APIs.
+- **Editor** — scoped to assigned KBs for content management (`kb_user_assignments`); reads all
+  public KBs plus assigned private KBs.
+- **Viewer** — local-password account provisioned by an Owner; reads assigned private KBs plus public
+  KBs; sees no admin surfaces and can never reach mutation APIs.
 
 Role checks: `requireAdminMutation` (valid session + same-origin request) plus per-route role/scope
 checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsForSession` /
-`requireKbAccess` in `src/lib/auth.ts` + `src/lib/security.ts`. Phase 1 adds a read-access helper
-for public/private KB visibility; use that helper for public home, KB landing/article/search, page
-tree, redirects, and asset delivery.
+`requireKbAccess` in `src/lib/auth.ts` + `src/lib/security.ts`. Public/private read scope is
+enforced via `getKbReadAccess` / `filterKbsForReadAccess` in `src/lib/auth.ts`; use that helper for
+public home, KB landing/article/search, page tree, redirects, asset delivery, and page-view
+recording.
 
-**Intended authorization matrix** (Owner/Admin are KB-wide; Editor is limited to assigned KBs for
-mutations; Viewer is read-only and Phase 1):
+**Authorization matrix** (Owner/Admin are KB-wide; Editor is limited to assigned KBs for mutations;
+Viewer is read-only):
 
 | Area | Owner | Admin | Editor | Viewer | Scope mechanism |
 |------|-------|-------|--------|--------|-----------------|
-| Public/private KB read | all | all | public + assigned private | public + assigned private | Phase 1 read-access helper |
+| Public/private KB read | all | all | public + assigned private | public + assigned private | `getKbReadAccess` / `filterKbsForReadAccess` |
 | Pages list/edit/publish | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
 | KB homepage assignment | all | all | assigned | no | `requireKbAccess` |
 | Assets list/edit | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
@@ -112,7 +110,7 @@ surfaces are added):
 
 | Surface | Allowed roles | KB scoping / role gate | Implementation files |
 |---------|---------------|------------------------|----------------------|
-| `/admin` | Owner/Admin/Editor | Signed-in session only; navigation hides owner/admin-only links but is not the authorization boundary. Phase 1 viewers must redirect to `/`. | `src/app/admin/page.tsx` |
+| `/admin` | Owner/Admin/Editor | Signed-in non-viewer session only; navigation hides owner/admin-only links but is not the authorization boundary. Viewers redirect to `/` before the admin shell renders. | `src/app/admin/layout.tsx`, `src/app/admin/page.tsx` |
 | `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Editors | The pages list uses `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
 | `/admin/pages/[pageId]` | Owner/Admin/assigned Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
 | Page mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | `PATCH`, status, layout, lock, and create routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/pages/**/route.ts` |
@@ -123,9 +121,9 @@ surfaces are added):
 | `/admin/import` and staged import APIs | Owner/Admin/assigned Editor | Import list page uses `accessibleKbIds`; collection/item/stage/commit APIs use `requireKbAccess` after resolving or receiving `kbId`. | `src/app/admin/import/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`, `src/app/api/admin/import/**/route.ts` |
 | `/admin/redirects` and redirect APIs | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; API routes use `requireKbAccess` on the target/resolved KB. | `src/app/admin/redirects/page.tsx`, `src/app/api/admin/redirects/**/route.ts` |
 | `/admin/review` | Owner/Admin/assigned Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
-| `/admin/usage` | Owner/Admin/assigned Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
+| `/admin/usage` | Owner/Admin/assigned Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`; Viewers redirect to `/`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
 | `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
-| `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
+| `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation, and Owner-only user management can assign Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
 | `/admin/kbs/[kbId]/styles` and KB theme APIs | Owner only | Server page and theme API both require `session.role === "owner"`. | `src/app/admin/kbs/[kbId]/styles/page.tsx`, `src/app/api/admin/kbs/[kbId]/theme/route.ts` |
 | Auth endpoints | Public sign-in; signed-in logout/session delete | Login is rate-limited and creates signed HMAC cookies; logout/session delete clear the admin cookie. | `src/app/admin/sign-in/page.tsx`, `src/app/api/admin/session/route.ts`, `src/app/api/admin/logout/route.ts` |
 
@@ -136,16 +134,16 @@ editor-reachable data access, add one of the KB scope guards: `requireKbAccess` 
 server-rendered detail pages. For public/private read access after Phase 1, anonymous users and
 signed-in users without access must get `notFound()` rather than a private-KB existence signal.
 
-**Phase 1 public/private read-access surfaces to guard:**
+**Public/private read-access enforcement surfaces:**
 
-| Surface | Anonymous | Owner/Admin | Editor | Viewer | Required behavior |
-|---------|-----------|-------------|--------|--------|-------------------|
-| `/` KB list | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Hide private KBs without read access. |
-| `/search` global search | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Group results by readable KB; never leak private/staff results. |
-| `/kb/[kbSlug]` | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | `notFound()` for private KBs without access. |
-| `/kb/[kbSlug]/[...pagePath]` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Staff-only pages require KB read access; viewers never see drafts. |
-| `/kb/[kbSlug]/search` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Search must never leak private/staff results. |
-| `/kb/[kbSlug]/files/[assetSlug]` | public assets only | all readable assets | public + assigned KB assets | public + assigned public-page assets | Authorized responses use `Cache-Control: private, no-store`. |
+| Surface | Anonymous | Owner/Admin | Editor | Viewer | Required behavior | Implementation files |
+|---------|-----------|-------------|--------|--------|-------------------|----------------------|
+| `/` KB list | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Hide private KBs without read access. | `src/app/page.tsx`, `src/lib/auth.ts` |
+| `/search` global search | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Group results by readable KB; never leak private/staff results. | `src/app/search/page.tsx`, `src/lib/kb-store.ts` |
+| `/kb/[kbSlug]` | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | `notFound()` for private KBs without access. | `src/app/kb/[kbSlug]/page.tsx` |
+| `/kb/[kbSlug]/[...pagePath]` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Staff-only pages require KB read access; viewers never see drafts. | `src/app/kb/[kbSlug]/[...pagePath]/page.tsx` |
+| `/kb/[kbSlug]/search` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Search must never leak private/staff results. | `src/app/kb/[kbSlug]/search/page.tsx`, `src/lib/kb-store.ts` |
+| `/kb/[kbSlug]/files/[assetSlug]` | public assets only | all readable assets | public + assigned KB assets | public + assigned public-page assets | Authorized responses use `Cache-Control: private, no-store`; private bytes are streamed through this route instead of redirecting to public Blob URLs. | `src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`, `src/lib/kb-store.ts` |
 
 > ✅ **The matrix is enforced at the API, list-view, detail-page, and owner-only-page levels.** Closed
 > across several passes (FB-11, FB-15, FB-17, FB-18):
@@ -294,8 +292,10 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   query tokens are reduced to alphanumerics so punctuation can never raise a syntax error.
 - A correlated `NOT EXISTS` prune hides any public page under a `staff` ancestor from public search.
 - `/search` runs the same FTS path across all KBs readable by the current requester and groups results
-  by KB. Anonymous callers are limited to published KBs' public pages under the current model; Phase 1
-  will extend that same scope object to KB-level private visibility and viewers.
+  by KB. The scope object is built from `getKbReadAccess`: anonymous users see published public KBs
+  only; Owners/Admins see all; Editors/Viewers see public KBs plus assigned private KBs. Page and
+  asset results are additionally pruned so staff-only pages/assets never leak to callers without
+  staff-content access.
 
 ### Edit locks (`src/lib/db.ts`)
 - DB-backed per-page locks: `tryAcquirePageLock`, 5-minute TTL, 60s client heartbeat, client-side
@@ -368,7 +368,7 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `028_page_views`.** Migrations after `018_rate_limits` add content
+  backfills. **Current head: `029_kb_visibility`.** Migrations after `018_rate_limits` add content
   lifecycle columns (`019`: `next_review_date` / `verified_at` / `verified_by`), the global default
   site theme (`020`), home content blocks + KB-list controls (`021`), branding/logo + layout columns
   (`022`: `brand_text`, `logo_url`, `logo_width`, `header_alignment`, `hero_alignment`,
@@ -376,8 +376,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   section-heading style columns (`024`: `kb_list_title_color/size/weight/font`), KB homepage page
   assignment (`025`: `knowledge_bases.home_page_id`), per-page print-button visibility
   (`026`: `kb_pages.show_print_button`), page revision history (`027`: `kb_page_revisions` plus
-  a baseline revision backfill for pre-existing pages), and page-view analytics
-  (`028`: `kb_page_views` daily counters with retention-fold indexes).
+  a baseline revision backfill for pre-existing pages), page-view analytics (`028`: `kb_page_views`
+  daily counters with retention-fold indexes), and KB public/private visibility
+  (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`).
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
@@ -393,7 +394,7 @@ npm run dev        # http://localhost:3000
 npm run build      # production build
 npm run check      # tsc --noEmit
 npm test           # Vitest unit suite (in-memory; live-DB tests self-skip)
-npm run test:a11y  # Playwright + axe smoke tests for public pages
+npm run test:a11y  # Playwright + axe smoke tests for public pages and private viewer read access
 npm run test:editor # Playwright editor regression suite (builds + starts prod server; see below)
 npm run test:db    # live-DB integration suite against DATABASE_URL (reads .env.local)
 ```
@@ -491,7 +492,8 @@ manual redirect persistence, and the single-active-version DB invariant.
 - **Migration `up()` functions must be straight-line, idempotent SQL.** `runMigrations` does not
   execute a migration's `up()` directly: it first replays `up()` against a **collector** that records
   each query and returns an empty result, then runs the recorded queries in one `sql.transaction`
-  under `pg_advisory_xact_lock`. Two consequences when adding a migration (Phase 1's `029` is next):
+  under `pg_advisory_xact_lock`. Two consequences when adding a migration (Phase 1's `029` followed
+  this pattern):
   (1) `up()` cannot branch on query results — every awaited query resolves to `[]` during collection,
   so conditional logic must live *inside* SQL (`IF NOT EXISTS`, `ON CONFLICT`, `WHERE NOT EXISTS`);
   (2) the applied-check runs *before* the lock is taken, so two racing cold starts can both execute
@@ -511,9 +513,9 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 9. Current feature status
 
-**Working & verified (2026-07-10):** `main` passes GitHub CI with type-check, lint, unit tests,
-production build, public axe smoke tests, authenticated Chromium editor regressions, and live-DB
-integration tests when `DATABASE_URL` is configured.
+**Working & verified (2026-07-13, `phase-1-private-kbs`):** local type-check, lint, unit tests,
+production build, public/private-viewer axe smoke tests, authenticated Chromium editor regressions,
+and live-DB integration tests pass when `DATABASE_URL` is configured.
 
 **Complete for the current release baseline:**
 - Multi-KB public site, configurable KB homepage pages, 3-column docs layout, hierarchical page-tree
@@ -540,8 +542,15 @@ integration tests when `DATABASE_URL` is configured.
 - Targeted DB read loaders for public KB/article/tree/asset paths, plus a live-DB parity guard against
   legacy `getDataset()` article lookup; migration batches run under a Postgres advisory transaction
   lock and record applied migrations conflict-safely.
-- Auth (HMAC cookies), Owner/Admin/Editor roles; per-KB editor scoping enforced on all editor-reachable
-  list views and mutations (pages, assets, imports, redirects, review); owner-only user management.
+- Auth (HMAC cookies), Owner/Admin/Editor/Viewer roles; per-KB editor scoping enforced on all
+  editor-reachable list views and mutations (pages, assets, imports, redirects, review); owner-only
+  user management.
+- Private KBs: `knowledge_bases.visibility` (`public`/`private`), owner-facing KB visibility control,
+  owner-provisioned Viewers with KB assignments, read-access helpers shared by public KB lists,
+  landing/article/search/page-tree/asset routes, and private/staff-aware search and asset delivery.
+  Unauthorized private content returns `notFound()`; authorized private assets use
+  `Cache-Control: private, no-store` and are streamed through the route instead of redirecting to a
+  public Blob URL.
 - Per-KB theming ("Manage Styles") and a **global default theme**; owner Site Settings — home hero +
   rich content blocks, KB-list section, header/footer links, contact, a site **logo + branding**
   (brand text with color/size/weight/font), and **layout** (header/hero alignment, content width),
@@ -559,13 +568,11 @@ integration tests when `DATABASE_URL` is configured.
   full-fidelity backup and can include raw editor-note metadata preserved in stored blocks.
 - Privacy-light usage analytics (`kb_page_views`) for published public article/homepage renders,
   scoped admin reporting at `/admin/usage`, and monthly retention folding through the daily cron.
-- CI (type-check + lint + unit + build + public axe smoke + Chromium editor regressions always;
-  live-DB when the secret is configured) is green on `main` as of 2026-07-10.
+- CI (type-check + lint + unit + build + public/private-viewer axe smoke + Chromium editor
+  regressions always; live-DB when the secret is configured) should run on the Phase 1 PR before
+  merge. `main` was green on 2026-07-10 before the Phase 1 branch.
 
 **Remaining before a production-compliance claim:**
-- Phase 1 private-KB implementation: KB-level public/private visibility, owner-provisioned viewer
-  accounts, read gating for every public surface, visibility-aware asset delivery/search, and
-  live-DB/in-memory tests for the access matrix.
 - Manual Chrome + Firefox + mobile-width editor QA, especially around the custom `contentEditable`
   workflows covered by FB-25/FB-26.
 - Manual WCAG 2.1 AA audit of representative public pages and admin/editor workflows. Until this is
@@ -591,10 +598,11 @@ integration tests when `DATABASE_URL` is configured.
 - **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Do not describe
   the product as ADA/WCAG certified until a manual audit passes. Public article tables now emit
   `scope="col"` / `scope="row"` on header cells, but this does not replace the manual audit.
-- **Private KBs are required scope but not yet implemented** (FB-27). Until Phase 1 lands, KBs are
-  effectively public/draft/status-scoped rather than KB-level public/private, and public routes must not
-  be described as private-content safe. When Phase 1 lands, private KB pages/assets/search must remain
-  dynamic and uncacheable for unauthorized readers.
+- **Private KB reads are intentionally dynamic and auth-gated** (FB-27). Do not add static caching,
+  public redirects, sitemap exposure, or "sign in to view" affordances for private KB
+  landing/article/search/asset URLs. Unauthorized private content returns `notFound()` so KB
+  existence is not distinguishable, and authorized private asset responses use
+  `Cache-Control: private, no-store`.
 - **Authentication is intentionally local for now**: owner-provisioned accounts use scrypt password
   hashes and signed HMAC cookies. There is no SSO/OIDC/SAML integration until WSU ITS engagement, and
   no server-side idle-session table or sliding idle timeout beyond the current cookie/token expiry
@@ -626,22 +634,16 @@ integration tests when `DATABASE_URL` is configured.
 
 Narrative backlog; the actionable, tagged version is §12.
 
-**Phase 1 — the committed next build — covers both of the following. Plan before coding:**
+Phase 1 private knowledge bases (§12 FB-27) are delivered: KB-level `public`/`private` visibility,
+local-password Viewers, one read-access helper consumed by every public surface, visibility-aware
+asset delivery/search, and live-DB/in-memory access-matrix coverage. The build plan remains in §14
+as the implementation audit trail.
 
-1. **Private knowledge bases (§12 FB-27).** KB-level `public`/`private` visibility, a
-   local-password `viewer` role, one read-access helper (`canReadKb`-style) consumed by every public
-   surface, visibility-aware asset delivery and search. Build sequence: read-access helper + `029`
-   visibility migration first; convert the existing `isStaff = Boolean(session)` call sites (public
-   routes, search scope, page-view recording guards) to the helper as a behavior-preserving refactor;
-   then add the viewer role, asset gating, and the access-matrix test suite. Pre-work: verify a
-   **fresh-database** `ensureSchema()` bootstrap once against a new Neon branch (the advisory-lock
-   collector runner has only ever executed against databases with existing schema), and keep viewers
-   excluded from review digests and `/admin/usage`. **The complete step-by-step build plan is §14.**
-2. **WSU SSO (§12 FB-30).** Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers. Gated
-   on WSU ITS engagement; the ITS ask list (app registration, prod + preview redirect URIs,
-   claims/groups for role mapping) is in FB-30 — start it in parallel with the private-KB build. Local
-   owner-provisioned accounts remain the break-glass path. Design viewer identities so SSO can back
-   them later without re-modeling `kb_user_assignments`.
+**WSU SSO (§12 FB-30)** is the remaining near-term access item: Entra ID / Azure AD OIDC or SAML for
+staff and private-KB viewers. It is gated on WSU ITS engagement; the ITS ask list (app registration,
+prod + preview redirect URIs, claims/groups for role mapping) is in FB-30. Local owner-provisioned
+accounts remain the interim and break-glass path. Design viewer identities so SSO can back them later
+without re-modeling `kb_user_assignments`.
 
 Other tracked work:
 
@@ -997,10 +999,10 @@ Items are ordered by recommended priority.
   queries, and `listAuditEvents` excludes `entity_type = 'search'` from the default admin audit list
   (both the SQL and in-memory paths) unless that entity type is explicitly filtered. The in-memory
   search path now records gaps too, for zero-config parity.
-- **Global FTS delivered (2026-07-10):** `/search` now searches all KBs readable under the current
-  public/staff model, reuses the per-KB FTS ranking and rate limit, logs zero-result searches, groups
-  results by KB, and has public axe smoke coverage plus a live-DB guard that unpublished KBs do not
-  leak into anonymous global search. Phase 1 will extend this to KB-level private visibility/viewers.
+- **Global FTS delivered (2026-07-10) + private scope updated (2026-07-13):** `/search` now searches
+  all KBs readable under `getKbReadAccess`, reuses the per-KB FTS ranking and rate limit, logs
+  zero-result searches, groups results by KB, and has axe/live-DB guards that unpublished, private,
+  and staff-only content do not leak into anonymous global search.
 - **Remaining:** true semantic/vector ranking is not yet productized in public search. The delivered
   search path remains Postgres FTS + prefix/type-ahead + gap reporting; semantic hybrid ranking should
   stay an explicit future enhancement until a human owner confirms the need.
@@ -1233,27 +1235,29 @@ Items are ordered by recommended priority.
 
 ### FB-27 — Private knowledge bases and viewer read access
 
-`[AI-AGENT-TASK] id:FB-27  priority:high  area:authz-visibility  effort:L  status:open`
+`[AI-AGENT-TASK] id:FB-27  priority:high  area:authz-visibility  effort:L  status:done`
 
+- **DONE (2026-07-13):** implemented KB-level `public`/`private` visibility (`029_kb_visibility`),
+  local-password Viewers, owner-facing KB visibility and Viewer assignment UI, a shared read-access
+  helper for public/private reads, private/staff-aware search and asset delivery, and live-DB plus
+  in-memory access-matrix tests. The fresh-database bootstrap and Phase 1 live-DB suites passed
+  against throwaway Neon databases, which were deleted after verification.
 - **Build plan:** the complete, ordered implementation plan for this item — including the
-  maintainer-action protocol for storage/infrastructure steps — is **§14**. Implementing agents
-  execute §14; this item holds the finding and the acceptance criteria.
-- **Finding:** The product goal now requires both public and private KBs. The current implementation is
-  built around public KB routes plus page-level public/staff visibility; it does not yet provide a
-  KB-level `public`/`private` visibility column, a read-only `viewer` role, or a single visibility
-  helper that gates every public route, search path, page tree, redirect, and asset response.
-- **Pre-work (do before migration `029`):** run a fresh-database `ensureSchema()` bootstrap once
-  against a brand-new Neon branch (or enable `db-pr.yml` with the Neon secrets). The advisory-lock
-  collector runner introduced in the Phase 2 commit has only ever executed against databases that
-  already had schema; a fresh bootstrap exercises all 28 collected migrations end-to-end. Also read
-  the §8 migration gotcha: `up()` must be straight-line, idempotent SQL.
-- **Suggested approach:** Add `knowledge_bases.visibility` (`public` default for existing rows), add a
-  local-password `viewer` role to the existing user model, reuse `kb_user_assignments` for viewer/editor
-  private-KB read access, and introduce one read-access helper beside the existing admin-scope helpers.
-  Owners/Admins can read all KBs; Editors and Viewers can read all public KBs plus assigned private KBs.
-  Viewers must be redirected away from `/admin`, rejected by every mutation API, and must never see
-  draft pages or staff-only pages. Asset delivery and search must use the same visibility semantics;
-  authorized asset responses must use `Cache-Control: private, no-store`.
+  maintainer-action protocol for storage/infrastructure steps — remains in **§14** as the
+  implementation audit trail.
+- **Finding:** Closed. The product goal requires both public and private KBs; the implementation now
+  uses KB-level `public`/`private` visibility, a read-only `viewer` role, and one visibility helper
+  gating every public route, search path, page tree, redirect-sensitive read, and asset response.
+- **Pre-work completed before migration `029`:** a fresh-database `ensureSchema()` bootstrap ran
+  against a brand-new Neon database and exercised collected migrations 001-028 end-to-end. The
+  bootstrap exposed and fixed the legacy `locked_at` timestamp conversion in migration `007` while
+  staying within the §8 straight-line/idempotent SQL rules.
+- **Implemented approach:** `knowledge_bases.visibility` defaults existing rows to `public`;
+  `kb_user_assignments` is reused for Viewer/Editor private-KB read access; Owners/Admins can read
+  all KBs; Editors and Viewers can read all public KBs plus assigned private KBs. Viewers redirect
+  away from `/admin`, mutation APIs reject them, and Viewers never see draft or staff-only pages.
+  Asset delivery and search use the same visibility semantics; authorized asset responses use
+  `Cache-Control: private, no-store`.
 - **Touch points:** `src/lib/types.ts`, `src/lib/auth.ts`, `src/lib/security.ts`,
   `src/lib/migrations/index.ts`, `src/lib/db.ts`, `src/lib/kb-store.ts`, public routes under
   `src/app/kb/**`, `src/app/page.tsx`, `src/app/api/admin/kbs/**`, `src/app/admin/kbs/**`,
@@ -1398,9 +1402,17 @@ Items are ordered by recommended priority.
 
 ### Post-Deploy Checks
 
+- Verify migration `029_kb_visibility` applied: in Neon SQL Editor, run
+  `SELECT id FROM _schema_migrations WHERE id = '029_kb_visibility';`, then confirm existing public
+  KBs show `visibility = 'public'` with
+  `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.
 - Public KB list renders without loading draft-only content.
 - Article pages render blocks, related assets, table of contents, and PDF controls where configured.
 - Asset delivery works for a known image/document asset.
+- Private KB smoke check: create a private KB, add a published public-visibility page with an
+  attached file, create a Viewer assigned only to that KB, then confirm in an incognito window that
+  the Viewer can read the KB/page/file while an anonymous window gets 404 for the same KB, article,
+  search, and file URLs.
 - Test owner KB export on a media-heavy KB after deploy. The ZIP response is streamed and asset bytes are loaded one entry at a time; if an asset fetch fails mid-stream the download is truncated and a structured `kb-export` error is logged, so verify the downloaded ZIP opens cleanly.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
 - `/admin/usage` loads aggregate view counts when `DATABASE_URL` is configured.

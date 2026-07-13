@@ -8,7 +8,7 @@ import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { ModalForm } from "@/components/Modal";
 import { PageLoader } from "@/components/PageLoader";
-import type { KbStatus, KnowledgeBase } from "@/lib/types";
+import type { KbStatus, KbVisibility, KnowledgeBase } from "@/lib/types";
 import { readApiErrorMessage, useStatusModal } from "@/lib/use-status-modal";
 
 function kbSearchFilter(kb: KnowledgeBase, query: string) {
@@ -16,7 +16,8 @@ function kbSearchFilter(kb: KnowledgeBase, query: string) {
     kb.title.toLowerCase().includes(query) ||
     kb.slug.toLowerCase().includes(query) ||
     kb.description.toLowerCase().includes(query) ||
-    kb.status.toLowerCase().includes(query)
+    kb.status.toLowerCase().includes(query) ||
+    kb.visibility.toLowerCase().includes(query)
   );
 }
 
@@ -32,6 +33,7 @@ export default function AdminKbsPage() {
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newSlug, setNewSlug] = useState("");
+  const [newVisibility, setNewVisibility] = useState<KbVisibility>("public");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<KnowledgeBase>>({});
@@ -59,7 +61,13 @@ export default function AdminKbsPage() {
       const res = await fetch("/api/admin/kbs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle, description: newDescription, slug: newSlug, status: "draft" }),
+        body: JSON.stringify({
+          title: newTitle,
+          description: newDescription,
+          slug: newSlug,
+          status: "draft",
+          visibility: newVisibility,
+        }),
       });
       if (!res.ok) {
         throw new Error(await readApiErrorMessage(res, "Failed to create KB"));
@@ -70,6 +78,7 @@ export default function AdminKbsPage() {
       setNewTitle("");
       setNewDescription("");
       setNewSlug("");
+      setNewVisibility("public");
       showSuccess("Knowledge base created.");
     } catch (err) {
       showError(err instanceof Error ? err.message : "Error creating KB");
@@ -81,6 +90,7 @@ export default function AdminKbsPage() {
     setNewTitle("");
     setNewDescription("");
     setNewSlug("");
+    setNewVisibility("public");
   }
 
   async function handleUpdate(kbId: string) {
@@ -204,6 +214,17 @@ export default function AdminKbsPage() {
               onChange={(e) => setNewDescription(e.target.value)}
             />
           </label>
+          <label>
+            <span className="meta">Visibility</span>
+            <select
+              className="input"
+              value={newVisibility}
+              onChange={(e) => setNewVisibility(e.target.value as KbVisibility)}
+            >
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          </label>
         </ModalForm>
       )}
 
@@ -232,12 +253,26 @@ export default function AdminKbsPage() {
                       value={editData.description ?? kb.description}
                       onChange={(e) => setEditData({ ...editData, description: e.target.value })}
                     />
+                    <select
+                      className="input"
+                      value={editData.visibility ?? kb.visibility}
+                      onChange={(e) => setEditData({ ...editData, visibility: e.target.value as KbVisibility })}
+                    >
+                      <option value="public">Public</option>
+                      <option value="private">Private</option>
+                    </select>
                   </div>
                 );
               }
               return (
                 <>
                   <strong>{kb.title}</strong>
+                  {kb.visibility === "private" && (
+                    <>
+                      {" "}
+                      <span className="badge badge--staff">Private</span>
+                    </>
+                  )}
                   <div className="meta">/{kb.slug}</div>
                   <div className="meta" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
                     {kb.description}
@@ -267,6 +302,10 @@ export default function AdminKbsPage() {
                 <>
                   <span className={`badge ${kb.status === "published" ? "badge--section" : "badge--draft"}`}>
                     {kb.status}
+                  </span>
+                  {" "}
+                  <span className={`badge ${kb.visibility === "private" ? "badge--staff" : "badge--section"}`}>
+                    {kb.visibility}
                   </span>
                   {kb.status !== "published" && (
                     <div className="meta" style={{ marginTop: "0.5rem" }}>

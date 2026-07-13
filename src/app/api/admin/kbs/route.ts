@@ -26,6 +26,7 @@ export async function GET(request: Request) {
       slug: string;
       description: string;
       status: KbStatus;
+      visibility?: string;
       updated_on: string;
       home_page_id?: string | null;
     }>;
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
       slug: row.slug,
       description: row.description,
       status: row.status,
+      visibility: row.visibility === "private" ? "private" : "public",
       updatedOn: row.updated_on,
       homepagePageId: row.home_page_id ?? null,
     }));
@@ -82,13 +84,14 @@ export async function POST(request: Request) {
       slug,
       description: body.description?.trim() || "",
       status: body.status === "published" ? "published" : "draft",
+      visibility: body.visibility === "private" ? "private" : "public",
       updatedOn: new Date().toISOString().slice(0, 10),
       homepagePageId: null,
     };
 
     await sql`
-      INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
-      VALUES (${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.updatedOn})
+      INSERT INTO knowledge_bases (id, slug, title, description, status, visibility, updated_on)
+      VALUES (${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.visibility}, ${kb.updatedOn})
     `;
 
     return NextResponse.json({ ok: true, kb });

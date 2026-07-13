@@ -20,6 +20,10 @@ export default defineConfig({
   ],
   webServer: {
     command: isCi ? "npm run start" : "npm run dev",
+    env: {
+      ...process.env,
+      DATABASE_URL: "",
+    },
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !isCi,
     timeout: 120_000,

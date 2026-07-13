@@ -83,6 +83,9 @@ export default async function AdminUsagePage() {
   if (!session) {
     redirect("/admin/sign-in?next=/admin/usage");
   }
+  if (session.role === "viewer") {
+    redirect("/");
+  }
 
   const analytics = await getUsageAnalyticsForSession(session);
 

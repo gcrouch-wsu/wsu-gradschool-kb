@@ -8,6 +8,7 @@ const kb: KnowledgeBase = {
   title: "Review Test",
   description: "Review test KB",
   status: "published",
+  visibility: "public",
   updatedOn: "2026-01-01",
 };
 

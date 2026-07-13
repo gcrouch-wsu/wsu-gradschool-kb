@@ -1,4 +1,5 @@
 export type KbStatus = "draft" | "published" | "archived";
+export type KbVisibility = "public" | "private";
 export type PageStatus = "draft" | "published" | "archived";
 export type AssetStatus = "draft" | "active" | "archived";
 export type AssetType = "document" | "image" | "video";
@@ -37,6 +38,7 @@ export interface KnowledgeBase {
   slug: string;
   description: string;
   status: KbStatus;
+  visibility: KbVisibility;
   updatedOn: string;
   homepagePageId?: string | null;
 
@@ -261,7 +263,7 @@ export interface KbRedirect {
   reason: string;
 }
 
-export type UserRole = "owner" | "admin" | "editor";
+export type UserRole = "owner" | "admin" | "editor" | "viewer";
 
 export interface User {
   id: string;

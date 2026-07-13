@@ -8,6 +8,7 @@ export const knowledgeBases: KnowledgeBase[] = [
     description:
       "Public procedures, guidance, templates, and support information for Graduate School partners.",
     status: "published",
+    visibility: "public",
     updatedOn: "2026-06-02",
   },
   {
@@ -17,6 +18,7 @@ export const knowledgeBases: KnowledgeBase[] = [
     description:
       "Public procedures, guidance, templates, and support information for Graduate School partners.",
     status: "published",
+    visibility: "public",
     updatedOn: "2026-06-02",
   },
   {
@@ -26,6 +28,16 @@ export const knowledgeBases: KnowledgeBase[] = [
     description:
       "Public procedures, guidance, templates, and support information for Graduate School partners.",
     status: "published",
+    visibility: "public",
+    updatedOn: "2026-06-02",
+  },
+  {
+    id: "kb-private-staff",
+    title: "Graduate School Staff Knowledge Base",
+    slug: "graduate-school-staff",
+    description: "Private operational guidance for Graduate School staff.",
+    status: "published",
+    visibility: "private",
     updatedOn: "2026-06-02",
   },
 ];
@@ -66,6 +78,23 @@ export const assets: Asset[] = [
     versionId: "asset-version-handbook-template-1",
     body:
       "Graduate Program Handbook Template\n\nThis deployable prototype streams managed assets through stable KB routes. Replace this seeded asset with Blob-backed file versions in the production implementation.\n",
+  },
+  {
+    id: "asset-private-orientation",
+    homeKbId: "kb-private-staff",
+    title: "Private Staff Orientation Checklist",
+    slug: "private-staff-orientation-checklist",
+    description: "A private staff-only onboarding checklist for access-matrix testing.",
+    assetType: "document",
+    mimeType: "text/plain; charset=utf-8",
+    fileSizeBytes: 238,
+    status: "active",
+    ownerLabel: "Graduate School",
+    lastReviewedDate: "2026-06-02",
+    updatedDisplayDate: "2026-06-02",
+    versionId: "asset-version-private-orientation-1",
+    body:
+      "Private Staff Orientation Checklist\n\n- Confirm assigned KB access.\n- Review internal escalation contacts.\n- Verify private managed asset delivery.\n",
   },
 ];
 
@@ -240,6 +269,38 @@ export const pages: KbPage[] = [
         blockId: "file-link-template",
         type: "asset_link",
         assetId: "asset-handbook-template",
+      },
+    ],
+  },
+  {
+    id: "page-private-staff-orientation",
+    kbId: "kb-private-staff",
+    title: "Private Staff Orientation",
+    slug: "private-staff-orientation",
+    path: ["private-staff-orientation"],
+    sortOrder: 10,
+    summary: "Private onboarding guidance for Graduate School staff.",
+    status: "published",
+    visibility: "public",
+    ownerLabel: "Graduate School",
+    contactEmail: "gradschool@wsu.edu",
+    lastReviewedDate: "2026-06-02",
+    updatedDisplayDate: "2026-06-02",
+    relatedPageIds: [],
+    relatedAssetIds: ["asset-private-orientation"],
+    showToc: true,
+    tocDepth: 3,
+    blocks: [
+      {
+        blockId: "intro",
+        type: "paragraph",
+        text:
+          "This private page exists in seed data so local in-memory mode can exercise private KB read access.",
+      },
+      {
+        blockId: "private-file",
+        type: "asset_link",
+        assetId: "asset-private-orientation",
       },
     ],
   },

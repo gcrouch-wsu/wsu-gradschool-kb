@@ -6,7 +6,7 @@ import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
 import { TableOfContents } from "@/components/TableOfContents";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
 import { buildPageTree, getAssetById, getKbById, getKbBySlug, getKbHomepagePage } from "@/lib/kb-store";
 import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
@@ -16,17 +16,22 @@ import { isPageViewPrefetch, recordPageViewLater } from "@/lib/page-views";
 
 export default async function KbHomePage({ params }: { params: Promise<{ kbSlug: string }> }) {
   const { kbSlug } = await params;
-  const isStaff = Boolean(await getCurrentAdminSession());
-  const kb = await getKbBySlug(kbSlug, isStaff);
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
   if (!kb) {
     notFound();
   }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
+    notFound();
+  }
+  const includeStaff = access.canReadStaffContent;
 
   const requestHeaders = await headers();
   const settings = await loadSiteSettings();
-  const tree = await buildPageTree(kb.id, isStaff);
+  const tree = await buildPageTree(kb.id, includeStaff);
   const topLevel = tree.map((node) => node.page);
-  const homepagePage = await getKbHomepagePage(kb.id, isStaff);
+  const homepagePage = await getKbHomepagePage(kb.id, includeStaff);
 
   const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const effectiveTheme = kb.theme ? mergeTheme(kb.theme, baseTheme) : baseTheme;
@@ -34,7 +39,8 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
 
   if (homepagePage) {
     if (
-      !isStaff &&
+      !access.canReadStaffContent &&
+      kb.visibility === "public" &&
       !isPageViewPrefetch(requestHeaders) &&
       homepagePage.status === "published" &&
       homepagePage.visibility === "public"
@@ -78,7 +84,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
                 </span>
               )}
             </p>
-            {isStaff && (
+            {access.canReadStaffContent && (
               <p className="admin-inline-actions">
                 {/* Plain anchor: entering the admin shell needs a full page load. */}
                 <a className="button button--small" href={`/admin/pages/${homepagePage.id}`}>

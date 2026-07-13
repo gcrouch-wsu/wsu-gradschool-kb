@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { NextResponse } from "next/server";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
 import { isTrustedAssetUrl } from "@/lib/blob";
-import { getAssetForDelivery, getKbBySlug } from "@/lib/kb-store";
+import { assetHasPublicPublishedUsage, getAssetForDelivery, getKbBySlug } from "@/lib/kb-store";
 import { videoDeliveryUrl } from "@/lib/video";
 
 export const dynamic = "force-dynamic";
@@ -32,20 +32,45 @@ function dataUriToResponseBody(dataUri: string) {
   };
 }
 
+function cacheControl(requiresAuthorization: boolean) {
+  return requiresAuthorization ? "private, no-store" : "public, max-age=60, stale-while-revalidate=300";
+}
+
+async function fetchTrustedAssetBody(url: string) {
+  const response = await fetch(url);
+  if (!response.ok || !response.body) {
+    return null;
+  }
+  return response;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ kbSlug: string; assetSlug: string }> },
 ) {
   const { kbSlug, assetSlug: rawAssetSlug } = await params;
   const assetSlug = decodeURIComponent(rawAssetSlug);
-  const isStaff = Boolean(await getCurrentAdminSession());
-  const kb = await getKbBySlug(kbSlug, isStaff);
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
   if (!kb) {
+    notFound();
+  }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
     notFound();
   }
 
   const asset = await getAssetForDelivery(kb.id, assetSlug);
   if (!asset) {
+    notFound();
+  }
+
+  const publicPublishedUsage = kb.visibility === "public" ? await assetHasPublicPublishedUsage(asset) : false;
+  const requiresAuthorization = kb.visibility === "private" || !publicPublishedUsage;
+  const authorized = kb.visibility === "private"
+    ? Boolean(session && access.canRead)
+    : !requiresAuthorization || access.canReadStaffContent;
+  if (!authorized) {
     notFound();
   }
 
@@ -56,7 +81,7 @@ export async function GET(
     }
     return NextResponse.redirect(target, {
       status: 307,
-      headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" },
+      headers: { "Cache-Control": cacheControl(requiresAuthorization) },
     });
   }
 
@@ -64,14 +89,14 @@ export async function GET(
   const extension = fileExtension(asset.mimeType);
   const disposition = asset.mimeType.toLowerCase().includes("svg") ? "attachment" : "inline";
   const headers = {
-    "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+    "Cache-Control": cacheControl(requiresAuthorization),
     "Content-Disposition": `${disposition}; filename="${asset.slug}.${extension}"`,
     "Content-Type": asset.mimeType,
     ETag: etag,
     "X-Content-Type-Options": "nosniff",
   };
 
-  if (request.headers.get("if-none-match") === etag) {
+  if (!requiresAuthorization && request.headers.get("if-none-match") === etag) {
     return new Response(null, { status: 304, headers });
   }
 
@@ -87,6 +112,19 @@ export async function GET(
   if (asset.body.startsWith("http://") || asset.body.startsWith("https://")) {
     if (!isTrustedAssetUrl(asset.body)) {
       notFound();
+    }
+
+    if (requiresAuthorization) {
+      const upstream = await fetchTrustedAssetBody(asset.body);
+      if (!upstream) {
+        notFound();
+      }
+      return new Response(upstream.body, {
+        headers: {
+          ...headers,
+          "Content-Type": upstream.headers.get("content-type") || asset.mimeType,
+        },
+      });
     }
 
     return NextResponse.redirect(asset.body, { status: 307, headers });

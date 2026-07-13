@@ -1,5 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import {
+  ADMIN_COOKIE_NAME,
+  createAdminSessionToken,
+  validateAdminCredentials,
+  type AdminSession,
+} from "../../src/lib/auth";
 
 const PUBLIC_ROUTES = [
   { name: "home", path: "/" },
@@ -34,6 +40,38 @@ test("article has no axe violations", async ({ page }) => {
   const response = await page.goto(articlePath);
   expect(response?.ok()).toBe(true);
   await expect(page.locator("main, .page-shell").first()).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).analyze();
+
+  expect(results.violations).toEqual([]);
+});
+
+test("signed-in viewer can read a private article without axe violations", async ({ context, page }) => {
+  const bootstrap = await validateAdminCredentials("admin@example.edu", "ChangeMe123!");
+  expect(bootstrap).not.toBeNull();
+  const viewerSession: AdminSession = {
+    ...bootstrap!,
+    userId: "seed-viewer-private-staff",
+    email: "viewer@example.edu",
+    role: "viewer",
+    expiresAt: Date.now() + 60 * 60 * 1000,
+  };
+  await context.addCookies([
+    {
+      name: ADMIN_COOKIE_NAME,
+      value: createAdminSessionToken(viewerSession),
+      domain: "127.0.0.1",
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: false,
+      expires: Math.floor(viewerSession.expiresAt / 1000),
+    },
+  ]);
+
+  const response = await page.goto("/kb/graduate-school-staff/private-staff-orientation");
+  expect(response?.ok()).toBe(true);
+  await expect(page.getByRole("heading", { level: 1, name: "Private Staff Orientation" })).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
 

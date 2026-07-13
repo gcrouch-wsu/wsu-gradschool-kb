@@ -7,7 +7,7 @@ import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
 import { TableOfContents } from "@/components/TableOfContents";
 import { hasTocEntries } from "@/lib/toc";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
 import {
   buildPageTree,
   getAssetById,
@@ -28,12 +28,16 @@ export async function generateMetadata({
   params: Promise<{ kbSlug: string; pagePath: string[] }>;
 }): Promise<Metadata> {
   const { kbSlug, pagePath } = await params;
-  const isStaff = Boolean(await getCurrentAdminSession());
-  const kb = await getKbBySlug(kbSlug, isStaff);
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
   if (!kb) {
     return {};
   }
-  const page = await getPageByPath(kb.id, pagePath, isStaff);
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
+    return {};
+  }
+  const page = await getPageByPath(kb.id, pagePath, access.canReadStaffContent);
   if (!page) {
     return {};
   }
@@ -50,23 +54,32 @@ export default async function KbArticlePage({
   params: Promise<{ kbSlug: string; pagePath: string[] }>;
 }) {
   const { kbSlug, pagePath } = await params;
-  const isStaff = Boolean(await getCurrentAdminSession());
-  const kb = await getKbBySlug(kbSlug, isStaff);
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
   if (!kb) {
     notFound();
   }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
+    notFound();
+  }
+  const includeStaff = access.canReadStaffContent;
 
   let effectivePath = pagePath;
   const redirectTarget = await getActiveRedirectTarget(kb.id, pagePath);
   if (redirectTarget) {
-    const pageAtOld = await getPageByPath(kb.id, pagePath, isStaff);
+    const targetPage = await getPageByPath(kb.id, redirectTarget, includeStaff);
+    if (!targetPage) {
+      notFound();
+    }
+    const pageAtOld = await getPageByPath(kb.id, pagePath, includeStaff);
     if (!pageAtOld) {
       permanentRedirect(`/kb/${kb.slug}/${redirectTarget.join("/")}`);
     }
     effectivePath = redirectTarget;
   }
 
-  const page = await getPageByPath(kb.id, effectivePath, isStaff);
+  const page = await getPageByPath(kb.id, effectivePath, includeStaff);
   if (!page) {
     notFound();
   }
@@ -74,12 +87,18 @@ export default async function KbArticlePage({
     permanentRedirect(`/kb/${kb.slug}`);
   }
   const requestHeaders = await headers();
-  if (!isStaff && !isPageViewPrefetch(requestHeaders) && page.status === "published" && page.visibility === "public") {
+  if (
+    !access.canReadStaffContent &&
+    kb.visibility === "public" &&
+    !isPageViewPrefetch(requestHeaders) &&
+    page.status === "published" &&
+    page.visibility === "public"
+  ) {
     recordPageViewLater({ pageId: page.id, kbId: kb.id });
   }
 
   const settings = await loadSiteSettings();
-  const tree = await buildPageTree(kb.id, isStaff);
+  const tree = await buildPageTree(kb.id, includeStaff);
   const currentPath = page.path.join("/");
   const relatedAssets = (
     await Promise.all(page.relatedAssetIds.map((assetId) => getAssetById(assetId)))
@@ -129,7 +148,7 @@ export default async function KbArticlePage({
               </span>
             )}
           </p>
-          {isStaff && (
+          {access.canReadStaffContent && (
             <p className="admin-inline-actions">
               {/* Plain anchor: entering the admin shell needs a full page load. */}
               <a className="button button--small" href={`/admin/pages/${page.id}`}>

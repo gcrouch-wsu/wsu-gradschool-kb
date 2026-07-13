@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual, scryptSync, randomBytes } from "node:crypt
 import { cookies } from "next/headers";
 import { isDatabaseEnabled } from "@/lib/db";
 import { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS } from "@/lib/session-constants";
-import type { UserRole } from "@/lib/types";
+import type { KnowledgeBase, UserRole } from "@/lib/types";
 import { loadUserByEmail, loadUserById, isUserAssignedToKb, listUserAssignments } from "@/lib/db-users";
 
 export { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS };
@@ -195,14 +195,62 @@ export function getAdminCookieOptions(maxAge = IDLE_TTL_SECONDS) {
   };
 }
 
+async function assignedKbIdsForSession(session: AdminSession): Promise<string[]> {
+  if (!isDatabaseEnabled()) {
+    return session.userId === "seed-viewer-private-staff" || session.userId === "seed-editor-private-staff"
+      ? ["kb-private-staff"]
+      : [];
+  }
+  return listUserAssignments(session.userId);
+}
+
 export async function canAccessKb(session: AdminSession, kbId: string): Promise<boolean> {
   if (session.role === "owner" || session.role === "admin") {
     return true;
   }
   if (session.role === "editor") {
+    if (!isDatabaseEnabled()) {
+      return (await assignedKbIdsForSession(session)).includes(kbId);
+    }
     return isUserAssignedToKb(session.userId, kbId);
   }
   return false;
+}
+
+export interface KbReadAccess {
+  canRead: boolean;
+  canReadStaffContent: boolean;
+}
+
+export async function getKbReadAccess(
+  session: AdminSession | null,
+  kb: Pick<KnowledgeBase, "id" | "visibility">,
+): Promise<KbReadAccess> {
+  if (!session) {
+    return {
+      canRead: kb.visibility === "public",
+      canReadStaffContent: false,
+    };
+  }
+  if (session.role === "owner" || session.role === "admin") {
+    return {
+      canRead: true,
+      canReadStaffContent: true,
+    };
+  }
+  if (session.role === "editor" || session.role === "viewer") {
+    const assigned = isDatabaseEnabled()
+      ? await isUserAssignedToKb(session.userId, kb.id)
+      : (await assignedKbIdsForSession(session)).includes(kb.id);
+    return {
+      canRead: kb.visibility === "public" || assigned,
+      canReadStaffContent: session.role === "editor" && assigned,
+    };
+  }
+  return {
+    canRead: kb.visibility === "public",
+    canReadStaffContent: false,
+  };
 }
 
 export async function accessibleKbIds(session: AdminSession): Promise<string[] | null> {
@@ -210,7 +258,7 @@ export async function accessibleKbIds(session: AdminSession): Promise<string[] |
     return null;
   }
   if (session.role === "editor") {
-    return listUserAssignments(session.userId);
+    return assignedKbIdsForSession(session);
   }
   return [];
 }
@@ -225,4 +273,21 @@ export async function filterKbsForSession<T extends { id: string }>(
   }
   const allowedSet = new Set(allowed);
   return kbs.filter((kb) => allowedSet.has(kb.id));
+}
+
+export async function filterKbsForReadAccess<T extends Pick<KnowledgeBase, "id" | "visibility">>(
+  session: AdminSession | null,
+  kbs: T[],
+): Promise<T[]> {
+  if (!session) {
+    return kbs.filter((kb) => kb.visibility === "public");
+  }
+  if (session.role === "owner" || session.role === "admin") {
+    return kbs;
+  }
+  if (session.role === "editor" || session.role === "viewer") {
+    const assigned = new Set(await assignedKbIdsForSession(session));
+    return kbs.filter((kb) => kb.visibility === "public" || assigned.has(kb.id));
+  }
+  return kbs.filter((kb) => kb.visibility === "public");
 }
