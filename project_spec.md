@@ -16,7 +16,8 @@ git, not here.
 
 > Quick map: §1–2 (goal & scope) → §3 (roles) → §4 (stack) → §5 (architecture) → §6 (data) →
 > §7 (run/test) → **§8 (gotchas — read before editing core areas)** → §9–10 (status & limits) →
-> §11 (future work) → §12 (tagged AI-agent backlog) → §13 (operations runbook).
+> §11 (future work) → §12 (tagged AI-agent backlog) → §13 (operations runbook) →
+> **§14 (Phase 1 build plan — the next build; implementing agents start there)**.
 
 ---
 
@@ -635,7 +636,7 @@ Narrative backlog; the actionable, tagged version is §12.
    then add the viewer role, asset gating, and the access-matrix test suite. Pre-work: verify a
    **fresh-database** `ensureSchema()` bootstrap once against a new Neon branch (the advisory-lock
    collector runner has only ever executed against databases with existing schema), and keep viewers
-   excluded from review digests and `/admin/usage`.
+   excluded from review digests and `/admin/usage`. **The complete step-by-step build plan is §14.**
 2. **WSU SSO (§12 FB-30).** Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers. Gated
    on WSU ITS engagement; the ITS ask list (app registration, prod + preview redirect URIs,
    claims/groups for role mapping) is in FB-30 — start it in parallel with the private-KB build. Local
@@ -1234,6 +1235,9 @@ Items are ordered by recommended priority.
 
 `[AI-AGENT-TASK] id:FB-27  priority:high  area:authz-visibility  effort:L  status:open`
 
+- **Build plan:** the complete, ordered implementation plan for this item — including the
+  maintainer-action protocol for storage/infrastructure steps — is **§14**. Implementing agents
+  execute §14; this item holds the finding and the acceptance criteria.
 - **Finding:** The product goal now requires both public and private KBs. The current implementation is
   built around public KB routes plus page-level public/staff visibility; it does not yet provide a
   KB-level `public`/`private` visibility column, a read-only `viewer` role, or a single visibility
@@ -1401,3 +1405,156 @@ Items are ordered by recommended priority.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
 - `/admin/usage` loads aggregate view counts when `DATABASE_URL` is configured.
 - Logs are structured JSON and suitable for forwarding through Vercel log drains.
+
+---
+
+## 14. Phase 1 build plan (private knowledge bases) — for the implementing agent
+
+This section is the complete, ordered implementation plan for Phase 1 (§12 FB-27). An agent assigned
+Phase 1 must read this spec in full first — §2 (scope), §3 (authorization matrix and the Phase-1
+gating table, which is the checklist), §8 (gotchas: the migration-runner and per-route-scoping
+entries are binding), §11 (sequence rationale), §12 FB-27 (acceptance criteria — the definition of
+done) and FB-30 (SSO design constraints), §13 (operations) — and then execute this plan starting at
+Step 0. Do not reorder steps.
+
+### 14.1 Hard boundaries
+
+- **No SSO code.** No OIDC/SAML/Entra dependencies or stubs. All authentication stays local
+  (scrypt passwords + HMAC cookies). SSO is FB-30, gated on WSU ITS engagement. The only SSO
+  obligation in this phase: viewer identity must be a normal `users` row keyed by email with access
+  via `kb_user_assignments`, so an SSO subject can attach to the same row later without a data
+  migration.
+- **Do not touch the page editor core** (`PageDocumentEditor.tsx`, `page-document.ts`,
+  `page-editor-format.ts`).
+- **Documentation lives in exactly two files**: `project_spec.md` and `README.md`. Do not create new
+  .md files, docs folders, or backlog files. Backlog updates go in §12; operational notes in §13.
+- **Branch discipline:** one short-lived branch (`phase-1-private-kbs`), one PR to `main`, branch
+  deleted on merge. No other branches.
+
+### 14.2 MAINTAINER ACTION REQUIRED protocol
+
+The implementing agent cannot create Neon branches/databases, change Vercel environment variables,
+or add GitHub secrets. Whenever a step needs any storage or infrastructure action, the agent MUST
+stop and print a block in exactly this shape, then wait for the maintainer to confirm before
+continuing:
+
+```
+=== MAINTAINER ACTION REQUIRED ===
+Why: <one sentence — what this unblocks>
+Steps:
+  1. <exact console navigation or CLI command, e.g. "Neon console → your project → Branches → New branch → name it phase1-bootstrap-test, parent: main">
+  2. <exactly what value to copy and where to paste it, e.g. "copy the pooled connection string and paste it into .env.local as DATABASE_URL_TEST">
+  3. <how to verify it worked, e.g. "the branch shows 'idle' in the Neon console">
+Cost/risk: <e.g. "free on your Neon plan; throwaway branch, deleted at the end">
+When done, reply: DONE
+==================================
+```
+
+Never assume a secret or environment variable exists — check, and if missing, emit the block. Known
+points where this WILL happen:
+
+1. **Step 0 fresh-bootstrap test** needs a throwaway Neon branch (create branch → paste pooled
+   connection string; the agent runs the bootstrap and tests against it, then gives the maintainer
+   explicit deletion instructions).
+2. **Production schema:** migration `029` applies automatically on the first request after deploy
+   (§6 — no manual migration step). The PR description must state this explicitly: no Neon console
+   action is needed for production, and afterward the maintainer verifies `_schema_migrations`
+   contains `029` and existing KBs show `visibility = 'public'`.
+3. If the CI live-DB step is skipped on the PR (no `DATABASE_URL` repo secret), emit the block with
+   GitHub → Settings → Secrets instructions rather than merging without it.
+
+No Vercel Blob changes are expected in this phase; if one appears necessary, stop and emit the
+block rather than proceeding.
+
+### 14.3 Ground rules
+
+- Follow §3's authorization contract for every route touched and keep both §3 tables current.
+- The §8 migration gotcha is binding: migration `up()` must be straight-line, idempotent SQL — no
+  branching on query results, every statement tolerant of double execution.
+- Unauthorized access to private content returns `notFound()` — never a redirect, never a
+  "sign in to view" page, never a distinguishable error. Private KBs must not leak existence.
+- Every new `isDatabaseEnabled()` branch needs matching live-DB coverage (§8); the in-memory seed
+  path must implement identical visibility semantics so local dev behaves like production.
+- Definition of done per step: `npm run check`, `npm run lint`, `npm test`, `npm run build` green;
+  `npm run test:a11y` and `npm run test:editor` green at the end; live-DB suites green on the PR.
+
+### 14.4 Build sequence
+
+**Step 0 — Fresh-database bootstrap verification (pre-work).** The advisory-lock migration runner
+has never executed a from-scratch bootstrap (every existing DB already had schema). Before adding
+migration `029`: request a throwaway Neon branch **created from an empty database, not from
+production** (MAINTAINER ACTION REQUIRED), point `DATABASE_URL` at it locally, hit the app once so
+`ensureSchema()` runs migrations 001→028 through the collector, run `npm run test:db` against it,
+report results, then give the maintainer explicit steps to delete the branch. If the bootstrap
+fails, fix the offending migration (within §8 rules) before anything else.
+
+**Step 1 — Migration 029 + data model.** `knowledge_bases.visibility TEXT NOT NULL DEFAULT
+'public'` (values `public`|`private`); the `visibility` field on the `KnowledgeBase` type; the
+demo/seed data (default public, plus one private seed KB so in-memory mode can exercise the access
+matrix); every KB row mapper in `db.ts`.
+
+**Step 2 — The read-access helper (behavior-preserving refactor first).** Add one helper beside the
+existing scope helpers in `src/lib/auth.ts`/`src/lib/security.ts` (e.g. `canReadKb(session, kb)`
+plus a list-filter variant): anonymous → public KBs; Owner/Admin → all; Editor → public + assigned;
+(Viewer → public + assigned private, arrives in Step 3). Convert ALL existing
+`isStaff = Boolean(session)` call sites to the helper **before introducing the viewer role**, so
+this commit is behavior-preserving for today's users. Surfaces (§3 Phase-1 table is the checklist):
+home KB list (`src/app/page.tsx`), `/kb/[kbSlug]` landing, `/kb/[kbSlug]/[...pagePath]` articles,
+per-KB search, global `/search` scope object, page tree, redirects resolution, and the two
+page-view recording guards. Staff-page visibility becomes per-KB through the same helper — this
+intentionally fixes the current looseness where any signed-in editor reads staff pages of every KB
+on public routes; note the behavior change in the PR description.
+
+**Step 3 — Viewer role.** Add `"viewer"` to `UserRole`; `/admin/users` (owner-only) can create/edit
+viewers and assign KBs with the existing picker; `kb_user_assignments` is reused unchanged.
+Guarantees, each with a test: (a) viewers hitting `/admin/**` are redirected to `/` before any admin
+UI renders; (b) `requireAdminMutation` rejects viewers on every mutation API (403); (c) viewers
+never see draft pages or staff-only pages, even in assigned KBs; (d) viewers are excluded from
+review-digest recipients (`buildRecipients`) and from `/admin/usage`; (e) `GET /api/admin/kbs` and
+other editor-reachable data APIs do not become viewer-reachable.
+
+**Step 4 — Asset delivery gating (most security-sensitive step).**
+`src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`, including the video 307-redirect path:
+- Assets homed in a private KB require a session with read access to that KB.
+- Assets in a public KB referenced ONLY by staff-visibility pages require a session with KB read
+  access (derive from existing usage-tracking data; an asset referenced by at least one public
+  published page stays public).
+- Any response that required authorization: `Cache-Control: private, no-store`. Public assets keep
+  current caching. Unauthorized → `notFound()`.
+- Watch the redirect-to-Blob path: if an authorized private asset would 307 to a public Blob URL,
+  that URL is itself unauthenticated — serve private asset bytes through the route instead (no
+  redirect) and say so in the PR. Do not leave a public Blob URL as an authorization bypass.
+
+**Step 5 — Search gating.** Extend the existing staff-prune `NOT EXISTS` pattern in the FTS SQL so
+private-KB pages/assets never appear for callers without read access; mirror identical semantics in
+the in-memory search path. Applies to per-KB search, global `/search` (its scope object should now
+be built from the Step 2 helper), and zero-result gap logging.
+
+**Step 6 — Admin UX.** Owner-only visibility control on KB create/edit (`/admin/kbs` +
+`PATCH /api/admin/kbs/[kbId]`, owner-gated like status); "Private" badge on admin KB and page
+lists; viewer role option in the user form. Keep the §3 tables current.
+
+**Step 7 — The access-matrix test suite (FB-27 acceptance, verbatim).** Live-DB tests (new
+`*.db.test.ts` beside `ki1.db.test.ts`) plus in-memory unit tests covering: (1) anonymous → 404 on
+private KB landing/article/search/asset routes; (2) a viewer assigned to private KB A reads A and
+gets 404 on private KB B; (3) viewer mutation attempts → 403 and no admin surfaces; (4) staff-only
+pages and staff-only-referenced assets readable only with KB read access; public assets cacheable
+only when referenced by a public published page; (5) public and per-KB search never return
+private/staff results to unauthorized callers; (6) authorized private-asset responses carry
+`Cache-Control: private, no-store`. Add one axe smoke case for a signed-in viewer reading a private
+article.
+
+**Step 8 — Docs + ship.**
+- This spec: §2 moves private KBs from "required next" to built; §3 matrix and gating tables updated
+  from "Phase 1 target" to enforced-with-file-references; §9/§10 updated honestly (private pages are
+  dynamic/uncacheable by design); flip FB-27 to `status:done` with a dated note (never delete
+  items); §13 gains a "private KB smoke check" post-deploy item.
+- `README.md`: roles section gains Viewer; current-status section updated.
+- Open ONE PR to `main`. The PR description must include: the Step 2 behavior change, the
+  production-migration note from §14.2, and a **maintainer smoke-test script** in plain numbered
+  steps (create a private KB → add a viewer → sign in as the viewer in an incognito window →
+  confirm read works; confirm anonymous 404 on the same URLs; confirm a private page's attached
+  file 404s anonymously).
+- Confirm the CI live-DB step RAN (not skipped) before declaring ready. After merge, delete the
+  branch and give the maintainer the §13 post-deploy checks, including verifying migration `029`
+  applied and existing public KBs are unaffected.
