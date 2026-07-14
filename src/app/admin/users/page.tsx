@@ -31,6 +31,11 @@ function userSearchFilter(user: ManagedUser, query: string) {
 
 const userRoleOptions = [
   {
+    description: "Can read assigned private knowledge bases",
+    label: "Viewer",
+    value: "viewer",
+  },
+  {
     description: "Can edit only assigned knowledge bases",
     label: "Editor",
     value: "editor",
@@ -46,6 +51,10 @@ const userRoleOptions = [
     value: "owner",
   },
 ];
+
+function usesKbAssignments(role: User["role"]) {
+  return role === "editor" || role === "viewer";
+}
 
 export default function AdminUsersPage() {  const { showError, showSuccess, statusModal } = useStatusModal();
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -101,7 +110,7 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
           password: newPassword,
           fullName: newFullName,
           role: newRole,
-          kbAssignments: newRole === "editor" ? newAssignments : [],
+          kbAssignments: usesKbAssignments(newRole) ? newAssignments : [],
         }),
       });
       if (!res.ok) {
@@ -144,7 +153,7 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role: editRole,
-          kbAssignments: editRole === "editor" ? editAssignments : [],
+          kbAssignments: usesKbAssignments(editRole) ? editAssignments : [],
         }),
       });
       if (!res.ok) {
@@ -188,7 +197,7 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
       </div>
       <p className="meta">
         <strong>Owners</strong> and <strong>Admins</strong> can manage all knowledge bases. <strong>Editors</strong>{" "}
-        can only edit the knowledge bases assigned to them below.
+        can edit assigned knowledge bases. <strong>Viewers</strong> can read assigned private knowledge bases only.
       </p>
 
       {isCreating && (
@@ -253,7 +262,7 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
             searchable={false}
             value={newRole}
           />
-          {newRole === "editor" && (
+          {usesKbAssignments(newRole) && (
             <KbAssignmentPicker kbs={kbs} selected={newAssignments} onChange={setNewAssignments} />
           )}
         </ModalForm>
@@ -300,13 +309,13 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
             cell: (user) => {
               const isEditing = editingId === user.id;
               if (isEditing) {
-                return editRole === "editor" ? (
+                return usesKbAssignments(editRole) ? (
                   <KbAssignmentPicker kbs={kbs} selected={editAssignments} onChange={setEditAssignments} />
                 ) : (
                   <span className="meta">All knowledge bases</span>
                 );
               }
-              if (user.role === "editor") {
+              if (usesKbAssignments(user.role)) {
                 return user.kbAssignments.length > 0 ? (
                   <span className="meta">{user.kbAssignments.map(kbTitle).join(", ")}</span>
                 ) : (

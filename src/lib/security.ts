@@ -31,6 +31,9 @@ export async function requireAdminMutation(request: Request): Promise<AdminGuard
   if (!session) {
     return { ok: false, response: NextResponse.json({ message: "Unauthorized." }, { status: 401 }) };
   }
+  if (session.role === "viewer") {
+    return { ok: false, response: NextResponse.json({ message: "Viewers cannot access admin APIs." }, { status: 403 }) };
+  }
   if (!isSameOrigin(request)) {
     return {
       ok: false,

@@ -16,6 +16,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   if (!session) {
     redirect(`/admin/sign-in?next=${encodeURIComponent(pathname || "/admin")}`);
   }
+  if (session.role === "viewer") {
+    redirect("/");
+  }
 
   const branding = await loadSiteSettings();
 

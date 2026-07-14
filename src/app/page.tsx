@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { HOME_KB_PAGE_SIZE, KbListPagination } from "@/components/KbListPagination";
 import { PageBlocks } from "@/components/PageBlocks";
-import { getCurrentAdminSession } from "@/lib/auth";
-import { getPublishedKbs } from "@/lib/kb-store";
+import { filterKbsForReadAccess, getCurrentAdminSession } from "@/lib/auth";
+import { getAllKbsForAdmin, getPublishedKbs } from "@/lib/kb-store";
 import { loadSiteSettings } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_THEME, fontStack, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
@@ -21,24 +21,10 @@ interface HomeKb extends KnowledgeBase {
 }
 
 async function getHomeKbs(): Promise<HomeKb[]> {
-  const published = await getPublishedKbs();
-  const list: HomeKb[] = published.map((kb) => ({ ...kb, isDraft: false }));
-
   const session = await getCurrentAdminSession();
-  if (session?.role === "editor") {
-    const { accessibleKbIds } = await import("@/lib/auth");
-    const { getAllKbsForAdmin } = await import("@/lib/kb-store");
-    const allowed = await accessibleKbIds(session);
-    if (allowed && allowed.length > 0) {
-      const publishedIds = new Set(published.map((kb) => kb.id));
-      const all = await getAllKbsForAdmin();
-      for (const kb of all) {
-        if (allowed.includes(kb.id) && !publishedIds.has(kb.id)) {
-          list.push({ ...kb, isDraft: kb.status !== "published" });
-        }
-      }
-    }
-  }
+  const source = session ? await getAllKbsForAdmin() : await getPublishedKbs();
+  const readable = await filterKbsForReadAccess(session, source);
+  const list: HomeKb[] = readable.map((kb) => ({ ...kb, isDraft: kb.status !== "published" }));
 
   return list.sort((a, b) => b.updatedOn.localeCompare(a.updatedOn));
 }

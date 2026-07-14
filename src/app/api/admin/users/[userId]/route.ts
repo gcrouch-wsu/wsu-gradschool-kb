@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateUser, deleteUser, replaceUserAssignments } from "@/lib/db-users";
+import { updateUser, deleteUser, loadUserById, replaceUserAssignments } from "@/lib/db-users";
 import { isDatabaseEnabled } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { logError } from "@/lib/log";
@@ -32,7 +32,9 @@ export async function PATCH(
     const updates: Partial<User> = {};
     if (body.fullName !== undefined) updates.fullName = body.fullName.trim();
     if (body.email !== undefined) updates.email = body.email.trim().toLowerCase();
-    if (body.role !== undefined) updates.role = body.role as UserRole;
+    if (body.role !== undefined && ["owner", "admin", "editor", "viewer"].includes(body.role)) {
+      updates.role = body.role as UserRole;
+    }
     if (body.password) {
       updates.passwordHash = await hashPassword(body.password);
     }
@@ -42,7 +44,12 @@ export async function PATCH(
     }
 
     if (Array.isArray(body.kbAssignments)) {
-      await replaceUserAssignments(userId, body.kbAssignments);
+      const currentUser = updates.role ? null : await loadUserById(userId);
+      const nextRole = updates.role ?? currentUser?.role;
+      await replaceUserAssignments(
+        userId,
+        nextRole === "editor" || nextRole === "viewer" ? body.kbAssignments : [],
+      );
     }
 
     return NextResponse.json({ ok: true });

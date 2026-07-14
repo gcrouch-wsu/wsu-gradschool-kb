@@ -542,6 +542,46 @@ export async function getAssetUsages(assetId: string): Promise<AssetUsage[]> {
   return extractAssetUsages(dataset.pages, normalizedId);
 }
 
+export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolean> {
+  if (isDatabaseEnabled()) {
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT 1
+      FROM kb_pages
+      WHERE kb_pages.kb_id = ${asset.homeKbId}
+        AND kb_pages.status = 'published'
+        AND kb_pages.visibility = 'public'
+        AND (
+          kb_pages.related_asset_ids @> ${JSON.stringify([asset.id])}::jsonb
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(kb_pages.blocks) AS block
+            WHERE block.value->>'type' IN ('image', 'asset_link')
+              AND block.value->>'assetId' = ${asset.id}
+          )
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM kb_pages p2
+          WHERE p2.kb_id = kb_pages.kb_id
+            AND p2.visibility = 'staff'
+            AND p2.status = 'published'
+            AND (kb_pages.path = p2.path OR kb_pages.path LIKE p2.path || '/%')
+        )
+      LIMIT 1
+    `) as unknown as unknown[];
+    return rows.length > 0;
+  }
+  const pages = (await getDataset()).pages.filter((page) => page.kbId === asset.homeKbId);
+  const published = pages.filter((page) => page.status === "published");
+  if (published.length === 0) {
+    return false;
+  }
+  const pageById = new Map(published.map((page) => [page.id, page]));
+  return extractAssetUsages(published, asset.id).some((usage) => {
+    const page = pageById.get(usage.pageId);
+    return Boolean(page && !isStaffOnly(published, page));
+  });
+}
+
 export async function getAssetForDelivery(homeKbId: string, slug: string): Promise<Asset | null> {
   if (isDatabaseEnabled()) {
     const fromDb = await loadAssetForDelivery(homeKbId, slug);
@@ -913,40 +953,73 @@ export async function searchKb(
     if (!searchTokens) return [];
 
     const readableKbIds = [...new Set(options.readableKbIds ?? [])];
+    const hasReadableScope = options.readableKbIds !== undefined;
     const staffKbIds = options.staffKbIds === null ? null : [...new Set(options.staffKbIds ?? [])];
     const includeAllKbs = Boolean(options.includeAllKbs);
 
     const kbFilterPages = kbId
-      ? sql`AND kb_pages.kb_id = ${kbId}`
+      ? includeAllKbs
+        ? sql`AND kb_pages.kb_id = ${kbId}`
+        : hasReadableScope
+          ? readableKbIds.includes(kbId)
+            ? sql`AND kb_pages.kb_id = ${kbId}`
+            : sql`AND FALSE`
+          : sql`
+              AND kb_pages.kb_id = ${kbId}
+              AND EXISTS (
+                SELECT 1 FROM knowledge_bases kb
+                WHERE kb.id = kb_pages.kb_id AND kb.status = 'published' AND kb.visibility = 'public'
+              )
+            `
       : includeAllKbs
         ? sql``
+        : hasReadableScope
+          ? readableKbIds.length > 0
+            ? sql`AND kb_pages.kb_id = ANY(${readableKbIds}::text[])`
+            : sql`AND FALSE`
         : readableKbIds.length > 0
           ? sql`AND (
               EXISTS (
                 SELECT 1 FROM knowledge_bases kb
-                WHERE kb.id = kb_pages.kb_id AND kb.status = 'published'
+                WHERE kb.id = kb_pages.kb_id AND kb.status = 'published' AND kb.visibility = 'public'
               )
               OR kb_pages.kb_id = ANY(${readableKbIds}::text[])
             )`
           : sql`AND EXISTS (
               SELECT 1 FROM knowledge_bases kb
-              WHERE kb.id = kb_pages.kb_id AND kb.status = 'published'
+              WHERE kb.id = kb_pages.kb_id AND kb.status = 'published' AND kb.visibility = 'public'
             )`;
     const kbFilterAssets = kbId
-      ? sql`AND kb_assets.home_kb_id = ${kbId}`
+      ? includeAllKbs
+        ? sql`AND kb_assets.home_kb_id = ${kbId}`
+        : hasReadableScope
+          ? readableKbIds.includes(kbId)
+            ? sql`AND kb_assets.home_kb_id = ${kbId}`
+            : sql`AND FALSE`
+          : sql`
+              AND kb_assets.home_kb_id = ${kbId}
+              AND EXISTS (
+                SELECT 1 FROM knowledge_bases kb
+                WHERE kb.id = kb_assets.home_kb_id AND kb.status = 'published' AND kb.visibility = 'public'
+              )
+            `
       : includeAllKbs
         ? sql``
+        : hasReadableScope
+          ? readableKbIds.length > 0
+            ? sql`AND kb_assets.home_kb_id = ANY(${readableKbIds}::text[])`
+            : sql`AND FALSE`
         : readableKbIds.length > 0
           ? sql`AND (
               EXISTS (
                 SELECT 1 FROM knowledge_bases kb
-                WHERE kb.id = kb_assets.home_kb_id AND kb.status = 'published'
+                WHERE kb.id = kb_assets.home_kb_id AND kb.status = 'published' AND kb.visibility = 'public'
               )
               OR kb_assets.home_kb_id = ANY(${readableKbIds}::text[])
             )`
           : sql`AND EXISTS (
               SELECT 1 FROM knowledge_bases kb
-              WHERE kb.id = kb_assets.home_kb_id AND kb.status = 'published'
+              WHERE kb.id = kb_assets.home_kb_id AND kb.status = 'published' AND kb.visibility = 'public'
             )`;
 
     const staffPageAccess = !includeStaff
@@ -964,6 +1037,7 @@ export async function searchKb(
           SELECT 1 FROM kb_pages p2
           WHERE p2.kb_id = kb_pages.kb_id
             AND p2.visibility = 'staff'
+            AND p2.status = 'published'
             AND (kb_pages.path = p2.path OR kb_pages.path LIKE p2.path || '/%')
         )
       )
@@ -1013,6 +1087,14 @@ export async function searchKb(
     }
 
     for (const row of assetRows) {
+      const assetKbId = row.kb_id as string;
+      const canReadStaffAsset = includeStaff && (staffKbIds === null || staffKbIds.includes(assetKbId));
+      if (!canReadStaffAsset) {
+        const asset = await getAssetById(row.id as string);
+        if (!asset || !(await assetHasPublicPublishedUsage(asset))) {
+          continue;
+        }
+      }
       scored.push({
         score: row.rank as number,
         result: { type: "asset", id: row.id as string, title: row.title as string, summary: row.summary as string, slug: row.slug as string, kbId: row.kb_id as string },
@@ -1029,16 +1111,23 @@ export async function searchKb(
   const scored: ScoredResult[] = [];
 
   const readableKbIds = new Set(options.readableKbIds ?? []);
+  const hasReadableScope = options.readableKbIds !== undefined;
   const staffKbIds = options.staffKbIds === null || options.staffKbIds === undefined
     ? null
     : new Set(options.staffKbIds);
   const kbById = new Map(dataset.knowledgeBases.map((kb) => [kb.id, kb]));
   const canReadKb = (candidateKbId: string) => {
-    if (kbId) {
-      return candidateKbId === kbId;
-    }
     const kb = kbById.get(candidateKbId);
-    return Boolean(options.includeAllKbs || kb?.status === "published" || readableKbIds.has(candidateKbId));
+    if (options.includeAllKbs) {
+      return !kbId || candidateKbId === kbId;
+    }
+    if (hasReadableScope) {
+      return readableKbIds.has(candidateKbId) && (!kbId || candidateKbId === kbId);
+    }
+    if (kbId && candidateKbId !== kbId) {
+      return false;
+    }
+    return Boolean(kb?.status === "published" && kb.visibility === "public");
   };
   const canReadStaffPages = (candidateKbId: string) =>
     includeStaff && (staffKbIds === null || staffKbIds.has(candidateKbId));
@@ -1051,7 +1140,9 @@ export async function searchKb(
   }
 
   const pagesToSearch = kbId
-    ? visiblePages(dataset, kbId, includeStaff)
+    ? canReadKb(kbId)
+      ? visiblePages(dataset, kbId, includeStaff)
+      : []
     : dataset.pages.filter((page) => {
         if (!canReadKb(page.kbId)) {
           return false;
@@ -1079,11 +1170,16 @@ export async function searchKb(
   }
 
   const assetsToSearch = kbId
-    ? dataset.assets.filter((asset) => asset.homeKbId === kbId)
+    ? canReadKb(kbId)
+      ? dataset.assets.filter((asset) => asset.homeKbId === kbId)
+      : []
     : dataset.assets.filter((asset) => canReadKb(asset.homeKbId));
 
   for (const asset of assetsToSearch) {
     if (asset.status !== "active") {
+      continue;
+    }
+    if (!canReadStaffPages(asset.homeKbId) && !(await assetHasPublicPublishedUsage(asset))) {
       continue;
     }
     const titleScore = fieldScore(asset.title, normalized, { exact: 90, prefix: 50, includes: 30 });

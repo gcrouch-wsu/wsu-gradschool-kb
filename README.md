@@ -1,13 +1,13 @@
 # WSU Graduate School Knowledge Base
 
-Deployable Next.js (16 / React 19 / App Router) platform for accessible, multi-KB knowledge bases
-with a focused admin editor. The built baseline supports public KBs; the current product scope now
-requires first-class private KBs with owner-provisioned viewer access as the next implementation
-phase. See `project_spec.md` for the full spec and current implementation status.
+Deployable Next.js (16 / React 19 / App Router) platform for accessible public and private
+multi-KB knowledge bases with a focused admin editor. See `project_spec.md` for the full spec and
+current implementation status.
 
 ## Highlights
 
-- **Public KB**: home/article routes, hierarchical sidebar nav, configurable KB landing pages, and
+- **Public/private KBs**: home/article routes, hierarchical sidebar nav, configurable KB landing
+  pages, KB-level public/private visibility, owner-provisioned Viewer access, and
   a responsive **3-column docs layout** (nav · article · sticky on-page TOC rail) with
   depth-controlled TOC.
 - **Rich editor**: paragraphs, headings, lists with continued numbering controls, reader-visible
@@ -16,12 +16,12 @@ phase. See `project_spec.md` for the full spec and current implementation status
   (create/edit links, new-tab target); a **media picker**; per-image **alt text** and optional
   visible captions kept as separate fields.
 - **Managed assets**: stable public URLs, version history with replace/activate, usage tracking,
-  archive-first permanent delete, and reference-blocking safeguards.
-- **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Editor roles, KB scoping,
-  header identity + **Sign out**, a global Owner/Admin **Audit log**, and DB-backed **edit locks**
-  to prevent concurrent overwrites.
+  private/staff-aware delivery, archive-first permanent delete, and reference-blocking safeguards.
+- **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Editor/Viewer roles, KB
+  scoping, header identity + **Sign out**, a global Owner/Admin **Audit log**, and DB-backed
+  **edit locks** to prevent concurrent overwrites.
 - **Search**: global and per-KB Postgres full-text search (tsvector + GIN) with prefix/type-ahead,
-  grouped global results, zero-result gap logging, and staff-page visibility pruning.
+  grouped global results, zero-result gap logging, and private/staff-page visibility pruning.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
   WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over
@@ -36,22 +36,18 @@ phase. See `project_spec.md` for the full spec and current implementation status
 
 ## Current Status
 
-As of 2026-07-10, the public-KB release baseline is complete and `main` passes GitHub CI, including
-the live-DB test step when `DATABASE_URL` is configured. Completed release work includes the public
-multi-KB reader, admin/editor workflow, managed assets, imports, search, audit/governance surfaces,
-revision history with restore, print-to-PDF export, owner site settings/branding, and the Chromium
-editor regression suite. Production-readiness work merged to `main` (2026-07-10): weekly review-date
-notifications, bulk KB export (streamed ZIP), privacy-light usage analytics, global cross-KB search,
-targeted public read loaders, migration concurrency locking, and structured operations docs.
+As of 2026-07-13, the Phase 1 private-KB branch implements the public/private KB release baseline.
+Completed release work includes the multi-KB reader, private KB visibility, owner-provisioned Viewer
+accounts, visibility-aware search and asset delivery, admin/editor workflow, managed assets, imports,
+audit/governance surfaces, revision history with restore, print-to-PDF export, owner site
+settings/branding, and the Chromium editor regression suite. Production-readiness work includes
+weekly review-date notifications, bulk KB export (streamed ZIP), privacy-light usage analytics,
+global cross-KB search, targeted read loaders, migration concurrency locking, and structured
+operations docs.
 
-Phase 1 is the committed next build and covers both:
-
-1. **Private knowledge bases** (`project_spec.md` §12 FB-27): KB-level public/private visibility,
-   owner-provisioned `viewer` users, a single read-access helper gating every public route, and
-   visibility-aware search/asset delivery.
-2. **WSU SSO** (`project_spec.md` §12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
-   private-KB viewers. Gated on WSU ITS engagement; all authentication stays local
-   (owner-provisioned) until then.
+Still gated on WSU ITS engagement: **WSU SSO** (`project_spec.md` §12 FB-30), via Entra ID / Azure
+AD OIDC or SAML for staff and private-KB viewers. All authentication stays local and
+owner-provisioned until then.
 
 Remaining QA work before a production-compliance claim:
 
@@ -65,16 +61,17 @@ migration, SEO/discoverability, reader feedback, public reading polish, proposed
 public API, KB templates/advanced settings, large-file asset handling, and third-party error
 tracking. The deploy/rollback runbook is `project_spec.md` §13.
 
-Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page axe smoke
-tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
+Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
+axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
 `npm run check`.
 
 **Live-database tests:** `npm run test:db` runs the KI-1, page-revision, review-digest, KB-export,
-and page-view integration suites against a real Neon database —
+page-view, and private-KB access-matrix integration suites against a real Neon database —
 edit-lock conflicts, atomic multi-row reorder rollback, lock expiry, full-text search safety/recall,
-the staff-visibility prune, editor KB scoping, managed-video behavior, atomic revision writes,
+the private/staff-visibility prune, editor/viewer KB scoping, managed-video behavior, atomic revision writes,
 restore, baseline backfill, revision-retention cleanup, review-date due-page queries, KB export
-manifest behavior, and page-view upsert/retention folding. It reads `DATABASE_URL` from `.env.local`;
+manifest behavior, page-view upsert/retention folding, and private KB read/search/asset semantics.
+It reads `DATABASE_URL` from `.env.local`;
 the same tests self-skip during the normal `npm test` run when no database is configured. Tests create
 data under unique ids/slugs and clean up after themselves.
 
@@ -149,7 +146,12 @@ To use Neon, create a database and set `DATABASE_URL` locally and in Vercel:
 DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
-Schema changes are applied automatically on first request via versioned migrations in `src/lib/migrations/` (tracked in `_schema_migrations`). These include asset versions, redirects, staged imports, users / KB assignments, KB homepage page selection, TOC settings, edit-lock columns, and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
+Schema changes are applied automatically on first request via versioned migrations in
+`src/lib/migrations/` (tracked in `_schema_migrations`). The current head is
+`029_kb_visibility`, which adds `knowledge_bases.visibility` and defaults existing KBs to `public`;
+no manual Neon console migration is required. Earlier migrations include asset versions, redirects,
+staged imports, users / KB assignments, KB homepage page selection, TOC settings, edit-lock columns,
+and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
 
 ## Managed assets
 
@@ -219,9 +221,10 @@ page is not public/published for a public visitor, the KB falls back to the gene
 
 ## Roles & access
 
-Three roles: **Owner**, **Admin**, **Editor**. Owners/Admins can access all KBs; Editors are
-scoped to their assigned KBs (`kb_user_assignments`). Sessions are HMAC-signed, HTTP-only cookies;
-sign out from the header.
+Four roles: **Owner**, **Admin**, **Editor**, and **Viewer**. Owners/Admins can access all KBs;
+Editors can manage assigned KBs and read all public KBs plus assigned private KBs; Viewers can read
+all public KBs plus assigned private KBs and cannot access admin surfaces or mutation APIs. Sessions
+are HMAC-signed, HTTP-only cookies; sign out from the header.
 
 Owners/Admins can permanently delete archived, unreferenced pages and assets. Editors can archive
 pages but cannot permanently delete. Page delete is blocked while child pages or related-page
@@ -237,21 +240,25 @@ IP addresses, or user agents are stored. Bot and crawler traffic can be counted.
 in in-memory mode.
 
 **User management** (`/admin/users`, owner-only) and **KB management** (`/admin/kbs`, owner-only)
-are gated both in the UI and at the API. When creating or editing an editor, assign knowledge bases
-with a **search + chips** picker (type to filter, click/Enter to add, ✕ or Backspace to remove) that
-scales to many KBs.
+are gated both in the UI and at the API. Owners can mark KBs public/private and create or edit
+Editors/Viewers with a **search + chips** KB assignment picker (type to filter, click/Enter to add,
+✕ or Backspace to remove) that scales to many KBs.
 
-**Editor scoping is enforced on both mutations and visibility:**
+**Editor/Viewer scoping is enforced on mutations and public/private reads:**
 
 - *Mutations* (page/asset/import/redirect changes) are guarded by `requireKbAccess` — editors can
-  only modify their assigned KBs.
+  only modify their assigned KBs, and Viewers are rejected before mutations run.
 - *List views* — the `/admin/pages` and `/admin/assets` screens, and the `GET /api/admin/assets`
   endpoint, are filtered to the editor's assigned KBs so they can't browse or enumerate others'
   content. The `GET /api/admin/users` directory is owner-only.
+- *Public reads* — the home KB list, KB landing/article routes, per-KB search, global search, page
+  trees, and file routes use the read-access helper. Unauthorized private content returns 404;
+  authorized private assets use `Cache-Control: private, no-store`.
 
-Scoping helpers live in `src/lib/auth.ts` (`canAccessKb`, `accessibleKbIds`, `filterKbsForSession`).
-Because assignments live in Neon (`kb_user_assignments`), the per-editor behavior only takes effect
-when `DATABASE_URL` is set.
+Scoping helpers live in `src/lib/auth.ts` (`canAccessKb`, `accessibleKbIds`,
+`filterKbsForSession`, `getKbReadAccess`, `filterKbsForReadAccess`). Because assignments live in
+Neon (`kb_user_assignments`), per-user assignment behavior is durable only when `DATABASE_URL` is
+set; in-memory mode uses seed data for local parity checks.
 
 ## Reading experience
 

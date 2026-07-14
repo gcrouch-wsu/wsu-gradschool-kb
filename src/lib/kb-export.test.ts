@@ -40,7 +40,7 @@ describe("KB export", () => {
   });
 
   it("exports a seeded KB as a ZIP manifest with page HTML", async () => {
-    const [kb] = await getAllKbsForAdmin();
+    const kb = (await getAllKbsForAdmin()).find((candidate) => candidate.id === "kb-grad-school")!;
     const archive = await buildKbExport(kb.id);
 
     expect(archive).not.toBeNull();
@@ -54,7 +54,7 @@ describe("KB export", () => {
   });
 
   it("streams the same archive shape the route serves", async () => {
-    const [kb] = await getAllKbsForAdmin();
+    const kb = (await getAllKbsForAdmin()).find((candidate) => candidate.id === "kb-grad-school")!;
     const archive = await buildKbExportStream(kb.id);
 
     expect(archive).not.toBeNull();

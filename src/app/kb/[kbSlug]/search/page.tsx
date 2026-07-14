@@ -1,12 +1,26 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { getCurrentAdminSession } from "@/lib/auth";
+import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
 import { getAssetById, getKbById, getKbBySlug, searchKb } from "@/lib/kb-store";
 import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 
 const SEARCH_LIMIT = 30;
 const SEARCH_WINDOW_SECONDS = 60;
+
+export async function generateMetadata({ params }: { params: Promise<{ kbSlug: string }> }) {
+  const { kbSlug } = await params;
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
+  if (!kb) {
+    notFound();
+  }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
+    notFound();
+  }
+  return { title: `Search · ${kb.title}` };
+}
 
 export default async function SearchPage({
   params,
@@ -17,9 +31,13 @@ export default async function SearchPage({
 }) {
   const { kbSlug } = await params;
   const { q = "" } = await searchParams;
-  const isStaff = Boolean(await getCurrentAdminSession());
-  const kb = await getKbBySlug(kbSlug, isStaff);
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
   if (!kb) {
+    notFound();
+  }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
     notFound();
   }
 
@@ -30,7 +48,12 @@ export default async function SearchPage({
     rateLimited = !(await rateLimit(`search:${clientKey}`, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS)).allowed;
   }
 
-  const results = rateLimited ? [] : await searchKb(kb.id, q, isStaff);
+  const results = rateLimited
+    ? []
+    : await searchKb(kb.id, q, access.canReadStaffContent, {
+        readableKbIds: [kb.id],
+        staffKbIds: access.canReadStaffContent ? [kb.id] : [],
+      });
   const resultsWithHref = await Promise.all(
     results.map(async (result) => {
       if (result.type === "page") {

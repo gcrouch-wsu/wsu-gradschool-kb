@@ -128,8 +128,8 @@ async function seedIfEmpty() {
 
   for (const kb of seedDataset.knowledgeBases) {
     await sql`
-      INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
-      VALUES (${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.updatedOn})
+      INSERT INTO knowledge_bases (id, slug, title, description, status, visibility, updated_on)
+      VALUES (${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.visibility}, ${kb.updatedOn})
       ON CONFLICT (id) DO NOTHING
     `;
   }
@@ -173,6 +173,7 @@ interface KbRow {
   title: string;
   description: string;
   status: string;
+  visibility: string;
   updated_on: string;
   home_page_id?: string | null;
   theme?: unknown;
@@ -234,6 +235,7 @@ function mapKb(row: KbRow): KnowledgeBase {
     title: row.title,
     description: row.description,
     status: row.status as KnowledgeBase["status"],
+    visibility: row.visibility === "private" ? "private" : "public",
     updatedOn: row.updated_on,
     homepagePageId: row.home_page_id ?? null,
     theme: row.theme ? mergeTheme(row.theme) : undefined,

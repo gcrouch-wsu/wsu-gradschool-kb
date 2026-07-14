@@ -45,7 +45,15 @@ export default async function AdminPagesPage() {
         {groups.map(({ kb, pages }) => (
           <section className="card admin-pages__kb-card" key={kb.id}>
             <div className="admin-actions admin-pages__kb-header">
-              <h2>{kb.title}</h2>
+              <h2>
+                {kb.title}
+                {kb.visibility === "private" && (
+                  <>
+                    {" "}
+                    <span className="badge badge--staff">Private</span>
+                  </>
+                )}
+              </h2>
               <Link className="button button--small button--ghost" href={`/admin/pages/new?kb=${kb.id}`}>
                 + New Page
               </Link>

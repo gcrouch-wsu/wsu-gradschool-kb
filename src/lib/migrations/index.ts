@@ -285,7 +285,23 @@ const migrations: Migration[] = [
     id: "007_hardening",
     async up(sql) {
 
-      await sql`ALTER TABLE kb_pages ALTER COLUMN locked_at TYPE TIMESTAMPTZ USING NULLIF(locked_at, '')::TIMESTAMPTZ`;
+      await sql`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'kb_pages'
+              AND column_name = 'locked_at'
+              AND data_type <> 'timestamp with time zone'
+          ) THEN
+            ALTER TABLE kb_pages ALTER COLUMN locked_at DROP DEFAULT;
+            UPDATE kb_pages SET locked_at = NULL WHERE locked_at = '';
+            ALTER TABLE kb_pages ALTER COLUMN locked_at TYPE TIMESTAMPTZ USING locked_at::TIMESTAMPTZ;
+          END IF;
+        END
+        $$;
+      `;
 
       await sql`
         CREATE OR REPLACE FUNCTION kb_extract_blocks_text(blocks jsonb) RETURNS text AS $$
@@ -675,6 +691,30 @@ const migrations: Migration[] = [
       `;
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_views_kb_day ON kb_page_views(kb_id, day DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_views_day ON kb_page_views(day DESC)`;
+    },
+  },
+  {
+    id: "029_kb_visibility",
+    async up(sql) {
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'`;
+      await sql`UPDATE knowledge_bases SET visibility = 'public' WHERE visibility NOT IN ('public', 'private')`;
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'knowledge_bases_visibility_check'
+              AND conrelid = 'knowledge_bases'::regclass
+          ) THEN
+            ALTER TABLE knowledge_bases
+              ADD CONSTRAINT knowledge_bases_visibility_check
+              CHECK (visibility IN ('public', 'private'));
+          END IF;
+        END
+        $$;
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_knowledge_bases_visibility ON knowledge_bases(visibility)`;
     },
   },
 ];

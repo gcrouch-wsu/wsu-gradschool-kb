@@ -34,12 +34,14 @@ export async function PATCH(
       title?: string;
       description?: string;
       status?: "published" | "draft";
+      visibility?: "public" | "private";
       slug?: string;
     } = { updated_on: new Date().toISOString().slice(0, 10) };
 
     if (body.title !== undefined) updates.title = body.title.trim();
     if (body.description !== undefined) updates.description = body.description.trim();
     if (body.status !== undefined) updates.status = body.status === "published" ? "published" : "draft";
+    if (body.visibility !== undefined) updates.visibility = body.visibility === "private" ? "private" : "public";
 
     if (body.slug !== undefined) {
       let slug = slugify(body.slug);
@@ -54,6 +56,7 @@ export async function PATCH(
         if (updates.title) await sql`UPDATE knowledge_bases SET title = ${updates.title} WHERE id = ${kbId}`;
         if (updates.description !== undefined) await sql`UPDATE knowledge_bases SET description = ${updates.description} WHERE id = ${kbId}`;
         if (updates.status) await sql`UPDATE knowledge_bases SET status = ${updates.status} WHERE id = ${kbId}`;
+        if (updates.visibility) await sql`UPDATE knowledge_bases SET visibility = ${updates.visibility} WHERE id = ${kbId}`;
         if (updates.slug) await sql`UPDATE knowledge_bases SET slug = ${updates.slug} WHERE id = ${kbId}`;
         await sql`UPDATE knowledge_bases SET updated_on = ${updates.updated_on} WHERE id = ${kbId}`;
     }
