@@ -553,12 +553,17 @@ export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolea
         AND kb_pages.visibility = 'public'
         AND (
           kb_pages.related_asset_ids @> ${JSON.stringify([asset.id])}::jsonb
-          OR kb_pages.blocks::text LIKE ${`%${asset.id}%`}
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(kb_pages.blocks) AS block
+            WHERE block.value->>'type' IN ('image', 'asset_link')
+              AND block.value->>'assetId' = ${asset.id}
+          )
         )
         AND NOT EXISTS (
           SELECT 1 FROM kb_pages p2
           WHERE p2.kb_id = kb_pages.kb_id
             AND p2.visibility = 'staff'
+            AND p2.status = 'published'
             AND (kb_pages.path = p2.path OR kb_pages.path LIKE p2.path || '/%')
         )
       LIMIT 1
@@ -1032,6 +1037,7 @@ export async function searchKb(
           SELECT 1 FROM kb_pages p2
           WHERE p2.kb_id = kb_pages.kb_id
             AND p2.visibility = 'staff'
+            AND p2.status = 'published'
             AND (kb_pages.path = p2.path OR kb_pages.path LIKE p2.path || '/%')
         )
       )

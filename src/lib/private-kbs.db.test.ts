@@ -31,6 +31,10 @@ describe.skipIf(!isDatabaseEnabled())("private KB access matrix live DB", () => 
     const privateAsset = `test-private-asset-${id}`;
     const publicAsset = `test-public-asset-${id}`;
     const staffAsset = `test-staff-asset-${id}`;
+    const nestedAsset = `test-nested-asset-${id}`;
+    const decoyPage = `test-decoy-page-${id}`;
+    const draftStaffParent = `test-draft-staff-parent-${id}`;
+    const nestedChildPage = `test-nested-child-${id}`;
 
     try {
       await sql`
@@ -103,7 +107,39 @@ describe.skipIf(!isDatabaseEnabled())("private KB access matrix live DB", () => 
             'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
             ${JSON.stringify([{ blockId: "p1", type: "asset_link", assetId: staffAsset }])}::jsonb,
             '[]'::jsonb, ${JSON.stringify([staffAsset])}::jsonb, true, 3, true, true
+          ),
+          (
+            ${decoyPage}, ${publicKb}, 'decoy-page', 'decoy-page', 30,
+            ${`Decoy Page ${unique}`}, 'Mentions an asset id without using it', 'published', 'public',
+            'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
+            ${JSON.stringify([
+              { blockId: "p1", type: "paragraph", text: `See ${staffAsset} for details`, html: `See ${staffAsset} for details` },
+            ])}::jsonb,
+            '[]'::jsonb, '[]'::jsonb, true, 3, true, true
+          ),
+          (
+            ${draftStaffParent}, ${publicKb}, 'ops', 'ops', 40,
+            ${`Ops Parent ${unique}`}, 'Draft staff parent', 'draft', 'staff',
+            'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
+            '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, true, 3, true, true
+          ),
+          (
+            ${nestedChildPage}, ${publicKb}, 'nested-child', 'ops/nested-child', 50,
+            ${`Nested Child ${unique}`}, 'Published public child under a draft staff parent', 'published', 'public',
+            'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
+            ${JSON.stringify([{ blockId: "p1", type: "asset_link", assetId: nestedAsset }])}::jsonb,
+            '[]'::jsonb, '[]'::jsonb, true, 3, true, true
           )
+      `;
+      await sql`
+        INSERT INTO kb_assets (
+          id, home_kb_id, slug, title, description, asset_type, mime_type, file_size_bytes,
+          status, owner_label, last_reviewed_date, updated_display_date, version_id, body
+        ) VALUES (
+          ${nestedAsset}, ${publicKb}, ${`nested-asset-${unique}`}, ${`Nested Asset ${unique}`},
+          'Asset used under a draft staff parent', 'document', 'text/plain', 10,
+          'active', 'Graduate School', '2026-01-01', '2026-01-01', ${`version-${nestedAsset}`}, 'nested'
+        )
       `;
 
       const [kbA, kbB] = await Promise.all([getKbById(privateA), getKbById(privateB)]);
@@ -134,6 +170,10 @@ describe.skipIf(!isDatabaseEnabled())("private KB access matrix live DB", () => 
       await expect(assetHasPublicPublishedUsage(publicAssetRecord!)).resolves.toBe(true);
       await expect(assetHasPublicPublishedUsage(staffAssetRecord!)).resolves.toBe(false);
 
+      const nestedAssetRecord = await getAssetById(nestedAsset);
+      expect(nestedAssetRecord).not.toBeNull();
+      await expect(assetHasPublicPublishedUsage(nestedAssetRecord!)).resolves.toBe(true);
+
       const anonymousStaffAsset = await searchKb(undefined, `Staff Asset ${unique}`, false, {
         readableKbIds: [publicKb],
         staffKbIds: [],
@@ -145,6 +185,12 @@ describe.skipIf(!isDatabaseEnabled())("private KB access matrix live DB", () => 
         staffKbIds: [publicKb],
       });
       expect(staffScopedAsset.some((result) => result.id === staffAsset)).toBe(true);
+
+      const nestedChildSearch = await searchKb(undefined, `Nested Child ${unique}`, false, {
+        readableKbIds: [publicKb],
+        staffKbIds: [],
+      });
+      expect(nestedChildSearch.some((result) => result.id === nestedChildPage)).toBe(true);
     } finally {
       await sql`DELETE FROM kb_page_revisions WHERE kb_id IN (${privateA}, ${privateB}, ${publicKb})`;
       await sql`DELETE FROM kb_pages WHERE kb_id IN (${privateA}, ${privateB}, ${publicKb})`;

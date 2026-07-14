@@ -98,7 +98,7 @@ Viewer is read-only):
 
 | Area | Owner | Admin | Editor | Viewer | Scope mechanism |
 |------|-------|-------|--------|--------|-----------------|
-| Public/private KB read | all | all | public + assigned private | public + assigned private | `getKbReadAccess` / `filterKbsForReadAccess` |
+| Public/private KB read | all | all | published public + assigned (incl. assigned drafts) | published public + assigned published private | `getKbReadAccess` / `filterKbsForReadAccess` (KB status enforced) |
 | Pages list/edit/publish | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
 | KB homepage assignment | all | all | assigned | no | `requireKbAccess` |
 | Assets list/edit | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
@@ -142,12 +142,12 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 
 | Surface | Anonymous | Owner/Admin | Editor | Viewer | Required behavior | Implementation files |
 |---------|-----------|-------------|--------|--------|-------------------|----------------------|
-| `/` KB list | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Hide private KBs without read access. | `src/app/page.tsx`, `src/lib/auth.ts` |
-| `/search` global search | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | Group results by readable KB; never leak private/staff results. | `src/app/search/page.tsx`, `src/lib/kb-store.ts` |
-| `/kb/[kbSlug]` | public KBs only | all KBs | public + assigned KBs | public + assigned KBs | `notFound()` for private KBs without access. | `src/app/kb/[kbSlug]/page.tsx` |
-| `/kb/[kbSlug]/[...pagePath]` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Staff-only pages require KB read access; viewers never see drafts. | `src/app/kb/[kbSlug]/[...pagePath]/page.tsx` |
-| `/kb/[kbSlug]/search` | public pages in public KBs | all readable pages | public + assigned KB pages | public + assigned public pages | Search must never leak private/staff results. | `src/app/kb/[kbSlug]/search/page.tsx`, `src/lib/kb-store.ts` |
-| `/kb/[kbSlug]/files/[assetSlug]` | public assets only | all readable assets | public + assigned KB assets | public + assigned public-page assets | Authorized responses use `Cache-Control: private, no-store`; private bytes are streamed through this route instead of redirecting to public Blob URLs. | `src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`, `src/lib/kb-store.ts` |
+| `/` KB list | published public KBs only | all KBs | published public + assigned KBs | published public + assigned published KBs | Hide private KBs without read access. | `src/app/page.tsx`, `src/lib/auth.ts` |
+| `/search` global search | published public KBs only | all KBs | published public + assigned KBs | published public + assigned published KBs | Group results by readable KB; never leak private/staff results. | `src/app/search/page.tsx`, `src/lib/kb-store.ts` |
+| `/kb/[kbSlug]` | published public KBs only | all KBs | published public + assigned KBs | published public + assigned published KBs | `notFound()` for private KBs without access. | `src/app/kb/[kbSlug]/page.tsx` |
+| `/kb/[kbSlug]/[...pagePath]` | public pages in published public KBs | all readable pages | published public + assigned KB pages | published public + assigned published, non-staff pages | Staff-only pages require KB read access; viewers never see drafts. | `src/app/kb/[kbSlug]/[...pagePath]/page.tsx` |
+| `/kb/[kbSlug]/search` | public pages in published public KBs | all readable pages | published public + assigned KB pages | published public + assigned published, non-staff pages | Search must never leak private/staff results. | `src/app/kb/[kbSlug]/search/page.tsx`, `src/lib/kb-store.ts` |
+| `/kb/[kbSlug]/files/[assetSlug]` | assets with published, non-staff usage in published public KBs | all readable assets | published public + assigned KB assets | assets with published, non-staff usage in readable KBs | Authorized responses use `Cache-Control: private, no-store`; private bytes are streamed through this route instead of redirecting to public Blob URLs. | `src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`, `src/lib/kb-store.ts` |
 
 > ✅ **The matrix is enforced at the API, list-view, detail-page, and owner-only-page levels.** Closed
 > across several passes (FB-11, FB-15, FB-17, FB-18):
@@ -612,8 +612,10 @@ and live-DB integration tests pass when `DATABASE_URL` is configured.
   checks run; the 404 boundary UI then streams into a 200 response. This applies identically to
   nonexistent, private, and draft KB URLs (verified parity — no existence signal) and predates
   Phase 1. Asset delivery is a route handler and returns genuine 404/status codes.
-  `generateMetadata` on KB landing/article/search routes also calls `notFound()`, which gives
-  crawlers configured for blocking metadata a real 404. Revisit for SEO under FB-31.
+  `generateMetadata` on KB landing/article/search routes also calls `notFound()` so gated pages
+  never emit real titles/descriptions, but empirical probes (common bot user agents against a
+  production server) still received HTTP 200 with the not-found UI — do not claim crawler-visible
+  404s. Revisit status-code fidelity for SEO under FB-31.
 - **Authentication is intentionally local for now**: owner-provisioned accounts use scrypt password
   hashes and signed HMAC cookies. There is no SSO/OIDC/SAML integration until WSU ITS engagement, and
   no server-side idle-session table or sliding idle timeout beyond the current cookie/token expiry
@@ -1267,6 +1269,18 @@ Items are ordered by recommended priority.
   status parity with nonexistent KBs (see the §10 streaming-status note), anonymous asset requests
   return a real 404, gated asset responses carry `Cache-Control: private, no-store`, viewer
   mutations return 403, and viewers are redirected out of `/admin`.
+- **Second review hardening (2026-07-14, independent Codex audit):** (a) the SQL usage probe no
+  longer text-matches `blocks::text LIKE '%id%'` (which let a published page merely *mentioning* an
+  asset id expose a staff-only asset); it now matches exactly what `extractAssetUsages` matches —
+  top-level `image`/`asset_link` blocks via `jsonb_array_elements(...)->>'assetId'` plus
+  `related_asset_ids` containment; (b) the staff-ancestor prunes in both the usage probe and the
+  search `pageVisibilityFilter` now require `p2.status = 'published'`, matching the in-memory
+  `isStaffOnly`-over-published semantics (a draft staff parent no longer hides its published public
+  children from DB search/asset delivery); (c) live-DB regressions added: a decoy page containing an
+  asset id as plain text must not make the asset reader-visible, and a published public child under
+  a draft staff parent must stay searchable with its asset deliverable; (d) the §10 crawler-404
+  claim was corrected (bots receive 200 + not-found UI like all page requests) and the §3 matrix
+  rows now state the `published` constraints.
 - **Build plan:** the complete, ordered implementation plan for this item — including the
   maintainer-action protocol for storage/infrastructure steps — remains in **§14** as the
   implementation audit trail.
