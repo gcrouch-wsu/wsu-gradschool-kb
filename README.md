@@ -36,7 +36,8 @@ current implementation status.
 
 ## Current Status
 
-As of 2026-07-13, the Phase 1 private-KB branch implements the public/private KB release baseline.
+As of 2026-07-14, the public/private KB release baseline is merged to `main` (PR #11) and deployed
+to production; `main` passes full CI including the Neon live-DB access-matrix suites.
 Completed release work includes the multi-KB reader, private KB visibility, owner-provisioned Viewer
 accounts, visibility-aware search and asset delivery, admin/editor workflow, managed assets, imports,
 audit/governance surfaces, revision history with restore, print-to-PDF export, owner site

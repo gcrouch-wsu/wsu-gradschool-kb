@@ -17,7 +17,7 @@ git, not here.
 > Quick map: §1–2 (goal & scope) → §3 (roles) → §4 (stack) → §5 (architecture) → §6 (data) →
 > §7 (run/test) → **§8 (gotchas — read before editing core areas)** → §9–10 (status & limits) →
 > §11 (future work) → §12 (tagged AI-agent backlog) → §13 (operations runbook) →
-> **§14 (Phase 1 build plan — the next build; implementing agents start there)**.
+> §14 (Phase 1 build plan — delivered 2026-07-14; retained as the implementation audit trail).
 
 ---
 
@@ -517,9 +517,10 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 9. Current feature status
 
-**Working & verified (2026-07-13, `phase-1-private-kbs`):** local type-check, lint, unit tests,
-production build, public/private-viewer axe smoke tests, authenticated Chromium editor regressions,
-and live-DB integration tests pass when `DATABASE_URL` is configured.
+**Working & verified (2026-07-14):** Phase 1 is merged to `main` (PR #11) and deployed to
+production. `main` passes GitHub CI: type-check, lint, unit tests, production build,
+public/private-viewer axe smoke tests, route-level access tests, authenticated Chromium editor
+regressions, and the Neon live-DB integration suites (including the private-KB access matrix).
 
 **Complete for the current release baseline:**
 - Multi-KB public site, configurable KB homepage pages, 3-column docs layout, hierarchical page-tree
@@ -1459,7 +1460,11 @@ Items are ordered by recommended priority.
 
 ---
 
-## 14. Phase 1 build plan (private knowledge bases) — for the implementing agent
+## 14. Phase 1 build plan (private knowledge bases) — delivered; retained as audit trail
+
+> **Status: delivered and merged to `main` 2026-07-14 (PR #11), including two review-hardening
+> rounds (see §12 FB-27 notes). This section is kept verbatim as the implementation audit trail;
+> do not execute it again.**
 
 This section is the complete, ordered implementation plan for Phase 1 (§12 FB-27). An agent assigned
 Phase 1 must read this spec in full first — §2 (scope), §3 (authorization matrix and the Phase-1
