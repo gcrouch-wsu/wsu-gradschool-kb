@@ -13,6 +13,28 @@ import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
 import { loadSiteSettings } from "@/lib/db";
 import { hasTocEntries } from "@/lib/toc";
 import { isPageViewPrefetch, recordPageViewLater } from "@/lib/page-views";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ kbSlug: string }>;
+}): Promise<Metadata> {
+  const { kbSlug } = await params;
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
+  if (!kb) {
+    notFound();
+  }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
+    notFound();
+  }
+  return {
+    title: `${kb.title} · WSU Knowledge Base`,
+    description: kb.description || undefined,
+  };
+}
 
 export default async function KbHomePage({ params }: { params: Promise<{ kbSlug: string }> }) {
   const { kbSlug } = await params;

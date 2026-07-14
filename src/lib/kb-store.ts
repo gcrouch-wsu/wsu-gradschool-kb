@@ -543,9 +543,29 @@ export async function getAssetUsages(assetId: string): Promise<AssetUsage[]> {
 }
 
 export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolean> {
-  const pages = isDatabaseEnabled()
-    ? await getDbPagesForKb(asset.homeKbId)
-    : (await getDataset()).pages.filter((page) => page.kbId === asset.homeKbId);
+  if (isDatabaseEnabled()) {
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT 1
+      FROM kb_pages
+      WHERE kb_pages.kb_id = ${asset.homeKbId}
+        AND kb_pages.status = 'published'
+        AND kb_pages.visibility = 'public'
+        AND (
+          kb_pages.related_asset_ids @> ${JSON.stringify([asset.id])}::jsonb
+          OR kb_pages.blocks::text LIKE ${`%${asset.id}%`}
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM kb_pages p2
+          WHERE p2.kb_id = kb_pages.kb_id
+            AND p2.visibility = 'staff'
+            AND (kb_pages.path = p2.path OR kb_pages.path LIKE p2.path || '/%')
+        )
+      LIMIT 1
+    `) as unknown as unknown[];
+    return rows.length > 0;
+  }
+  const pages = (await getDataset()).pages.filter((page) => page.kbId === asset.homeKbId);
   const published = pages.filter((page) => page.status === "published");
   if (published.length === 0) {
     return false;

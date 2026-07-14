@@ -224,11 +224,12 @@ export interface KbReadAccess {
 
 export async function getKbReadAccess(
   session: AdminSession | null,
-  kb: Pick<KnowledgeBase, "id" | "visibility">,
+  kb: Pick<KnowledgeBase, "id" | "visibility" | "status">,
 ): Promise<KbReadAccess> {
+  const publiclyReadable = kb.visibility === "public" && kb.status === "published";
   if (!session) {
     return {
-      canRead: kb.visibility === "public",
+      canRead: publiclyReadable,
       canReadStaffContent: false,
     };
   }
@@ -242,13 +243,19 @@ export async function getKbReadAccess(
     const assigned = isDatabaseEnabled()
       ? await isUserAssignedToKb(session.userId, kb.id)
       : (await assignedKbIdsForSession(session)).includes(kb.id);
+    if (session.role === "editor") {
+      return {
+        canRead: publiclyReadable || assigned,
+        canReadStaffContent: assigned,
+      };
+    }
     return {
-      canRead: kb.visibility === "public" || assigned,
-      canReadStaffContent: session.role === "editor" && assigned,
+      canRead: publiclyReadable || (assigned && kb.status === "published"),
+      canReadStaffContent: false,
     };
   }
   return {
-    canRead: kb.visibility === "public",
+    canRead: publiclyReadable,
     canReadStaffContent: false,
   };
 }
@@ -275,19 +282,23 @@ export async function filterKbsForSession<T extends { id: string }>(
   return kbs.filter((kb) => allowedSet.has(kb.id));
 }
 
-export async function filterKbsForReadAccess<T extends Pick<KnowledgeBase, "id" | "visibility">>(
+export async function filterKbsForReadAccess<T extends Pick<KnowledgeBase, "id" | "visibility" | "status">>(
   session: AdminSession | null,
   kbs: T[],
 ): Promise<T[]> {
+  const publiclyReadable = (kb: T) => kb.visibility === "public" && kb.status === "published";
   if (!session) {
-    return kbs.filter((kb) => kb.visibility === "public");
+    return kbs.filter(publiclyReadable);
   }
   if (session.role === "owner" || session.role === "admin") {
     return kbs;
   }
   if (session.role === "editor" || session.role === "viewer") {
     const assigned = new Set(await assignedKbIdsForSession(session));
-    return kbs.filter((kb) => kb.visibility === "public" || assigned.has(kb.id));
+    if (session.role === "editor") {
+      return kbs.filter((kb) => publiclyReadable(kb) || assigned.has(kb.id));
+    }
+    return kbs.filter((kb) => publiclyReadable(kb) || (assigned.has(kb.id) && kb.status === "published"));
   }
-  return kbs.filter((kb) => kb.visibility === "public");
+  return kbs.filter(publiclyReadable);
 }

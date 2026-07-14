@@ -40,6 +40,15 @@ export const knowledgeBases: KnowledgeBase[] = [
     visibility: "private",
     updatedOn: "2026-06-02",
   },
+  {
+    id: "kb-draft-preview",
+    title: "Draft Preview Knowledge Base",
+    slug: "draft-preview",
+    description: "An unpublished KB used to verify that drafts stay staff-only.",
+    status: "draft",
+    visibility: "public",
+    updatedOn: "2026-06-02",
+  },
 ];
 
 export const assets: Asset[] = [

@@ -65,14 +65,12 @@ export async function GET(
     notFound();
   }
 
-  const publicPublishedUsage = kb.visibility === "public" ? await assetHasPublicPublishedUsage(asset) : false;
-  const requiresAuthorization = kb.visibility === "private" || !publicPublishedUsage;
-  const authorized = kb.visibility === "private"
-    ? Boolean(session && access.canRead)
-    : !requiresAuthorization || access.canReadStaffContent;
+  const readerVisibleUsage = await assetHasPublicPublishedUsage(asset);
+  const authorized = access.canReadStaffContent || (access.canRead && readerVisibleUsage);
   if (!authorized) {
     notFound();
   }
+  const requiresAuthorization = !(kb.visibility === "public" && kb.status === "published" && readerVisibleUsage);
 
   if (asset.assetType === "video") {
     const target = videoDeliveryUrl(asset);

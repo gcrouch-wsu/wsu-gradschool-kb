@@ -39,6 +39,31 @@ describe("private KB read access (in-memory)", () => {
     });
   });
 
+  it("treats unpublished KBs as unreadable for anonymous users and viewers", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const draftPublicKb = { id: "kb-any", visibility: "public" as const, status: "draft" as const };
+    const draftPrivateKb = { id: "kb-private-staff", visibility: "private" as const, status: "draft" as const };
+
+    expect(await getKbReadAccess(null, draftPublicKb)).toMatchObject({ canRead: false });
+    expect(await getKbReadAccess(session("viewer", "seed-viewer-private-staff"), draftPublicKb)).toMatchObject({
+      canRead: false,
+    });
+    expect(await getKbReadAccess(session("viewer", "seed-viewer-private-staff"), draftPrivateKb)).toMatchObject({
+      canRead: false,
+    });
+    expect(await getKbReadAccess(session("editor", "seed-editor-private-staff"), draftPrivateKb)).toMatchObject({
+      canRead: true,
+      canReadStaffContent: true,
+    });
+    expect(await getKbReadAccess(session("editor", "unassigned-editor"), draftPublicKb)).toMatchObject({
+      canRead: false,
+    });
+    expect(await getKbReadAccess(session("owner", "any-owner"), draftPublicKb)).toMatchObject({
+      canRead: true,
+      canReadStaffContent: true,
+    });
+  });
+
   it("does not expose staff-only pages to viewers even when they have a session", async () => {
     vi.stubEnv("DATABASE_URL", "");
     const publicKb = await getKbBySlug("graduate-school");

@@ -78,9 +78,13 @@ handled with locks, not CRDTs).
 - **Owner** — full access (KB-wide), plus user management, KB creation, theming, site settings.
 - **Admin** — KB-wide content/asset management.
 - **Editor** — scoped to assigned KBs for content management (`kb_user_assignments`); reads all
-  public KBs plus assigned private KBs.
-- **Viewer** — local-password account provisioned by an Owner; reads assigned private KBs plus public
-  KBs; sees no admin surfaces and can never reach mutation APIs.
+  published public KBs plus assigned KBs (including assigned drafts).
+- **Viewer** — local-password account provisioned by an Owner; reads **published** KBs only —
+  published public KBs plus assigned published private KBs; unpublished (draft/archived) KBs are
+  staff-only. Viewers see no admin surfaces, can never reach mutation APIs, and never see draft or
+  staff-only pages. Assets referenced only by staff-only pages are staff-only in both public and
+  private KBs: ordinary readers (anonymous or viewer) can fetch an asset only when at least one
+  published, non-staff page references it.
 
 Role checks: `requireAdminMutation` (valid session + same-origin request) plus per-route role/scope
 checks. KB scope is enforced via `canAccessKb` / `accessibleKbIds` / `filterKbsForSession` /
@@ -603,6 +607,13 @@ and live-DB integration tests pass when `DATABASE_URL` is configured.
   landing/article/search/asset URLs. Unauthorized private content returns `notFound()` so KB
   existence is not distinguishable, and authorized private asset responses use
   `Cache-Control: private, no-store`.
+- **Not-found page responses carry HTTP 200, by framework design.** Page routes stream behind the
+  root `loading.tsx` boundary, so the status code is committed before authorization or existence
+  checks run; the 404 boundary UI then streams into a 200 response. This applies identically to
+  nonexistent, private, and draft KB URLs (verified parity — no existence signal) and predates
+  Phase 1. Asset delivery is a route handler and returns genuine 404/status codes.
+  `generateMetadata` on KB landing/article/search routes also calls `notFound()`, which gives
+  crawlers configured for blocking metadata a real 404. Revisit for SEO under FB-31.
 - **Authentication is intentionally local for now**: owner-provisioned accounts use scrypt password
   hashes and signed HMAC cookies. There is no SSO/OIDC/SAML integration until WSU ITS engagement, and
   no server-side idle-session table or sliding idle timeout beyond the current cookie/token expiry
@@ -657,7 +668,9 @@ Other tracked work:
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
 - **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
   navigation options); bulk page operations; trash/restore; scheduled publish.
-- **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact view.
+- **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact
+  view; a persisted asset-usage index so delivery/search visibility checks stop re-deriving usage
+  from page blocks (today a per-request SQL probe).
 - **Governance & ops**: per-KB activity feed from the audit log; keep GitHub/Neon CI secrets healthy;
   broader integration + a11y coverage; a real rate-limit load test; production monitoring/log review
   and rollback checklist; reader feedback, SEO/discoverability, and third-party error tracking are
@@ -1242,6 +1255,18 @@ Items are ordered by recommended priority.
   helper for public/private reads, private/staff-aware search and asset delivery, and live-DB plus
   in-memory access-matrix tests. The fresh-database bootstrap and Phase 1 live-DB suites passed
   against throwaway Neon databases, which were deleted after verification.
+- **Review hardening (2026-07-13):** (a) KB **status** folded into `getKbReadAccess` /
+  `filterKbsForReadAccess` — draft/archived KBs are now unreadable by viewers and anonymous users
+  (owner/admin read all; editors read assigned drafts), closing a leak where any session could read
+  unpublished public KBs; (b) the staff-only-referenced asset rule now applies inside **private**
+  KBs too — assigned viewers can fetch an asset only when a published, non-staff page references it;
+  (c) `assetHasPublicPublishedUsage` is a single indexed SQL `EXISTS` probe in DB mode (mirroring
+  the search staff-prune pattern) instead of loading every page's blocks per asset request;
+  (d) route-level Playwright coverage added (`tests/a11y/private-access.spec.ts`): anonymous and
+  viewer requests to private/draft KB pages render the not-found boundary with no gated content and
+  status parity with nonexistent KBs (see the §10 streaming-status note), anonymous asset requests
+  return a real 404, gated asset responses carry `Cache-Control: private, no-store`, viewer
+  mutations return 403, and viewers are redirected out of `/admin`.
 - **Build plan:** the complete, ordered implementation plan for this item — including the
   maintainer-action protocol for storage/infrastructure steps — remains in **§14** as the
   implementation audit trail.

@@ -31,11 +31,11 @@ export async function generateMetadata({
   const session = await getCurrentAdminSession();
   const kb = await getKbBySlug(kbSlug, Boolean(session));
   if (!kb) {
-    return {};
+    notFound();
   }
   const access = await getKbReadAccess(session, kb);
   if (!access.canRead) {
-    return {};
+    notFound();
   }
   const page = await getPageByPath(kb.id, pagePath, access.canReadStaffContent);
   if (!page) {

@@ -8,6 +8,20 @@ import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 const SEARCH_LIMIT = 30;
 const SEARCH_WINDOW_SECONDS = 60;
 
+export async function generateMetadata({ params }: { params: Promise<{ kbSlug: string }> }) {
+  const { kbSlug } = await params;
+  const session = await getCurrentAdminSession();
+  const kb = await getKbBySlug(kbSlug, Boolean(session));
+  if (!kb) {
+    notFound();
+  }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
+    notFound();
+  }
+  return { title: `Search · ${kb.title}` };
+}
+
 export default async function SearchPage({
   params,
   searchParams,
