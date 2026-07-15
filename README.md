@@ -174,6 +174,14 @@ Admins can import Confluence-exported `.docx` files at `/admin/import`. The docu
 
 Embedded images are promoted into managed image assets when the draft is created. If **Vercel Blob** is configured, the image bytes are stored there; otherwise supported images are retained as data-backed managed assets for local development. Non-web image formats (EMF/WMF) are not yet supported.
 
+## KB page style pipeline (agent-assisted)
+
+The `style/` folder is a workflow for polishing KB page HTML with an AI agent (Claude Code, Codex,
+Gemini CLI, etc.) **before** pasting it into the visual editor: drop a page into `style/draft/`,
+run the prompt in `style/README.md`, and collect the reviewed-and-edited result from
+`style/edited/`. The rules live in `style/style.md`, whose guardrails mirror the app's publish
+gate. This is content tooling, not part of the deployed app.
+
 ## Managing Pages
 
 Signed-in admins manage pages at `/admin/pages`: reopen drafts, edit metadata and content,

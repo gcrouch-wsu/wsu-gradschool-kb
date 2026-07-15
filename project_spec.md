@@ -512,6 +512,11 @@ manual redirect persistence, and the single-active-version DB invariant.
   instead, or content drifts out of the shared rhythm. The editor surface (`.wysiwyg-surface`) keeps
   its own spacing and is intentionally **not** a `.flow` container. Line-heights are unitless and sizes
   are rem/ch so everything scales with reader zoom (WCAG 1.4.4/1.4.8/1.4.12).
+- **`style/style.md` hand-mirrors the publish gate and editor block contract.** The agent style
+  pipeline in `style/` (see `style/README.md`) checks pages against a prose copy of
+  `validatePageForPublish` rules and the `documentHtmlToBlocks` allowed-block list. If you change
+  publish-gate rules or the block contract, update `style/style.md` to match or the content
+  pipeline silently drifts.
 
 ---
 
