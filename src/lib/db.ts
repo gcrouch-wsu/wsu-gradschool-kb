@@ -93,6 +93,7 @@ async function backfillAssetVersions() {
         ${versionId}, ${asset.id}, 1, 'active', ${asset.body}, ${asset.mime_type},
         ${asset.file_size_bytes}, 'backfill', ${asset.updated_display_date}, ''
       )
+      ON CONFLICT DO NOTHING
     `;
     if (!asset.version_id) {
       await sql`UPDATE kb_assets SET version_id = ${versionId} WHERE id = ${asset.id}`;
@@ -130,7 +131,7 @@ async function seedIfEmpty() {
     await sql`
       INSERT INTO knowledge_bases (id, slug, title, description, status, visibility, updated_on)
       VALUES (${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.visibility}, ${kb.updatedOn})
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT DO NOTHING
     `;
   }
 
@@ -145,7 +146,7 @@ async function seedIfEmpty() {
         ${asset.ownerLabel}, ${asset.lastReviewedDate}, ${asset.updatedDisplayDate},
         ${asset.versionId}, ${asset.body}
       )
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT DO NOTHING
     `;
   }
 
@@ -162,7 +163,7 @@ async function seedIfEmpty() {
         ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
         ${page.showToc ?? true}, ${page.tocDepth ?? 3}, ${page.showSummary ?? true}
       )
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT DO NOTHING
     `;
   }
 }
