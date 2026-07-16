@@ -59,7 +59,11 @@ accessibility/governance gate; an audit log; revision history with restore; and 
 `kb_user_assignments` table for viewer/editor access, read gating for every public surface, and
 visibility-aware asset delivery/search.
 
-**In scope next:** WSU SSO (§12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
+**In scope next (maintainer-ratified 2026-07-16):** content reuse & sourcing — cross-page excerpt
+blocks (§12 FB-33, build first) and P&P sourced-content imports with provenance callouts and
+staleness flags (§12 FB-34).
+
+**Also in scope next:** WSU SSO (§12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
 private-KB viewers, superseding local viewer passwords. The SSO portion is gated on WSU ITS
 engagement (app registration, redirect URIs, role/claims mapping). Keep local owner-provisioned
 accounts as the interim and break-glass path, and keep viewer identities keyed so SSO can back them
@@ -663,6 +667,12 @@ staff and private-KB viewers. It is gated on WSU ITS engagement; the ITS ask lis
 prod + preview redirect URIs, claims/groups for role mapping) is in FB-30. Local owner-provisioned
 accounts remain the interim and break-glass path. Design viewer identities so SSO can back them later
 without re-modeling `kb_user_assignments`.
+
+**Content reuse & sourcing (§12 FB-33/FB-34)** is the maintainer-ratified next build step
+(2026-07-16): live cross-page excerpt blocks so a target page always renders the source's current
+section, and snapshot imports from the published P&P manual with a provenance callout and
+review-dashboard staleness flags. FB-33 is the foundation; FB-34 layers external sourcing on its
+callout chrome.
 
 Other tracked work:
 
@@ -1403,6 +1413,119 @@ Items are ordered by recommended priority.
 - **Acceptance:** readers can submit yes/no plus optional short feedback; repeat submissions are handled
   without invasive tracking; admins can see page-level feedback counts/trends; feedback submission never
   blocks page rendering.
+
+---
+
+> Items FB-33–FB-34 were ratified by the maintainer (2026-07-16) as the **next build step**, following
+> a feasibility review in-session (Claude Fable 5). FB-33 is the foundation; FB-34 shares its
+> callout/provenance chrome. Build FB-33 first.
+
+### FB-33 — Cross-page excerpt blocks (internal transclusion)
+
+`[AI-AGENT-TASK] id:FB-33  priority:high  area:content-reuse  effort:L  status:open`
+
+- **Finding:** content that applies to multiple pages/KBs must currently be duplicated, and copies
+  drift when the source page changes. This is the missing Confluence "excerpt include" equivalent:
+  a target page should render a section of a source page, and stay current when the source updates.
+- **Approach — live reference, not copy-and-sync:** add an `excerpt` `ContentBlock` variant that
+  stores a *reference* (source page id + the stable `data-block-id` of a heading, meaning "that
+  heading's section"). The target page resolves the source's current blocks server-side at render
+  time inside an "Included from [page]" callout frame. Because nothing is copied, source updates
+  appear on every target immediately — no sync job, no staleness state for internal excerpts.
+- **Design decisions (from the 2026-07-16 feasibility review):**
+  - **Visibility:** resolve excerpts through the same `getKbReadAccess` semantics as every public
+    surface. When the reader cannot read the source (draft/staff/private/archived relative to them),
+    render a neutral "content unavailable" callout — never the content, and no existence signal
+    beyond the callout itself. Live-DB access-matrix tests required (§8 convention).
+  - **Headings:** demote or strip headings inside excerpted content so the target's heading
+    hierarchy stays valid for the publish gate (same normalization family as DOCX import H1/H4–H6).
+  - **Search:** excerpted text is *not* indexed on the target page (`kb_extract_blocks_text` sees
+    only the reference); the source page matches instead. Accepted and documented behavior.
+  - **Reference integrity:** archiving/permanently deleting a source page while excerpts reference
+    it is blocked (or degrades to the unavailable callout on archive), mirroring the existing
+    related-page/asset reference safeguards with a new usage type.
+  - **Cycles:** excerpt resolution carries a depth cap (cards' max-depth-3 precedent) so A→B→A
+    cannot recurse.
+  - **Rendering & theming (maintainer requirement, 2026-07-16):** the excerpt renders inside a
+    **themed callout box in the info-box family**, visually distinct from the info box, with a
+    labeled link to the source page ("Included from: [page title]" → canonical page URL). Styling
+    follows the exact `infoBox*` pattern: a new `excerptBoxBg`/`excerptBoxBorder`/`excerptBoxInk`
+    color triplet in `KbTheme` (`src/lib/kb-theme.ts`), editable in the shared `ThemeEditor` (global
+    default + per-KB override), emitted as CSS vars by `themeToCssVars`.
+  - **Editor:** excerpts render as a non-editable placeholder block (video/asset-link precedent)
+    with a picker to choose source page + section (media-picker pattern).
+  - **Print/PDF and KB export** inline the resolved content; revision snapshots store the reference
+    only (accepted: a target revision does not freeze excerpt content as-of that save).
+- **Touch points:** `src/lib/types.ts`, `src/lib/page-document.ts`, `src/components/PageBlocks.tsx`,
+  `src/components/PageDocumentEditor.tsx`, `src/lib/kb-store.ts` / `src/lib/db.ts` (resolution +
+  usage tracking), `src/lib/publish-gate.ts`, `src/lib/kb-export.ts`, `style/style.md` (block
+  contract mirror, §8), live-DB + in-memory tests.
+- **Acceptance:** (1) editing a source page updates every target render immediately; (2) readers
+  without source access see the fallback callout and never the content (in-memory + live-DB matrix
+  tests); (3) source archive/permanent-delete is blocked or degrades safely while referenced;
+  (4) cyclic excerpts are capped, not infinite; (5) the publish gate passes/fails correctly on pages
+  containing excerpts; (6) print, KB export, and draft preview inline the resolved content;
+  (7) the excerpt callout colors are editable in the global and per-KB theme editors exactly like
+  the info box, and the source link renders in the callout chrome.
+
+### FB-34 — Sourced content from the published P&P manual (external excerpt with provenance)
+
+`[AI-AGENT-TASK] id:FB-34  priority:high  area:content-sourcing  effort:M  status:open`
+
+- **Finding:** the Graduate School Policies & Procedures manual is published at
+  `https://gradschool.wsu.edu/graduate-school-policies-and-procedures/` (WordPress, one ~600 KB
+  page). Editors want to include specific policy sections in KB pages with a visible "this comes
+  from the P&P" callout and awareness when the source changes. KB users have access to the webpage
+  only — not to the maintainer's Word→HTML converter that generates it.
+- **Feasibility findings (2026-07-16 live probes; revalidate before build):**
+  - The page carries **341 stable heading anchors (h2–h6)** generated by the maintainer's converter
+    heading map. Anchor ids persist across publication cycles **only while heading text is
+    unchanged** (strict signature match, no fuzzy fallback) — a reworded heading mints a new id, so
+    the stored reference must keep the heading text alongside the anchor.
+  - The **WordPress REST API is open**: `wp-json/wp/v2/pages?slug=graduate-school-policies-and-procedures`
+    returns the page id and a `modified` timestamp; `content.rendered` is fetchable.
+  - The **WAF blocks default tool user agents** (curl → 403) but serves any self-identifying UA
+    (e.g. `wsu-gradschool-kb/1.0`) on both the page and `wp-json`. The web team is not cooperative:
+    assume every fetch path is revocable without notice.
+  - Page-level `Last-Modified`/`ETag` are render-time stamps — **useless for change detection**.
+    Use the `wp-json` `modified` field plus stored per-section content hashes.
+  - The manual republishes in **discrete annual cycles** ("2025–2026", "2026–2027"), not continuous
+    edits.
+- **Approach — snapshot import with staleness flags, never live embedding:**
+  1. An admin **"Import from source"** action accepts a P&P URL + anchor, fetches server-side
+     (`wp-json` preferred, HTML page fallback, honest identifying UA), extracts from the anchor's
+     heading to the next same-or-higher-level heading, sanitizes through the existing paste-HTML
+     path (h4–h6 → H3 demotion), and stores real blocks inside a **sourced-content callout block**
+     with metadata: source URL + anchor, heading text, retrieved date, section content hash.
+  2. Public render shows the provenance callout — *"Source: Graduate School Policies and
+     Procedures — [section], retrieved [date]"* — linking to the anchored source. Shares callout
+     chrome with FB-33 but is its **own themed box** (maintainer requirement, 2026-07-16): a
+     `sourceBoxBg`/`sourceBoxBorder`/`sourceBoxInk` triplet in `KbTheme` following the `infoBox*` /
+     FB-33 `excerptBox*` pattern, editable in `ThemeEditor` (global + per-KB), emitted by
+     `themeToCssVars`. Info box, KB excerpt, and P&P source are three independently styleable
+     callout kinds.
+  3. **Staleness:** a cron (`CRON_SECRET` pattern; confirm the Vercel plan's cron count, §13) or a
+     manual "check sources" admin button polls `modified`; on change, re-extract only the referenced
+     sections and compare hashes. Affected pages are **flagged in the review dashboard** with a
+     tri-state: *content changed* (review + refresh) / *anchor moved* (heading text found under a
+     new id — relink) / *section removed* (flag hard). **Never auto-update** — refresh is a
+     deliberate editor action that re-runs the publish gate.
+  4. **Never fetch in the reader render path.** Fetch failures degrade to an admin-side "source
+     unreachable — last verified [date]" state; the published KB page is unaffected.
+  5. **Paste-from-browser fallback is a first-class import mode:** the import action also accepts
+     pasted section HTML with a manually entered source URL (same sanitizer, same callout), so the
+     feature degrades to copy-paste-with-provenance if server access is ever lost entirely.
+- **Touch points:** the FB-33 callout/block foundation, `src/lib/page-document.ts` /
+  `src/lib/rich-text.ts` (sanitize path), a new admin import UI + API route (`requireAdminMutation`
+  + `requireKbAccess`), a cron route, `src/lib/admin-review.ts` (source-updated flags), a migration
+  for source metadata, `.env.example` if any config is added, `style/style.md`, tests.
+- **Acceptance:** (1) an editor can import `#graduate-program-faculty` and publish a page showing
+  the section inside the provenance callout; (2) a source change flags affected pages for review,
+  and one-click refresh re-runs the publish gate; (3) anchor rename/removal is flagged distinctly
+  from content change; (4) fetch failure or a closed API never affects public rendering; (5) the
+  paste fallback produces identical block output to the fetch path; (6) polling is throttled and
+  sends an honest identifying user agent; (7) the source callout colors are editable in the global
+  and per-KB theme editors like the info box, independently of the FB-33 excerpt callout.
 
 ---
 
