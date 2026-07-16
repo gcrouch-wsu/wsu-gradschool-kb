@@ -72,7 +72,7 @@ async function ExcerptBlock({ block }: { block: Extract<ContentBlock, { type: "e
   const resolved = await resolveExcerptForRead(block, session);
   if (resolved.state !== "ok") {
     return (
-      <aside className="excerpt-box excerpt-box--unavailable" role="note">
+      <aside aria-label="Included content unavailable" className="excerpt-box excerpt-box--unavailable" role="note">
         <p className="excerpt-box__source">This included content is currently unavailable.</p>
       </aside>
     );

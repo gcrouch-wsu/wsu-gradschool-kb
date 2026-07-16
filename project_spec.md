@@ -1464,6 +1464,17 @@ Items are ordered by recommended priority.
     checker states). Unit, live-DB, axe, and editor Playwright suites all green.
   - The cold-start seed race found while setting up the local Neon test branch was fixed alongside
     (targetless `ON CONFLICT DO NOTHING` in `seedIfEmpty`/`backfillAssetVersions`).
+  - **Independent review repair (Codex, 2026-07-16):** the excerpt-sources picker's direct
+    `?page=` lookup originally checked only the source row's own status/visibility, so an editor
+    without staff access could fetch title/headings of a public page under a staff-only ancestor
+    (and of archived pages) by id. It now routes through
+    `getReadableExcerptSourcePageForPicker` (`src/lib/excerpts.ts`), applying the same
+    `getPageByPath` visibility rules as render-time resolution; live-DB regression added.
+  - **Review-question decisions (2026-07-16):** (a) the unavailable callout now carries
+    `aria-label="Included content unavailable"` for state parity with the available callout's
+    labeled `role="note"` region; (b) long "Included from" labels intentionally wrap rather than
+    truncate — visually shortening while exposing full text only to assistive tech would diverge
+    the visible and accessible names and hide the section cue sighted readers use.
 
 - **Finding:** content that applies to multiple pages/KBs must currently be duplicated, and copies
   drift when the source page changes. This is the missing Confluence "excerpt include" equivalent:
