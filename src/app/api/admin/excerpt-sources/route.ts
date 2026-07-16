@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { filterKbsForReadAccess, getKbReadAccess } from "@/lib/auth";
+import { getReadableExcerptSourcePageForPicker } from "@/lib/excerpts";
 import { richTextToPlainText } from "@/lib/rich-text";
 import {
   getAllKbsForAdmin,
   getAllPageSummariesForAdmin,
   getKbById,
-  getPageByIdForAdmin,
   getVisiblePagesForKb,
 } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
@@ -43,18 +43,13 @@ export async function GET(request: Request) {
 
   try {
     if (pageId) {
-      const page = await getPageByIdForAdmin(pageId);
-      const kb = page ? await getKbById(page.kbId) : null;
-      if (!page || !kb) {
-        return NextResponse.json({ message: "Page not found." }, { status: 404 });
-      }
-      const access = await getKbReadAccess(guard.session, kb);
-      if (!access.canRead || (!access.canReadStaffContent && (page.status !== "published" || page.visibility === "staff"))) {
+      const source = await getReadableExcerptSourcePageForPicker(pageId, guard.session);
+      if (!source) {
         return NextResponse.json({ message: "Page not found." }, { status: 404 });
       }
       return NextResponse.json({
-        page: { id: page.id, title: page.title },
-        headings: listExcerptHeadings(page.blocks),
+        page: { id: source.page.id, title: source.page.title },
+        headings: listExcerptHeadings(source.page.blocks),
       });
     }
 

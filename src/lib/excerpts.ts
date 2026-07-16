@@ -2,7 +2,7 @@ import type { AdminSession } from "@/lib/auth";
 import { getKbReadAccess } from "@/lib/auth";
 import { getKbById, getPageByIdForAdmin, getPageByPath } from "@/lib/kb-store";
 import { richTextToPlainText, textToRichText } from "@/lib/rich-text";
-import type { ContentBlock } from "@/lib/types";
+import type { ContentBlock, KbPage, KnowledgeBase } from "@/lib/types";
 
 export type ExcerptBlockRef = Pick<
   Extract<ContentBlock, { type: "excerpt" }>,
@@ -163,6 +163,29 @@ export async function resolveExcerptForRead(
     return UNAVAILABLE;
   }
   return resolveFromVisibleSource(ref, page, kb);
+}
+
+export async function getReadableExcerptSourcePageForPicker(
+  pageId: string,
+  session: AdminSession,
+): Promise<{ page: KbPage; kb: KnowledgeBase } | null> {
+  const page = await getPageByIdForAdmin(pageId);
+  if (!page) {
+    return null;
+  }
+  const kb = await getKbById(page.kbId);
+  if (!kb) {
+    return null;
+  }
+  const access = await getKbReadAccess(session, kb);
+  if (!access.canRead) {
+    return null;
+  }
+  const visible = await getPageByPath(page.kbId, page.path, access.canReadStaffContent);
+  if (!visible || visible.id !== page.id) {
+    return null;
+  }
+  return { page: visible, kb };
 }
 
 // Owner-only KB export inlines excerpt content without reader gating: the

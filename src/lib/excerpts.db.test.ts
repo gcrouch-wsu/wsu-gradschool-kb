@@ -1,18 +1,26 @@
 import { describe, expect, it } from "vitest";
 import type { AdminSession } from "@/lib/auth";
 import { ensureSchema, getSql, isDatabaseEnabled } from "@/lib/db";
-import { checkExcerptSourceForPublish, resolveExcerptForRead } from "@/lib/excerpts";
+import {
+  checkExcerptSourceForPublish,
+  getReadableExcerptSourcePageForPicker,
+  resolveExcerptForRead,
+} from "@/lib/excerpts";
 import { getExcerptReferencesToPage } from "@/lib/kb-store";
 
-function viewerSession(userId: string): AdminSession {
+function session(role: AdminSession["role"], userId: string): AdminSession {
   return {
     userId,
     email: `${userId}@example.edu`,
-    role: "viewer",
-    source: "managed",
+    role,
+    source: role === "owner" ? "env" : "managed",
     expiresAt: Date.now() + 60_000,
     version: "test",
   };
+}
+
+function viewerSession(userId: string): AdminSession {
+  return session("viewer", userId);
 }
 
 describe.skipIf(!isDatabaseEnabled())("cross-page excerpts live DB", () => {
@@ -28,6 +36,8 @@ describe.skipIf(!isDatabaseEnabled())("cross-page excerpts live DB", () => {
     const privateSource = `test-excerpt-priv-src-${id}`;
     const targetPage = `test-excerpt-target-${id}`;
     const decoyPage = `test-excerpt-decoy-${id}`;
+    const staffParent = `test-excerpt-staff-parent-${id}`;
+    const publicUnderStaff = `test-excerpt-staff-child-${id}`;
     const viewerId = `test-excerpt-viewer-${id}`;
 
     const sourceBlocks = [
@@ -97,6 +107,20 @@ describe.skipIf(!isDatabaseEnabled())("cross-page excerpts live DB", () => {
               { blockId: "p1", type: "paragraph", text: `See ${sourcePage} for details`, html: `See ${sourcePage} for details` },
             ])}::jsonb,
             '[]'::jsonb, '[]'::jsonb, true, 3, true, true
+          ),
+          (
+            ${staffParent}, ${publicKb}, 'staff-parent', 'staff-parent', 50,
+            ${`Excerpt Staff Parent ${unique}`}, 'Staff parent', 'published', 'staff',
+            'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
+            ${JSON.stringify([{ blockId: "p1", type: "paragraph", text: "Staff parent", html: "Staff parent" }])}::jsonb,
+            '[]'::jsonb, '[]'::jsonb, true, 3, true, true
+          ),
+          (
+            ${publicUnderStaff}, ${publicKb}, 'child-under-staff', 'staff-parent/child-under-staff', 10,
+            ${`Excerpt Staff Child ${unique}`}, 'Public child under staff parent', 'published', 'public',
+            'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
+            ${JSON.stringify([{ blockId: "p1", type: "paragraph", text: "Hidden by ancestor", html: "Hidden by ancestor" }])}::jsonb,
+            '[]'::jsonb, '[]'::jsonb, true, 3, true, true
           )
       `;
 
@@ -119,6 +143,19 @@ describe.skipIf(!isDatabaseEnabled())("cross-page excerpts live DB", () => {
       expect(
         (await resolveExcerptForRead({ sourcePageId: privateSource }, viewerSession(viewerId))).state,
       ).toBe("ok");
+
+      // The editor picker's direct page lookup must hide pages that are public
+      // themselves but live under a staff-only ancestor, matching article route
+      // visibility instead of only checking the page row's own visibility.
+      expect(
+        await getReadableExcerptSourcePageForPicker(
+          publicUnderStaff,
+          session("editor", `unassigned-editor-${id}`),
+        ),
+      ).toBeNull();
+      expect(
+        await getReadableExcerptSourcePageForPicker(publicUnderStaff, session("owner", `owner-${id}`)),
+      ).not.toBeNull();
 
       // The reference probe finds the real excerpt and ignores the decoy that
       // only mentions the source id in paragraph text.
