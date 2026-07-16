@@ -1,4 +1,5 @@
 import { parse } from "node-html-parser";
+import type { ExcerptBlockRef, ExcerptSourceState } from "@/lib/excerpts";
 import type { ContentBlock, PageRevision } from "@/lib/types";
 
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
@@ -15,6 +16,16 @@ export interface PublishablePage {
 }
 
 export type AssetStatusResolver = (assetId: string) => Promise<string | null>;
+
+// Injected like AssetStatusResolver so the gate stays free of data-layer
+// imports; callers pass checkExcerptSourceForPublish from src/lib/excerpts.ts.
+export type ExcerptSourceChecker = (ref: ExcerptBlockRef) => Promise<ExcerptSourceState>;
+
+const EXCERPT_ISSUES: Record<Exclude<ExcerptSourceState, "ok">, string> = {
+  missing: "An included excerpt references a page that no longer exists. Remove or repoint the excerpt.",
+  unpublished: "An included excerpt references a page that is not published.",
+  section_missing: "An included excerpt references a section that no longer exists on its source page.",
+};
 
 function collectHtml(block: ContentBlock): string[] {
   switch (block.type) {
@@ -37,6 +48,7 @@ function collectHtml(block: ContentBlock): string[] {
 export async function validatePageForPublish(
   page: PublishablePage,
   resolveAssetStatus: AssetStatusResolver,
+  checkExcerptSource?: ExcerptSourceChecker,
 ): Promise<string[]> {
   const issues: string[] = [];
 
@@ -91,10 +103,17 @@ export async function validatePageForPublish(
         issues.push("A file link references an asset that is not active.");
       }
     }
+    if (block.type === "excerpt" && checkExcerptSource) {
+      const state = await checkExcerptSource(block);
+      if (state !== "ok") {
+        issues.push(EXCERPT_ISSUES[state]);
+      }
+    }
     if (block.type === "card" || block.type === "procedure_section") {
       const nestedIssues = await validatePageForPublish(
         { ...page, blocks: block.blocks },
         resolveAssetStatus,
+        checkExcerptSource,
       );
       issues.push(
         ...nestedIssues.filter(
@@ -151,6 +170,7 @@ export async function validateRevisionForRestore(
     | "blocks"
   >,
   resolveAssetStatus: AssetStatusResolver,
+  checkExcerptSource?: ExcerptSourceChecker,
 ): Promise<string[]> {
   if (revision.status !== "published") {
     return [];
@@ -166,5 +186,6 @@ export async function validateRevisionForRestore(
       blocks: revision.blocks,
     },
     resolveAssetStatus,
+    checkExcerptSource,
   );
 }

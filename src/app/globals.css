@@ -978,6 +978,37 @@ p {
   margin-bottom: 0;
 }
 
+.excerpt-box {
+  background: var(--excerpt-box-bg, var(--wash));
+  border-left: 4px solid var(--excerpt-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--excerpt-box-ink, var(--ink));
+  padding: 1.25rem 1.5rem;
+}
+
+.excerpt-box__source {
+  font-size: 0.875rem;
+  color: var(--excerpt-box-ink, var(--ink));
+  margin: 0 0 0.75rem;
+}
+
+.excerpt-box__source a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.excerpt-box--unavailable .excerpt-box__source {
+  margin-bottom: 0;
+}
+
+.excerpt-box__blocks > :first-child {
+  margin-top: 0;
+}
+
+.excerpt-box__blocks > :last-child {
+  margin-bottom: 0;
+}
+
 .alert--warning {
   border-left-color: var(--warning);
   background: var(--warning-wash);
@@ -3086,7 +3117,21 @@ article li > ol {
   margin: 0;
 }
 
-.doc.card { min-width: 0; 
+.doc-excerpt {
+  background: var(--excerpt-box-bg, var(--wash));
+  border-left: 4px solid var(--excerpt-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--excerpt-box-ink, var(--ink));
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+}
+
+.doc-excerpt::before {
+  content: "Included content from another page — shown in full on the published page.";
+  font-size: 0.875rem;
+}
+
+.doc.card { min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   margin: 1.5rem 0;

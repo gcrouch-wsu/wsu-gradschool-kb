@@ -326,6 +326,12 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
       const titleAttr = block.title ? ` data-title="${escapeHtml(block.title)}"` : "";
       return `<div class="doc-video" contenteditable="false" data-block-id="${id}"${providerAttr}${embedIdAttr}${urlAttr}${titleAttr}></div>`;
     }
+    case "excerpt": {
+      const headingAttr = block.sourceHeadingBlockId
+        ? ` data-source-heading-id="${escapeHtml(block.sourceHeadingBlockId)}"`
+        : "";
+      return `<div class="doc-excerpt" contenteditable="false" data-block-id="${id}" data-source-page-id="${escapeHtml(block.sourcePageId)}"${headingAttr}></div>`;
+    }
     default:
       return assertNever(block);
   }
@@ -434,6 +440,13 @@ function serializeDocumentNode(node: Node): string {
     const url = node.getAttribute("data-url") || "";
     const title = node.getAttribute("data-title") || "";
     return `<div class="doc-video" contenteditable="false" data-block-id="${escapeHtml(blockId)}" data-provider="${escapeHtml(provider)}" data-embed-id="${escapeHtml(embedId)}" data-url="${escapeHtml(url)}" data-title="${escapeHtml(title)}"></div>`;
+  }
+
+  if (tag === "div" && hasClass(node, "doc-excerpt")) {
+    const sourcePageId = node.getAttribute("data-source-page-id") || "";
+    const sourceHeadingId = node.getAttribute("data-source-heading-id") || "";
+    const headingAttr = sourceHeadingId ? ` data-source-heading-id="${escapeHtml(sourceHeadingId)}"` : "";
+    return `<div class="doc-excerpt" contenteditable="false" data-block-id="${escapeHtml(blockId)}" data-source-page-id="${escapeHtml(sourcePageId)}"${headingAttr}></div>`;
   }
 
   if ((tag === "div" && hasClass(node, "doc-section-break")) || (tag === "hr" && hasClass(node, "doc-section-break"))) {
@@ -713,6 +726,20 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
         url: node.getAttribute("data-url") || undefined,
         title: node.getAttribute("data-title") || undefined,
       });
+      continue;
+    }
+
+    if (tag === "div" && hasClass(node, "doc-excerpt")) {
+      // Excerpts are top-level blocks only; one dropped inside a card or
+      // procedure section would resolve recursively at render time.
+      if (depth === 0) {
+        blocks.push({
+          blockId: blockIdFrom(node),
+          type: "excerpt",
+          sourcePageId: node.getAttribute("data-source-page-id") || "",
+          sourceHeadingBlockId: node.getAttribute("data-source-heading-id") || undefined,
+        });
+      }
       continue;
     }
   }

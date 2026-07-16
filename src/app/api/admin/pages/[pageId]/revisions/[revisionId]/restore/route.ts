@@ -7,6 +7,7 @@ import {
   getPageRevision,
   restorePageRevision,
 } from "@/lib/kb-store";
+import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { logError } from "@/lib/log";
 import { validateRevisionForRestore } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -38,7 +39,7 @@ export async function POST(
 
   // Restoring a published revision re-publishes it, so it must clear the publish
   // gate — mirror the normal save route's 422-with-issues response.
-  const issues = await validateRevisionForRestore(revision, getAssetStatusById);
+  const issues = await validateRevisionForRestore(revision, getAssetStatusById, checkExcerptSourceForPublish);
   if (issues.length > 0) {
     return NextResponse.json(
       {

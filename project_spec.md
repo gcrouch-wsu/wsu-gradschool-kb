@@ -59,9 +59,12 @@ accessibility/governance gate; an audit log; revision history with restore; and 
 `kb_user_assignments` table for viewer/editor access, read gating for every public surface, and
 visibility-aware asset delivery/search.
 
-**In scope next (maintainer-ratified 2026-07-16):** content reuse & sourcing — cross-page excerpt
-blocks (§12 FB-33, build first) and P&P sourced-content imports with provenance callouts and
-staleness flags (§12 FB-34).
+**In scope (built 2026-07-16):** cross-page excerpt blocks (§12 FB-33) — live "Included from"
+callouts that render another page's current section, reader-visibility-gated, themeable like the
+info box.
+
+**In scope next (maintainer-ratified 2026-07-16):** P&P sourced-content imports with provenance
+callouts and staleness flags (§12 FB-34), building on the FB-33 callout foundation.
 
 **Also in scope next:** WSU SSO (§12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
 private-KB viewers, superseding local viewer passwords. The SSO portion is gated on WSU ITS
@@ -191,7 +194,8 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - A page's body is a `ContentBlock[]` union (`src/lib/types.ts`): paragraph, heading (H2/H3), list
   with optional custom start number, alert (rendered in the editor as a reader-visible info box),
   image with separate optional caption, table, asset_link, card (recursive, max depth 3), top-level
-  procedure_section, video, and section_divider.
+  procedure_section, video, section_divider, and top-level excerpt (a live reference to another
+  page's section — see §8 and FB-33).
 - A KB can optionally point `homepagePageId` / `knowledge_bases.home_page_id` at one page in that
   KB. Public `/kb/{kbSlug}` renders that page as the KB landing page when it is visible to the
   current visitor; otherwise it falls back to the generated section list. The homepage page's tree
@@ -516,6 +520,15 @@ manual redirect persistence, and the single-active-version DB invariant.
   instead, or content drifts out of the shared rhythm. The editor surface (`.wysiwyg-surface`) keeps
   its own spacing and is intentionally **not** a `.flow` container. Line-heights are unitless and sizes
   are rem/ch so everything scales with reader zoom (WCAG 1.4.4/1.4.8/1.4.12).
+- **Excerpt blocks are live references, resolved per reader at render time.** An `excerpt` block
+  stores only `sourcePageId` (+ optional heading block id); `resolveExcerptForRead`
+  (`src/lib/excerpts.ts`) applies `getKbReadAccess` + the article route's status/staff rules and
+  collapses every failure to one indistinguishable "unavailable" callout. Never render excerpt
+  content through a path that skips this resolver, never index it into the target's FTS vector,
+  and keep excerpts top-level only (`documentHtmlToBlocks` drops nested ones; demotion replaces
+  nested excerpts with a note, which is what makes cycles impossible). The publish gate's excerpt
+  checks are injected (`checkExcerptSourceForPublish`) — pass the checker at any new gate call
+  site or excerpt problems silently stop blocking publish.
 - **`style/style.md` hand-mirrors the publish gate and editor block contract.** The agent style
   pipeline in `style/` (see `style/README.md`) checks pages against a prose copy of
   `validatePageForPublish` rules and the `documentHtmlToBlocks` allowed-block list. If you change
@@ -668,11 +681,12 @@ prod + preview redirect URIs, claims/groups for role mapping) is in FB-30. Local
 accounts remain the interim and break-glass path. Design viewer identities so SSO can back them later
 without re-modeling `kb_user_assignments`.
 
-**Content reuse & sourcing (§12 FB-33/FB-34)** is the maintainer-ratified next build step
-(2026-07-16): live cross-page excerpt blocks so a target page always renders the source's current
-section, and snapshot imports from the published P&P manual with a provenance callout and
-review-dashboard staleness flags. FB-33 is the foundation; FB-34 layers external sourcing on its
-callout chrome.
+**Content reuse & sourcing (§12 FB-33/FB-34)** is the maintainer-ratified 2026-07-16 work:
+FB-33 (live cross-page excerpt blocks) is **delivered** — a target page always renders the
+source's current section in a themeable "Included from" callout, gated by reader visibility.
+FB-34 (snapshot imports from the published P&P manual with a provenance callout and
+review-dashboard staleness flags) is the remaining next step and layers external sourcing on the
+FB-33 callout chrome.
 
 Other tracked work:
 
@@ -1422,7 +1436,34 @@ Items are ordered by recommended priority.
 
 ### FB-33 — Cross-page excerpt blocks (internal transclusion)
 
-`[AI-AGENT-TASK] id:FB-33  priority:high  area:content-reuse  effort:L  status:open`
+`[AI-AGENT-TASK] id:FB-33  priority:high  area:content-reuse  effort:L  status:done`
+
+- **DONE (2026-07-16, `feature/excerpt-blocks`):** delivered as designed below. Implementation notes:
+  - New `excerpt` block (`sourcePageId` + optional `sourceHeadingBlockId`) serialized as a
+    top-level `<div class="doc-excerpt">`; `documentHtmlToBlocks` drops excerpt divs nested inside
+    cards/procedure sections. No DB migration was needed — the reference lives in the blocks JSONB
+    and the FTS extractor is field-driven, so excerpt blocks index nothing on the target.
+  - Resolution (`src/lib/excerpts.ts`): reader-scoped `resolveExcerptForRead` (via
+    `getKbReadAccess` + `getPageByPath` for status/staff-ancestor rules; every failure collapses to
+    one "unavailable" state), owner-scoped `resolveExcerptForExport` for the KB export, and
+    author-facing `checkExcerptSourceForPublish` for the gate. Headings inside excerpted content
+    demote to bold paragraphs; nested excerpts render as a pointer note (cap = no recursion, so
+    cycles are impossible).
+  - Publish gate takes an optional injected `ExcerptSourceChecker` (missing / unpublished /
+    section-missing block publish); wired at the save, tree-publish, restore, and review-dashboard
+    call sites. Permanent page delete is blocked while any page (any KB) references it via the
+    top-level-blocks SQL probe `getExcerptReferencesToPage` (decoy-safe, mirrors the asset probe).
+  - Editor: "Excerpt" toolbar insert + `ExcerptSectionEditor` cascading picker backed by
+    `GET /api/admin/excerpt-sources` (session + read-access filtered; viewers rejected). Draft
+    preview shows a placeholder callout (like videos); the published page resolves live.
+  - Theming: `excerptBoxBg/Border/Ink` in `KbTheme` → ThemeEditor "Included Excerpt Styles" +
+    contrast row → `--excerpt-box-*` CSS vars consumed by `.excerpt-box` (public) and
+    `.doc-excerpt` (editor/preview placeholder).
+  - Tests: `excerpts.test.ts` (section extraction, demotion, round-trip, in-memory access matrix,
+    gate) and `excerpts.db.test.ts` (live-DB resolution matrix, decoy-safe reference probe, gate
+    checker states). Unit, live-DB, axe, and editor Playwright suites all green.
+  - The cold-start seed race found while setting up the local Neon test branch was fixed alongside
+    (targetless `ON CONFLICT DO NOTHING` in `seedIfEmpty`/`backfillAssetVersions`).
 
 - **Finding:** content that applies to multiple pages/KBs must currently be duplicated, and copies
   drift when the source page changes. This is the missing Confluence "excerpt include" equivalent:
@@ -1464,7 +1505,9 @@ Items are ordered by recommended priority.
   without source access see the fallback callout and never the content (in-memory + live-DB matrix
   tests); (3) source archive/permanent-delete is blocked or degrades safely while referenced;
   (4) cyclic excerpts are capped, not infinite; (5) the publish gate passes/fails correctly on pages
-  containing excerpts; (6) print, KB export, and draft preview inline the resolved content;
+  containing excerpts; (6) print and KB export inline the resolved content (delivered deviation:
+  the client-side draft preview shows a placeholder callout, matching the existing video/file-link
+  preview behavior);
   (7) the excerpt callout colors are editable in the global and per-KB theme editors exactly like
   the info box, and the source link renders in the callout chrome.
 

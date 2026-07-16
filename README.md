@@ -11,7 +11,9 @@ current implementation status.
   a responsive **3-column docs layout** (nav · article · sticky on-page TOC rail) with
   depth-controlled TOC.
 - **Rich editor**: paragraphs, headings, lists with continued numbering controls, reader-visible
-  **info boxes**, procedure sections, tables, cards, images, videos, and internal **editor notes**
+  **info boxes**, procedure sections, tables, cards, images, videos, **live excerpts from other
+  pages** (an "Included from" callout that always shows the source's current section, gated by the
+  reader's access and styleable like the info box), and internal **editor notes**
   anchored to selected text or a cursor position; text/image **alignment**; a **link dialog**
   (create/edit links, new-tab target); a **media picker**; per-image **alt text** and optional
   visible captions kept as separate fields.

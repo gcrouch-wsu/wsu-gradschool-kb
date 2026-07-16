@@ -183,6 +183,12 @@ export type ContentBlock =
       title?: string;
       provider?: "youtube" | "vimeo" | "direct";
       embedId?: string;
+    }
+  | {
+      blockId: string;
+      type: "excerpt";
+      sourcePageId: string;
+      sourceHeadingBlockId?: string;
     };
 
 export type StagedImportStatus = "uploaded" | "parsed" | "needs_review" | "failed";

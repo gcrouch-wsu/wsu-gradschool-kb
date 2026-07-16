@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AltTextDialog } from "@/components/AltTextDialog";
 import { DocumentToolbar } from "@/components/DocumentToolbar";
+import { ExcerptSectionEditor } from "@/components/ExcerptSectionEditor";
 import { LinkDialog } from "@/components/LinkDialog";
 import { NoteDialog } from "@/components/NoteDialog";
 import { MediaPicker } from "@/components/MediaPicker";
@@ -264,6 +265,28 @@ export function PageDocumentEditor({
     emitChange(next);
   }
 
+  function addExcerpt() {
+    const next = [
+      ...sections,
+      {
+        type: "excerpt" as const,
+        block: {
+          blockId: newBlockId(),
+          type: "excerpt" as const,
+          sourcePageId: "",
+        },
+      },
+    ];
+    emitChange(next);
+  }
+
+  function updateExcerptSection(index: number, block: ContentBlock) {
+    if (block.type !== "excerpt") return;
+    const next = [...sections];
+    next[index] = { type: "excerpt", block };
+    emitChange(next);
+  }
+
   return (
     <div className="page-document-editor">
       <div className="editor-toolbar-sticky">
@@ -295,6 +318,7 @@ export function PageDocumentEditor({
             onAddTable={addTable}
             onAddCard={addCard}
             onAddProcedureSection={addProcedureSection}
+            onAddExcerpt={addExcerpt}
             onInsertSectionBreak={handleInsertSectionBreak}
             pageUrl={pageUrl}
           />
@@ -392,6 +416,7 @@ export function PageDocumentEditor({
             onUpdateCard={(next) => updateCardSection(index, next)}
             onUpdateProcedureSection={(next) => updateProcedureSection(index, next)}
             onUpdateVideo={(next) => updateVideoSection(index, next)}
+            onUpdateExcerpt={(next) => updateExcerptSection(index, next)}
             section={section}
           />
         ))}
@@ -416,6 +441,7 @@ function SectionEditor({
   onUpdateCard,
   onUpdateProcedureSection,
   onUpdateVideo,
+  onUpdateExcerpt,
 }: {
   section: EditorSection;
   index: number;
@@ -430,6 +456,7 @@ function SectionEditor({
   onUpdateCard: (block: ContentBlock) => void;
   onUpdateProcedureSection: (block: ContentBlock) => void;
   onUpdateVideo: (block: ContentBlock) => void;
+  onUpdateExcerpt: (block: ContentBlock) => void;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const lastSyncedHtml = useRef("");
@@ -711,6 +738,10 @@ function SectionEditor({
             suppressContentEditableWarning
           />
         </div>
+      )}
+
+      {section.type === "excerpt" && (
+        <ExcerptSectionEditor block={section.block} onChange={onUpdateExcerpt} />
       )}
 
       {section.type === "section_divider" && <hr className="content-section-break" />}

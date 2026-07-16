@@ -3,11 +3,13 @@ import { recordAuditEvent } from "@/lib/audit-log";
 import {
   getAllPagesForAdmin,
   getAssetStatusById,
+  getExcerptReferencesToPage,
   getKbById,
   getPageByIdForAdmin,
   permanentlyDeletePage,
   updatePage,
 } from "@/lib/kb-store";
+import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { logError } from "@/lib/log";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -92,6 +94,7 @@ export async function PATCH(
         blocks,
       },
       getAssetStatusById,
+      checkExcerptSourceForPublish,
     );
     if (issues.length > 0) {
       return NextResponse.json(
@@ -178,6 +181,13 @@ export async function DELETE(
     if (referencedBy) {
       return NextResponse.json(
         { message: `Remove the related-page reference from "${referencedBy.title}" before deleting this page.` },
+        { status: 409 },
+      );
+    }
+    const excerptRefs = await getExcerptReferencesToPage(page.id);
+    if (excerptRefs.length > 0) {
+      return NextResponse.json(
+        { message: `Remove the included excerpt on "${excerptRefs[0].pageTitle}" before deleting this page.` },
         { status: 409 },
       );
     }

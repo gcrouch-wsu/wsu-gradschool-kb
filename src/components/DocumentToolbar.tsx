@@ -37,6 +37,7 @@ export function DocumentToolbar({
   onAddTable,
   onAddCard,
   onAddProcedureSection,
+  onAddExcerpt,
   onInsertSectionBreak,
   pageUrl,
 }: {
@@ -47,6 +48,7 @@ export function DocumentToolbar({
   onAddTable: () => void;
   onAddCard: () => void;
   onAddProcedureSection: () => void;
+  onAddExcerpt: () => void;
   onInsertSectionBreak: () => void;
   pageUrl?: string;
 }) {
@@ -310,6 +312,16 @@ export function DocumentToolbar({
               type="button"
             >
               Procedure section
+            </button>
+            <button
+              aria-label="Insert excerpt from another page"
+              className={buttonClass}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onAddExcerpt}
+              title="Include a live excerpt from another page"
+              type="button"
+            >
+              Excerpt
             </button>
             <button
               aria-label="Insert table"

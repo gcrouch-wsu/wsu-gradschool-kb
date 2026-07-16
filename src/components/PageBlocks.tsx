@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getCurrentAdminSession } from "@/lib/auth";
+import { resolveExcerptForRead } from "@/lib/excerpts";
 import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
 import { sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
@@ -62,6 +64,31 @@ async function AssetLink({ assetId }: { assetId: string }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+async function ExcerptBlock({ block }: { block: Extract<ContentBlock, { type: "excerpt" }> }) {
+  const session = await getCurrentAdminSession();
+  const resolved = await resolveExcerptForRead(block, session);
+  if (resolved.state !== "ok") {
+    return (
+      <aside className="excerpt-box excerpt-box--unavailable" role="note">
+        <p className="excerpt-box__source">This included content is currently unavailable.</p>
+      </aside>
+    );
+  }
+  const sourceLabel = resolved.sectionTitle
+    ? `${resolved.sourceTitle} — ${resolved.sectionTitle}`
+    : resolved.sourceTitle;
+  return (
+    <aside aria-label={`Included from ${sourceLabel}`} className="excerpt-box" role="note">
+      <p className="excerpt-box__source">
+        Included from: <Link href={resolved.sourceHref}>{sourceLabel}</Link>
+      </p>
+      <div className="excerpt-box__blocks flow">
+        <PageBlocks blocks={resolved.blocks} />
+      </div>
+    </aside>
   );
 }
 
@@ -274,6 +301,8 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
             );
           case "asset_link":
             return <AssetLink assetId={block.assetId} key={block.blockId} />;
+          case "excerpt":
+            return <ExcerptBlock block={block} key={block.blockId} />;
           case "section_divider":
             return <hr className="content-section-break" key={block.blockId} />;
           default:

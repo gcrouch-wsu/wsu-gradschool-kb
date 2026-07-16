@@ -542,6 +542,43 @@ export async function getAssetUsages(assetId: string): Promise<AssetUsage[]> {
   return extractAssetUsages(dataset.pages, normalizedId);
 }
 
+export interface ExcerptReference {
+  pageId: string;
+  pageTitle: string;
+  kbId: string;
+}
+
+// Pages (in any KB) whose top-level excerpt blocks reference the given source
+// page. Mirrors the asset-usage SQL probe: excerpts are top-level blocks by
+// the serializer contract, so jsonb_array_elements over blocks is exact.
+export async function getExcerptReferencesToPage(sourcePageId: string): Promise<ExcerptReference[]> {
+  const normalizedId = normalizeRecordId(sourcePageId);
+  if (isDatabaseEnabled()) {
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT id, title, kb_id
+      FROM kb_pages
+      WHERE id <> ${normalizedId}
+        AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements(kb_pages.blocks) AS block
+          WHERE block.value->>'type' = 'excerpt'
+            AND block.value->>'sourcePageId' = ${normalizedId}
+        )
+      ORDER BY title
+      LIMIT 10
+    `) as unknown as Array<{ id: string; title: string; kb_id: string }>;
+    return rows.map((row) => ({ pageId: row.id, pageTitle: row.title, kbId: row.kb_id }));
+  }
+  const dataset = await getDataset();
+  return dataset.pages
+    .filter(
+      (page) =>
+        page.id !== normalizedId &&
+        page.blocks.some((block) => block.type === "excerpt" && block.sourcePageId === normalizedId),
+    )
+    .map((page) => ({ pageId: page.id, pageTitle: page.title, kbId: page.kbId }));
+}
+
 export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolean> {
   if (isDatabaseEnabled()) {
     const sql = getSql();
