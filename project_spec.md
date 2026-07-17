@@ -1602,6 +1602,16 @@ Items are ordered by recommended priority.
   default to "KB: Page — Section" on selection. (c) The label/new-tab controls were redesigned:
   full-width label input, properly aligned checkbox (`.attribution-label-field` /
   `.attribution-checkbox`).
+- **Maintainer feedback round 2 (2026-07-17):** (a) the sourced callout now renders the numbered
+  section heading (`headingText`) as a styled non-outline heading (`.source-box__heading`) above
+  the content — visually matching the P&P source without contributing to the target page's
+  heading outline; mirrored in KB export and the editor placeholder. (b) Import normalization
+  unwraps `blockquote`/`div`/`section`/`article`/`main` containers before sanitizing — the P&P
+  wraps some sections in `<blockquote>`, which the editor sanitizer treated as one inline run,
+  silently merging sibling paragraphs into a single block. (c) The new-page form gained a
+  searchable **Parent page** picker (reuses `GET /api/admin/excerpt-sources?kb=` — access-scoped,
+  tree-ordered) so pages can be created nested directly; the create API already accepted
+  `parentPath`, and drag re-nesting in the page tree is unchanged.
 - **Maintainer decision (2026-07-17): allowlisting stays host-level, not path-level.** Path
   restriction adds no SSRF protection within an already-allowlisted https origin, and would
   block future WSU source pages without a code change; the provenance callout always shows the

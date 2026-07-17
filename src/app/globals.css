@@ -1032,6 +1032,15 @@ p {
   opacity: 0.8;
 }
 
+.source-box__heading {
+  color: var(--source-box-ink, var(--ink));
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: var(--leading-heading, 1.2);
+  margin: 0 0 0.75rem;
+}
+
 .source-box__blocks > :first-child {
   margin-top: 0;
 }
@@ -3212,6 +3221,11 @@ article li > ol {
 
 .doc-sourced[data-label]::before {
   content: "Source: " attr(data-label);
+}
+
+.doc-sourced[data-label][data-heading-text]::before {
+  content: "Source: " attr(data-label) "\A" attr(data-heading-text);
+  white-space: pre-line;
 }
 
 .doc.card { min-width: 0;

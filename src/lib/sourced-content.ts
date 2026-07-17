@@ -87,6 +87,18 @@ function sourceAnchorFromUrl(url: URL): string | null | undefined {
 // the doc-table contract (first-row header when the source used <th>).
 function normalizeSourcedFragment(fragmentHtml: string, baseUrl?: URL): string {
   const root = parse(fragmentHtml);
+  // The source wraps some sections in blockquote/div containers; the editor
+  // sanitizer treats unknown containers as one inline run, which merges the
+  // paragraphs inside. Unwrap containers so each child keeps its own block.
+  for (let pass = 0; pass < 10; pass += 1) {
+    const wrappers = root.querySelectorAll("blockquote, div, section, article, main");
+    if (wrappers.length === 0) {
+      break;
+    }
+    for (const wrapper of wrappers) {
+      wrapper.replaceWith(wrapper.innerHTML);
+    }
+  }
   if (baseUrl) {
     for (const anchor of root.querySelectorAll("a[href]")) {
       const href = anchor.getAttribute("href") ?? "";

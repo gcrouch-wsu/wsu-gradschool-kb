@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen } from "lucide-react";
-import type { KnowledgeBase } from "@/lib/types";
+import { BookOpen, FileText } from "lucide-react";
+import type { KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
 import Link from "next/link";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageLoader } from "@/components/PageLoader";
+
+interface ParentPageOption {
+  id: string;
+  title: string;
+  path: string[];
+  status: PageStatus;
+  visibility: PageVisibility;
+}
 
 export default function NewPageScreen() {
   const router = useRouter();
@@ -16,6 +24,8 @@ export default function NewPageScreen() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [kbId, setKbId] = useState(preselectedKbId || "");
+  const [parentPages, setParentPages] = useState<ParentPageOption[]>([]);
+  const [parentPageId, setParentPageId] = useState("");
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,15 +50,35 @@ export default function NewPageScreen() {
     loadKbs();
   }, [kbId]);
 
+  useEffect(() => {
+    if (!kbId) {
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/admin/excerpt-sources?kb=${encodeURIComponent(kbId)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("load failed"))))
+      .then((data: { pages?: ParentPageOption[] }) => {
+        if (!cancelled) {
+          setParentPages(data.pages ?? []);
+          setParentPageId("");
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [kbId]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
+      const parent = parentPages.find((page) => page.id === parentPageId);
       const res = await fetch("/api/admin/pages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kbId, title, slug }),
+        body: JSON.stringify({ kbId, title, slug, parentPath: parent ? parent.path : [] }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to create page");
@@ -85,6 +115,26 @@ export default function NewPageScreen() {
           value={kbId}
         />
 
+        <DropdownSelect
+          label="Parent page (optional)"
+          onChange={setParentPageId}
+          options={[
+            { label: "None — top level", searchText: "top level root", value: "" },
+            ...parentPages.map((page) => ({
+              icon: <FileText aria-hidden size={18} strokeWidth={1.75} />,
+              label: `${"— ".repeat(Math.max(0, page.path.length - 1))}${page.title}${page.status !== "published" ? ` (${page.status})` : ""}`,
+              searchText: page.path.join("/"),
+              value: page.id,
+            })),
+          ]}
+          searchLabel="Search pages"
+          value={parentPageId}
+        />
+        <p className="meta">
+          Nesting groups this page under the parent in the page tree; readers expand the parent to
+          find it. You can also re-nest any page later by dragging it in the page tree.
+        </p>
+
         <label>
           <span className="meta">Title</span>
           <input className="input" required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. My New Guide" />
@@ -108,4 +158,3 @@ export default function NewPageScreen() {
     </div>
   );
 }
-

@@ -74,6 +74,24 @@ describe("extractSourcedSectionFromHtml", () => {
     expect(subsection?.headingText).toBe("3.1.1.1 Academic Requirements for Doctoral Programs at WSU");
   });
 
+  it("unwraps blockquote and div containers so sibling paragraphs stay separate blocks", () => {
+    const wrapped = `
+      <main>
+        <h4 id="dual-masters">Dual Programs</h4>
+        <blockquote>
+          <p>First paragraph of policy.</p>
+          <p>Second paragraph of policy.</p>
+        </blockquote>
+        <h4 id="next">Next</h4>
+      </main>`;
+    const extracted = extractSourcedSectionFromHtml(wrapped, "dual-masters", BASE);
+    const blocks = documentHtmlToBlocks(extracted!.fragmentHtml);
+    const paragraphs = blocks.filter((block) => block.type === "paragraph");
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]).toMatchObject({ text: "First paragraph of policy." });
+    expect(paragraphs[1]).toMatchObject({ text: "Second paragraph of policy." });
+  });
+
   it("leaves headings unnumbered when the page does not declare css-counter numbering", () => {
     const extracted = extractSourcedSectionFromHtml(SOURCE_PAGE_HTML, "graduate-program-faculty", BASE);
     expect(extracted?.headingText).toBe("Graduate Program Faculty");

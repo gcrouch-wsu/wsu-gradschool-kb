@@ -124,6 +124,7 @@ function SourcedBlock({ block }: { block: Extract<ContentBlock, { type: "sourced
           <span className="source-box__meta"> · retrieved {formatDate(block.retrievedAt.slice(0, 10))}</span>
         )}
       </p>
+      {block.headingText && <p className="source-box__heading">{block.headingText}</p>}
       <div className="source-box__blocks flow">
         <PageBlocks blocks={block.blocks} />
       </div>

@@ -154,7 +154,8 @@ function renderBlock(
         ? escapeHtml(`${block.sourceUrl}${block.sourceAnchor ? `#${block.sourceAnchor}` : ""}`)
         : "";
       const attribution = href ? `<a href="${href}"${newTabAttrs(block.openInNewTab, rawLabel)}>${label}</a>` : label;
-      return `<aside role="note"><p>Source: ${attribution}</p>${renderBlocks(block.blocks, kbSlug, assetPaths, excerptHtml)}</aside>`;
+      const heading = block.headingText ? `<p><strong>${escapeHtml(block.headingText)}</strong></p>` : "";
+      return `<aside role="note"><p>Source: ${attribution}</p>${heading}${renderBlocks(block.blocks, kbSlug, assetPaths, excerptHtml)}</aside>`;
     }
   }
 }
