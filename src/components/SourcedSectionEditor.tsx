@@ -9,6 +9,8 @@ interface ImportResponse {
   sourceUrl: string;
   sourceAnchor?: string;
   headingText?: string;
+  documentTitle?: string;
+  defaultLabel?: string;
   retrievedAt: string;
   contentHash: string;
   blocks: ContentBlock[];
@@ -56,6 +58,7 @@ export function SourcedSectionEditor({
         retrievedAt: data.retrievedAt,
         contentHash: data.contentHash,
         blocks: data.blocks,
+        label: (block.label ?? "").trim() ? block.label : data.defaultLabel || block.label,
       });
       setStatus(
         action === "refresh"
@@ -181,25 +184,23 @@ export function SourcedSectionEditor({
           </button>
         </div>
       )}
-      <div className="field-row">
-        <label>
-          <span className="meta">Attribution label (optional)</span>
-          <input
-            className="input"
-            onChange={(e) => onChange({ ...block, label: e.target.value || undefined })}
-            placeholder="Default: site — section name"
-            value={block.label ?? ""}
-          />
-        </label>
-        <label className="excerpt-editor__checkbox">
-          <input
-            checked={Boolean(block.openInNewTab)}
-            onChange={(e) => onChange({ ...block, openInNewTab: e.target.checked || undefined })}
-            type="checkbox"
-          />
-          <span className="meta">Open the source link in a new tab</span>
-        </label>
-      </div>
+      <label className="attribution-label-field">
+        <span className="meta">Attribution label (what readers see after &quot;Source:&quot;)</span>
+        <input
+          className="input"
+          onChange={(e) => onChange({ ...block, label: e.target.value || undefined })}
+          placeholder="Filled in automatically when you import"
+          value={block.label ?? ""}
+        />
+      </label>
+      <label className="attribution-checkbox">
+        <input
+          checked={Boolean(block.openInNewTab)}
+          onChange={(e) => onChange({ ...block, openInNewTab: e.target.checked || undefined })}
+          type="checkbox"
+        />
+        <span>Open the source link in a new tab</span>
+      </label>
       {status && <p className="meta" role="status">{status}</p>}
       {error && <p className="alert editor-format-hint">{error}</p>}
     </div>

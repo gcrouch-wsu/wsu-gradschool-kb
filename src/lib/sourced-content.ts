@@ -12,9 +12,24 @@ export interface SourcedSection {
   sourceUrl: string;
   sourceAnchor?: string;
   headingText?: string;
+  documentTitle?: string;
+  defaultLabel?: string;
   retrievedAt: string;
   contentHash: string;
   blocks: ContentBlock[];
+}
+
+export function sourcedDefaultLabel(section: Pick<SourcedSection, "sourceUrl" | "headingText" | "documentTitle">): string {
+  const origin = section.documentTitle || safeHostname(section.sourceUrl);
+  return section.headingText ? `${origin} — ${section.headingText}` : origin;
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "External source";
+  }
 }
 
 export type SourcedCheckState = "unchanged" | "changed" | "anchor_missing" | "unreachable";
@@ -109,11 +124,57 @@ function normalizeSourcedFragment(fragmentHtml: string, baseUrl?: URL): string {
   return root.toString();
 }
 
+// The P&P manual renders section numbers ("3.1.1") with CSS counters — the
+// heading text in the HTML is unnumbered. When the page declares that mode,
+// replicate the counters structurally: count h2–h6 among the anchor's content
+// siblings (the TOC lives in a separate <nav> parent, so it never counts).
+function usesCssCounterNumbering(target: HTMLElement): boolean {
+  let current: HTMLElement | null = target.parentNode as HTMLElement | null;
+  while (current) {
+    if (current.getAttribute?.("data-numbering-mode") === "css-counters") {
+      return true;
+    }
+    current = current.parentNode as HTMLElement | null;
+  }
+  return false;
+}
+
+function sectionNumberFor(target: HTMLElement, level: number): string | null {
+  if (!usesCssCounterNumbering(target)) {
+    return null;
+  }
+  const counters = [0, 0, 0, 0, 0];
+  const siblings = (target.parentNode as HTMLElement | null)?.childNodes ?? [];
+  for (const node of siblings) {
+    const siblingLevel = headingLevel((node as HTMLElement).tagName ?? "");
+    if (siblingLevel !== null) {
+      counters[siblingLevel - 2] += 1;
+      for (let deeper = siblingLevel - 1; deeper < counters.length; deeper += 1) {
+        counters[deeper] = 0;
+      }
+    }
+    if (node === target) {
+      const parts = counters.slice(0, level - 1);
+      return parts.every((part) => part > 0) ? parts.join(".") : null;
+    }
+  }
+  return null;
+}
+
+function documentTitleFrom(root: HTMLElement): string | undefined {
+  const h1 = root.querySelector("h1")?.text.trim();
+  if (h1) {
+    return h1;
+  }
+  const title = root.querySelector("title")?.text.split("|")[0].trim();
+  return title || undefined;
+}
+
 export function extractSourcedSectionFromHtml(
   pageHtml: string,
   anchor: string,
   baseUrl?: URL,
-): { headingText: string; fragmentHtml: string } | null {
+): { headingText: string; fragmentHtml: string; documentTitle?: string } | null {
   const root = parse(pageHtml);
   const target = root.querySelectorAll("[id]").find((node) => node.getAttribute("id") === anchor);
   if (!target) {
@@ -146,9 +207,12 @@ export function extractSourcedSectionFromHtml(
       collected.push(node.text);
     }
   }
+  const sectionNumber = sectionNumberFor(target, level);
+  const text = target.text.trim();
   return {
-    headingText: target.text.trim(),
+    headingText: sectionNumber ? `${sectionNumber} ${text}` : text,
     fragmentHtml: normalizeSourcedFragment(collected.join("\n"), baseUrl),
+    documentTitle: documentTitleFrom(root),
   };
 }
 
@@ -181,7 +245,7 @@ export function buildSourcedFromPastedHtml(
     return null;
   }
   const blocks = documentHtmlToBlocks(normalizeSourcedFragment(pastedHtml, url));
-  return {
+  const section: SourcedSection = {
     sourceUrl: `${url.origin}${url.pathname}`,
     sourceAnchor,
     headingText: headingText?.trim() || undefined,
@@ -189,6 +253,8 @@ export function buildSourcedFromPastedHtml(
     contentHash: hashSourcedBlocks(blocks),
     blocks,
   };
+  section.defaultLabel = sourcedDefaultLabel(section);
+  return section;
 }
 
 async function readTextWithinLimit(response: Response): Promise<string | null> {
@@ -277,17 +343,17 @@ export async function fetchSourcedSection(urlString: string): Promise<
     return { ok: false, reason: "anchor_missing" };
   }
   const blocks = documentHtmlToBlocks(extracted.fragmentHtml);
-  return {
-    ok: true,
-    section: {
-      sourceUrl: `${url.origin}${url.pathname}`,
-      sourceAnchor: anchor,
-      headingText: extracted.headingText,
-      retrievedAt: new Date().toISOString(),
-      contentHash: hashSourcedBlocks(blocks),
-      blocks,
-    },
+  const section: SourcedSection = {
+    sourceUrl: `${url.origin}${url.pathname}`,
+    sourceAnchor: anchor,
+    headingText: extracted.headingText,
+    documentTitle: extracted.documentTitle,
+    retrievedAt: new Date().toISOString(),
+    contentHash: hashSourcedBlocks(blocks),
+    blocks,
   };
+  section.defaultLabel = sourcedDefaultLabel(section);
+  return { ok: true, section };
 }
 
 export async function checkSourcedSection(

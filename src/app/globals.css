@@ -3162,12 +3162,31 @@ article li > ol {
   font-size: 0.875rem;
 }
 
-.excerpt-editor__checkbox {
+.attribution-label-field {
+  display: block;
+  width: 100%;
+}
+
+.attribution-label-field .input {
+  width: 100%;
+}
+
+.attribution-checkbox {
   align-items: center;
-  align-self: end;
   display: flex;
   gap: 0.5rem;
-  padding-bottom: 0.55rem;
+  width: fit-content;
+}
+
+.attribution-checkbox input[type="checkbox"] {
+  height: 1rem;
+  margin: 0;
+  width: 1rem;
+}
+
+.attribution-checkbox span {
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
 .doc-sourced {

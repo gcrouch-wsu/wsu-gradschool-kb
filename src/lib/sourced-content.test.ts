@@ -8,6 +8,7 @@ import {
   fetchSourcedSection,
   hashSourcedBlocks,
   parseAllowedSourceUrl,
+  sourcedDefaultLabel,
 } from "@/lib/sourced-content";
 import type { ContentBlock } from "@/lib/types";
 
@@ -43,6 +44,39 @@ describe("extractSourcedSectionFromHtml", () => {
     expect(extracted?.fragmentHtml).toContain('href="https://gradschool.wsu.edu/faculty-appointments/"');
     expect(extracted?.fragmentHtml).toContain('class="doc-table"');
     expect(extracted?.fragmentHtml).toContain('data-header-row="true"');
+  });
+
+  it("computes CSS-counter section numbers and the document title, excluding the TOC nav", () => {
+    const numberedHtml = `
+      <h1>2025-2026 Graduate School Policies and Procedures</h1>
+      <div class="manual-grid" data-numbering-mode="css-counters">
+        <nav class="manual-toc"><h2 id="toc-heading">Table of Contents</h2></nav>
+        <main class="manual"><div class="manual">
+          <h2 id="ch1">Chapter One</h2>
+          <h3 id="ch1-s1">Governance</h3>
+          <h2 id="ch2">Chapter Two</h2>
+          <h2 id="ch3">Chapter Three</h2>
+          <h3 id="ch3-s1">Descriptions of Graduate Programs</h3>
+          <h4 id="doctoral-programs">Doctoral Programs</h4>
+          <p>Doctoral body.</p>
+          <h5 id="academic-requirements">Academic Requirements for Doctoral Programs at WSU</h5>
+          <p>Requirements body.</p>
+          <h4 id="masters-programs">Masters Programs</h4>
+        </div></main>
+      </div>`;
+    const section = extractSourcedSectionFromHtml(numberedHtml, "doctoral-programs", BASE);
+    expect(section?.headingText).toBe("3.1.1 Doctoral Programs");
+    expect(section?.documentTitle).toBe("2025-2026 Graduate School Policies and Procedures");
+    expect(section?.fragmentHtml).toContain("Requirements body");
+    expect(section?.fragmentHtml).not.toContain("Masters Programs");
+
+    const subsection = extractSourcedSectionFromHtml(numberedHtml, "academic-requirements", BASE);
+    expect(subsection?.headingText).toBe("3.1.1.1 Academic Requirements for Doctoral Programs at WSU");
+  });
+
+  it("leaves headings unnumbered when the page does not declare css-counter numbering", () => {
+    const extracted = extractSourcedSectionFromHtml(SOURCE_PAGE_HTML, "graduate-program-faculty", BASE);
+    expect(extracted?.headingText).toBe("Graduate Program Faculty");
   });
 
   it("returns null for a missing anchor or a non-heading anchor", () => {
@@ -157,6 +191,24 @@ describe("buildSourcedFromPastedHtml", () => {
   it("rejects source URLs with query strings and malformed anchors", () => {
     expect(buildSourcedFromPastedHtml("<p>x</p>", "https://gradschool.wsu.edu/x/?next=http://127.0.0.1/#a")).toBeNull();
     expect(buildSourcedFromPastedHtml("<p>x</p>", "https://gradschool.wsu.edu/x/#%E0%A4%A")).toBeNull();
+  });
+});
+
+describe("sourcedDefaultLabel", () => {
+  it("prefers the document title with the numbered heading, falling back to the hostname", () => {
+    expect(
+      sourcedDefaultLabel({
+        sourceUrl: "https://gradschool.wsu.edu/graduate-school-policies-and-procedures/",
+        documentTitle: "2025-2026 Graduate School Policies and Procedures",
+        headingText: "3.1.1 Doctoral Programs",
+      }),
+    ).toBe("2025-2026 Graduate School Policies and Procedures — 3.1.1 Doctoral Programs");
+    expect(
+      sourcedDefaultLabel({
+        sourceUrl: "https://gradschool.wsu.edu/x/",
+        headingText: "Some Section",
+      }),
+    ).toBe("gradschool.wsu.edu — Some Section");
   });
 });
 

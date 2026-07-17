@@ -74,6 +74,12 @@ export function ExcerptSectionEditor({
     };
   }, [block.sourcePageId]);
 
+  function defaultLabel(pageTitle: string, headingText?: string) {
+    const kbTitle = kbs.find((kb) => kb.id === selectedKbId)?.title ?? "";
+    const base = kbTitle && pageTitle ? `${kbTitle}: ${pageTitle}` : pageTitle || kbTitle;
+    return headingText ? `${base} — ${headingText}` : base;
+  }
+
   useEffect(() => {
     if (!selectedKbId) {
       return;
@@ -144,7 +150,13 @@ export function ExcerptSectionEditor({
             disabled={!selectedKbId}
             onChange={(e) => {
               if (e.target.value) {
-                onChange({ ...block, sourcePageId: e.target.value, sourceHeadingBlockId: undefined });
+                const page = pages.find((candidate) => candidate.id === e.target.value);
+                onChange({
+                  ...block,
+                  sourcePageId: e.target.value,
+                  sourceHeadingBlockId: undefined,
+                  label: defaultLabel(page?.title ?? "") || undefined,
+                });
               }
             }}
             value={pages.some((page) => page.id === block.sourcePageId) ? block.sourcePageId : ""}
@@ -164,9 +176,14 @@ export function ExcerptSectionEditor({
           <select
             className="input"
             disabled={!block.sourcePageId}
-            onChange={(e) =>
-              onChange({ ...block, sourceHeadingBlockId: e.target.value || undefined })
-            }
+            onChange={(e) => {
+              const heading = headings.find((candidate) => candidate.blockId === e.target.value);
+              onChange({
+                ...block,
+                sourceHeadingBlockId: e.target.value || undefined,
+                label: defaultLabel(sourcePageTitle, heading?.text) || undefined,
+              });
+            }}
             value={block.sourceHeadingBlockId ?? ""}
           >
             <option value="">Whole page</option>
@@ -179,30 +196,28 @@ export function ExcerptSectionEditor({
           </select>
         </label>
       </div>
-      <div className="field-row">
-        <label>
-          <span className="meta">Attribution label (optional)</span>
-          <input
-            className="input"
-            onChange={(e) => onChange({ ...block, label: e.target.value || undefined })}
-            placeholder="Default: KB: Page — Section"
-            value={block.label ?? ""}
-          />
-        </label>
-        <label className="excerpt-editor__checkbox">
-          <input
-            checked={Boolean(block.openInNewTab)}
-            onChange={(e) => onChange({ ...block, openInNewTab: e.target.checked || undefined })}
-            type="checkbox"
-          />
-          <span className="meta">Open the source link in a new tab</span>
-        </label>
-      </div>
+      <label className="attribution-label-field">
+        <span className="meta">Attribution label (what readers see after &quot;Included from:&quot;)</span>
+        <input
+          className="input"
+          onChange={(e) => onChange({ ...block, label: e.target.value || undefined })}
+          placeholder="Filled in automatically when you pick a source"
+          value={block.label ?? ""}
+        />
+      </label>
+      <label className="attribution-checkbox">
+        <input
+          checked={Boolean(block.openInNewTab)}
+          onChange={(e) => onChange({ ...block, openInNewTab: e.target.checked || undefined })}
+          type="checkbox"
+        />
+        <span>Open the source link in a new tab</span>
+      </label>
       <p className="meta">
-        The attribution label is what readers see after &quot;Included from:&quot; — leave it blank
-        to show the knowledge base, page, and section names. Headings inside the excerpt are shown
-        as bold text so this page&apos;s own outline stays accurate. Readers who cannot view the
-        source page see an &quot;unavailable&quot; notice instead of the content.
+        The attribution label starts from the knowledge base, page, and section names when you pick
+        a source — edit it freely. Headings inside the excerpt are shown as bold text so this
+        page&apos;s own outline stays accurate. Readers who cannot view the source page see an
+        &quot;unavailable&quot; notice instead of the content.
       </p>
     </div>
   );

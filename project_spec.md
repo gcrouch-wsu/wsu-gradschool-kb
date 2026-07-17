@@ -1591,6 +1591,17 @@ Items are ordered by recommended priority.
   no longer interpolates into a selector. Follow-ups: `openInNewTab` carried through draft
   preview and KB export with hidden "(opens in a new tab)" text on reader-facing attribution
   links; the editor/preview sourced placeholder falls back label → heading text → source URL.
+- **Maintainer feedback round (2026-07-17):** (a) imports now compute the P&P **section number**
+  ("3.1.1") structurally — the manual renders numbers with CSS counters
+  (`data-numbering-mode="css-counters"`), so the extractor replays them by counting h2–h6 among
+  the anchor's content siblings (the TOC `<nav>` is a different parent and never counts); the
+  stored heading becomes e.g. "3.1.1 Doctoral Programs". A section deliberately includes its
+  subsections (until the next same-or-higher heading). (b) The attribution **label is pre-filled
+  and editable**: sourced imports default to "[document h1] — [numbered heading]" (e.g.
+  "2025-2026 Graduate School Policies and Procedures — 3.1.1 Doctoral Programs"); excerpt pickers
+  default to "KB: Page — Section" on selection. (c) The label/new-tab controls were redesigned:
+  full-width label input, properly aligned checkbox (`.attribution-label-field` /
+  `.attribution-checkbox`).
 - **Maintainer decision (2026-07-17): allowlisting stays host-level, not path-level.** Path
   restriction adds no SSRF protection within an already-allowlisted https origin, and would
   block future WSU source pages without a code change; the provenance callout always shows the
