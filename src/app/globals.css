@@ -3180,9 +3180,11 @@ article li > ol {
   width: 100%;
 }
 
-.attribution-checkbox {
+.attribution-checkbox,
+.form label.attribution-checkbox {
   align-items: center;
   display: flex;
+  flex-direction: row;
   gap: 0.5rem;
   width: fit-content;
 }
