@@ -543,7 +543,9 @@ manual redirect persistence, and the single-active-version DB invariant.
   explicit editor refresh — never at reader render time. The import/check APIs fetch external
   HTML server-side: keep `parseAllowedSourceUrl` (https + host allowlist, default
   `gradschool.wsu.edu`, env `SOURCED_CONTENT_ALLOWED_HOSTS`) in front of every fetch, or the
-  route becomes an SSRF proxy. Reader-facing routes must never fetch the source.
+  route becomes an SSRF proxy. The allowlist is hostname-only; reject userinfo, non-default ports,
+  query strings, malformed anchors, and redirects before reading the response body. Reader-facing
+  routes must never fetch the source.
 - **`style/style.md` hand-mirrors the publish gate and editor block contract.** The agent style
   pipeline in `style/` (see `style/README.md`) checks pages against a prose copy of
   `validatePageForPublish` rules and the `documentHtmlToBlocks` allowed-block list. If you change

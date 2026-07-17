@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { excerptAttributionLabel, type ResolvedExcerpt } from "@/lib/excerpts";
 import { blocksToDocumentHtml, documentHtmlToBlocks } from "@/lib/page-document";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import {
   buildSourcedFromPastedHtml,
   extractSourcedSectionFromHtml,
+  fetchSourcedSection,
   hashSourcedBlocks,
   parseAllowedSourceUrl,
 } from "@/lib/sourced-content";
@@ -23,6 +24,10 @@ const SOURCE_PAGE_HTML = `
   <h6 id="next-section">Next Section</h6>
   <p>Should not be included.</p>
 </main>`;
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("extractSourcedSectionFromHtml", () => {
   it("extracts from the anchor heading to the next same-or-higher heading", () => {
@@ -53,6 +58,21 @@ describe("extractSourcedSectionFromHtml", () => {
     expect(blocks.some((block) => block.type === "table")).toBe(true);
     expect(blocks.some((block) => block.type === "list")).toBe(true);
   });
+
+  it("normalizes risky links and images before block parsing", () => {
+    const extracted = extractSourcedSectionFromHtml(
+      `<main>
+        <h2 id="policy">Policy</h2>
+        <p><a href="javascript:alert(1)">bad link</a><a href="mailto:gradschool@example.edu">email</a></p>
+        <figure class="doc-image"><img src="data:image/svg+xml,<svg></svg>" alt="bad"></figure>
+      </main>`,
+      "policy",
+      BASE,
+    );
+    expect(extracted?.fragmentHtml).not.toContain("javascript:");
+    expect(extracted?.fragmentHtml).not.toContain("data:image");
+    expect(extracted?.fragmentHtml).toContain('href="mailto:gradschool@example.edu"');
+  });
 });
 
 describe("hashSourcedBlocks", () => {
@@ -75,6 +95,45 @@ describe("parseAllowedSourceUrl", () => {
     expect(parseAllowedSourceUrl("https://evil.example.com/x/")).toBeNull();
     expect(parseAllowedSourceUrl("not a url")).toBeNull();
   });
+
+  it("rejects common host and URL-shape bypasses", () => {
+    expect(parseAllowedSourceUrl("https://gradschool.wsu.edu@evil.example.com/x/#a")).toBeNull();
+    expect(parseAllowedSourceUrl("https://gradschool.wsu.edu.evil.example.com/x/#a")).toBeNull();
+    expect(parseAllowedSourceUrl("https://gradschool.wsu.edu:4443/x/#a")).toBeNull();
+    expect(parseAllowedSourceUrl("https://gradschool.wsu.edu/x/?next=http://127.0.0.1/#a")).toBeNull();
+    expect(parseAllowedSourceUrl("https://grаdschool.wsu.edu/x/#a")).toBeNull();
+  });
+});
+
+describe("fetchSourcedSection", () => {
+  it("does not follow redirects from the allowlisted host", async () => {
+    const fetchMock = vi.fn(async () => new Response("", { status: 302, headers: { Location: "http://127.0.0.1/" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchSourcedSection("https://gradschool.wsu.edu/graduate-school-policies-and-procedures/#graduate-program-faculty"),
+    ).resolves.toEqual({ ok: false, reason: "unreachable" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://gradschool.wsu.edu/graduate-school-policies-and-procedures/",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
+  it("rejects malformed anchors and oversized responses before parsing", async () => {
+    await expect(fetchSourcedSection("https://gradschool.wsu.edu/x/#%E0%A4%A")).resolves.toEqual({
+      ok: false,
+      reason: "invalid_url",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<main></main>", { headers: { "content-length": "5000001" } })),
+    );
+    await expect(fetchSourcedSection("https://gradschool.wsu.edu/x/#a")).resolves.toEqual({
+      ok: false,
+      reason: "unreachable",
+    });
+  });
 });
 
 describe("buildSourcedFromPastedHtml", () => {
@@ -93,6 +152,11 @@ describe("buildSourcedFromPastedHtml", () => {
 
   it("rejects non-allowlisted URLs", () => {
     expect(buildSourcedFromPastedHtml("<p>x</p>", "https://evil.example.com/#a")).toBeNull();
+  });
+
+  it("rejects source URLs with query strings and malformed anchors", () => {
+    expect(buildSourcedFromPastedHtml("<p>x</p>", "https://gradschool.wsu.edu/x/?next=http://127.0.0.1/#a")).toBeNull();
+    expect(buildSourcedFromPastedHtml("<p>x</p>", "https://gradschool.wsu.edu/x/#%E0%A4%A")).toBeNull();
   });
 });
 

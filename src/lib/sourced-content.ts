@@ -26,8 +26,12 @@ export function allowedSourceHosts(): string[] {
   }
   return raw
     .split(",")
-    .map((host) => host.trim().toLowerCase())
+    .map((host) => normalizeHost(host))
     .filter(Boolean);
+}
+
+function normalizeHost(host: string): string {
+  return host.trim().toLowerCase().replace(/\.$/, "");
 }
 
 export function parseAllowedSourceUrl(urlString: string): URL | null {
@@ -37,10 +41,10 @@ export function parseAllowedSourceUrl(urlString: string): URL | null {
   } catch {
     return null;
   }
-  if (url.protocol !== "https:") {
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.port) {
     return null;
   }
-  if (!allowedSourceHosts().includes(url.hostname.toLowerCase())) {
+  if (!allowedSourceHosts().includes(normalizeHost(url.hostname))) {
     return null;
   }
   return url;
@@ -49,6 +53,17 @@ export function parseAllowedSourceUrl(urlString: string): URL | null {
 function headingLevel(tag: string): number | null {
   const match = /^h([1-6])$/.exec(tag.toLowerCase());
   return match ? Number(match[1]) : null;
+}
+
+function sourceAnchorFromUrl(url: URL): string | null | undefined {
+  if (!url.hash) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(url.hash.slice(1));
+  } catch {
+    return null;
+  }
 }
 
 // Content fetched from the source site uses relative and fragment links, and
@@ -61,7 +76,12 @@ function normalizeSourcedFragment(fragmentHtml: string, baseUrl?: URL): string {
     for (const anchor of root.querySelectorAll("a[href]")) {
       const href = anchor.getAttribute("href") ?? "";
       try {
-        anchor.setAttribute("href", new URL(href, baseUrl).toString());
+        const nextHref = new URL(href, baseUrl);
+        if (!["http:", "https:", "mailto:"].includes(nextHref.protocol)) {
+          anchor.removeAttribute("href");
+          continue;
+        }
+        anchor.setAttribute("href", nextHref.toString());
       } catch {
         anchor.removeAttribute("href");
       }
@@ -69,7 +89,12 @@ function normalizeSourcedFragment(fragmentHtml: string, baseUrl?: URL): string {
     for (const img of root.querySelectorAll("img[src]")) {
       const src = img.getAttribute("src") ?? "";
       try {
-        img.setAttribute("src", new URL(src, baseUrl).toString());
+        const nextSrc = new URL(src, baseUrl);
+        if (!["http:", "https:"].includes(nextSrc.protocol)) {
+          img.remove();
+          continue;
+        }
+        img.setAttribute("src", nextSrc.toString());
       } catch {
         img.remove();
       }
@@ -90,7 +115,7 @@ export function extractSourcedSectionFromHtml(
   baseUrl?: URL,
 ): { headingText: string; fragmentHtml: string } | null {
   const root = parse(pageHtml);
-  const target = root.querySelector(`[id="${anchor}"]`);
+  const target = root.querySelectorAll("[id]").find((node) => node.getAttribute("id") === anchor);
   if (!target) {
     return null;
   }
@@ -151,10 +176,14 @@ export function buildSourcedFromPastedHtml(
   if (!url || !pastedHtml.trim()) {
     return null;
   }
+  const sourceAnchor = sourceAnchorFromUrl(url);
+  if (sourceAnchor === null) {
+    return null;
+  }
   const blocks = documentHtmlToBlocks(normalizeSourcedFragment(pastedHtml, url));
   return {
-    sourceUrl: `${url.origin}${url.pathname}${url.search}`,
-    sourceAnchor: url.hash ? url.hash.slice(1) : undefined,
+    sourceUrl: `${url.origin}${url.pathname}`,
+    sourceAnchor,
     headingText: headingText?.trim() || undefined,
     retrievedAt: new Date().toISOString(),
     contentHash: hashSourcedBlocks(blocks),
@@ -162,19 +191,61 @@ export function buildSourcedFromPastedHtml(
   };
 }
 
+async function readTextWithinLimit(response: Response): Promise<string | null> {
+  const contentLength = Number(response.headers.get("content-length") ?? "");
+  if (Number.isFinite(contentLength) && contentLength > MAX_SOURCE_BYTES) {
+    return null;
+  }
+  if (!response.body) {
+    const body = await response.text();
+    return new TextEncoder().encode(body).byteLength > MAX_SOURCE_BYTES ? null : body;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value) {
+        continue;
+      }
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_SOURCE_BYTES) {
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const buffer = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(buffer);
+}
+
 async function fetchSourcePage(url: URL): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(`${url.origin}${url.pathname}${url.search}`, {
+    const response = await fetch(`${url.origin}${url.pathname}`, {
       headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+      redirect: "manual",
       signal: controller.signal,
     });
     if (!response.ok) {
       return null;
     }
-    const body = await response.text();
-    return body.length > MAX_SOURCE_BYTES ? null : body;
+    return await readTextWithinLimit(response);
   } catch {
     return null;
   } finally {
@@ -190,7 +261,10 @@ export async function fetchSourcedSection(urlString: string): Promise<
   if (!url) {
     return { ok: false, reason: "invalid_url" };
   }
-  const anchor = url.hash ? decodeURIComponent(url.hash.slice(1)) : "";
+  const anchor = sourceAnchorFromUrl(url);
+  if (anchor === null) {
+    return { ok: false, reason: "invalid_url" };
+  }
   if (!anchor) {
     return { ok: false, reason: "missing_anchor" };
   }
@@ -206,7 +280,7 @@ export async function fetchSourcedSection(urlString: string): Promise<
   return {
     ok: true,
     section: {
-      sourceUrl: `${url.origin}${url.pathname}${url.search}`,
+      sourceUrl: `${url.origin}${url.pathname}`,
       sourceAnchor: anchor,
       headingText: extracted.headingText,
       retrievedAt: new Date().toISOString(),
