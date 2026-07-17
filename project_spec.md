@@ -1584,6 +1584,17 @@ Items are ordered by recommended priority.
     "External Source Styles" + contrast row). Publish gate and KB export recurse into sourced
     content; migration `030_sourced_blocks_search` indexes sourced text in FTS (unlike live
     excerpts, the snapshot is page content), with in-memory parity via `blocksBodyText`.
+- **Second review hardening (Codex, 2026-07-17):** outbound fetches tightened — URLs with
+  userinfo, query strings, non-default ports, or malformed anchors are rejected; redirects are
+  not followed (`redirect: "manual"`); the response body is capped by a streaming byte counter;
+  imported hrefs are restricted to http/https/mailto and images to http/https; the anchor lookup
+  no longer interpolates into a selector. Follow-ups: `openInNewTab` carried through draft
+  preview and KB export with hidden "(opens in a new tab)" text on reader-facing attribution
+  links; the editor/preview sourced placeholder falls back label → heading text → source URL.
+- **Maintainer decision (2026-07-17): allowlisting stays host-level, not path-level.** Path
+  restriction adds no SSRF protection within an already-allowlisted https origin, and would
+  block future WSU source pages without a code change; the provenance callout always shows the
+  exact source URL, so breadth is visible.
 - **Remaining (before flipping to done):** scheduled/automated staleness (cron polling the
   `wp-json` `modified` timestamp + review-dashboard "source updated" flags with the tri-state
   relink flow) — today checking is a per-block editor action, which fits the annual publication
