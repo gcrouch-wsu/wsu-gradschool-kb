@@ -3180,11 +3180,19 @@ article li > ol {
 }
 
 .doc-sourced::before {
-  content: "Source: " attr(data-label);
+  content: "Source: " attr(data-source-url);
   display: block;
   font-size: 0.875rem;
   margin-bottom: 0.75rem;
   text-decoration: underline;
+}
+
+.doc-sourced[data-heading-text]::before {
+  content: "Source: " attr(data-heading-text);
+}
+
+.doc-sourced[data-label]::before {
+  content: "Source: " attr(data-label);
 }
 
 .doc.card { min-width: 0;
