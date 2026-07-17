@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { getAssetStatusById, getKbById, getPageByIdForAdmin, updatePageStatus } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
 import { validatePageForPublish } from "@/lib/publish-gate";
@@ -48,7 +49,7 @@ export async function PATCH(
     if (!existing) {
       return NextResponse.json({ message: "Page not found." }, { status: 404 });
     }
-    const issues = await validatePageForPublish(existing, getAssetStatusById);
+    const issues = await validatePageForPublish(existing, getAssetStatusById, checkExcerptSourceForPublish);
     if (issues.length > 0) {
       return NextResponse.json(
         {

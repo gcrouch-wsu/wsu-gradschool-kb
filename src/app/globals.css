@@ -978,6 +978,77 @@ p {
   margin-bottom: 0;
 }
 
+.excerpt-box {
+  background: var(--excerpt-box-bg, var(--wash));
+  border-left: 4px solid var(--excerpt-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--excerpt-box-ink, var(--ink));
+  padding: 1.25rem 1.5rem;
+}
+
+.excerpt-box__source {
+  font-size: 0.875rem;
+  color: var(--excerpt-box-ink, var(--ink));
+  margin: 0 0 0.75rem;
+}
+
+.excerpt-box__source a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.excerpt-box--unavailable .excerpt-box__source {
+  margin-bottom: 0;
+}
+
+.excerpt-box__blocks > :first-child {
+  margin-top: 0;
+}
+
+.excerpt-box__blocks > :last-child {
+  margin-bottom: 0;
+}
+
+.source-box {
+  background: var(--source-box-bg, var(--wash));
+  border-left: 4px solid var(--source-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--source-box-ink, var(--ink));
+  padding: 1.25rem 1.5rem;
+}
+
+.source-box__source {
+  font-size: 0.875rem;
+  color: var(--source-box-ink, var(--ink));
+  margin: 0 0 0.75rem;
+}
+
+.source-box__source a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.source-box__meta {
+  opacity: 0.8;
+}
+
+.source-box__heading {
+  color: var(--source-box-ink, var(--ink));
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: var(--leading-heading, 1.2);
+  margin: 0 0 0.75rem;
+}
+
+.source-box__blocks > :first-child {
+  margin-top: 0;
+}
+
+.source-box__blocks > :last-child {
+  margin-bottom: 0;
+}
+
 .alert--warning {
   border-left-color: var(--warning);
   background: var(--warning-wash);
@@ -3086,7 +3157,80 @@ article li > ol {
   margin: 0;
 }
 
-.doc.card { min-width: 0; 
+.doc-excerpt {
+  background: var(--excerpt-box-bg, var(--wash));
+  border-left: 4px solid var(--excerpt-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--excerpt-box-ink, var(--ink));
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+}
+
+.doc-excerpt::before {
+  content: "Included content from another page — shown in full on the published page.";
+  font-size: 0.875rem;
+}
+
+.attribution-label-field {
+  display: block;
+  width: 100%;
+}
+
+.attribution-label-field .input {
+  width: 100%;
+}
+
+.attribution-checkbox,
+.form label.attribution-checkbox {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  width: fit-content;
+}
+
+.attribution-checkbox input[type="checkbox"] {
+  height: 1rem;
+  margin: 0;
+  width: 1rem;
+}
+
+.attribution-checkbox span {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.doc-sourced {
+  background: var(--source-box-bg, var(--wash));
+  border-left: 4px solid var(--source-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--source-box-ink, var(--ink));
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+}
+
+.doc-sourced::before {
+  content: "Source: " attr(data-source-url);
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  text-decoration: underline;
+}
+
+.doc-sourced[data-heading-text]::before {
+  content: "Source: " attr(data-heading-text);
+}
+
+.doc-sourced[data-label]::before {
+  content: "Source: " attr(data-label);
+}
+
+.doc-sourced[data-label][data-heading-text]::before {
+  content: "Source: " attr(data-label) "\A" attr(data-heading-text);
+  white-space: pre-line;
+}
+
+.doc.card { min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   margin: 1.5rem 0;

@@ -1,5 +1,6 @@
 import { getCurrentAdminSession, type AdminSession } from "@/lib/auth";
 import { isTrustedAssetUrl } from "@/lib/blob";
+import { excerptAttributionLabel, resolveExcerptForExport } from "@/lib/excerpts";
 import {
   getAllAssetsForAdmin,
   getAllPagesForAdmin,
@@ -44,11 +45,54 @@ function renderInline(html: string | undefined, text: string | undefined) {
   return html ? sanitizeRichText(html) : textToRichText(text ?? "");
 }
 
-function renderBlocks(blocks: ContentBlock[], kbSlug: string, assetPaths: Map<string, string>): string {
-  return blocks.map((block) => renderBlock(block, kbSlug, assetPaths)).join("\n");
+function newTabAttrs(openInNewTab: boolean | undefined, label: string) {
+  return openInNewTab
+    ? ` target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${label} (opens in a new tab)`)}"`
+    : "";
 }
 
-function renderBlock(block: ContentBlock, kbSlug: string, assetPaths: Map<string, string>): string {
+function renderBlocks(
+  blocks: ContentBlock[],
+  kbSlug: string,
+  assetPaths: Map<string, string>,
+  excerptHtml: Map<string, string> = new Map(),
+): string {
+  return blocks.map((block) => renderBlock(block, kbSlug, assetPaths, excerptHtml)).join("\n");
+}
+
+// Pre-resolve top-level excerpt blocks into standalone HTML so the sync block
+// renderer can inline them. Demoted excerpt content never contains further
+// excerpts, so this needs no recursion.
+async function buildExcerptHtml(
+  blocks: ContentBlock[],
+  kbSlug: string,
+  assetPaths: Map<string, string>,
+): Promise<Map<string, string>> {
+  const excerptHtml = new Map<string, string>();
+  for (const block of blocks) {
+    if (block.type !== "excerpt") {
+      continue;
+    }
+    const resolved = await resolveExcerptForExport(block);
+    if (resolved.state !== "ok") {
+      excerptHtml.set(block.blockId, `<aside role="note"><p>Included content unavailable.</p></aside>`);
+      continue;
+    }
+    const label = excerptAttributionLabel(resolved, block.label);
+    excerptHtml.set(
+      block.blockId,
+      `<aside role="note"><p>Included from: <a href="${escapeHtml(resolved.sourceHref)}"${newTabAttrs(block.openInNewTab, label)}>${escapeHtml(label)}</a></p>${renderBlocks(resolved.blocks, kbSlug, assetPaths)}</aside>`,
+    );
+  }
+  return excerptHtml;
+}
+
+function renderBlock(
+  block: ContentBlock,
+  kbSlug: string,
+  assetPaths: Map<string, string>,
+  excerptHtml: Map<string, string> = new Map(),
+): string {
   switch (block.type) {
     case "paragraph":
       return `<p>${renderInline(block.html, block.text) || "<br>"}</p>`;
@@ -93,18 +137,35 @@ function renderBlock(block: ContentBlock, kbSlug: string, assetPaths: Map<string
     case "asset_link":
       return `<p><a href="${escapeHtml(assetPaths.get(block.assetId) ?? "#")}">${escapeHtml(block.label ?? "Download file")}</a></p>`;
     case "card":
-      return `<section><h2>${escapeHtml(block.title ?? "Card")}</h2>${renderBlocks(block.blocks, kbSlug, assetPaths)}</section>`;
+      return `<section><h2>${escapeHtml(block.title ?? "Card")}</h2>${renderBlocks(block.blocks, kbSlug, assetPaths, excerptHtml)}</section>`;
     case "procedure_section":
-      return `<section><h${block.level}>${escapeHtml(block.title)}</h${block.level}>${renderBlocks(block.blocks, kbSlug, assetPaths)}</section>`;
+      return `<section><h${block.level}>${escapeHtml(block.title)}</h${block.level}>${renderBlocks(block.blocks, kbSlug, assetPaths, excerptHtml)}</section>`;
     case "video": {
       const src = block.assetId ? assetPaths.get(block.assetId) : block.url;
       const title = escapeHtml(block.title ?? "Video");
       return src ? `<figure><video controls src="${escapeHtml(src)}"></video><figcaption>${title}</figcaption></figure>` : "";
     }
+    case "excerpt":
+      return excerptHtml.get(block.blockId) ?? "";
+    case "sourced": {
+      const rawLabel = (block.label ?? "").trim() || block.headingText || block.sourceUrl;
+      const label = escapeHtml(rawLabel);
+      const href = /^https:\/\//.test(block.sourceUrl)
+        ? escapeHtml(`${block.sourceUrl}${block.sourceAnchor ? `#${block.sourceAnchor}` : ""}`)
+        : "";
+      const attribution = href ? `<a href="${href}"${newTabAttrs(block.openInNewTab, rawLabel)}>${label}</a>` : label;
+      const heading = block.headingText ? `<p><strong>${escapeHtml(block.headingText)}</strong></p>` : "";
+      return `<aside role="note"><p>Source: ${attribution}</p>${heading}${renderBlocks(block.blocks, kbSlug, assetPaths, excerptHtml)}</aside>`;
+    }
   }
 }
 
-function renderStandalonePage(page: KbPage, kbSlug: string, assetPaths: Map<string, string>) {
+function renderStandalonePage(
+  page: KbPage,
+  kbSlug: string,
+  assetPaths: Map<string, string>,
+  excerptHtml: Map<string, string>,
+) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -116,7 +177,7 @@ function renderStandalonePage(page: KbPage, kbSlug: string, assetPaths: Map<stri
   <main>
     <h1>${escapeHtml(page.title)}</h1>
     ${page.summary ? `<p>${escapeHtml(page.summary)}</p>` : ""}
-    ${renderBlocks(page.blocks, kbSlug, assetPaths)}
+    ${renderBlocks(page.blocks, kbSlug, assetPaths, excerptHtml)}
   </main>
 </body>
 </html>
@@ -235,11 +296,18 @@ async function prepareKbExport(kbId: string): Promise<{ filename: string; entrie
       path: "kb.json",
       data: `${JSON.stringify(metadata, null, 2)}\n`,
     },
-    ...pages.map((page) => ({
-      path: pageExportPath(page),
-      data: renderStandalonePage(page, kb.slug, assetPaths),
-      modifiedAt: new Date(`${page.updatedDisplayDate}T00:00:00.000Z`),
-    })),
+    ...(await Promise.all(
+      pages.map(async (page) => ({
+        path: pageExportPath(page),
+        data: renderStandalonePage(
+          page,
+          kb.slug,
+          assetPaths,
+          await buildExcerptHtml(page.blocks, kb.slug, assetPaths),
+        ),
+        modifiedAt: new Date(`${page.updatedDisplayDate}T00:00:00.000Z`),
+      })),
+    )),
     ...assetEntries.map((asset) => asset.entry),
   ];
 

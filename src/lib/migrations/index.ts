@@ -717,6 +717,58 @@ const migrations: Migration[] = [
       await sql`CREATE INDEX IF NOT EXISTS idx_knowledge_bases_visibility ON knowledge_bases(visibility)`;
     },
   },
+  {
+    id: "030_sourced_blocks_search",
+    async up(sql) {
+      await sql`
+        CREATE OR REPLACE FUNCTION kb_extract_blocks_text(blocks jsonb) RETURNS text AS $$
+        declare
+          block jsonb;
+          result text := '';
+        begin
+          if blocks is null or jsonb_typeof(blocks) <> 'array' then
+            return '';
+          end if;
+          for block in select * from jsonb_array_elements(blocks)
+          loop
+            if block->>'text' is not null then
+              result := result || ' ' || (block->>'text');
+            end if;
+            if block->>'title' is not null and block->>'type' in ('card', 'procedure_section') then
+              result := result || ' ' || (block->>'title');
+            end if;
+            if block->>'caption' is not null then
+              result := result || ' ' || (block->>'caption');
+            end if;
+            if jsonb_typeof(block->'items') = 'array' then
+              result := result || ' ' || coalesce(
+                (select string_agg(item_text, ' ')
+                   from jsonb_array_elements_text(block->'items') as items_t(item_text)), '');
+            end if;
+            if jsonb_typeof(block->'rows') = 'array' then
+              result := result || ' ' || coalesce(
+                (select string_agg(cell, ' ')
+                   from (select row_el
+                           from jsonb_array_elements(block->'rows') as r(row_el)
+                          where jsonb_typeof(row_el) = 'array') rows_only,
+                        jsonb_array_elements_text(rows_only.row_el) as c(cell)), '');
+            end if;
+            if block->>'type' in ('card', 'procedure_section', 'sourced') and jsonb_typeof(block->'blocks') = 'array' then
+              result := result || ' ' || kb_extract_blocks_text(block->'blocks');
+            end if;
+          end loop;
+          return trim(result);
+        end
+        $$ LANGUAGE plpgsql IMMUTABLE;
+      `;
+      await sql`
+        UPDATE kb_pages
+        SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+                            setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
+                            setweight(to_tsvector('english', coalesce(kb_extract_blocks_text(blocks), '')), 'C')
+      `;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

@@ -319,6 +319,17 @@ Content in this folder should round-trip through `documentHtmlToBlocks` / the vi
 - `<ol>` / `<ul data-block-id="…">` with `<li>` children (nested lists inside `<li>` only)
 - `<table class="doc-table" data-header-row="true" …>` with `<tbody>`, `<tr>`, `<th>`, `<td>`
 - `<figure class="doc-image" …>` with `<img alt="…" src="…">`
+- `<div class="doc-excerpt" data-block-id="…" data-source-page-id="…">` (optionally
+  `data-source-heading-id="…"`, `data-label="…"`, `data-new-tab="true"`) — a live include of
+  another KB page's section, resolved at render time. Top-level only; never place one inside a
+  card or procedure section. Preserve these divs and their attributes exactly; do not add content
+  inside them.
+- `<section class="doc-sourced" data-block-id="…" data-source-url="…">` (optionally
+  `data-source-anchor`, `data-label`, `data-new-tab`, `data-heading-text`, `data-retrieved-at`,
+  `data-content-hash`) — a snapshot imported from an approved external source (the P&P site),
+  rendered with a provenance callout. Top-level only. **Do not reword the inner content** — it
+  mirrors the published source and a refresh overwrites local edits — and **never change the data
+  attributes**: the content hash and retrieved date drive staleness checks.
 - Inline: `<a>`, `<strong>`, `<em>`, `<br>` (sparingly)
 
 ### Do not use
@@ -348,6 +359,7 @@ These mirror the live editor **Publishing readiness** checklist and `validatePag
 | Tables | Header row or header column |
 | Links | No vague text; no empty `href` |
 | Assets | Images/files referenced must be active in the library |
+| Excerpts | `doc-excerpt` blocks must reference an existing, published page and a section that still exists on it |
 | Governance (page metadata, not in HTML) | Title, summary, responsible office, contact email, last reviewed date |
 
 When reviewing HTML-only files, **note metadata gaps** the author must fill in the editor (summary, dates, etc.).

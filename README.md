@@ -11,8 +11,12 @@ current implementation status.
   a responsive **3-column docs layout** (nav · article · sticky on-page TOC rail) with
   depth-controlled TOC.
 - **Rich editor**: paragraphs, headings, lists with continued numbering controls, reader-visible
-  **info boxes**, procedure sections, tables, cards, images, videos, and internal **editor notes**
-  anchored to selected text or a cursor position; text/image **alignment**; a **link dialog**
+  **info boxes**, procedure sections, tables, cards, images, videos, **live excerpts from other
+  pages** (an "Included from" callout that always shows the source's current section, gated by the
+  reader's access, with a custom attribution label and new-tab option, styleable like the info
+  box), **P&P sourced content** (a section imported from the Policies & Procedures site as a
+  snapshot inside a "Source:" callout, with check-for-changes and refresh controls), and internal
+  **editor notes** anchored to selected text or a cursor position; text/image **alignment**; a **link dialog**
   (create/edit links, new-tab target); a **media picker**; per-image **alt text** and optional
   visible captions kept as separate fields.
 - **Managed assets**: stable public URLs, version history with replace/activate, usage tracking,
@@ -45,6 +49,13 @@ settings/branding, and the Chromium editor regression suite. Production-readines
 weekly review-date notifications, bulk KB export (streamed ZIP), privacy-light usage analytics,
 global cross-KB search, targeted read loaders, migration concurrency locking, and structured
 operations docs.
+
+Content reuse & sourcing (2026-07-17, PR #12): **cross-page excerpt blocks** (FB-33, delivered) —
+a page can include another page's section as a live "Included from" callout with a custom
+attribution label and new-tab option, resolved per reader at render time — and the **P&P
+sourced-content core** (FB-34): sections imported from the Policies & Procedures site as
+snapshots inside a "Source:" callout, with check-for-changes/refresh controls and a paste-HTML
+fallback. The draft-preview modal resolves excerpts so preview matches the published render.
 
 Still gated on WSU ITS engagement: **WSU SSO** (`project_spec.md` §12 FB-30), via Entra ID / Azure
 AD OIDC or SAML for staff and private-KB viewers. All authentication stays local and
@@ -149,8 +160,9 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 
 Schema changes are applied automatically on first request via versioned migrations in
 `src/lib/migrations/` (tracked in `_schema_migrations`). The current head is
-`029_kb_visibility`, which adds `knowledge_bases.visibility` and defaults existing KBs to `public`;
-no manual Neon console migration is required. Earlier migrations include asset versions, redirects,
+`030_sourced_blocks_search`, which extends full-text search to index content inside imported
+sourced blocks; `029_kb_visibility` added `knowledge_bases.visibility` (existing KBs default to
+`public`). No manual Neon console migration is required. Earlier migrations include asset versions, redirects,
 staged imports, users / KB assignments, KB homepage page selection, TOC settings, edit-lock columns,
 and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
 
@@ -194,8 +206,10 @@ The document editor is a WYSIWYG surface with a wrapping toolbar:
 - **Blocks**: paragraphs, H2/H3 headings, ordered/unordered lists (with Tab/Shift+Tab nesting and
   contextual "Starts at" control), reader-visible info boxes, **Procedure sections** (top-level
   structural sections that default to H2 and can be H3), editable tables, section dividers, cards
-  (visual emphasis blocks), videos, and **editor notes** (internal only — never published, excluded
-  from search).
+  (visual emphasis blocks), videos, **Excerpts** (live includes of another page's section, chosen
+  with a KB → page → section picker), **P&P source** blocks (sections imported from the Policies &
+  Procedures site with provenance and refresh controls), and **editor notes** (internal only —
+  never published, excluded from search).
 - **Rich text**: fonts, sizes, colors, bold/italic/underline/strike/sub/sup, and **alignment**
   (left/center/right) for text and images.
 - **Links**: the **Link** button (or clicking an existing link) opens a dialog to set the display

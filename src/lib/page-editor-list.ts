@@ -159,6 +159,8 @@ export type EditorSection =
   | { type: "card"; block: Extract<ContentBlock, { type: "card" }> }
   | { type: "procedure_section"; block: Extract<ContentBlock, { type: "procedure_section" }> }
   | { type: "video"; block: Extract<ContentBlock, { type: "video" }> }
+  | { type: "excerpt"; block: Extract<ContentBlock, { type: "excerpt" }> }
+  | { type: "sourced"; block: Extract<ContentBlock, { type: "sourced" }> }
   | { type: "section_divider"; block: Extract<ContentBlock, { type: "section_divider" }> };
 
 export function blocksToSections(blocks: ContentBlock[]): EditorSection[] {
@@ -188,6 +190,8 @@ export function blocksToSections(blocks: ContentBlock[]): EditorSection[] {
       else if (block.type === "card") sections.push({ type: "card", block });
       else if (block.type === "procedure_section") sections.push({ type: "procedure_section", block });
       else if (block.type === "video") sections.push({ type: "video", block });
+      else if (block.type === "excerpt") sections.push({ type: "excerpt", block });
+      else if (block.type === "sourced") sections.push({ type: "sourced", block });
       else if (block.type === "section_divider") sections.push({ type: "section_divider", block });
     }
   }
@@ -204,6 +208,8 @@ export function sectionsToBlocks(sections: EditorSection[]): ContentBlock[] {
     else if (section.type === "card") blocks.push(section.block);
     else if (section.type === "procedure_section") blocks.push(section.block);
     else if (section.type === "video") blocks.push(section.block);
+    else if (section.type === "excerpt") blocks.push(section.block);
+    else if (section.type === "sourced") blocks.push(section.block);
     else if (section.type === "section_divider") blocks.push(section.block);
   }
   return blocks;

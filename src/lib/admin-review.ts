@@ -1,4 +1,5 @@
 import { extractAssetUsages } from "@/lib/asset-lifecycle";
+import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { getAllAssetsForAdmin, getAllKbsForAdmin, getAllPagesForAdmin, getAssetStatusById } from "@/lib/kb-store";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { listStagedImportsForAdmin } from "@/lib/staged-imports";
@@ -62,7 +63,7 @@ export async function getAdminReviewDashboard(
   const draftPagesBlocked: ReviewDraftPage[] = [];
 
   for (const page of draftPages) {
-    const issues = await validatePageForPublish(page, getAssetStatusById);
+    const issues = await validatePageForPublish(page, getAssetStatusById, checkExcerptSourceForPublish);
     const kb = kbById.get(page.kbId);
     if (issues.length === 0) {
       draftPagesReady.push({

@@ -9,12 +9,18 @@ export interface ThemeColors {
   line: string; 
   paper: string; 
   wash: string; 
-  infoBoxBg: string; 
-  infoBoxBorder: string; 
-  infoBoxInk: string; 
-  procedureBg: string; 
-  procedureBorder: string; 
-  procedureInk: string; 
+  infoBoxBg: string;
+  infoBoxBorder: string;
+  infoBoxInk: string;
+  excerptBoxBg: string;
+  excerptBoxBorder: string;
+  excerptBoxInk: string;
+  sourceBoxBg: string;
+  sourceBoxBorder: string;
+  sourceBoxInk: string;
+  procedureBg: string;
+  procedureBorder: string;
+  procedureInk: string;
 }
 
 export interface ThemeFonts {
@@ -124,6 +130,12 @@ export const DEFAULT_THEME: KbTheme = {
     infoBoxBg: "#f6f3f0",
     infoBoxBorder: "#a60f2d",
     infoBoxInk: "#1d1a1b",
+    excerptBoxBg: "#f4f6f6",
+    excerptBoxBorder: "#5e6a71",
+    excerptBoxInk: "#1d1a1b",
+    sourceBoxBg: "#f8f5ee",
+    sourceBoxBorder: "#8a7237",
+    sourceBoxInk: "#1d1a1b",
     procedureBg: "#ffffff",
     procedureBorder: "#e4ddd8",
     procedureInk: "#1d1a1b",
@@ -303,6 +315,12 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       infoBoxBg: safeHex(c.infoBoxBg, base.colors.infoBoxBg),
       infoBoxBorder: safeHex(c.infoBoxBorder, base.colors.infoBoxBorder),
       infoBoxInk: safeHex(c.infoBoxInk, base.colors.infoBoxInk),
+      excerptBoxBg: safeHex(c.excerptBoxBg, base.colors.excerptBoxBg),
+      excerptBoxBorder: safeHex(c.excerptBoxBorder, base.colors.excerptBoxBorder),
+      excerptBoxInk: safeHex(c.excerptBoxInk, base.colors.excerptBoxInk),
+      sourceBoxBg: safeHex(c.sourceBoxBg, base.colors.sourceBoxBg),
+      sourceBoxBorder: safeHex(c.sourceBoxBorder, base.colors.sourceBoxBorder),
+      sourceBoxInk: safeHex(c.sourceBoxInk, base.colors.sourceBoxInk),
       procedureBg: safeHex(c.procedureBg, base.colors.procedureBg),
       procedureBorder: safeHex(c.procedureBorder, base.colors.procedureBorder),
       procedureInk: safeHex(c.procedureInk, base.colors.procedureInk),
@@ -429,6 +447,12 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--info-box-bg": theme.colors.infoBoxBg,
     "--info-box-border": theme.colors.infoBoxBorder,
     "--info-box-ink": theme.colors.infoBoxInk,
+    "--excerpt-box-bg": theme.colors.excerptBoxBg,
+    "--excerpt-box-border": theme.colors.excerptBoxBorder,
+    "--excerpt-box-ink": theme.colors.excerptBoxInk,
+    "--source-box-bg": theme.colors.sourceBoxBg,
+    "--source-box-border": theme.colors.sourceBoxBorder,
+    "--source-box-ink": theme.colors.sourceBoxInk,
     "--procedure-bg": theme.colors.procedureBg,
     "--procedure-border": theme.colors.procedureBorder,
     "--procedure-ink": theme.colors.procedureInk,

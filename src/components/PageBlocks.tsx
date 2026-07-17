@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { getCurrentAdminSession } from "@/lib/auth";
+import { excerptAttributionLabel, resolveExcerptForRead } from "@/lib/excerpts";
+import { formatDate } from "@/lib/format";
 import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
 import { sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
@@ -24,6 +27,10 @@ function ListItemRichText({ html, text }: { html?: string; text?: string }) {
 function CalloutRichText({ html, text }: { html?: string; text?: string }) {
   const clean = html ? sanitizeCalloutHtml(html) : textToRichText(text || "");
   return <div className="callout-rich-text" dangerouslySetInnerHTML={{ __html: clean }} />;
+}
+
+function OpensInNewTabText({ enabled }: { enabled?: boolean }) {
+  return enabled ? <span className="sr-only"> (opens in a new tab)</span> : null;
 }
 
 async function AssetLink({ assetId }: { assetId: string }) {
@@ -63,6 +70,74 @@ async function AssetLink({ assetId }: { assetId: string }) {
       </div>
     </Link>
   );
+}
+
+async function ExcerptBlock({ block }: { block: Extract<ContentBlock, { type: "excerpt" }> }) {
+  const session = await getCurrentAdminSession();
+  const resolved = await resolveExcerptForRead(block, session);
+  if (resolved.state !== "ok") {
+    return (
+      <aside aria-label="Included content unavailable" className="excerpt-box excerpt-box--unavailable" role="note">
+        <p className="excerpt-box__source">This included content is currently unavailable.</p>
+      </aside>
+    );
+  }
+  const sourceLabel = excerptAttributionLabel(resolved, block.label);
+  const newTabProps = block.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
+  return (
+    <aside aria-label={`Included from ${sourceLabel}`} className="excerpt-box" role="note">
+      <p className="excerpt-box__source">
+        Included from:{" "}
+        <Link href={resolved.sourceHref} {...newTabProps}>
+          {sourceLabel}
+          <OpensInNewTabText enabled={block.openInNewTab} />
+        </Link>
+      </p>
+      <div className="excerpt-box__blocks flow">
+        <PageBlocks blocks={resolved.blocks} />
+      </div>
+    </aside>
+  );
+}
+
+function SourcedBlock({ block }: { block: Extract<ContentBlock, { type: "sourced" }> }) {
+  const href = /^https:\/\//.test(block.sourceUrl)
+    ? `${block.sourceUrl}${block.sourceAnchor ? `#${block.sourceAnchor}` : ""}`
+    : "";
+  const label =
+    (block.label ?? "").trim() ||
+    (block.headingText ? `${sourceHostLabel(block.sourceUrl)} — ${block.headingText}` : sourceHostLabel(block.sourceUrl));
+  const newTabProps = block.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
+  return (
+    <aside aria-label={`Source: ${label}`} className="source-box" role="note">
+      <p className="source-box__source">
+        Source:{" "}
+        {href ? (
+          <a href={href} {...newTabProps}>
+            {label}
+            <OpensInNewTabText enabled={block.openInNewTab} />
+          </a>
+        ) : (
+          label
+        )}
+        {block.retrievedAt && (
+          <span className="source-box__meta"> · retrieved {formatDate(block.retrievedAt.slice(0, 10))}</span>
+        )}
+      </p>
+      {block.headingText && <p className="source-box__heading">{block.headingText}</p>}
+      <div className="source-box__blocks flow">
+        <PageBlocks blocks={block.blocks} />
+      </div>
+    </aside>
+  );
+}
+
+function sourceHostLabel(sourceUrl: string): string {
+  try {
+    return new URL(sourceUrl).hostname;
+  } catch {
+    return "External source";
+  }
 }
 
 async function CardBlock({ block }: { block: Extract<ContentBlock, { type: "card" }> }) {
@@ -274,6 +349,10 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
             );
           case "asset_link":
             return <AssetLink assetId={block.assetId} key={block.blockId} />;
+          case "excerpt":
+            return <ExcerptBlock block={block} key={block.blockId} />;
+          case "sourced":
+            return <SourcedBlock block={block} key={block.blockId} />;
           case "section_divider":
             return <hr className="content-section-break" key={block.blockId} />;
           default:
