@@ -45,6 +45,12 @@ function renderInline(html: string | undefined, text: string | undefined) {
   return html ? sanitizeRichText(html) : textToRichText(text ?? "");
 }
 
+function newTabAttrs(openInNewTab: boolean | undefined, label: string) {
+  return openInNewTab
+    ? ` target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${label} (opens in a new tab)`)}"`
+    : "";
+}
+
 function renderBlocks(
   blocks: ContentBlock[],
   kbSlug: string,
@@ -75,7 +81,7 @@ async function buildExcerptHtml(
     const label = excerptAttributionLabel(resolved, block.label);
     excerptHtml.set(
       block.blockId,
-      `<aside role="note"><p>Included from: <a href="${escapeHtml(resolved.sourceHref)}">${escapeHtml(label)}</a></p>${renderBlocks(resolved.blocks, kbSlug, assetPaths)}</aside>`,
+      `<aside role="note"><p>Included from: <a href="${escapeHtml(resolved.sourceHref)}"${newTabAttrs(block.openInNewTab, label)}>${escapeHtml(label)}</a></p>${renderBlocks(resolved.blocks, kbSlug, assetPaths)}</aside>`,
     );
   }
   return excerptHtml;
@@ -142,13 +148,12 @@ function renderBlock(
     case "excerpt":
       return excerptHtml.get(block.blockId) ?? "";
     case "sourced": {
-      const label = escapeHtml(
-        (block.label ?? "").trim() || block.headingText || block.sourceUrl,
-      );
+      const rawLabel = (block.label ?? "").trim() || block.headingText || block.sourceUrl;
+      const label = escapeHtml(rawLabel);
       const href = /^https:\/\//.test(block.sourceUrl)
         ? escapeHtml(`${block.sourceUrl}${block.sourceAnchor ? `#${block.sourceAnchor}` : ""}`)
         : "";
-      const attribution = href ? `<a href="${href}">${label}</a>` : label;
+      const attribution = href ? `<a href="${href}"${newTabAttrs(block.openInNewTab, rawLabel)}>${label}</a>` : label;
       return `<aside role="note"><p>Source: ${attribution}</p>${renderBlocks(block.blocks, kbSlug, assetPaths, excerptHtml)}</aside>`;
     }
   }

@@ -11,6 +11,7 @@ interface PreviewRef {
   sourcePageId?: unknown;
   sourceHeadingBlockId?: unknown;
   label?: unknown;
+  openInNewTab?: unknown;
 }
 
 export async function POST(request: Request) {
@@ -23,7 +24,8 @@ export async function POST(request: Request) {
   try {
     const results: Record<
       string,
-      { state: "ok"; label: string; href: string; bodyHtml: string } | { state: "unavailable" }
+      | { state: "ok"; label: string; href: string; bodyHtml: string; openInNewTab?: boolean }
+      | { state: "unavailable" }
     > = {};
     for (const ref of refs) {
       const blockId = typeof ref.blockId === "string" ? ref.blockId : "";
@@ -50,6 +52,7 @@ export async function POST(request: Request) {
         label: excerptAttributionLabel(resolved, typeof ref.label === "string" ? ref.label : undefined),
         href: resolved.sourceHref,
         bodyHtml: blocksToSourceHtml(resolved.blocks),
+        openInNewTab: ref.openInNewTab === true || undefined,
       };
     }
     return NextResponse.json({ results });

@@ -9,7 +9,7 @@ import { useModalA11y } from "@/lib/use-modal-a11y";
 import type { ContentBlock } from "@/lib/types";
 
 type ExcerptPreviewResult =
-  | { state: "ok"; label: string; href: string; bodyHtml: string }
+  | { state: "ok"; label: string; href: string; bodyHtml: string; openInNewTab?: boolean }
   | { state: "unavailable" };
 
 // Renders the current (possibly unsaved) editor content with the public
@@ -45,6 +45,7 @@ export function DraftPreviewModal({
         sourcePageId: block.sourcePageId,
         sourceHeadingBlockId: block.sourceHeadingBlockId,
         label: block.label,
+        openInNewTab: block.openInNewTab,
       }));
     if (refs.length === 0) {
       return;
@@ -85,8 +86,10 @@ export function DraftPreviewModal({
         );
         continue;
       }
+      const newTabAttrs = resolved.openInNewTab ? ` target="_blank" rel="noopener noreferrer"` : "";
+      const newTabText = resolved.openInNewTab ? `<span class="sr-only"> (opens in a new tab)</span>` : "";
       node.replaceWith(
-        `<aside class="excerpt-box" role="note"><p class="excerpt-box__source">Included from: <a href="${escapeHtml(resolved.href)}">${escapeHtml(resolved.label)}</a></p><div class="excerpt-box__blocks flow">${resolved.bodyHtml}</div></aside>`,
+        `<aside class="excerpt-box" role="note"><p class="excerpt-box__source">Included from: <a href="${escapeHtml(resolved.href)}"${newTabAttrs}>${escapeHtml(resolved.label)}${newTabText}</a></p><div class="excerpt-box__blocks flow">${resolved.bodyHtml}</div></aside>`,
       );
     }
     return root.toString();

@@ -29,6 +29,10 @@ function CalloutRichText({ html, text }: { html?: string; text?: string }) {
   return <div className="callout-rich-text" dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 
+function OpensInNewTabText({ enabled }: { enabled?: boolean }) {
+  return enabled ? <span className="sr-only"> (opens in a new tab)</span> : null;
+}
+
 async function AssetLink({ assetId }: { assetId: string }) {
   const asset = await getAssetById(assetId);
   if (!asset) {
@@ -86,6 +90,7 @@ async function ExcerptBlock({ block }: { block: Extract<ContentBlock, { type: "e
         Included from:{" "}
         <Link href={resolved.sourceHref} {...newTabProps}>
           {sourceLabel}
+          <OpensInNewTabText enabled={block.openInNewTab} />
         </Link>
       </p>
       <div className="excerpt-box__blocks flow">
@@ -110,6 +115,7 @@ function SourcedBlock({ block }: { block: Extract<ContentBlock, { type: "sourced
         {href ? (
           <a href={href} {...newTabProps}>
             {label}
+            <OpensInNewTabText enabled={block.openInNewTab} />
           </a>
         ) : (
           label
