@@ -4162,6 +4162,39 @@ article ol ol ol {
   box-shadow: var(--shadow-md);
 }
 
+.tree-editor__row {
+  position: relative;
+}
+
+.tree-editor__row.is-dragging {
+  opacity: 0.45;
+}
+
+.tree-editor__row.is-drop-before::before,
+.tree-editor__row.is-drop-after::after {
+  background: var(--wsu-crimson);
+  border-radius: 2px;
+  content: "";
+  height: 3px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.tree-editor__row.is-drop-before::before {
+  top: -4px;
+}
+
+.tree-editor__row.is-drop-after::after {
+  bottom: -4px;
+}
+
+.tree-editor__row.is-drop-into {
+  background: var(--wash);
+  border-color: var(--wsu-crimson);
+  box-shadow: inset 0 0 0 1px var(--wsu-crimson);
+}
+
 .tree-editor__handle {
   align-items: center;
   background: transparent;

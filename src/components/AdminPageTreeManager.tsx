@@ -23,6 +23,8 @@ type PageItem = Pick<
   "id" | "path" | "sortOrder" | "status" | "title" | "updatedDisplayDate" | "visibility" | "nextReviewDate"
 >;
 
+type DropZone = "before" | "after" | "into";
+
 function pathKey(path: string[]) {
   return path.join("/");
 }
@@ -574,6 +576,7 @@ export function AdminPageTreeManager({
   const [trackedInitialPages, setTrackedInitialPages] = useState(initialPages);
   const [showArchived, setShowArchived] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; zone: DropZone } | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [homepageBusyId, setHomepageBusyId] = useState<string | null>(null);
@@ -607,31 +610,64 @@ export function AdminPageTreeManager({
     setLiveMessage(text);
   }
 
-  function dropBefore(targetId: string) {
-    if (!draggedId || draggedId === targetId) {
-      return;
+  function canDropOn(target: PageItem) {
+    if (!draggedId || draggedId === target.id) {
+      return false;
     }
-    const target = pages.find((page) => page.id === targetId);
-    if (!target) {
-      return;
-    }
-    const targetParent = target.path.slice(0, -1);
-    setPages((current) => movePage(current, draggedId, targetParent, target.sortOrder - 1));
-    setDraggedId(null);
+    const dragged = pages.find((page) => page.id === draggedId);
+    return Boolean(dragged && !hasPathPrefix(target.path, dragged.path));
   }
 
-  function nestUnder(targetId: string) {
-    if (!draggedId || draggedId === targetId) {
+  function rowDragOver(event: React.DragEvent<HTMLDivElement>, target: PageItem) {
+    if (!canDropOn(target)) {
       return;
     }
-    const target = pages.find((page) => page.id === targetId);
-    if (!target) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = (event.clientY - rect.top) / Math.max(1, rect.height);
+    const zone: DropZone = ratio < 0.3 ? "before" : ratio > 0.7 ? "after" : "into";
+    setDropTarget((current) =>
+      current?.id === target.id && current.zone === zone ? current : { id: target.id, zone },
+    );
+  }
+
+  function rowDragLeave(event: React.DragEvent<HTMLDivElement>, target: PageItem) {
+    if (
+      dropTarget?.id === target.id &&
+      !event.currentTarget.contains(event.relatedTarget as Node | null)
+    ) {
+      setDropTarget(null);
+    }
+  }
+
+  function rowDrop(event: React.DragEvent<HTMLDivElement>, target: PageItem) {
+    event.preventDefault();
+    const zone = dropTarget?.id === target.id ? dropTarget.zone : "into";
+    const dragged = pages.find((page) => page.id === draggedId);
+    setDropTarget(null);
+    if (!draggedId || !dragged || !canDropOn(target)) {
+      setDraggedId(null);
       return;
     }
-    const childOrders = pages
-      .filter((page) => pathKey(page.path.slice(0, -1)) === pathKey(target.path))
-      .map((page) => page.sortOrder);
-    setPages((current) => movePage(current, draggedId, target.path, Math.max(0, ...childOrders) + 10));
+    if (zone === "into") {
+      const childOrders = pages
+        .filter((page) => pathKey(page.path.slice(0, -1)) === pathKey(target.path))
+        .map((page) => page.sortOrder);
+      setPages((current) => movePage(current, draggedId, target.path, Math.max(0, ...childOrders) + 10));
+      announceMove(`${dragged.title} nested under ${target.title}.`);
+    } else {
+      const targetParent = target.path.slice(0, -1);
+      setPages((current) =>
+        movePage(
+          current,
+          draggedId,
+          targetParent,
+          zone === "before" ? target.sortOrder - 1 : target.sortOrder + 1,
+        ),
+      );
+      announceMove(`${dragged.title} moved ${zone === "before" ? "above" : "below"} ${target.title}.`);
+    }
     setDraggedId(null);
   }
 
@@ -851,6 +887,12 @@ export function AdminPageTreeManager({
         )}
       </div>
 
+      <p className="meta">
+        Drag a page onto the <strong>middle</strong> of another page to nest it underneath; drop
+        near a row&apos;s <strong>top or bottom edge</strong> to reorder at the same level. The
+        arrows menu and Alt + arrow keys do the same from the keyboard.
+      </p>
+
       <ul aria-label={`${kb.title} page tree editor`} className="tree-editor" role="tree">
         {displayPages.map((page) => {
           const depth = Math.max(0, page.path.length - 1);
@@ -874,16 +916,21 @@ export function AdminPageTreeManager({
               className="tree-editor__item"
               data-depth={depth}
               draggable
-              onDragOver={(event) => event.preventDefault()}
+              onDragEnd={() => {
+                setDraggedId(null);
+                setDropTarget(null);
+              }}
               onDragStart={() => setDraggedId(page.id)}
-              onDrop={() => dropBefore(page.id)}
               role="treeitem"
               style={{ marginLeft: `${depth * 1.25}rem` }}
             >
               <div
-                className="tree-editor__row"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={() => nestUnder(page.id)}
+                className={`tree-editor__row${
+                  dropTarget?.id === page.id ? ` is-drop-${dropTarget.zone}` : ""
+                }${draggedId === page.id ? " is-dragging" : ""}`}
+                onDragLeave={(event) => rowDragLeave(event, page)}
+                onDragOver={(event) => rowDragOver(event, page)}
+                onDrop={(event) => rowDrop(event, page)}
               >
                 <div className="tree-editor__handle-group">
                   <button
