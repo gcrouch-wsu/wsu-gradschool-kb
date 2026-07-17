@@ -38,6 +38,7 @@ export function DocumentToolbar({
   onAddCard,
   onAddProcedureSection,
   onAddExcerpt,
+  onAddSourced,
   onInsertSectionBreak,
   pageUrl,
 }: {
@@ -49,6 +50,7 @@ export function DocumentToolbar({
   onAddCard: () => void;
   onAddProcedureSection: () => void;
   onAddExcerpt: () => void;
+  onAddSourced: () => void;
   onInsertSectionBreak: () => void;
   pageUrl?: string;
 }) {
@@ -322,6 +324,16 @@ export function DocumentToolbar({
               type="button"
             >
               Excerpt
+            </button>
+            <button
+              aria-label="Insert content from the P&P source site"
+              className={buttonClass}
+              onMouseDown={(event) => toolbarPrepare(event)}
+              onClick={onAddSourced}
+              title="Import a section from the Policies and Procedures site with a source attribution"
+              type="button"
+            >
+              P&amp;P source
             </button>
             <button
               aria-label="Insert table"

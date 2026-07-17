@@ -12,12 +12,27 @@ export type ExcerptBlockRef = Pick<
 export type ResolvedExcerpt =
   | {
       state: "ok";
+      kbTitle: string;
       sourceTitle: string;
       sourceHref: string;
       sectionTitle?: string;
       blocks: ContentBlock[];
     }
   | { state: "unavailable" };
+
+// The reader-facing attribution: a custom label wins; otherwise KB, page, and
+// section are all named so readers know the origin without following the link.
+export function excerptAttributionLabel(
+  resolved: Extract<ResolvedExcerpt, { state: "ok" }>,
+  customLabel?: string,
+): string {
+  const custom = (customLabel ?? "").trim();
+  if (custom) {
+    return custom;
+  }
+  const base = `${resolved.kbTitle}: ${resolved.sourceTitle}`;
+  return resolved.sectionTitle ? `${base} — ${resolved.sectionTitle}` : base;
+}
 
 const UNAVAILABLE: ResolvedExcerpt = { state: "unavailable" };
 
@@ -106,6 +121,10 @@ export function demoteExcerptBlocks(blocks: ContentBlock[]): ContentBlock[] {
       });
       continue;
     }
+    if (block.type === "sourced") {
+      demoted.push({ ...block, blocks: demoteExcerptBlocks(block.blocks) });
+      continue;
+    }
     demoted.push(block);
   }
   return demoted;
@@ -114,7 +133,7 @@ export function demoteExcerptBlocks(blocks: ContentBlock[]): ContentBlock[] {
 function resolveFromVisibleSource(
   ref: ExcerptBlockRef,
   page: { title: string; blocks: ContentBlock[]; path: string[]; id: string },
-  kb: { slug: string; homepagePageId?: string | null },
+  kb: { slug: string; title: string; homepagePageId?: string | null },
 ): ResolvedExcerpt {
   const section = extractExcerptSection(page.blocks, ref.sourceHeadingBlockId);
   if (!section) {
@@ -125,6 +144,7 @@ function resolveFromVisibleSource(
   const anchor = ref.sourceHeadingBlockId ? `#${ref.sourceHeadingBlockId}` : "";
   return {
     state: "ok",
+    kbTitle: kb.title,
     sourceTitle: page.title,
     sourceHref: `${basePath}${anchor}`,
     sectionTitle: section.sectionTitle,

@@ -6,7 +6,7 @@ import {
   getReadableExcerptSourcePageForPicker,
   resolveExcerptForRead,
 } from "@/lib/excerpts";
-import { getExcerptReferencesToPage } from "@/lib/kb-store";
+import { getExcerptReferencesToPage, searchKb } from "@/lib/kb-store";
 
 function session(role: AdminSession["role"], userId: string): AdminSession {
   return {
@@ -38,6 +38,7 @@ describe.skipIf(!isDatabaseEnabled())("cross-page excerpts live DB", () => {
     const decoyPage = `test-excerpt-decoy-${id}`;
     const staffParent = `test-excerpt-staff-parent-${id}`;
     const publicUnderStaff = `test-excerpt-staff-child-${id}`;
+    const sourcedPage = `test-excerpt-sourced-${id}`;
     const viewerId = `test-excerpt-viewer-${id}`;
 
     const sourceBlocks = [
@@ -121,6 +122,26 @@ describe.skipIf(!isDatabaseEnabled())("cross-page excerpts live DB", () => {
             'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
             ${JSON.stringify([{ blockId: "p1", type: "paragraph", text: "Hidden by ancestor", html: "Hidden by ancestor" }])}::jsonb,
             '[]'::jsonb, '[]'::jsonb, true, 3, true, true
+          ),
+          (
+            ${sourcedPage}, ${publicKb}, 'sourced-page', 'sourced-page', 60,
+            ${`Sourced Page ${unique}`}, 'Page with imported P&P content', 'published', 'public',
+            'Graduate School', 'gradschool@example.edu', '2026-01-01', '2026-01-01',
+            ${JSON.stringify([
+              {
+                blockId: "src-1",
+                type: "sourced",
+                sourceUrl: "https://gradschool.wsu.edu/graduate-school-policies-and-procedures/",
+                sourceAnchor: "graduate-program-faculty",
+                headingText: "Graduate Program Faculty",
+                retrievedAt: "2026-07-17T00:00:00.000Z",
+                contentHash: "hash",
+                blocks: [
+                  { blockId: "src-1-p", type: "paragraph", text: `sourcedneedle${unique}`, html: `sourcedneedle${unique}` },
+                ],
+              },
+            ])}::jsonb,
+            '[]'::jsonb, '[]'::jsonb, true, 3, true, true
           )
       `;
 
@@ -162,6 +183,11 @@ describe.skipIf(!isDatabaseEnabled())("cross-page excerpts live DB", () => {
       const refs = await getExcerptReferencesToPage(sourcePage);
       expect(refs.map((ref) => ref.pageId)).toEqual([targetPage]);
       expect(await getExcerptReferencesToPage(draftSource)).toEqual([]);
+
+      // Migration 030: text inside sourced blocks is indexed on the owning
+      // page, so anonymous public search finds it.
+      const sourcedResults = await searchKb(publicKb, `sourcedneedle${unique}`, false);
+      expect(sourcedResults.some((result) => result.type === "page" && result.id === sourcedPage)).toBe(true);
 
       // The publish-gate checker names the specific failure.
       expect(await checkExcerptSourceForPublish({ sourcePageId: sourcePage, sourceHeadingBlockId: "sec-a" })).toBe("ok");

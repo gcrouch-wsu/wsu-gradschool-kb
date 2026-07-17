@@ -330,7 +330,19 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
       const headingAttr = block.sourceHeadingBlockId
         ? ` data-source-heading-id="${escapeHtml(block.sourceHeadingBlockId)}"`
         : "";
-      return `<div class="doc-excerpt" contenteditable="false" data-block-id="${id}" data-source-page-id="${escapeHtml(block.sourcePageId)}"${headingAttr}></div>`;
+      const labelAttr = block.label ? ` data-label="${escapeHtml(block.label)}"` : "";
+      const newTabAttr = block.openInNewTab ? ` data-new-tab="true"` : "";
+      return `<div class="doc-excerpt" contenteditable="false" data-block-id="${id}" data-source-page-id="${escapeHtml(block.sourcePageId)}"${headingAttr}${labelAttr}${newTabAttr}></div>`;
+    }
+    case "sourced": {
+      const anchorAttr = block.sourceAnchor ? ` data-source-anchor="${escapeHtml(block.sourceAnchor)}"` : "";
+      const labelAttr = block.label ? ` data-label="${escapeHtml(block.label)}"` : "";
+      const newTabAttr = block.openInNewTab ? ` data-new-tab="true"` : "";
+      const headingAttr = block.headingText ? ` data-heading-text="${escapeHtml(block.headingText)}"` : "";
+      const retrievedAttr = block.retrievedAt ? ` data-retrieved-at="${escapeHtml(block.retrievedAt)}"` : "";
+      const hashAttr = block.contentHash ? ` data-content-hash="${escapeHtml(block.contentHash)}"` : "";
+      const inner = blocksToDocumentHtml(block.blocks, kbSlug);
+      return `<section class="doc-sourced" contenteditable="false" data-block-id="${id}" data-source-url="${escapeHtml(block.sourceUrl)}"${anchorAttr}${labelAttr}${newTabAttr}${headingAttr}${retrievedAttr}${hashAttr}>${inner}</section>`;
     }
     default:
       return assertNever(block);
@@ -445,8 +457,23 @@ function serializeDocumentNode(node: Node): string {
   if (tag === "div" && hasClass(node, "doc-excerpt")) {
     const sourcePageId = node.getAttribute("data-source-page-id") || "";
     const sourceHeadingId = node.getAttribute("data-source-heading-id") || "";
+    const label = node.getAttribute("data-label") || "";
+    const newTab = node.getAttribute("data-new-tab") === "true";
     const headingAttr = sourceHeadingId ? ` data-source-heading-id="${escapeHtml(sourceHeadingId)}"` : "";
-    return `<div class="doc-excerpt" contenteditable="false" data-block-id="${escapeHtml(blockId)}" data-source-page-id="${escapeHtml(sourcePageId)}"${headingAttr}></div>`;
+    const labelAttr = label ? ` data-label="${escapeHtml(label)}"` : "";
+    const newTabAttr = newTab ? ` data-new-tab="true"` : "";
+    return `<div class="doc-excerpt" contenteditable="false" data-block-id="${escapeHtml(blockId)}" data-source-page-id="${escapeHtml(sourcePageId)}"${headingAttr}${labelAttr}${newTabAttr}></div>`;
+  }
+
+  if (tag === "section" && hasClass(node, "doc-sourced")) {
+    const attrs = ["data-source-url", "data-source-anchor", "data-label", "data-new-tab", "data-heading-text", "data-retrieved-at", "data-content-hash"]
+      .map((name) => {
+        const value = node.getAttribute(name) || "";
+        return value ? ` ${name}="${escapeHtml(value)}"` : "";
+      })
+      .join("");
+    const inner = node.childNodes.map(serializeDocumentNode).join("");
+    return `<section class="doc-sourced" contenteditable="false" data-block-id="${escapeHtml(blockId)}"${attrs}>${inner}</section>`;
   }
 
   if ((tag === "div" && hasClass(node, "doc-section-break")) || (tag === "hr" && hasClass(node, "doc-section-break"))) {
@@ -738,7 +765,29 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
           type: "excerpt",
           sourcePageId: node.getAttribute("data-source-page-id") || "",
           sourceHeadingBlockId: node.getAttribute("data-source-heading-id") || undefined,
+          label: node.getAttribute("data-label") || undefined,
+          openInNewTab: node.getAttribute("data-new-tab") === "true" || undefined,
         });
+      }
+      continue;
+    }
+
+    if (tag === "section" && hasClass(node, "doc-sourced")) {
+      if (depth === 0) {
+        blocks.push({
+          blockId: blockIdFrom(node),
+          type: "sourced",
+          sourceUrl: node.getAttribute("data-source-url") || "",
+          sourceAnchor: node.getAttribute("data-source-anchor") || undefined,
+          label: node.getAttribute("data-label") || undefined,
+          openInNewTab: node.getAttribute("data-new-tab") === "true" || undefined,
+          headingText: node.getAttribute("data-heading-text") || undefined,
+          retrievedAt: node.getAttribute("data-retrieved-at") || undefined,
+          contentHash: node.getAttribute("data-content-hash") || undefined,
+          blocks: documentHtmlToBlocks(node.innerHTML, depth + 1),
+        });
+      } else {
+        blocks.push(...documentHtmlToBlocks(node.innerHTML, depth));
       }
       continue;
     }

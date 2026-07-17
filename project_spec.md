@@ -194,8 +194,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - A page's body is a `ContentBlock[]` union (`src/lib/types.ts`): paragraph, heading (H2/H3), list
   with optional custom start number, alert (rendered in the editor as a reader-visible info box),
   image with separate optional caption, table, asset_link, card (recursive, max depth 3), top-level
-  procedure_section, video, section_divider, and top-level excerpt (a live reference to another
-  page's section — see §8 and FB-33).
+  procedure_section, video, section_divider, top-level excerpt (a live reference to another
+  page's section — see §8 and FB-33), and top-level sourced (a snapshot imported from an
+  approved external site with provenance metadata — see §8 and FB-34).
 - A KB can optionally point `homepagePageId` / `knowledge_bases.home_page_id` at one page in that
   KB. Public `/kb/{kbSlug}` renders that page as the KB landing page when it is visible to the
   current visitor; otherwise it falls back to the generated section list. The homepage page's tree
@@ -389,8 +390,10 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   assignment (`025`: `knowledge_bases.home_page_id`), per-page print-button visibility
   (`026`: `kb_pages.show_print_button`), page revision history (`027`: `kb_page_revisions` plus
   a baseline revision backfill for pre-existing pages), page-view analytics (`028`: `kb_page_views`
-  daily counters with retention-fold indexes), and KB public/private visibility
-  (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`).
+  daily counters with retention-fold indexes), KB public/private visibility
+  (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`), and sourced-block
+  FTS indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill).
+  **Current head: `030_sourced_blocks_search`.**
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
@@ -529,6 +532,12 @@ manual redirect persistence, and the single-active-version DB invariant.
   nested excerpts with a note, which is what makes cycles impossible). The publish gate's excerpt
   checks are injected (`checkExcerptSourceForPublish`) — pass the checker at any new gate call
   site or excerpt problems silently stop blocking publish.
+- **Sourced blocks are snapshots; their server fetch is allowlist-gated.** A `sourced` block's
+  content is stored on the page (indexed in FTS, validated by the gate) and changes only via an
+  explicit editor refresh — never at reader render time. The import/check APIs fetch external
+  HTML server-side: keep `parseAllowedSourceUrl` (https + host allowlist, default
+  `gradschool.wsu.edu`, env `SOURCED_CONTENT_ALLOWED_HOSTS`) in front of every fetch, or the
+  route becomes an SSRF proxy. Reader-facing routes must never fetch the source.
 - **`style/style.md` hand-mirrors the publish gate and editor block contract.** The agent style
   pipeline in `style/` (see `style/README.md`) checks pages against a prose copy of
   `validatePageForPublish` rules and the `documentHtmlToBlocks` allowed-block list. If you change
@@ -1475,6 +1484,13 @@ Items are ordered by recommended priority.
     labeled `role="note"` region; (b) long "Included from" labels intentionally wrap rather than
     truncate — visually shortening while exposing full text only to assistive tech would diverge
     the visible and accessible names and hide the section cue sighted readers use.
+  - **Maintainer follow-ups (2026-07-17):** (a) excerpt blocks gained `label` (custom attribution
+    overriding the default, which now names KB, page, and section via `excerptAttributionLabel`)
+    and `openInNewTab` (adds `target="_blank"` + `rel="noopener noreferrer"`), editable in the
+    excerpt section editor and honored by the public render and KB export; (b) the draft-preview
+    modal now resolves excerpts through `POST /api/admin/excerpt-preview` (session-scoped
+    `resolveExcerptForRead`, capped ref count) so preview matches the published render — videos
+    and file links remain placeholders.
 
 - **Finding:** content that applies to multiple pages/KBs must currently be duplicated, and copies
   drift when the source page changes. This is the missing Confluence "excerpt include" equivalent:
@@ -1524,7 +1540,38 @@ Items are ordered by recommended priority.
 
 ### FB-34 — Sourced content from the published P&P manual (external excerpt with provenance)
 
-`[AI-AGENT-TASK] id:FB-34  priority:high  area:content-sourcing  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-34  priority:high  area:content-sourcing  effort:M  status:in-progress`
+
+- **CORE DELIVERED (2026-07-17, `feature/excerpt-blocks`):** the editor-facing import piece:
+  - New top-level `sourced` `ContentBlock` (`sourceUrl`, `sourceAnchor`, `label`, `openInNewTab`,
+    `headingText`, `retrievedAt`, `contentHash`, nested `blocks`), serialized as
+    `<section class="doc-sourced">` with the snapshot content inside; round-trips the editor's
+    Visual/HTML modes.
+  - **"P&P source" toolbar insert** → `SourcedSectionEditor`: paste a source link with a
+    `#section-anchor`, **Import from source** fetches server-side
+    (`POST /api/admin/sourced-content`), extracts from the anchor heading to the next
+    same-or-higher heading, absolutizes links/images, normalizes tables to the `doc-table`
+    contract, sanitizes through `documentHtmlToBlocks` (h4–h6 → H3), and stores the blocks plus a
+    content hash of the id-stripped block JSON. **Paste HTML instead** is the first-class fallback
+    (same sanitizer, URL still recorded). Attribution label + open-in-new-tab controls match the
+    FB-33 excerpt editor.
+  - **SSRF containment:** server fetches are `https`-only against an allowlist (default
+    `gradschool.wsu.edu`; override `SOURCED_CONTENT_ALLOWED_HOSTS`), honest UA
+    `wsu-gradschool-kb/1.0`, bounded timeout and body size.
+  - **Staleness (manual v1):** "Check source for changes"
+    (`POST /api/admin/sourced-content/check`) re-fetches, re-extracts, and hash-compares —
+    reporting unchanged / changed / anchor-missing / unreachable; "Refresh from source" re-imports
+    and the editor reminds the author to save (publish re-runs the gate). Reader pages never fetch
+    the source.
+  - Public render: `source-box` provenance callout ("Source: [label] · retrieved [date]" linking
+    to the anchored source), themed by the delivered `sourceBoxBg/Border/Ink` tokens (ThemeEditor
+    "External Source Styles" + contrast row). Publish gate and KB export recurse into sourced
+    content; migration `030_sourced_blocks_search` indexes sourced text in FTS (unlike live
+    excerpts, the snapshot is page content), with in-memory parity via `blocksBodyText`.
+- **Remaining (before flipping to done):** scheduled/automated staleness (cron polling the
+  `wp-json` `modified` timestamp + review-dashboard "source updated" flags with the tri-state
+  relink flow) — today checking is a per-block editor action, which fits the annual publication
+  cadence; and live editor QA against the real P&P page from a deployed environment.
 
 - **Finding:** the Graduate School Policies & Procedures manual is published at
   `https://gradschool.wsu.edu/graduate-school-policies-and-procedures/` (WordPress, one ~600 KB

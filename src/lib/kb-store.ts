@@ -928,18 +928,29 @@ export interface SearchKbOptions {
   staffKbIds?: string[] | null;
 }
 
-function pageBodyText(page: KbPage): string {
-  return page.blocks
-    .map((block) =>
-      "text" in block
-        ? block.text
-        : "items" in block
-          ? block.items.join(" ")
-          : "rows" in block
-            ? block.rows.flat().join(" ")
-            : "",
-    )
+function blocksBodyText(blocks: ContentBlock[]): string {
+  return blocks
+    .map((block) => {
+      if ("text" in block) {
+        return block.text;
+      }
+      if ("items" in block) {
+        return block.items.join(" ");
+      }
+      if ("rows" in block) {
+        return block.rows.flat().join(" ");
+      }
+      if (block.type === "card" || block.type === "procedure_section" || block.type === "sourced") {
+        const title = "title" in block ? (block.title ?? "") : "";
+        return `${title} ${blocksBodyText(block.blocks)}`;
+      }
+      return "";
+    })
     .join(" ");
+}
+
+function pageBodyText(page: KbPage): string {
+  return blocksBodyText(page.blocks);
 }
 
 function fieldScore(field: string, query: string, weights: { exact: number; prefix: number; includes: number }) {

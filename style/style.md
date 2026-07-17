@@ -320,9 +320,16 @@ Content in this folder should round-trip through `documentHtmlToBlocks` / the vi
 - `<table class="doc-table" data-header-row="true" …>` with `<tbody>`, `<tr>`, `<th>`, `<td>`
 - `<figure class="doc-image" …>` with `<img alt="…" src="…">`
 - `<div class="doc-excerpt" data-block-id="…" data-source-page-id="…">` (optionally
-  `data-source-heading-id="…"`) — a live include of another KB page's section, resolved at render
-  time. Top-level only; never place one inside a card or procedure section. Preserve these divs
-  and their attributes exactly; do not add content inside them.
+  `data-source-heading-id="…"`, `data-label="…"`, `data-new-tab="true"`) — a live include of
+  another KB page's section, resolved at render time. Top-level only; never place one inside a
+  card or procedure section. Preserve these divs and their attributes exactly; do not add content
+  inside them.
+- `<section class="doc-sourced" data-block-id="…" data-source-url="…">` (optionally
+  `data-source-anchor`, `data-label`, `data-new-tab`, `data-heading-text`, `data-retrieved-at`,
+  `data-content-hash`) — a snapshot imported from an approved external source (the P&P site),
+  rendered with a provenance callout. Top-level only. **Do not reword the inner content** — it
+  mirrors the published source and a refresh overwrites local edits — and **never change the data
+  attributes**: the content hash and retrieved date drive staleness checks.
 - Inline: `<a>`, `<strong>`, `<em>`, `<br>` (sparingly)
 
 ### Do not use

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentAdminSession } from "@/lib/auth";
-import { resolveExcerptForRead } from "@/lib/excerpts";
+import { excerptAttributionLabel, resolveExcerptForRead } from "@/lib/excerpts";
+import { formatDate } from "@/lib/format";
 import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
 import { sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
@@ -77,19 +78,59 @@ async function ExcerptBlock({ block }: { block: Extract<ContentBlock, { type: "e
       </aside>
     );
   }
-  const sourceLabel = resolved.sectionTitle
-    ? `${resolved.sourceTitle} — ${resolved.sectionTitle}`
-    : resolved.sourceTitle;
+  const sourceLabel = excerptAttributionLabel(resolved, block.label);
+  const newTabProps = block.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
   return (
     <aside aria-label={`Included from ${sourceLabel}`} className="excerpt-box" role="note">
       <p className="excerpt-box__source">
-        Included from: <Link href={resolved.sourceHref}>{sourceLabel}</Link>
+        Included from:{" "}
+        <Link href={resolved.sourceHref} {...newTabProps}>
+          {sourceLabel}
+        </Link>
       </p>
       <div className="excerpt-box__blocks flow">
         <PageBlocks blocks={resolved.blocks} />
       </div>
     </aside>
   );
+}
+
+function SourcedBlock({ block }: { block: Extract<ContentBlock, { type: "sourced" }> }) {
+  const href = /^https:\/\//.test(block.sourceUrl)
+    ? `${block.sourceUrl}${block.sourceAnchor ? `#${block.sourceAnchor}` : ""}`
+    : "";
+  const label =
+    (block.label ?? "").trim() ||
+    (block.headingText ? `${sourceHostLabel(block.sourceUrl)} — ${block.headingText}` : sourceHostLabel(block.sourceUrl));
+  const newTabProps = block.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
+  return (
+    <aside aria-label={`Source: ${label}`} className="source-box" role="note">
+      <p className="source-box__source">
+        Source:{" "}
+        {href ? (
+          <a href={href} {...newTabProps}>
+            {label}
+          </a>
+        ) : (
+          label
+        )}
+        {block.retrievedAt && (
+          <span className="source-box__meta"> · retrieved {formatDate(block.retrievedAt.slice(0, 10))}</span>
+        )}
+      </p>
+      <div className="source-box__blocks flow">
+        <PageBlocks blocks={block.blocks} />
+      </div>
+    </aside>
+  );
+}
+
+function sourceHostLabel(sourceUrl: string): string {
+  try {
+    return new URL(sourceUrl).hostname;
+  } catch {
+    return "External source";
+  }
 }
 
 async function CardBlock({ block }: { block: Extract<ContentBlock, { type: "card" }> }) {
@@ -303,6 +344,8 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
             return <AssetLink assetId={block.assetId} key={block.blockId} />;
           case "excerpt":
             return <ExcerptBlock block={block} key={block.blockId} />;
+          case "sourced":
+            return <SourcedBlock block={block} key={block.blockId} />;
           case "section_divider":
             return <hr className="content-section-break" key={block.blockId} />;
           default:

@@ -1,6 +1,6 @@
 import { getCurrentAdminSession, type AdminSession } from "@/lib/auth";
 import { isTrustedAssetUrl } from "@/lib/blob";
-import { resolveExcerptForExport } from "@/lib/excerpts";
+import { excerptAttributionLabel, resolveExcerptForExport } from "@/lib/excerpts";
 import {
   getAllAssetsForAdmin,
   getAllPagesForAdmin,
@@ -72,9 +72,7 @@ async function buildExcerptHtml(
       excerptHtml.set(block.blockId, `<aside role="note"><p>Included content unavailable.</p></aside>`);
       continue;
     }
-    const label = resolved.sectionTitle
-      ? `${resolved.sourceTitle} — ${resolved.sectionTitle}`
-      : resolved.sourceTitle;
+    const label = excerptAttributionLabel(resolved, block.label);
     excerptHtml.set(
       block.blockId,
       `<aside role="note"><p>Included from: <a href="${escapeHtml(resolved.sourceHref)}">${escapeHtml(label)}</a></p>${renderBlocks(resolved.blocks, kbSlug, assetPaths)}</aside>`,
@@ -143,6 +141,16 @@ function renderBlock(
     }
     case "excerpt":
       return excerptHtml.get(block.blockId) ?? "";
+    case "sourced": {
+      const label = escapeHtml(
+        (block.label ?? "").trim() || block.headingText || block.sourceUrl,
+      );
+      const href = /^https:\/\//.test(block.sourceUrl)
+        ? escapeHtml(`${block.sourceUrl}${block.sourceAnchor ? `#${block.sourceAnchor}` : ""}`)
+        : "";
+      const attribution = href ? `<a href="${href}">${label}</a>` : label;
+      return `<aside role="note"><p>Source: ${attribution}</p>${renderBlocks(block.blocks, kbSlug, assetPaths, excerptHtml)}</aside>`;
+    }
   }
 }
 

@@ -44,6 +44,12 @@ const EXCERPT_BOX_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: s
   { key: "excerptBoxInk", label: "Text", help: "Content and source-link color" },
 ];
 
+const SOURCE_BOX_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: string }[] = [
+  { key: "sourceBoxBg", label: "Background", help: "Box fill color" },
+  { key: "sourceBoxBorder", label: "Border", help: "Accent line color" },
+  { key: "sourceBoxInk", label: "Text", help: "Content and source-link color" },
+];
+
 const PROCEDURE_FIELDS: { key: keyof KbTheme["colors"]; label: string; help: string }[] = [
   { key: "procedureBg", label: "Background", help: "Section fill color" },
   { key: "procedureBorder", label: "Line", help: "Divider/border color" },
@@ -328,6 +334,31 @@ export function ThemeEditor({
           <legend>Included Excerpt Styles</legend>
           <div className="theme-color-grid">
             {EXCERPT_BOX_FIELDS.map((field) => (
+              <div className="theme-color" key={field.key}>
+                <span className="meta">{field.label}</span>
+                <div className="theme-color__inputs">
+                  <input
+                    aria-label={`${field.label} color`}
+                    onChange={(e) => setColor(field.key, e.target.value)}
+                    type="color"
+                    value={theme.colors[field.key]}
+                  />
+                  <input
+                    className="input"
+                    onChange={(e) => setColor(field.key, e.target.value)}
+                    value={theme.colors[field.key]}
+                  />
+                </div>
+                <span className="theme-color__help">{field.help}</span>
+              </div>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="fieldset">
+          <legend>External Source Styles</legend>
+          <div className="theme-color-grid">
+            {SOURCE_BOX_FIELDS.map((field) => (
               <div className="theme-color" key={field.key}>
                 <span className="meta">{field.label}</span>
                 <div className="theme-color__inputs">
@@ -670,6 +701,7 @@ export function ThemeEditor({
           <ContrastRow bg={theme.colors.wash} fg={theme.colors.ink} label="Body text on background" />
           <ContrastRow bg={theme.colors.infoBoxBg} fg={theme.colors.infoBoxInk} label="Info Box content" />
           <ContrastRow bg={theme.colors.excerptBoxBg} fg={theme.colors.excerptBoxInk} label="Included excerpt content" />
+          <ContrastRow bg={theme.colors.sourceBoxBg} fg={theme.colors.sourceBoxInk} label="External source content" />
           <ContrastRow bg={theme.colors.procedureBg} fg={theme.colors.procedureInk} label="Procedure content" />
           <ContrastRow bg={theme.colors.accent} fg="#ffffff" label="Button label on brand" />
           <ContrastRow bg={theme.colors.paper} fg={theme.colors.accent} label="Link on surface" />

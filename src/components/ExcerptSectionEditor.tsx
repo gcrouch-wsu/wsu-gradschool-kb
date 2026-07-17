@@ -179,10 +179,30 @@ export function ExcerptSectionEditor({
           </select>
         </label>
       </div>
+      <div className="field-row">
+        <label>
+          <span className="meta">Attribution label (optional)</span>
+          <input
+            className="input"
+            onChange={(e) => onChange({ ...block, label: e.target.value || undefined })}
+            placeholder="Default: KB: Page — Section"
+            value={block.label ?? ""}
+          />
+        </label>
+        <label className="excerpt-editor__checkbox">
+          <input
+            checked={Boolean(block.openInNewTab)}
+            onChange={(e) => onChange({ ...block, openInNewTab: e.target.checked || undefined })}
+            type="checkbox"
+          />
+          <span className="meta">Open the source link in a new tab</span>
+        </label>
+      </div>
       <p className="meta">
-        Headings inside the excerpt are shown as bold text so this page&apos;s own outline stays
-        accurate. Readers who cannot view the source page see an &quot;unavailable&quot; notice
-        instead of the content.
+        The attribution label is what readers see after &quot;Included from:&quot; — leave it blank
+        to show the knowledge base, page, and section names. Headings inside the excerpt are shown
+        as bold text so this page&apos;s own outline stays accurate. Readers who cannot view the
+        source page see an &quot;unavailable&quot; notice instead of the content.
       </p>
     </div>
   );

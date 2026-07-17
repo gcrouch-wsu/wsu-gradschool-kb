@@ -39,6 +39,7 @@ function collectHtml(block: ContentBlock): string[] {
       return (block.rowsHtml ?? []).flat();
     case "card":
     case "procedure_section":
+    case "sourced":
       return block.blocks.flatMap(collectHtml);
     default:
       return [];
@@ -109,7 +110,7 @@ export async function validatePageForPublish(
         issues.push(EXCERPT_ISSUES[state]);
       }
     }
-    if (block.type === "card" || block.type === "procedure_section") {
+    if (block.type === "card" || block.type === "procedure_section" || block.type === "sourced") {
       const nestedIssues = await validatePageForPublish(
         { ...page, blocks: block.blocks },
         resolveAssetStatus,

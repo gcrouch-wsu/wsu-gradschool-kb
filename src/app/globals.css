@@ -1009,6 +1009,37 @@ p {
   margin-bottom: 0;
 }
 
+.source-box {
+  background: var(--source-box-bg, var(--wash));
+  border-left: 4px solid var(--source-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--source-box-ink, var(--ink));
+  padding: 1.25rem 1.5rem;
+}
+
+.source-box__source {
+  font-size: 0.875rem;
+  color: var(--source-box-ink, var(--ink));
+  margin: 0 0 0.75rem;
+}
+
+.source-box__source a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.source-box__meta {
+  opacity: 0.8;
+}
+
+.source-box__blocks > :first-child {
+  margin-top: 0;
+}
+
+.source-box__blocks > :last-child {
+  margin-bottom: 0;
+}
+
 .alert--warning {
   border-left-color: var(--warning);
   background: var(--warning-wash);
@@ -3129,6 +3160,31 @@ article li > ol {
 .doc-excerpt::before {
   content: "Included content from another page — shown in full on the published page.";
   font-size: 0.875rem;
+}
+
+.excerpt-editor__checkbox {
+  align-items: center;
+  align-self: end;
+  display: flex;
+  gap: 0.5rem;
+  padding-bottom: 0.55rem;
+}
+
+.doc-sourced {
+  background: var(--source-box-bg, var(--wash));
+  border-left: 4px solid var(--source-box-border, var(--muted));
+  border-radius: var(--radius-sm);
+  color: var(--source-box-ink, var(--ink));
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+}
+
+.doc-sourced::before {
+  content: "Source: " attr(data-label);
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  text-decoration: underline;
 }
 
 .doc.card { min-width: 0;
