@@ -59,12 +59,14 @@ accessibility/governance gate; an audit log; revision history with restore; and 
 `kb_user_assignments` table for viewer/editor access, read gating for every public surface, and
 visibility-aware asset delivery/search.
 
-**In scope (built 2026-07-16):** cross-page excerpt blocks (§12 FB-33) — live "Included from"
-callouts that render another page's current section, reader-visibility-gated, themeable like the
-info box.
+**In scope (built 2026-07-16/17):** cross-page excerpt blocks (§12 FB-33) — live "Included from"
+callouts that render another page's current section, reader-visibility-gated, with custom
+attribution labels and a new-tab option, themeable like the info box — and the **P&P
+sourced-content core** (§12 FB-34): snapshot imports from the Policies & Procedures site inside a
+themed "Source:" callout with manual check-for-changes/refresh and a paste-HTML fallback.
 
-**In scope next (maintainer-ratified 2026-07-16):** P&P sourced-content imports with provenance
-callouts and staleness flags (§12 FB-34), building on the FB-33 callout foundation.
+**In scope next:** the remaining FB-34 automation — scheduled staleness polling and
+review-dashboard "source updated" flags.
 
 **Also in scope next:** WSU SSO (§12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
 private-KB viewers, superseding local viewer passwords. The SSO portion is gated on WSU ITS
@@ -136,6 +138,8 @@ surfaces are added):
 | `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
 | `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation, and Owner-only user management can assign Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
 | `/admin/kbs/[kbId]/styles` and KB theme APIs | Owner only | Server page and theme API both require `session.role === "owner"`. | `src/app/admin/kbs/[kbId]/styles/page.tsx`, `src/app/api/admin/kbs/[kbId]/theme/route.ts` |
+| Excerpt picker + preview APIs | Owner/Admin/Editor (viewers rejected) | `GET /api/admin/excerpt-sources` filters KBs/pages/headings by the caller's read access (`filterKbsForReadAccess` / `getReadableExcerptSourcePageForPicker` — staff-ancestor rules included); `POST /api/admin/excerpt-preview` resolves refs with the caller's session via `resolveExcerptForRead`. Both use `requireAdminMutation`. | `src/app/api/admin/excerpt-sources/route.ts`, `src/app/api/admin/excerpt-preview/route.ts`, `src/lib/excerpts.ts` |
+| Sourced-content import/check APIs | Owner/Admin/Editor (viewers rejected) | `POST /api/admin/sourced-content` and `…/check` use `requireAdminMutation`; outbound fetches are gated by `parseAllowedSourceUrl` (https + host allowlist) — no KB scoping needed, no KB data is read. | `src/app/api/admin/sourced-content/route.ts`, `src/app/api/admin/sourced-content/check/route.ts`, `src/lib/sourced-content.ts` |
 | Auth endpoints | Public sign-in; signed-in logout/session delete | Login is rate-limited and creates signed HMAC cookies; logout/session delete clear the admin cookie. | `src/app/admin/sign-in/page.tsx`, `src/app/api/admin/session/route.ts`, `src/app/api/admin/logout/route.ts` |
 
 For APIs, `requireAdminMutation` means "valid admin session plus same-origin `Origin`/`Referer`";
@@ -436,6 +440,8 @@ share the page lock and the process-global in-memory store.
 - `EMAIL_PROVIDER_URL` / `EMAIL_PROVIDER_TOKEN` / `EMAIL_FROM` — optional HTTP email provider for the
   weekly review-date digest; when unset the digest cron logs structured JSON and reports skipped
   deliveries instead of failing.
+- `SOURCED_CONTENT_ALLOWED_HOSTS` — optional comma-separated https hosts the "P&P source" import
+  may fetch from; defaults to `gradschool.wsu.edu` when unset.
 
 **CI** (`.github/workflows/ci.yml`): on pushes to `main` and on PRs, runs type-check, lint, unit
 tests, production build, public-page axe smoke tests, and the Chromium editor regression suite against
@@ -593,6 +599,14 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   all blank-safe.
 - DOCX staged import; auto-redirects.
 - Edit locks with atomic multi-row writes; print-to-PDF export; publishing gate.
+- Cross-page excerpt blocks (FB-33, 2026-07-16/17, PR #12): live "Included from" callouts with
+  reader-scoped resolution, custom attribution labels + new-tab control, themed `excerptBox*`
+  colors, publish-gate source checks, cross-KB delete blocking, KB-export inlining, and a
+  draft-preview modal that resolves excerpts to match the published render.
+- P&P sourced-content core (FB-34, 2026-07-17, PR #12): "P&P source" editor insert importing an
+  allowlisted external section as a snapshot in a themed `sourceBox*` provenance callout, with
+  manual check-for-changes/refresh, paste-HTML fallback, gate/export recursion, and FTS indexing
+  (migration `030`). Automated staleness polling remains open under FB-34.
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
@@ -690,12 +704,12 @@ prod + preview redirect URIs, claims/groups for role mapping) is in FB-30. Local
 accounts remain the interim and break-glass path. Design viewer identities so SSO can back them later
 without re-modeling `kb_user_assignments`.
 
-**Content reuse & sourcing (§12 FB-33/FB-34)** is the maintainer-ratified 2026-07-16 work:
-FB-33 (live cross-page excerpt blocks) is **delivered** — a target page always renders the
-source's current section in a themeable "Included from" callout, gated by reader visibility.
-FB-34 (snapshot imports from the published P&P manual with a provenance callout and
-review-dashboard staleness flags) is the remaining next step and layers external sourcing on the
-FB-33 callout chrome.
+**Content reuse & sourcing (§12 FB-33/FB-34)**, maintainer-ratified 2026-07-16: FB-33 (live
+cross-page excerpt blocks with custom attribution and new-tab controls) is **delivered**, and the
+FB-34 **core** (snapshot imports from the published P&P manual in a themed provenance callout,
+with manual check-for-changes/refresh and a paste-HTML fallback) is delivered on the same branch.
+Remaining under FB-34: scheduled staleness polling (wp-json `modified` + section hashes) and
+review-dashboard "source updated" flags.
 
 Other tracked work:
 
