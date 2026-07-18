@@ -164,20 +164,6 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
           <div>
             <h1>{kb.title}</h1>
             <p className="lead">{kb.description}</p>
-            <form action={`/kb/${kb.slug}/search`} className="kb-search" role="search">
-              <label>
-                <span className="meta">Search this knowledge base</span>
-                <input
-                  className="input"
-                  name="q"
-                  placeholder={`Search ${kb.title}…`}
-                  type="search"
-                />
-              </label>
-              <button className="button" type="submit" style={{ alignSelf: "end" }}>
-                Search
-              </button>
-            </form>
           </div>
         </div>
       </section>
