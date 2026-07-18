@@ -3195,6 +3195,28 @@ article li > ol {
   min-width: 0;
 }
 
+.kb-search-widget__submit {
+  align-items: center;
+  background: var(--wsu-crimson);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  flex: none;
+  justify-content: center;
+  padding: 0 0.7rem;
+}
+
+.kb-search-widget__submit:hover {
+  background: var(--wsu-crimson-dark);
+}
+
+.kb-search-widget__submit:focus-visible {
+  outline: 2px solid var(--wsu-crimson-dark);
+  outline-offset: 2px;
+}
+
 .kb-search-widget--home {
   margin: 0 0 2rem;
   max-width: 32rem;

@@ -1712,9 +1712,15 @@ Items are ordered by recommended priority.
   - **Review-question decisions (2026-07-18):** the KB create modal intentionally stays minimal —
     create first, then configure the widget via Edit; scope/label controls stay editable while
     the enable checkbox is off so owners can preconfigure before switching on.
+  - **Search-quality round (2026-07-18, maintainer feedback):** (a) reader-facing search results
+    now include only `document` assets — image/video assets are excluded in both the SQL and
+    in-memory paths (readers were matching image descriptions that mirror alt text; images
+    surface through the pages that use them); unit + live-DB regressions added. (b) The widget's
+    text submit button (nearly as wide as the input in the 260px sidebar) was replaced with a
+    compact icon submit (`.kb-search-widget__submit`, magnifier + `sr-only` text).
   - **Deferred by design:** an in-page search content block (phase 2 if a concrete case appears)
     and live type-ahead suggestions (needs a scoped public JSON endpoint; progressive
-    enhancement later).
+    enhancement later — being delivered as the FB-35 live-search follow-up).
 
 ---
 

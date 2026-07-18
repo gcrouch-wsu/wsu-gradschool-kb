@@ -1,4 +1,14 @@
+import { Search } from "lucide-react";
 import type { KnowledgeBase } from "@/lib/types";
+
+function SearchSubmitButton() {
+  return (
+    <button className="kb-search-widget__submit" type="submit">
+      <Search aria-hidden size={16} strokeWidth={2} />
+      <span className="sr-only">Search</span>
+    </button>
+  );
+}
 
 export function KbSearchWidget({ kb }: { kb: KnowledgeBase }) {
   if (!kb.searchWidgetEnabled) {
@@ -22,9 +32,7 @@ export function KbSearchWidget({ kb }: { kb: KnowledgeBase }) {
           placeholder="Search…"
           type="search"
         />
-        <button className="button button--small" type="submit">
-          Search
-        </button>
+        <SearchSubmitButton />
       </div>
     </form>
   );
@@ -44,9 +52,7 @@ export function HomeSearchWidget() {
           placeholder="Search…"
           type="search"
         />
-        <button className="button button--small" type="submit">
-          Search
-        </button>
+        <SearchSubmitButton />
       </div>
     </form>
   );

@@ -1120,6 +1120,7 @@ export async function searchKb(
       WHERE (search_vector @@ to_tsquery('english', ${searchTokens})
              OR search_vector @@ websearch_to_tsquery('english', ${normalized}))
       AND status = 'active'
+      AND asset_type = 'document'
       ${kbFilterAssets}
       ORDER BY rank DESC
       LIMIT 20
@@ -1224,7 +1225,7 @@ export async function searchKb(
     : dataset.assets.filter((asset) => canReadKb(asset.homeKbId));
 
   for (const asset of assetsToSearch) {
-    if (asset.status !== "active") {
+    if (asset.status !== "active" || asset.assetType !== "document") {
       continue;
     }
     if (!canReadStaffPages(asset.homeKbId) && !(await assetHasPublicPublishedUsage(asset))) {
