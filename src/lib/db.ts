@@ -129,8 +129,15 @@ async function seedIfEmpty() {
 
   for (const kb of seedDataset.knowledgeBases) {
     await sql`
-      INSERT INTO knowledge_bases (id, slug, title, description, status, visibility, updated_on)
-      VALUES (${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.visibility}, ${kb.updatedOn})
+      INSERT INTO knowledge_bases (
+        id, slug, title, description, status, visibility, updated_on,
+        search_widget_enabled, search_widget_scope, search_widget_label
+      )
+      VALUES (
+        ${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.visibility}, ${kb.updatedOn},
+        ${kb.searchWidgetEnabled ?? false}, ${kb.searchWidgetScope === "all" ? "all" : "kb"},
+        ${(kb.searchWidgetLabel ?? "").trim().slice(0, 120)}
+      )
       ON CONFLICT DO NOTHING
     `;
   }
