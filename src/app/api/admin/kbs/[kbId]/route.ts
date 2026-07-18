@@ -43,6 +43,23 @@ export async function PATCH(
     if (body.status !== undefined) updates.status = body.status === "published" ? "published" : "draft";
     if (body.visibility !== undefined) updates.visibility = body.visibility === "private" ? "private" : "public";
 
+    if (body.searchWidgetEnabled !== undefined) {
+      await sql`UPDATE knowledge_bases SET search_widget_enabled = ${body.searchWidgetEnabled === true} WHERE id = ${kbId}`;
+    }
+    if (body.searchWidgetScope !== undefined) {
+      await sql`UPDATE knowledge_bases SET search_widget_scope = ${body.searchWidgetScope === "all" ? "all" : "kb"} WHERE id = ${kbId}`;
+    }
+    if (body.searchWidgetLabel !== undefined) {
+      await sql`UPDATE knowledge_bases SET search_widget_label = ${typeof body.searchWidgetLabel === "string" ? body.searchWidgetLabel.trim().slice(0, 120) : ""} WHERE id = ${kbId}`;
+    }
+    if (
+      body.searchWidgetEnabled !== undefined ||
+      body.searchWidgetScope !== undefined ||
+      body.searchWidgetLabel !== undefined
+    ) {
+      await sql`UPDATE knowledge_bases SET updated_on = ${updates.updated_on} WHERE id = ${kbId}`;
+    }
+
     if (body.slug !== undefined) {
       let slug = slugify(body.slug);
       const existing = await sql`SELECT slug FROM knowledge_bases WHERE slug = ${slug} AND id != ${kbId}`;

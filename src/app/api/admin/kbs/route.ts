@@ -29,6 +29,9 @@ export async function GET(request: Request) {
       visibility?: string;
       updated_on: string;
       home_page_id?: string | null;
+      search_widget_enabled?: boolean;
+      search_widget_scope?: string;
+      search_widget_label?: string;
     }>;
     const allKbs: KnowledgeBase[] = rows.map((row) => ({
       id: row.id,
@@ -39,6 +42,9 @@ export async function GET(request: Request) {
       visibility: row.visibility === "private" ? "private" : "public",
       updatedOn: row.updated_on,
       homepagePageId: row.home_page_id ?? null,
+      searchWidgetEnabled: Boolean(row.search_widget_enabled),
+      searchWidgetScope: row.search_widget_scope === "all" ? "all" : "kb",
+      searchWidgetLabel: row.search_widget_label ?? "",
     }));
     const kbs = await filterKbsForSession(guard.session, allKbs);
     return NextResponse.json({ kbs });

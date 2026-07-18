@@ -503,6 +503,14 @@ export default function AdminSettingsPage() {
               <label className="checkbox-inline" style={{ marginBottom: "1rem" }}>
                 <input
                   type="checkbox"
+                  checked={settings.showHomeSearch}
+                  onChange={(e) => update("showHomeSearch", e.target.checked)}
+                />
+                <span>Show a search box above the knowledge base list (searches all KBs)</span>
+              </label>
+              <label className="checkbox-inline" style={{ marginBottom: "1rem" }}>
+                <input
+                  type="checkbox"
                   checked={settings.showKbList}
                   onChange={(e) => update("showKbList", e.target.checked)}
                 />

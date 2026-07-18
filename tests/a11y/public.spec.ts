@@ -25,6 +25,11 @@ for (const route of PUBLIC_ROUTES) {
   });
 }
 
+test("home search widget is hidden by default", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("search")).toHaveCount(0);
+});
+
 test("article has no axe violations", async ({ page }) => {
   await page.goto("/kb/graduate-school");
   const articlePath = await page

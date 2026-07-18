@@ -10,6 +10,9 @@ export const knowledgeBases: KnowledgeBase[] = [
     status: "published",
     visibility: "public",
     updatedOn: "2026-06-02",
+    searchWidgetEnabled: true,
+    searchWidgetScope: "kb",
+    searchWidgetLabel: "",
   },
   {
     id: "kb-grad-school-2",

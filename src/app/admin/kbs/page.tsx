@@ -8,7 +8,7 @@ import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { ModalForm } from "@/components/Modal";
 import { PageLoader } from "@/components/PageLoader";
-import type { KbStatus, KbVisibility, KnowledgeBase } from "@/lib/types";
+import type { KbStatus, KbVisibility, KnowledgeBase, SearchWidgetScope } from "@/lib/types";
 import { readApiErrorMessage, useStatusModal } from "@/lib/use-status-modal";
 
 function kbSearchFilter(kb: KnowledgeBase, query: string) {
@@ -261,6 +261,32 @@ export default function AdminKbsPage() {
                       <option value="public">Public</option>
                       <option value="private">Private</option>
                     </select>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <input
+                        checked={editData.searchWidgetEnabled ?? kb.searchWidgetEnabled ?? false}
+                        onChange={(e) => setEditData({ ...editData, searchWidgetEnabled: e.target.checked })}
+                        type="checkbox"
+                      />
+                      <span className="meta">Show a search box on this KB&apos;s pages</span>
+                    </label>
+                    <select
+                      aria-label="Search box scope"
+                      className="input"
+                      value={editData.searchWidgetScope ?? kb.searchWidgetScope ?? "kb"}
+                      onChange={(e) =>
+                        setEditData({ ...editData, searchWidgetScope: e.target.value as SearchWidgetScope })
+                      }
+                    >
+                      <option value="kb">Search this knowledge base only</option>
+                      <option value="all">Search all knowledge bases</option>
+                    </select>
+                    <input
+                      aria-label="Search box label"
+                      className="input"
+                      placeholder="Search box label (optional)"
+                      value={editData.searchWidgetLabel ?? kb.searchWidgetLabel ?? ""}
+                      onChange={(e) => setEditData({ ...editData, searchWidgetLabel: e.target.value })}
+                    />
                   </div>
                 );
               }
@@ -310,6 +336,11 @@ export default function AdminKbsPage() {
                   {kb.status !== "published" && (
                     <div className="meta" style={{ marginTop: "0.5rem" }}>
                       Hidden from public KB list
+                    </div>
+                  )}
+                  {kb.searchWidgetEnabled && (
+                    <div className="meta" style={{ marginTop: "0.5rem" }}>
+                      Search box: {kb.searchWidgetScope === "all" ? "all KBs" : "this KB"}
                     </div>
                   )}
                 </>

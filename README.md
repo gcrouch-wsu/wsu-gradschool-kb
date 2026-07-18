@@ -25,7 +25,9 @@ current implementation status.
   scoping, header identity + **Sign out**, a global Owner/Admin **Audit log**, and DB-backed
   **edit locks** to prevent concurrent overwrites.
 - **Search**: global and per-KB Postgres full-text search (tsvector + GIN) with prefix/type-ahead,
-  grouped global results, zero-result gap logging, and private/staff-page visibility pruning.
+  grouped global results, zero-result gap logging, private/staff-page visibility pruning, and an
+  owner-configurable **search widget** — per KB (sidebar box scoped to that KB or all KBs, with a
+  custom label) and optionally on the site home page above the KB list.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
   WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over
@@ -160,9 +162,10 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 
 Schema changes are applied automatically on first request via versioned migrations in
 `src/lib/migrations/` (tracked in `_schema_migrations`). The current head is
-`030_sourced_blocks_search`, which extends full-text search to index content inside imported
-sourced blocks; `029_kb_visibility` added `knowledge_bases.visibility` (existing KBs default to
-`public`). No manual Neon console migration is required. Earlier migrations include asset versions, redirects,
+`031_search_widget`, which adds owner-configurable KB search widget columns and the optional home
+search toggle; `030_sourced_blocks_search` extends full-text search to index content inside
+imported sourced blocks; `029_kb_visibility` added `knowledge_bases.visibility` (existing KBs
+default to `public`). No manual Neon console migration is required. Earlier migrations include asset versions, redirects,
 staged imports, users / KB assignments, KB homepage page selection, TOC settings, edit-lock columns,
 and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
 

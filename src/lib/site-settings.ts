@@ -32,6 +32,7 @@ export interface SiteSettings {
   homeIntro: string;
   homeBlocks: ContentBlock[];
   showKbList: boolean;
+  showHomeSearch: boolean;
   kbListTitle: string;
   kbListTitleColor: string; // hex; "" = inherit default
   kbListTitleSize: string; // e.g. "1.75rem" / "28px"; "" = default
@@ -62,6 +63,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     "A single platform for Washington State University's public knowledge bases. Each knowledge base — including the Graduate School's — has its own home, navigation, search, and stable managed asset links.",
   homeBlocks: [],
   showKbList: true,
+  showHomeSearch: false,
   kbListTitle: "Published knowledge bases",
   kbListTitleColor: "",
   kbListTitleSize: "",
@@ -187,6 +189,8 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
     globalTheme: input.globalTheme ? mergeTheme(input.globalTheme) : null,
     homeBlocks: Array.isArray(input.homeBlocks) ? (input.homeBlocks as ContentBlock[]) : DEFAULT_SITE_SETTINGS.homeBlocks,
     showKbList: typeof input.showKbList === "boolean" ? input.showKbList : DEFAULT_SITE_SETTINGS.showKbList,
+    showHomeSearch:
+      typeof input.showHomeSearch === "boolean" ? input.showHomeSearch : DEFAULT_SITE_SETTINGS.showHomeSearch,
     kbListTitle: pickText("kbListTitle", DEFAULT_SITE_SETTINGS.kbListTitle),
     kbListTitleColor: safeBrandColor(input.kbListTitleColor),
     kbListTitleSize: safeBrandSize(input.kbListTitleSize),

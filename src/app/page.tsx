@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HOME_KB_PAGE_SIZE, KbListPagination } from "@/components/KbListPagination";
+import { HomeSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { filterKbsForReadAccess, getCurrentAdminSession } from "@/lib/auth";
 import { getAllKbsForAdmin, getPublishedKbs } from "@/lib/kb-store";
@@ -82,22 +83,9 @@ export default async function HomePage({
         {/* One flow container so the home content AND the KB-list section share the
             owner-controlled spacing (block rhythm + space-after-heading). */}
         <div className="flow">
-          <form action="/search" className="kb-search" role="search">
-            <label>
-              <span className="meta">Search all knowledge bases</span>
-              <input
-                className="input"
-                name="q"
-                placeholder="Search all knowledge bases..."
-                type="search"
-              />
-            </label>
-            <button className="button" type="submit" style={{ alignSelf: "end" }}>
-              Search
-            </button>
-          </form>
-
           <PageBlocks blocks={settings.homeBlocks} />
+
+          {settings.showHomeSearch && <HomeSearchWidget />}
 
           {settings.showKbList && (
             <>

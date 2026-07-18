@@ -385,7 +385,7 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - Schema is created and migrated **automatically on first request** when `DATABASE_URL` is set —
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) → app-side
-  backfills. **Current head: `029_kb_visibility`.** Migrations after `018_rate_limits` add content
+  backfills. Migrations after `018_rate_limits` add content
   lifecycle columns (`019`: `next_review_date` / `verified_at` / `verified_by`), the global default
   site theme (`020`), home content blocks + KB-list controls (`021`), branding/logo + layout columns
   (`022`: `brand_text`, `logo_url`, `logo_width`, `header_alignment`, `hero_alignment`,
@@ -396,8 +396,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   a baseline revision backfill for pre-existing pages), page-view analytics (`028`: `kb_page_views`
   daily counters with retention-fold indexes), KB public/private visibility
   (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`), and sourced-block
-  FTS indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill).
-  **Current head: `030_sourced_blocks_search`.**
+  FTS indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill),
+  and the KB search widget (`031`: `knowledge_bases.search_widget_*` +
+  `site_settings.show_home_search`). **Current head: `031_search_widget`.**
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
@@ -1675,6 +1676,45 @@ Items are ordered by recommended priority.
   paste fallback produces identical block output to the fetch path; (6) polling is throttled and
   sends an honest identifying user agent; (7) the source callout colors are editable in the global
   and per-KB theme editors like the info box, independently of the FB-33 excerpt callout.
+
+### FB-35 — KB-level search widget
+
+`[AI-AGENT-TASK] id:FB-35  priority:med  area:public-ux  effort:S  status:done`
+
+- **DONE (2026-07-18, maintainer-requested):** an owner-configurable search box rendered in the
+  left sidebar (above the page tree) of every KB landing and article page, plus an optional
+  all-KB search box on the site home page.
+  - **Data:** migration `031_search_widget` — `knowledge_bases.search_widget_enabled` (default
+    off), `search_widget_scope` (`'kb'` | `'all'`), `search_widget_label` (blank = derived
+    default), and `site_settings.show_home_search`.
+  - **Config:** the owner-only KB Management edit form (`/admin/kbs`, PATCH
+    `/api/admin/kbs/[kbId]`) and the Site Settings home tab (flows through
+    `normalizeSiteSettings`). The scope choice is deliberately KB-level policy, not per-page
+    content — see the design rationale: search is chrome, consistency beats per-page insertion,
+    and a KB-level widget only ever targets its own KB or `/search`, so no unreadable-target
+    edge cases exist.
+  - **Render:** `KbSearchWidget` / `HomeSearchWidget` (`src/components/KbSearchWidget.tsx`) — a
+    plain GET form (`role="search"`, labeled input) posting to `/kb/{slug}/search` or `/search`;
+    zero JavaScript, inheriting the results pages' rate limiting and visibility enforcement, so
+    the widget adds no new security surface. Inherits KB theme tokens; no dedicated `searchBox*`
+    triplet (add later if ever needed).
+  - Seed KB `kb-grad-school` ships with the widget enabled so in-memory dev and the axe suite
+    exercise it. Tests: `search-widget.test.ts` (settings normalization),
+    `search-widget.db.test.ts` (column persistence + mapping).
+  - **Independent review repairs (Codex, 2026-07-18):** (a) legacy always-on `.kb-search` forms
+    on the site home page and the generated KB landing hero were removed so the configurable
+    widgets fully own search chrome — **behavior change:** after deploying, the home search box
+    is hidden until the owner enables `showHomeSearch`, and generated KB landings show search
+    only for widget-enabled KBs (an owner should enable the widget on production KBs post-merge
+    to restore the affordance); an a11y assertion covers the default-off home case.
+    (b) `seedIfEmpty` now inserts the widget columns so fresh-database seeds match the in-memory
+    dataset. (c) Migration-head references in README/spec were reconciled to `031`.
+  - **Review-question decisions (2026-07-18):** the KB create modal intentionally stays minimal —
+    create first, then configure the widget via Edit; scope/label controls stay editable while
+    the enable checkbox is off so owners can preconfigure before switching on.
+  - **Deferred by design:** an in-page search content block (phase 2 if a concrete case appears)
+    and live type-ahead suggestions (needs a scoped public JSON endpoint; progressive
+    enhancement later).
 
 ---
 

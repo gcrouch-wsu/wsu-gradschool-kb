@@ -32,6 +32,8 @@ export interface AssetUsage {
   usesAltText?: boolean;
 }
 
+export type SearchWidgetScope = "kb" | "all";
+
 export interface KnowledgeBase {
   id: string;
   title: string;
@@ -41,6 +43,9 @@ export interface KnowledgeBase {
   visibility: KbVisibility;
   updatedOn: string;
   homepagePageId?: string | null;
+  searchWidgetEnabled?: boolean;
+  searchWidgetScope?: SearchWidgetScope;
+  searchWidgetLabel?: string;
 
   theme?: import("@/lib/kb-theme").KbTheme;
 }

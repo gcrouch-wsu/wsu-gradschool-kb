@@ -769,6 +769,15 @@ const migrations: Migration[] = [
       `;
     },
   },
+  {
+    id: "031_search_widget",
+    async up(sql) {
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS search_widget_enabled BOOLEAN NOT NULL DEFAULT FALSE`;
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS search_widget_scope TEXT NOT NULL DEFAULT 'kb'`;
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS search_widget_label TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS show_home_search BOOLEAN NOT NULL DEFAULT FALSE`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {
