@@ -1701,6 +1701,17 @@ Items are ordered by recommended priority.
   - Seed KB `kb-grad-school` ships with the widget enabled so in-memory dev and the axe suite
     exercise it. Tests: `search-widget.test.ts` (settings normalization),
     `search-widget.db.test.ts` (column persistence + mapping).
+  - **Independent review repairs (Codex, 2026-07-18):** (a) legacy always-on `.kb-search` forms
+    on the site home page and the generated KB landing hero were removed so the configurable
+    widgets fully own search chrome — **behavior change:** after deploying, the home search box
+    is hidden until the owner enables `showHomeSearch`, and generated KB landings show search
+    only for widget-enabled KBs (an owner should enable the widget on production KBs post-merge
+    to restore the affordance); an a11y assertion covers the default-off home case.
+    (b) `seedIfEmpty` now inserts the widget columns so fresh-database seeds match the in-memory
+    dataset. (c) Migration-head references in README/spec were reconciled to `031`.
+  - **Review-question decisions (2026-07-18):** the KB create modal intentionally stays minimal —
+    create first, then configure the widget via Edit; scope/label controls stay editable while
+    the enable checkbox is off so owners can preconfigure before switching on.
   - **Deferred by design:** an in-page search content block (phase 2 if a concrete case appears)
     and live type-ahead suggestions (needs a scoped public JSON endpoint; progressive
     enhancement later).
