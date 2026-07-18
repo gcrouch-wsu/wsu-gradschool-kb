@@ -162,9 +162,10 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 
 Schema changes are applied automatically on first request via versioned migrations in
 `src/lib/migrations/` (tracked in `_schema_migrations`). The current head is
-`030_sourced_blocks_search`, which extends full-text search to index content inside imported
-sourced blocks; `029_kb_visibility` added `knowledge_bases.visibility` (existing KBs default to
-`public`). No manual Neon console migration is required. Earlier migrations include asset versions, redirects,
+`031_search_widget`, which adds owner-configurable KB search widget columns and the optional home
+search toggle; `030_sourced_blocks_search` extends full-text search to index content inside
+imported sourced blocks; `029_kb_visibility` added `knowledge_bases.visibility` (existing KBs
+default to `public`). No manual Neon console migration is required. Earlier migrations include asset versions, redirects,
 staged imports, users / KB assignments, KB homepage page selection, TOC settings, edit-lock columns,
 and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
 
