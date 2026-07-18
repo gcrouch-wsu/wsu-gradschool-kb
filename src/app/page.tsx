@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HOME_KB_PAGE_SIZE, KbListPagination } from "@/components/KbListPagination";
+import { HomeSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { filterKbsForReadAccess, getCurrentAdminSession } from "@/lib/auth";
 import { getAllKbsForAdmin, getPublishedKbs } from "@/lib/kb-store";
@@ -98,6 +99,8 @@ export default async function HomePage({
           </form>
 
           <PageBlocks blocks={settings.homeBlocks} />
+
+          {settings.showHomeSearch && <HomeSearchWidget />}
 
           {settings.showKbList && (
             <>

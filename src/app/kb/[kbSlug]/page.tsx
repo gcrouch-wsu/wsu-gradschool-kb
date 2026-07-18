@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
+import { KbSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
@@ -87,6 +88,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
       <div className="page-shell kb-theme-root" style={themeVars}>
         <div className={`layout${showTocRail ? " layout--with-toc" : ""}`}>
           <aside className="sidebar page-tree" aria-label="Knowledge base navigation">
+            <KbSearchWidget kb={kb} />
             <strong>{kb.title}</strong>
             <PageTree
               currentPageId={homepagePage.id}
@@ -182,6 +184,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
       <div className="page-shell">
         <div className="layout">
           <aside className="sidebar page-tree" aria-label="Knowledge base navigation">
+            <KbSearchWidget kb={kb} />
             <strong>Browse {kb.title}</strong>
             <PageTree homepagePageId={kb.homepagePageId} kbSlug={kb.slug} nodes={tree} />
           </aside>

@@ -25,7 +25,9 @@ current implementation status.
   scoping, header identity + **Sign out**, a global Owner/Admin **Audit log**, and DB-backed
   **edit locks** to prevent concurrent overwrites.
 - **Search**: global and per-KB Postgres full-text search (tsvector + GIN) with prefix/type-ahead,
-  grouped global results, zero-result gap logging, and private/staff-page visibility pruning.
+  grouped global results, zero-result gap logging, private/staff-page visibility pruning, and an
+  owner-configurable **search widget** — per KB (sidebar box scoped to that KB or all KBs, with a
+  custom label) and optionally on the site home page above the KB list.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
   WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over

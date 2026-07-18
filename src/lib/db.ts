@@ -177,6 +177,9 @@ interface KbRow {
   visibility: string;
   updated_on: string;
   home_page_id?: string | null;
+  search_widget_enabled?: boolean;
+  search_widget_scope?: string;
+  search_widget_label?: string;
   theme?: unknown;
 }
 
@@ -239,6 +242,9 @@ function mapKb(row: KbRow): KnowledgeBase {
     visibility: row.visibility === "private" ? "private" : "public",
     updatedOn: row.updated_on,
     homepagePageId: row.home_page_id ?? null,
+    searchWidgetEnabled: Boolean(row.search_widget_enabled),
+    searchWidgetScope: row.search_widget_scope === "all" ? "all" : "kb",
+    searchWidgetLabel: row.search_widget_label ?? "",
     theme: row.theme ? mergeTheme(row.theme) : undefined,
   };
 }
@@ -262,6 +268,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     global_theme?: unknown;
     home_blocks: unknown;
     show_kb_list: boolean;
+    show_home_search?: boolean;
     kb_list_title: string;
     kb_list_title_color?: string;
     kb_list_title_size?: string;
@@ -293,6 +300,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     globalTheme: row.global_theme,
     homeBlocks: row.home_blocks,
     showKbList: row.show_kb_list,
+    showHomeSearch: row.show_home_search,
     kbListTitle: row.kb_list_title,
     kbListTitleColor: row.kb_list_title_color,
     kbListTitleSize: row.kb_list_title_size,
@@ -318,7 +326,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
     INSERT INTO site_settings (
       id, home_eyebrow, home_title, home_intro,
       header_links, footer_text, footer_links, contact_info,
-      global_theme, home_blocks, show_kb_list, kb_list_title,
+      global_theme, home_blocks, show_kb_list, show_home_search, kb_list_title,
       kb_list_title_color, kb_list_title_size, kb_list_title_weight, kb_list_title_font,
       brand_text, brand_text_color, brand_text_size, brand_text_weight, brand_text_font,
       logo_url, logo_width, header_alignment, hero_alignment, content_width,
@@ -328,7 +336,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       'singleton', ${settings.homeEyebrow}, ${settings.homeTitle}, ${settings.homeIntro},
       ${JSON.stringify(settings.headerLinks)}, ${settings.footerText}, ${JSON.stringify(settings.footerLinks)}, ${settings.contactInfo},
       ${settings.globalTheme ? JSON.stringify(settings.globalTheme) : null},
-      ${JSON.stringify(settings.homeBlocks)}, ${settings.showKbList}, ${settings.kbListTitle},
+      ${JSON.stringify(settings.homeBlocks)}, ${settings.showKbList}, ${settings.showHomeSearch}, ${settings.kbListTitle},
       ${settings.kbListTitleColor}, ${settings.kbListTitleSize}, ${settings.kbListTitleWeight}, ${settings.kbListTitleFont},
       ${settings.brandText}, ${settings.brandTextColor}, ${settings.brandTextSize}, ${settings.brandTextWeight}, ${settings.brandTextFont},
       ${settings.logoUrl}, ${settings.logoWidth},
@@ -346,6 +354,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       global_theme = EXCLUDED.global_theme,
       home_blocks = EXCLUDED.home_blocks,
       show_kb_list = EXCLUDED.show_kb_list,
+      show_home_search = EXCLUDED.show_home_search,
       kb_list_title = EXCLUDED.kb_list_title,
       kb_list_title_color = EXCLUDED.kb_list_title_color,
       kb_list_title_size = EXCLUDED.kb_list_title_size,

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
+import { KbSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
@@ -124,6 +125,7 @@ export default async function KbArticlePage({
     <div className="page-shell kb-theme-root" style={themeVars}>
       <div className={`layout${showTocRail ? " layout--with-toc" : ""}`}>
         <aside className="sidebar page-tree" aria-label="Section navigation">
+          <KbSearchWidget kb={kb} />
           <strong>{kb.title}</strong>
           <PageTree
             currentPageId={page.id}
