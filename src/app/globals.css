@@ -3177,6 +3177,15 @@ article li > ol {
   margin-bottom: 1.25rem;
 }
 
+.page-tree__group {
+  color: var(--muted);
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .kb-search-widget__label {
   color: var(--muted);
   font-size: 0.8rem;

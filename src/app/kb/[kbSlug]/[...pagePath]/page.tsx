@@ -81,7 +81,7 @@ export default async function KbArticlePage({
   }
 
   const page = await getPageByPath(kb.id, effectivePath, includeStaff);
-  if (!page) {
+  if (!page || (page.nodeKind ?? "page") !== "page") {
     notFound();
   }
   if (kb.homepagePageId === page.id) {

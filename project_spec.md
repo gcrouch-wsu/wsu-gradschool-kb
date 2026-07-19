@@ -1733,6 +1733,35 @@ Items are ordered by recommended priority.
     with the panel open, Esc closes, Enter falls back to the results page).
   - **Deferred by design:** an in-page search content block (phase 2 if a concrete case appears).
 
+### FB-36 — Page-tree group headings and links
+
+`[AI-AGENT-TASK] id:FB-36  priority:med  area:public-ux  effort:M  status:done`
+
+- **DONE (2026-07-18, maintainer-requested):** the page tree can now contain two non-page node
+  kinds, modeled as `kb_pages.node_kind` (`'page'` default | `'group'` | `'link'`, migration
+  `032_tree_node_kinds` with `link_url` + `link_new_tab`) so all tree machinery — paths, sort
+  order, drag re-nesting, staff-ancestor pruning, locks, revisions — is reused rather than
+  duplicated.
+  - **Group heading:** an organizational label pages nest under; renders as a non-clickable
+    uppercase label (`.page-tree__group`) in the public tree, has no article page (its URL
+    returns the not-found boundary), and staff-only visibility on a group hides everything
+    nested under it via the existing path-based prune.
+  - **Link:** a tree item navigating to an `https://` URL or internal `/` path (validated at
+    create/publish), optional new-tab with hidden "(opens in a new tab)" text.
+  - **Exclusions:** groups/links never appear in search results (SQL `node_kind = 'page'` filter
+    + in-memory parity), the excerpt-source picker, the KB homepage assignment (rejected in
+    `setKbHomepagePage`), the generated KB-landing section cards, or KB-export page files
+    (kb.json still records them).
+  - **Admin:** the New Page form gained a Type selector (link shows destination + new-tab);
+    `/admin/pages/[pageId]` renders `TreeNodeSettingsForm` (title/status/visibility/destination,
+    no block editor) for non-page kinds; tree-manager rows show Group heading/Link badges and
+    hide Set Home for them. Publish gate: non-page kinds publish on title (+ valid destination
+    for links) alone.
+  - Seed data adds a published "Reference" group with an external P&P link under it so in-memory
+    dev and the axe suite exercise both kinds. Tests: `tree-nodes.test.ts` (search exclusion,
+    homepage rejection, gate rules) and `tree-nodes.db.test.ts` (column mapping + FTS
+    exclusion).
+
 ---
 
 ## 13. Operations runbook

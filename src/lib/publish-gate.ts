@@ -1,6 +1,6 @@
 import { parse } from "node-html-parser";
 import type { ExcerptBlockRef, ExcerptSourceState } from "@/lib/excerpts";
-import type { ContentBlock, PageRevision } from "@/lib/types";
+import type { ContentBlock, PageNodeKind, PageRevision } from "@/lib/types";
 
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -13,6 +13,8 @@ export interface PublishablePage {
   contactEmail: string;
   lastReviewedDate: string;
   blocks: ContentBlock[];
+  nodeKind?: PageNodeKind;
+  linkUrl?: string;
 }
 
 export type AssetStatusResolver = (assetId: string) => Promise<string | null>;
@@ -52,6 +54,18 @@ export async function validatePageForPublish(
   checkExcerptSource?: ExcerptSourceChecker,
 ): Promise<string[]> {
   const issues: string[] = [];
+
+  // Group headings and links are tree structure, not content: they publish on
+  // a title (and a valid destination for links) alone.
+  if ((page.nodeKind ?? "page") !== "page") {
+    if (!page.title.trim()) {
+      issues.push("Page is missing a title.");
+    }
+    if (page.nodeKind === "link" && !/^(https:\/\/|\/)/.test((page.linkUrl ?? "").trim())) {
+      issues.push("A link item needs a destination: an https:// URL or an internal path starting with /.");
+    }
+    return issues;
+  }
 
   if (!page.title.trim()) {
     issues.push("Page is missing a title.");

@@ -51,6 +51,7 @@ export interface KnowledgeBase {
 }
 
 export type PageVisibility = "public" | "staff";
+export type PageNodeKind = "page" | "group" | "link";
 
 export interface KbPage {
   id: string;
@@ -81,6 +82,10 @@ export interface KbPage {
   nextReviewDate?: string | null;
   verifiedAt?: string | null;
   verifiedBy?: string | null;
+
+  nodeKind?: PageNodeKind;
+  linkUrl?: string;
+  linkNewTab?: boolean;
 }
 
 export type PageRevisionAction = "save" | "restore";
@@ -105,6 +110,9 @@ export interface PageRevisionSnapshot {
   showSummary?: boolean;
   showPrintButton?: boolean;
   nextReviewDate?: string | null;
+  nodeKind?: PageNodeKind;
+  linkUrl?: string;
+  linkNewTab?: boolean;
 }
 
 export interface PageRevision extends PageRevisionSnapshot {

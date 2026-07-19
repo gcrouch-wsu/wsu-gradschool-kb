@@ -32,6 +32,8 @@ interface UpdateBody {
   showSummary?: unknown;
   showPrintButton?: unknown;
   nextReviewDate?: unknown;
+  linkUrl?: unknown;
+  linkNewTab?: unknown;
 }
 
 export async function PATCH(
@@ -75,10 +77,15 @@ export async function PATCH(
     : [];
   const blocks = Array.isArray(body.blocks) ? (body.blocks as ContentBlock[]) : [];
 
+  const nodeKind = existingPage?.nodeKind ?? "page";
+  const linkUrl =
+    typeof body.linkUrl === "string" ? body.linkUrl.trim().slice(0, 500) : undefined;
+  const linkNewTab = typeof body.linkNewTab === "boolean" ? body.linkNewTab : undefined;
+
   if (!title) {
     return NextResponse.json({ message: "Title is required." }, { status: 400 });
   }
-  if (blocks.length === 0) {
+  if (blocks.length === 0 && nodeKind === "page") {
     return NextResponse.json({ message: "A page must have at least one content block." }, { status: 400 });
   }
 
@@ -92,6 +99,8 @@ export async function PATCH(
         contactEmail: contactEmail ?? "",
         lastReviewedDate: lastReviewedDate ?? "",
         blocks,
+        nodeKind,
+        linkUrl: linkUrl ?? existingPage?.linkUrl ?? "",
       },
       getAssetStatusById,
       checkExcerptSourceForPublish,
@@ -123,6 +132,8 @@ export async function PATCH(
       showSummary,
       showPrintButton,
       nextReviewDate,
+      linkUrl,
+      linkNewTab,
     }, guard.session.email);
     await recordAuditEvent({
       session: guard.session,

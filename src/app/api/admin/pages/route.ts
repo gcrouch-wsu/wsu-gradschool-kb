@@ -18,6 +18,15 @@ export async function POST(request: Request) {
     return denied;
   }
 
+  const nodeKind = body.nodeKind === "group" || body.nodeKind === "link" ? body.nodeKind : "page";
+  const linkUrl = typeof body.linkUrl === "string" ? body.linkUrl.trim().slice(0, 500) : "";
+  if (nodeKind === "link" && !/^(https:\/\/|\/)/.test(linkUrl)) {
+    return NextResponse.json(
+      { message: "A link item needs a destination: an https:// URL or an internal path starting with /." },
+      { status: 400 },
+    );
+  }
+
   try {
     const page = await createPage({
       kbId: body.kbId,
@@ -25,7 +34,13 @@ export async function POST(request: Request) {
       slug: body.slug,
       parentPath: body.parentPath,
       summary: body.summary || "",
-      blocks: [{ blockId: `block-${crypto.randomUUID()}`, type: "paragraph", text: "New page content..." }],
+      blocks:
+        nodeKind === "page"
+          ? [{ blockId: `block-${crypto.randomUUID()}`, type: "paragraph", text: "New page content..." }]
+          : [],
+      nodeKind,
+      linkUrl,
+      linkNewTab: body.linkNewTab === true,
       authorEmail: guard.session.email,
     });
     await recordAuditEvent({

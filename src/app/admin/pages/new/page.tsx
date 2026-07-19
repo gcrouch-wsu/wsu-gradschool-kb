@@ -26,6 +26,9 @@ export default function NewPageScreen() {
   const [kbId, setKbId] = useState(preselectedKbId || "");
   const [parentPages, setParentPages] = useState<ParentPageOption[]>([]);
   const [parentPageId, setParentPageId] = useState("");
+  const [nodeKind, setNodeKind] = useState<"page" | "group" | "link">("page");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkNewTab, setLinkNewTab] = useState(false);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [busy, setBusy] = useState(false);
@@ -78,12 +81,20 @@ export default function NewPageScreen() {
       const res = await fetch("/api/admin/pages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kbId, title, slug, parentPath: parent ? parent.path : [] }),
+        body: JSON.stringify({
+          kbId,
+          title,
+          slug,
+          parentPath: parent ? parent.path : [],
+          nodeKind,
+          linkUrl: nodeKind === "link" ? linkUrl : "",
+          linkNewTab: nodeKind === "link" ? linkNewTab : false,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to create page");
 
-      router.push(`/admin/pages/${data.pageId}`);
+      router.push(nodeKind === "page" ? `/admin/pages/${data.pageId}` : "/admin/pages");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Action failed");
     } finally {
@@ -134,6 +145,38 @@ export default function NewPageScreen() {
           Nesting groups this page under the parent in the page tree; readers expand the parent to
           find it. You can also re-nest any page later by dragging it in the page tree.
         </p>
+
+        <label>
+          <span className="meta">Type</span>
+          <select
+            className="input"
+            onChange={(e) => setNodeKind(e.target.value as "page" | "group" | "link")}
+            value={nodeKind}
+          >
+            <option value="page">Page — has its own content</option>
+            <option value="group">Group heading — organizes pages in the tree, no page of its own</option>
+            <option value="link">Link — a tree item that opens another URL</option>
+          </select>
+        </label>
+
+        {nodeKind === "link" && (
+          <>
+            <label>
+              <span className="meta">Link destination</span>
+              <input
+                className="input"
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://… or /kb/other-kb/page"
+                required
+                value={linkUrl}
+              />
+            </label>
+            <label className="attribution-checkbox">
+              <input checked={linkNewTab} onChange={(e) => setLinkNewTab(e.target.checked)} type="checkbox" />
+              <span>Open in a new tab</span>
+            </label>
+          </>
+        )}
 
         <label>
           <span className="meta">Title</span>

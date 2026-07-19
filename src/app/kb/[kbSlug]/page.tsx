@@ -53,7 +53,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
   const requestHeaders = await headers();
   const settings = await loadSiteSettings();
   const tree = await buildPageTree(kb.id, includeStaff);
-  const topLevel = tree.map((node) => node.page);
+  const topLevel = tree.map((node) => node.page).filter((page) => (page.nodeKind ?? "page") === "page");
   const homepagePage = await getKbHomepagePage(kb.id, includeStaff);
 
   const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);

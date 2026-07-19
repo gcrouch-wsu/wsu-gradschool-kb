@@ -778,6 +778,14 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS show_home_search BOOLEAN NOT NULL DEFAULT FALSE`;
     },
   },
+  {
+    id: "032_tree_node_kinds",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS node_kind TEXT NOT NULL DEFAULT 'page'`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS link_url TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS link_new_tab BOOLEAN NOT NULL DEFAULT FALSE`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

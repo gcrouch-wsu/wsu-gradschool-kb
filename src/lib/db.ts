@@ -216,6 +216,9 @@ interface PageRow {
   next_review_date?: string | null;
   verified_at?: string | null;
   verified_by?: string | null;
+  node_kind?: string;
+  link_url?: string;
+  link_new_tab?: boolean;
 }
 
 interface AssetRow {
@@ -424,6 +427,9 @@ function mapPage(row: PageRow): KbPage {
     nextReviewDate: row.next_review_date,
     verifiedAt: row.verified_at,
     verifiedBy: row.verified_by,
+    nodeKind: row.node_kind === "group" || row.node_kind === "link" ? row.node_kind : "page",
+    linkUrl: row.link_url ?? "",
+    linkNewTab: Boolean(row.link_new_tab),
   };
 }
 
@@ -474,7 +480,7 @@ export async function insertPage(page: KbPage, revision?: PageRevisionWrite): Pr
       id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
       show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
-      next_review_date, verified_at, verified_by
+      next_review_date, verified_at, verified_by, node_kind, link_url, link_new_tab
     ) VALUES (
       ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
       ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
@@ -482,7 +488,8 @@ export async function insertPage(page: KbPage, revision?: PageRevisionWrite): Pr
       ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
       ${page.showToc}, ${page.tocDepth}, ${page.showSummary ?? true}, ${page.showPrintButton ?? true},
       ${page.lockedBy ?? null}, ${page.lockedAt ?? null},
-      ${page.nextReviewDate ?? null}, ${page.verifiedAt ?? null}, ${page.verifiedBy ?? null}
+      ${page.nextReviewDate ?? null}, ${page.verifiedAt ?? null}, ${page.verifiedBy ?? null},
+      ${page.nodeKind ?? "page"}, ${page.linkUrl ?? ""}, ${page.linkNewTab ?? false}
     )
   `;
   // Create the page and its initial revision together so the page is never
@@ -556,7 +563,10 @@ export async function updatePages(
             show_print_button = ${page.showPrintButton ?? true},
             next_review_date = ${page.nextReviewDate ?? null},
             verified_at = ${page.verifiedAt ?? null},
-            verified_by = ${page.verifiedBy ?? null}
+            verified_by = ${page.verifiedBy ?? null},
+            node_kind = ${page.nodeKind ?? "page"},
+            link_url = ${page.linkUrl ?? ""},
+            link_new_tab = ${page.linkNewTab ?? false}
           WHERE id = ${page.id}
             AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
           RETURNING id
@@ -588,7 +598,10 @@ export async function updatePages(
         show_print_button = ${page.showPrintButton ?? true},
         next_review_date = ${page.nextReviewDate ?? null},
         verified_at = ${page.verifiedAt ?? null},
-        verified_by = ${page.verifiedBy ?? null}
+        verified_by = ${page.verifiedBy ?? null},
+        node_kind = ${page.nodeKind ?? "page"},
+        link_url = ${page.linkUrl ?? ""},
+        link_new_tab = ${page.linkNewTab ?? false}
       WHERE id = ${page.id}
     `;
   });
@@ -903,7 +916,7 @@ export async function loadPagesForKbWithoutBlocksFromDb(kbId: string): Promise<K
       owner_label, contact_email, last_reviewed_date, updated_display_date,
       '[]'::jsonb AS blocks, related_page_ids, related_asset_ids,
       show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
-      next_review_date, verified_at, verified_by
+      next_review_date, verified_at, verified_by, node_kind, link_url, link_new_tab
     FROM kb_pages
     WHERE kb_id = ${kbId}
   `) as unknown as PageRow[];

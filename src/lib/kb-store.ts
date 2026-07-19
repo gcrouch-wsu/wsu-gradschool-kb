@@ -59,6 +59,7 @@ import type {
   PageRevisionAction,
   PageRevisionSnapshot,
   PageRevisionSummary,
+  PageNodeKind,
   PageStatus,
   PageTreeNode,
   PageVisibility,
@@ -397,6 +398,9 @@ export async function setKbHomepagePage(kbId: string, pageId: string | null): Pr
     }
     if (page.status === "archived") {
       throw new Error("Archived pages cannot be used as a knowledge base homepage.");
+    }
+    if ((page.nodeKind ?? "page") !== "page") {
+      throw new Error("Group headings and links cannot be used as a knowledge base homepage.");
     }
   }
 
@@ -1102,8 +1106,9 @@ export async function searchKb(
                 ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
               ) * 1.2) AS rank
       FROM kb_pages
-      WHERE (search_vector @@ to_tsquery('english', ${searchTokens}) 
+      WHERE (search_vector @@ to_tsquery('english', ${searchTokens})
              OR search_vector @@ websearch_to_tsquery('english', ${normalized}))
+      AND kb_pages.node_kind = 'page'
       ${kbFilterPages}
       ${pageVisibilityFilter}
       ORDER BY rank DESC
@@ -1188,22 +1193,24 @@ export async function searchKb(
     publishedPagesByKb.set(page.kbId, [...(publishedPagesByKb.get(page.kbId) ?? []), page]);
   }
 
-  const pagesToSearch = kbId
-    ? canReadKb(kbId)
-      ? visiblePages(dataset, kbId, includeStaff)
-      : []
-    : dataset.pages.filter((page) => {
-        if (!canReadKb(page.kbId)) {
-          return false;
-        }
-        if (canReadStaffPages(page.kbId)) {
-          return page.status === "published" || page.status === "draft";
-        }
-        if (page.status !== "published") {
-          return false;
-        }
-        return !isStaffOnly(publishedPagesByKb.get(page.kbId) ?? [], page);
-      });
+  const pagesToSearch = (
+    kbId
+      ? canReadKb(kbId)
+        ? visiblePages(dataset, kbId, includeStaff)
+        : []
+      : dataset.pages.filter((page) => {
+          if (!canReadKb(page.kbId)) {
+            return false;
+          }
+          if (canReadStaffPages(page.kbId)) {
+            return page.status === "published" || page.status === "draft";
+          }
+          if (page.status !== "published") {
+            return false;
+          }
+          return !isStaffOnly(publishedPagesByKb.get(page.kbId) ?? [], page);
+        })
+  ).filter((page) => (page.nodeKind ?? "page") === "page");
 
   for (const page of pagesToSearch) {
     const titleScore = fieldScore(page.title, normalized, { exact: 100, prefix: 60, includes: 40 });
@@ -1435,6 +1442,9 @@ export interface CreatePageInput {
   tocDepth?: number;
   showSummary?: boolean;
   showPrintButton?: boolean;
+  nodeKind?: PageNodeKind;
+  linkUrl?: string;
+  linkNewTab?: boolean;
   // Attribution for the initial revision (the create snapshot). Falls back to ""
   // when a create path has no session (e.g. seeding).
   authorEmail?: string;
@@ -1510,6 +1520,9 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     tocDepth: input.tocDepth ?? 3,
     showSummary: input.showSummary ?? true,
     showPrintButton: input.showPrintButton ?? true,
+    nodeKind: input.nodeKind ?? "page",
+    linkUrl: input.linkUrl ?? "",
+    linkNewTab: input.linkNewTab ?? false,
   };
 
   // Snapshot the page at creation so the original content is recoverable even
@@ -1544,6 +1557,8 @@ export interface UpdatePageInput {
   showSummary?: boolean;
   showPrintButton?: boolean;
   nextReviewDate?: string | null;
+  linkUrl?: string;
+  linkNewTab?: boolean;
   // Optional so ordinary editor saves (which don't touch related links) leave
   // them untouched; revision restore passes them to restore the full snapshot.
   relatedPageIds?: string[];
@@ -1583,6 +1598,9 @@ function snapshotFromPage(page: KbPage): PageRevisionSnapshot {
     showSummary: page.showSummary,
     showPrintButton: page.showPrintButton,
     nextReviewDate: page.nextReviewDate ?? null,
+    nodeKind: page.nodeKind ?? "page",
+    linkUrl: page.linkUrl ?? "",
+    linkNewTab: page.linkNewTab ?? false,
   };
 }
 
@@ -1702,6 +1720,8 @@ export async function updatePage(
           showSummary: input.showSummary ?? page.showSummary,
           showPrintButton: input.showPrintButton ?? page.showPrintButton,
           nextReviewDate: input.nextReviewDate ?? page.nextReviewDate,
+          linkUrl: input.linkUrl ?? page.linkUrl,
+          linkNewTab: input.linkNewTab ?? page.linkNewTab,
         };
       }
       return {
