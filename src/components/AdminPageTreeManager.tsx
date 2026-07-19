@@ -20,7 +20,7 @@ import type { KbPage, KnowledgeBase, PageStatus } from "@/lib/types";
 
 type PageItem = Pick<
   KbPage,
-  "id" | "path" | "sortOrder" | "status" | "title" | "updatedDisplayDate" | "visibility" | "nextReviewDate"
+  "id" | "path" | "sortOrder" | "status" | "title" | "updatedDisplayDate" | "visibility" | "nextReviewDate" | "nodeKind"
 >;
 
 type DropZone = "before" | "after" | "into";
@@ -381,7 +381,7 @@ function PageTreeOverflowMenu({
   const items = useMemo(() => {
     const entries: TreeRowMenuItem[] = [];
 
-    if (!isHomepage && page.status !== "archived") {
+    if (!isHomepage && page.status !== "archived" && (page.nodeKind ?? "page") === "page") {
       entries.push({
         icon: <House aria-hidden size={16} strokeWidth={1.75} />,
         label: homepageBusy ? "Setting..." : "Set Home",
@@ -427,6 +427,7 @@ function PageTreeOverflowMenu({
     onDelete,
     onHomepage,
     onPublishToggle,
+    page.nodeKind,
     page.status,
     statusBusy,
   ]);
@@ -972,6 +973,8 @@ export function AdminPageTreeManager({
                 <div>
                   <div className="tree-editor__title-row">
                     <strong>{page.title}</strong>
+                    {page.nodeKind === "group" && <span className="badge">Group heading</span>}
+                    {page.nodeKind === "link" && <span className="badge">Link</span>}
                     {isHomepage && <span className="badge badge--verified">Homepage</span>}
                     {page.path.length === 1 && <span className="badge badge--section">Section</span>}
                     <span className={statusBadgeClass(page.status)}>{statusLabel(page.status)}</span>

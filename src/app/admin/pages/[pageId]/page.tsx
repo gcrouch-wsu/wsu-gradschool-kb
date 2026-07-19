@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminPageEditorForm } from "@/components/AdminPageEditorForm";
+import { TreeNodeSettingsForm } from "@/components/TreeNodeSettingsForm";
 import { canAccessKb, getCurrentAdminSession } from "@/lib/auth";
 import { getAllPageSummariesForAdmin, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
@@ -31,6 +32,24 @@ export default async function AdminEditPage({
 
   if (!(await canAccessKb(session, kb.id))) {
     notFound();
+  }
+
+  if ((page.nodeKind ?? "page") !== "page") {
+    return (
+      <div className="page-shell">
+        <p className="eyebrow">Admin</p>
+        <h1>{page.nodeKind === "link" ? "Edit Link" : "Edit Group Heading"}</h1>
+        <p className="lead">
+          {page.nodeKind === "link"
+            ? "A tree item that sends readers to another URL."
+            : "An organizational heading that groups pages in the tree without a page of its own."}
+        </p>
+        <p className="meta">
+          <Link href="/admin/pages">Back to pages</Link>
+        </p>
+        <TreeNodeSettingsForm page={page} />
+      </div>
+    );
   }
 
   const pages = await getAllPageSummariesForAdmin(kb.id);

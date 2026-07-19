@@ -62,9 +62,11 @@ export async function GET(request: Request) {
       if (!access.canRead) {
         return NextResponse.json({ message: "Knowledge base not found." }, { status: 404 });
       }
-      const pages = access.canReadStaffContent
-        ? (await getAllPageSummariesForAdmin(kb.id)).filter((page) => page.status !== "archived")
-        : await getVisiblePagesForKb(kb.id, false);
+      const pages = (
+        access.canReadStaffContent
+          ? (await getAllPageSummariesForAdmin(kb.id)).filter((page) => page.status !== "archived")
+          : await getVisiblePagesForKb(kb.id, false)
+      ).filter((page) => (page.nodeKind ?? "page") === "page");
       return NextResponse.json({
         pages: pages.map((page) => ({
           id: page.id,

@@ -395,10 +395,11 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   (`026`: `kb_pages.show_print_button`), page revision history (`027`: `kb_page_revisions` plus
   a baseline revision backfill for pre-existing pages), page-view analytics (`028`: `kb_page_views`
   daily counters with retention-fold indexes), KB public/private visibility
-  (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`), and sourced-block
-  FTS indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill),
-  and the KB search widget (`031`: `knowledge_bases.search_widget_*` +
-  `site_settings.show_home_search`). **Current head: `031_search_widget`.**
+  (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`), sourced-block FTS
+  indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill), the
+  KB search widget (`031`: `knowledge_bases.search_widget_*` + `site_settings.show_home_search`),
+  and page-tree non-page node fields (`032`: `kb_pages.node_kind`, `link_url`, `link_new_tab`).
+  **Current head: `032_tree_node_kinds`.**
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
@@ -610,6 +611,15 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   allowlisted external section as a snapshot in a themed `sourceBox*` provenance callout, with
   manual check-for-changes/refresh, paste-HTML fallback, gate/export recursion, and FTS indexing
   (migration `030`). Automated staleness polling remains open under FB-34.
+- KB search widget + live suggestions (FB-35, 2026-07-18, PRs #14–#16): owner-configurable
+  sidebar/home search boxes, document-only asset results in reader-facing search, and a
+  progressive-enhancement suggestion combobox backed by the public `GET /api/search` endpoint
+  (shared visibility scope via `search-scope.ts`, own `search-suggest:` rate bucket,
+  `private, no-store`, no unknown-KB oracle).
+- Page-tree group headings and links (FB-36, 2026-07-18/19, PR #17): non-page tree node kinds
+  (`kb_pages.node_kind`, migration `032`) excluded from search, pickers, homepage assignment,
+  and export page files; minimally publish-gated; admin Type selector plus a dedicated
+  settings form.
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
@@ -1732,6 +1742,54 @@ Items are ordered by recommended priority.
     results pages. Covered by `tests/a11y/live-search.spec.ts` (suggestions appear, axe-clean
     with the panel open, Esc closes, Enter falls back to the results page).
   - **Deferred by design:** an in-page search content block (phase 2 if a concrete case appears).
+
+### FB-36 — Page-tree group headings and links
+
+`[AI-AGENT-TASK] id:FB-36  priority:med  area:public-ux  effort:M  status:done`
+
+- **DONE (2026-07-18, maintainer-requested):** the page tree can now contain two non-page node
+  kinds, modeled as `kb_pages.node_kind` (`'page'` default | `'group'` | `'link'`, migration
+  `032_tree_node_kinds` with `link_url` + `link_new_tab`) so all tree machinery — paths, sort
+  order, drag re-nesting, staff-ancestor pruning, locks, revisions — is reused rather than
+  duplicated.
+  - **Group heading:** an organizational label pages nest under; renders as a non-clickable
+    uppercase label (`.page-tree__group`) in the public tree, has no article page (its URL
+    returns the not-found boundary), and staff-only visibility on a group hides everything
+    nested under it via the existing path-based prune.
+  - **Link:** a tree item navigating to an `https://` URL or internal `/` path (validated at
+    create/publish), optional new-tab with hidden "(opens in a new tab)" text.
+  - **Exclusions:** groups/links never appear in search results (SQL `node_kind = 'page'` filter
+    + in-memory parity), the excerpt-source picker, the KB homepage assignment (rejected in
+    `setKbHomepagePage`), the generated KB-landing section cards, or KB-export page files
+    (kb.json still records them).
+  - **Admin:** the New Page form gained a Type selector (link shows destination + new-tab);
+    `/admin/pages/[pageId]` renders `TreeNodeSettingsForm` (title/status/visibility/destination,
+    no block editor) for non-page kinds; tree-manager rows show Group heading/Link badges and
+    hide Set Home for them. Publish gate: non-page kinds publish on title (+ valid destination
+    for links) alone.
+  - Seed data adds a published "Reference" group with an external P&P link under it so in-memory
+    dev and the axe suite exercise both kinds. Tests: `tree-nodes.test.ts` (search exclusion,
+    homepage rejection, gate rules) and `tree-nodes.db.test.ts` (column mapping + FTS
+    exclusion).
+  - **Independent review repairs (Codex, 2026-07-18/19):** (a) `seedIfEmpty` now persists
+    `node_kind`/`link_url`/`link_new_tab`, so fresh-database seeds keep the demo Reference
+    group/link instead of degrading them into empty pages; (b) revision restore passes
+    `linkUrl`/`linkNewTab` back through `updatePage`, and `validateRevisionForRestore` treats
+    link revisions as links — previously a restored link node silently kept the current
+    destination; unit regressions cover both paths; (c) page PATCH now rejects
+    `javascript:`/`data:` link destinations on drafts too, closing the stored-unsafe-input gap
+    in front of the existing create/publish/render guards; (d) migration-head doc references
+    reconciled to `032`.
+  - **Post-review follow-up (2026-07-19):** `generateMetadata` and redirect-target handling call
+    `notFound()` for non-page nodes, so a group/link URL renders the not-found boundary without
+    leaking group metadata. The Playwright regression asserts soft-404 **parity** with missing
+    article routes: KB page routes stream and commit HTTP 200 for all not-found states by
+    existing convention, so literal 404 statuses remain a route-wide open question, not a
+    tree-node one.
+  - **Deliberately unchanged (review-noted):** the review dashboard may list draft group/link
+    nodes in its draft buckets (admin-only noise under the minimal non-page gate), and
+    `PageTree` renders a manually DB-inserted `http://` link defensively even though every app
+    validator only accepts `https://` or internal `/`.
 
 ---
 

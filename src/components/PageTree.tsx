@@ -17,13 +17,31 @@ function TreeItems({
   return (
     <ul>
       {nodes.map((node) => {
+        const kind = node.page.nodeKind ?? "page";
         const href = node.page.id === homepagePageId ? `/kb/${kbSlug}` : `/kb/${kbSlug}/${node.page.path.join("/")}`;
         const isCurrent = currentPageId ? currentPageId === node.page.id : currentPath === node.page.path.join("/");
+        const externalLink = kind === "link" && /^https?:\/\//.test(node.page.linkUrl ?? "");
+        const internalLink = kind === "link" && (node.page.linkUrl ?? "").startsWith("/");
         return (
           <li key={node.page.id}>
-            <Link aria-current={isCurrent ? "page" : undefined} href={href}>
-              {node.page.title}
-            </Link>
+            {kind === "group" && <span className="page-tree__group">{node.page.title}</span>}
+            {kind === "link" && (externalLink || internalLink) && (
+              <a
+                href={node.page.linkUrl}
+                {...(node.page.linkNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              >
+                {node.page.title}
+                {node.page.linkNewTab && <span className="sr-only"> (opens in a new tab)</span>}
+              </a>
+            )}
+            {kind === "link" && !externalLink && !internalLink && (
+              <span className="page-tree__group">{node.page.title}</span>
+            )}
+            {kind === "page" && (
+              <Link aria-current={isCurrent ? "page" : undefined} href={href}>
+                {node.page.title}
+              </Link>
+            )}
             {node.page.visibility === "staff" && (
               <span className="badge badge--staff"> Staff</span>
             )}

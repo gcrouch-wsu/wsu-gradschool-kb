@@ -297,7 +297,9 @@ async function prepareKbExport(kbId: string): Promise<{ filename: string; entrie
       data: `${JSON.stringify(metadata, null, 2)}\n`,
     },
     ...(await Promise.all(
-      pages.map(async (page) => ({
+      pages
+        .filter((page) => (page.nodeKind ?? "page") === "page")
+        .map(async (page) => ({
         path: pageExportPath(page),
         data: renderStandalonePage(
           page,
