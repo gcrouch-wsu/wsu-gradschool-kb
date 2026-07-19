@@ -162,13 +162,14 @@ async function seedIfEmpty() {
       INSERT INTO kb_pages (
         id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
         last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
-        show_toc, toc_depth, show_summary
+        show_toc, toc_depth, show_summary, show_print_button, node_kind, link_url, link_new_tab
       ) VALUES (
         ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
         ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
         ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
         ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
-        ${page.showToc ?? true}, ${page.tocDepth ?? 3}, ${page.showSummary ?? true}
+        ${page.showToc ?? true}, ${page.tocDepth ?? 3}, ${page.showSummary ?? true}, ${page.showPrintButton ?? true},
+        ${page.nodeKind ?? "page"}, ${page.linkUrl ?? ""}, ${page.linkNewTab ?? false}
       )
       ON CONFLICT DO NOTHING
     `;
