@@ -13,6 +13,7 @@ const PUBLIC_ROUTES = [
   { name: "global search", path: "/search?q=fact" },
   { name: "search", path: "/kb/graduate-school/search?q=fact" },
 ];
+const BASE = "http://127.0.0.1:3000";
 
 for (const route of PUBLIC_ROUTES) {
   test(`${route.name} has no axe violations`, async ({ page }) => {
