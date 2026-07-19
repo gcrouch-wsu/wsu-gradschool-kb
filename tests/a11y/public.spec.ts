@@ -30,6 +30,12 @@ test("home search widget is hidden by default", async ({ page }) => {
   await expect(page.getByRole("search")).toHaveCount(0);
 });
 
+test("tree group URLs are not article pages", async ({ page }) => {
+  const response = await page.goto("/kb/graduate-school/reference");
+  expect(response?.status()).toBe(404);
+  await expect(page.locator(".kb-search-widget")).toHaveCount(0);
+});
+
 test("article has no axe violations", async ({ page }) => {
   await page.goto("/kb/graduate-school");
   const articlePath = await page

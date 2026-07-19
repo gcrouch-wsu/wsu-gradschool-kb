@@ -39,8 +39,8 @@ export async function generateMetadata({
     notFound();
   }
   const page = await getPageByPath(kb.id, pagePath, access.canReadStaffContent);
-  if (!page) {
-    return {};
+  if (!page || (page.nodeKind ?? "page") !== "page") {
+    notFound();
   }
 
   return {
@@ -70,10 +70,13 @@ export default async function KbArticlePage({
   const redirectTarget = await getActiveRedirectTarget(kb.id, pagePath);
   if (redirectTarget) {
     const targetPage = await getPageByPath(kb.id, redirectTarget, includeStaff);
-    if (!targetPage) {
+    if (!targetPage || (targetPage.nodeKind ?? "page") !== "page") {
       notFound();
     }
     const pageAtOld = await getPageByPath(kb.id, pagePath, includeStaff);
+    if (pageAtOld && (pageAtOld.nodeKind ?? "page") !== "page") {
+      notFound();
+    }
     if (!pageAtOld) {
       permanentRedirect(`/kb/${kb.slug}/${redirectTarget.join("/")}`);
     }
