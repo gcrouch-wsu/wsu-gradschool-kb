@@ -1718,9 +1718,20 @@ Items are ordered by recommended priority.
     surface through the pages that use them); unit + live-DB regressions added. (b) The widget's
     text submit button (nearly as wide as the input in the 260px sidebar) was replaced with a
     compact icon submit (`.kb-search-widget__submit`, magnifier + `sr-only` text).
-  - **Deferred by design:** an in-page search content block (phase 2 if a concrete case appears)
-    and live type-ahead suggestions (needs a scoped public JSON endpoint; progressive
-    enhancement later — being delivered as the FB-35 live-search follow-up).
+  - **Live in-place suggestions (2026-07-18, maintainer feedback — modeled on the P&P TOC
+    filter):** the widget is now a progressive-enhancement combobox (`LiveSearchForm`): typing
+    (debounced 250ms, min 2 chars) opens a suggestion panel in place — top 8 results with KB
+    context when global-scoped, ARIA combobox/listbox semantics (options are non-interactive
+    `role="option"` items navigated via JS — axe `nested-interactive` clean), arrow-key
+    navigation, Esc to close, a "See all results" option, and a polite live-region count
+    announcement. Backed by the new public `GET /api/search` endpoint, which reuses the exact
+    page-level visibility contract (`globalSearchScope` in `src/lib/search-scope.ts`, now shared
+    with `/search`, and per-KB `getKbReadAccess`), its own rate-limit bucket
+    (`search-suggest:`, 60/min), `Cache-Control: private, no-store`, and empty-result responses
+    for unknown/unreadable KBs (no oracle). Without JavaScript the form still submits to the
+    results pages. Covered by `tests/a11y/live-search.spec.ts` (suggestions appear, axe-clean
+    with the panel open, Esc closes, Enter falls back to the results page).
+  - **Deferred by design:** an in-page search content block (phase 2 if a concrete case appears).
 
 ---
 
