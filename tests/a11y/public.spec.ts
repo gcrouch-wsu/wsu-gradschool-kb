@@ -30,9 +30,16 @@ test("home search widget is hidden by default", async ({ page }) => {
   await expect(page.getByRole("search")).toHaveCount(0);
 });
 
-test("tree group URLs are not article pages", async ({ page }) => {
-  const response = await page.goto("/kb/graduate-school/reference");
-  expect(response?.status()).toBe(404);
+test("tree group URLs render the not-found UI like missing article pages", async ({ context, page }) => {
+  const [groupResponse, missingResponse] = await Promise.all([
+    context.request.get(`${BASE}/kb/graduate-school/reference`),
+    context.request.get(`${BASE}/kb/graduate-school/not-a-page`),
+  ]);
+  expect(groupResponse.status()).toBe(missingResponse.status());
+
+  await page.goto("/kb/graduate-school/reference");
+  await expect(page.getByRole("heading", { level: 1, name: /not found/i })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("Reference");
   await expect(page.locator(".kb-search-widget")).toHaveCount(0);
 });
 
