@@ -395,10 +395,11 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   (`026`: `kb_pages.show_print_button`), page revision history (`027`: `kb_page_revisions` plus
   a baseline revision backfill for pre-existing pages), page-view analytics (`028`: `kb_page_views`
   daily counters with retention-fold indexes), KB public/private visibility
-  (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`), and sourced-block
-  FTS indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill),
-  and the KB search widget (`031`: `knowledge_bases.search_widget_*` +
-  `site_settings.show_home_search`). **Current head: `031_search_widget`.**
+  (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`), sourced-block FTS
+  indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill), the
+  KB search widget (`031`: `knowledge_bases.search_widget_*` + `site_settings.show_home_search`),
+  and page-tree non-page node fields (`032`: `kb_pages.node_kind`, `link_url`, `link_new_tab`).
+  **Current head: `032_tree_node_kinds`.**
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
