@@ -183,6 +183,8 @@ export async function validateRevisionForRestore(
     | "contactEmail"
     | "lastReviewedDate"
     | "blocks"
+    | "nodeKind"
+    | "linkUrl"
   >,
   resolveAssetStatus: AssetStatusResolver,
   checkExcerptSource?: ExcerptSourceChecker,
@@ -199,6 +201,8 @@ export async function validateRevisionForRestore(
       contactEmail: revision.contactEmail,
       lastReviewedDate: revision.lastReviewedDate,
       blocks: revision.blocks,
+      nodeKind: revision.nodeKind,
+      linkUrl: revision.linkUrl,
     },
     resolveAssetStatus,
     checkExcerptSource,

@@ -1814,6 +1814,8 @@ export async function restorePageRevision(revisionId: string, editorEmail: strin
       showSummary: revision.showSummary,
       showPrintButton: revision.showPrintButton,
       nextReviewDate: revision.nextReviewDate ?? null,
+      linkUrl: revision.linkUrl ?? "",
+      linkNewTab: revision.linkNewTab ?? false,
     },
     editorEmail,
     "restore",

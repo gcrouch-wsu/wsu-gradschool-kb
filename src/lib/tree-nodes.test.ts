@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPage, searchKb, setKbHomepagePage } from "@/lib/kb-store";
-import { validatePageForPublish } from "@/lib/publish-gate";
+import {
+  createPage,
+  listPageRevisions,
+  restorePageRevision,
+  searchKb,
+  setKbHomepagePage,
+  updatePage,
+} from "@/lib/kb-store";
+import { validatePageForPublish, validateRevisionForRestore } from "@/lib/publish-gate";
 
 const activeAsset = async () => "active";
 
@@ -73,5 +80,66 @@ describe("tree node kinds (in-memory)", () => {
         activeAsset,
       ),
     ).toEqual([]);
+  });
+
+  it("restores link-node destinations from the selected revision", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+    const page = await createPage({
+      kbId: "kb-grad-school",
+      title: `Restore Link ${token}`,
+      nodeKind: "link",
+      linkUrl: "https://gradschool.wsu.edu/first",
+      linkNewTab: true,
+      blocks: [],
+      status: "published",
+    });
+    const revisions = await listPageRevisions(page.id);
+    const initialRevision = revisions.find((revision) => revision.revisionNumber === 1);
+    if (!initialRevision) {
+      throw new Error("Expected an initial page revision.");
+    }
+
+    await updatePage(
+      {
+        pageId: page.id,
+        title: page.title,
+        slug: page.slug,
+        parentPath: page.path.slice(0, -1),
+        summary: page.summary,
+        visibility: page.visibility,
+        status: page.status,
+        blocks: [],
+        linkUrl: "https://gradschool.wsu.edu/second",
+        linkNewTab: false,
+      },
+      "tester@example.edu",
+    );
+
+    const restored = await restorePageRevision(initialRevision.id, "tester@example.edu");
+    expect(restored.linkUrl).toBe("https://gradschool.wsu.edu/first");
+    expect(restored.linkNewTab).toBe(true);
+  });
+
+  it("validates published link-node revisions with link-node rules", async () => {
+    const baseRevision = {
+      status: "published" as const,
+      title: "Restored Link",
+      slug: "restored-link",
+      summary: "",
+      ownerLabel: "",
+      contactEmail: "",
+      lastReviewedDate: "",
+      blocks: [],
+      nodeKind: "link" as const,
+      linkUrl: "https://gradschool.wsu.edu/",
+    };
+
+    expect(await validateRevisionForRestore(baseRevision, activeAsset)).toEqual([]);
+    const badLink = await validateRevisionForRestore(
+      { ...baseRevision, linkUrl: "data:text/html,hi" },
+      activeAsset,
+    );
+    expect(badLink.some((issue) => issue.includes("destination"))).toBe(true);
   });
 });
