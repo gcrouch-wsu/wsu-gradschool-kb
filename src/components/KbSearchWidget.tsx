@@ -1,14 +1,5 @@
-import { Search } from "lucide-react";
+import { LiveSearchForm } from "@/components/LiveSearchForm";
 import type { KnowledgeBase } from "@/lib/types";
-
-function SearchSubmitButton() {
-  return (
-    <button className="kb-search-widget__submit" type="submit">
-      <Search aria-hidden size={16} strokeWidth={2} />
-      <span className="sr-only">Search</span>
-    </button>
-  );
-}
 
 export function KbSearchWidget({ kb }: { kb: KnowledgeBase }) {
   if (!kb.searchWidgetEnabled) {
@@ -20,40 +11,25 @@ export function KbSearchWidget({ kb }: { kb: KnowledgeBase }) {
     (kb.searchWidgetLabel ?? "").trim() ||
     (scopeAll ? "Search all knowledge bases" : `Search ${kb.title}`);
   return (
-    <form action={action} className="kb-search-widget" method="get" role="search">
-      <label className="kb-search-widget__label" htmlFor={`kb-search-${kb.id}`}>
-        {label}
-      </label>
-      <div className="kb-search-widget__row">
-        <input
-          className="input kb-search-widget__input"
-          id={`kb-search-${kb.id}`}
-          name="q"
-          placeholder="Search…"
-          type="search"
-        />
-        <SearchSubmitButton />
-      </div>
-    </form>
+    <LiveSearchForm
+      action={action}
+      inputId={`kb-search-${kb.id}`}
+      kbSlug={scopeAll ? undefined : kb.slug}
+      label={label}
+      showKbTitles={scopeAll}
+    />
   );
 }
 
 export function HomeSearchWidget() {
   return (
-    <form action="/search" className="kb-search-widget kb-search-widget--home" method="get" role="search">
-      <label className="kb-search-widget__label" htmlFor="home-search">
-        Search all knowledge bases
-      </label>
-      <div className="kb-search-widget__row">
-        <input
-          className="input kb-search-widget__input"
-          id="home-search"
-          name="q"
-          placeholder="Search…"
-          type="search"
-        />
-        <SearchSubmitButton />
-      </div>
-    </form>
+    <div className="kb-search-widget--home">
+      <LiveSearchForm
+        action="/search"
+        inputId="home-search"
+        label="Search all knowledge bases"
+        showKbTitles
+      />
+    </div>
   );
 }
