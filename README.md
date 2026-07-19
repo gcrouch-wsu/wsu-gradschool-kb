@@ -27,7 +27,10 @@ current implementation status.
 - **Search**: global and per-KB Postgres full-text search (tsvector + GIN) with prefix/type-ahead,
   grouped global results, zero-result gap logging, private/staff-page visibility pruning, and an
   owner-configurable **search widget** — per KB (sidebar box scoped to that KB or all KBs, with a
-  custom label) and optionally on the site home page above the KB list.
+  custom label) and optionally on the site home page above the KB list. The widget offers **live
+  in-place suggestions** (accessible combobox, visibility-scoped public `GET /api/search`, rate
+  limited, no-JS fallback to the results pages); reader-facing results include document assets
+  only.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
   WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over
@@ -58,6 +61,11 @@ attribution label and new-tab option, resolved per reader at render time — and
 sourced-content core** (FB-34): sections imported from the Policies & Procedures site as
 snapshots inside a "Source:" callout, with check-for-changes/refresh controls and a paste-HTML
 fallback. The draft-preview modal resolves excerpts so preview matches the published render.
+
+Search & navigation (2026-07-18/19, PRs #14–#17): the owner-configurable **KB search widget**
+with **live in-place suggestions** (FB-35), document-only asset results in reader-facing search,
+first-class drag **re-nesting** in the page-tree manager (PR #13), and page-tree **group
+headings and links** (FB-36, migration `032_tree_node_kinds`).
 
 Still gated on WSU ITS engagement: **WSU SSO** (`project_spec.md` §12 FB-30), via Entra ID / Azure
 AD OIDC or SAML for staff and private-KB viewers. All authentication stays local and
@@ -204,6 +212,13 @@ Signed-in admins manage pages at `/admin/pages`: reopen drafts, edit metadata an
 move a page under a different parent, choose a KB homepage page, and publish. The page-tree editor
 supports drag reorder, re-nesting, inline edit, setting/clearing the KB homepage, and publishing
 drafts directly from the tree.
+
+Besides regular pages, the tree supports two non-page node kinds: **group headings**
+(non-clickable organizational labels pages nest under; their URLs render the not-found page) and
+**links** (tree items opening an `https://` URL or internal `/` path, with an optional new-tab
+setting). Groups and links are excluded from search results, the excerpt-source picker, KB
+homepage assignment, and KB-export page files. They're created via the Type selector on the New
+Page form and edited through a dedicated settings form (no block editor).
 
 The document editor is a WYSIWYG surface with a wrapping toolbar:
 

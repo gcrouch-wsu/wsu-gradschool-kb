@@ -611,6 +611,15 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   allowlisted external section as a snapshot in a themed `sourceBox*` provenance callout, with
   manual check-for-changes/refresh, paste-HTML fallback, gate/export recursion, and FTS indexing
   (migration `030`). Automated staleness polling remains open under FB-34.
+- KB search widget + live suggestions (FB-35, 2026-07-18, PRs #14–#16): owner-configurable
+  sidebar/home search boxes, document-only asset results in reader-facing search, and a
+  progressive-enhancement suggestion combobox backed by the public `GET /api/search` endpoint
+  (shared visibility scope via `search-scope.ts`, own `search-suggest:` rate bucket,
+  `private, no-store`, no unknown-KB oracle).
+- Page-tree group headings and links (FB-36, 2026-07-18/19, PR #17): non-page tree node kinds
+  (`kb_pages.node_kind`, migration `032`) excluded from search, pickers, homepage assignment,
+  and export page files; minimally publish-gated; admin Type selector plus a dedicated
+  settings form.
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
@@ -1762,6 +1771,25 @@ Items are ordered by recommended priority.
     dev and the axe suite exercise both kinds. Tests: `tree-nodes.test.ts` (search exclusion,
     homepage rejection, gate rules) and `tree-nodes.db.test.ts` (column mapping + FTS
     exclusion).
+  - **Independent review repairs (Codex, 2026-07-18/19):** (a) `seedIfEmpty` now persists
+    `node_kind`/`link_url`/`link_new_tab`, so fresh-database seeds keep the demo Reference
+    group/link instead of degrading them into empty pages; (b) revision restore passes
+    `linkUrl`/`linkNewTab` back through `updatePage`, and `validateRevisionForRestore` treats
+    link revisions as links — previously a restored link node silently kept the current
+    destination; unit regressions cover both paths; (c) page PATCH now rejects
+    `javascript:`/`data:` link destinations on drafts too, closing the stored-unsafe-input gap
+    in front of the existing create/publish/render guards; (d) migration-head doc references
+    reconciled to `032`.
+  - **Post-review follow-up (2026-07-19):** `generateMetadata` and redirect-target handling call
+    `notFound()` for non-page nodes, so a group/link URL renders the not-found boundary without
+    leaking group metadata. The Playwright regression asserts soft-404 **parity** with missing
+    article routes: KB page routes stream and commit HTTP 200 for all not-found states by
+    existing convention, so literal 404 statuses remain a route-wide open question, not a
+    tree-node one.
+  - **Deliberately unchanged (review-noted):** the review dashboard may list draft group/link
+    nodes in its draft buckets (admin-only noise under the minimal non-page gate), and
+    `PageTree` renders a manually DB-inserted `http://` link defensively even though every app
+    validator only accepts `https://` or internal `/`.
 
 ---
 
