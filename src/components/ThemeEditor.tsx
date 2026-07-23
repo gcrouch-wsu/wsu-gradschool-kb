@@ -351,6 +351,29 @@ export function ThemeEditor({
           </p>
         )}
 
+        {scope === "kb" && (
+          <fieldset className="fieldset">
+            <legend>Page tree</legend>
+            <p className="meta">
+              Width and type size for the public page tree are set site-wide under Site Settings → Global
+              Styling. Use this option when this knowledge base has a deep navigation tree.
+            </p>
+            <label className="checkbox-inline">
+              <input
+                checked={theme.layout.pageTreeCollapsible}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    layout: { ...t.layout, pageTreeCollapsible: e.target.checked },
+                  }))
+                }
+                type="checkbox"
+              />
+              <span>Collapsible page tree — readers can expand and collapse nested sections</span>
+            </label>
+          </fieldset>
+        )}
+
         <fieldset className="fieldset">
           <legend>Base Colors</legend>
           <div className="theme-color-grid">
@@ -651,25 +674,10 @@ export function ThemeEditor({
                 <span className="theme-scale__value">{theme.layout[field.key]}</span>
               </label>
             ))}
-          {scope === "kb" && (
-            <label className="checkbox-inline">
-              <input
-                checked={theme.layout.pageTreeCollapsible}
-                onChange={(e) =>
-                  setTheme((t) => ({
-                    ...t,
-                    layout: { ...t.layout, pageTreeCollapsible: e.target.checked },
-                  }))
-                }
-                type="checkbox"
-              />
-              <span>Collapsible page tree — readers can expand and collapse nested sections</span>
-            </label>
-          )}
           {scope === "global" && (
             <p className="meta">
               Page tree width and type size apply site-wide. Turn on collapsible branches per knowledge
-              base under Manage Styles.
+              base under Knowledge bases → Styles &amp; page tree.
             </p>
           )}
           {widthHint && <p className="alert alert--warning">{widthHint}</p>}

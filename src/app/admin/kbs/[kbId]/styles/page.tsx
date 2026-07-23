@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ThemeEditor } from "@/components/ThemeEditor";
+import { ManageKbStylesEditor } from "@/components/ManageKbStylesEditor";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { isDatabaseEnabled, loadSiteSettings } from "@/lib/db";
 import { getKbById } from "@/lib/kb-store";
@@ -48,26 +48,16 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
       <p className="lead">
         Adjust the brand colors, fonts, and type scale for this knowledge base. Changes apply to every public
         page in <code>/kb/{kb.slug}</code> once saved. Page tree width and type size are set site-wide under
-        Site Settings → Global Styling; use the collapsible option below if this KB&apos;s tree is deep.
+        Site Settings → Global Styling. Enable <strong>Collapsible page tree</strong> in the Page &amp; column
+        widths section below if this KB&apos;s navigation is deep.
       </p>
-      <ThemeEditor
+      <ManageKbStylesEditor
         dbEnabled={isDatabaseEnabled()}
+        globalTheme={globalTheme}
         initialTheme={theme}
+        kbId={kb.id}
         kbTitle={kb.title}
-        scope="kb"
         siteContentWidth={settings.contentWidth}
-        onSave={async (newTheme) => {
-          const toSave = withGlobalPageTreeChrome(newTheme, globalTheme);
-          const res = await fetch(`/api/admin/kbs/${kb.id}/theme`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ theme: toSave }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.message || "Failed to save styles");
-          }
-        }}
       />
     </div>
   );
