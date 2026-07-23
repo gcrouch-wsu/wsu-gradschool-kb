@@ -620,6 +620,9 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   (`kb_pages.node_kind`, migration `032`) excluded from search, pickers, homepage assignment,
   and export page files; minimally publish-gated; admin Type selector plus a dedicated
   settings form.
+- Page-tree indent/outdent UX (2026-07-23): admin tree exposes visible up/down/indent/outdent
+  buttons; drag uses vertical bands plus horizontal depth for outdent, with a safe non-nesting
+  drop fallback (`src/lib/page-tree-drop.ts`).
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
