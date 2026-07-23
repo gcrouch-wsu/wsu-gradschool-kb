@@ -129,11 +129,48 @@ function normalizeSourcedFragment(fragmentHtml: string, baseUrl?: URL): string {
   }
   for (const table of root.querySelectorAll("table")) {
     table.setAttribute("class", "doc-table");
-    const hasHeaderRow = Boolean(table.querySelector("thead th, tr:first-child th"));
+    // word-to-html / Pandoc manuals often put a full-width title in thead as a
+    // single colspan cell. Promote that to <caption> so the KB table keeps a
+    // usable header structure while still showing the title.
+    const thead = table.querySelector("thead");
+    const hadThead = Boolean(thead);
+    if (thead) {
+      const titleRow = thead.querySelector("tr");
+      const titleCells = titleRow
+        ? [...titleRow.childNodes].filter((node) => {
+            const tag = (node as HTMLElement).tagName?.toLowerCase();
+            return tag === "th" || tag === "td";
+          })
+        : [];
+      if (titleRow && titleCells.length === 1) {
+        const titleCell = titleCells[0] as HTMLElement;
+        const colSpan = Number(titleCell.getAttribute("colspan") || "1") || 1;
+        const titleText = titleCell.text.replace(/\s+/g, " ").trim();
+        if (titleText && colSpan > 1 && !table.querySelector("caption")) {
+          const caption = parse(`<caption>${escapeHtmlText(titleText)}</caption>`).firstChild;
+          if (caption) {
+            table.prepend(caption);
+          }
+          titleRow.remove();
+        }
+      }
+      if (!thead.querySelector("tr")) {
+        thead.remove();
+      }
+    }
+    const hasHeaderRow = hadThead || Boolean(table.querySelector("th"));
     table.setAttribute("data-header-row", hasHeaderRow ? "true" : "false");
     table.setAttribute("data-header-column", "false");
   }
   return root.toString();
+}
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 // The P&P manual renders section numbers ("3.1.1") with CSS counters — the

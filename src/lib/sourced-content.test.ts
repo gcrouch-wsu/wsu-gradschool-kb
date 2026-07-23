@@ -111,6 +111,85 @@ describe("extractSourcedSectionFromHtml", () => {
     expect(blocks.some((block) => block.type === "list")).toBe(true);
   });
 
+  it("preserves word-to-html colspan tables and promotes a full-width title to caption", () => {
+    // Mirrors the Membership and Roles table emitted by wsu-gradschool-word-to-html
+    // for P&P §1.4.1.3 — a thead title with colspan=9 plus a group header spanning
+    // the last three committee-role columns.
+    const membershipHtml = `
+      <main>
+        <h5 id="faculty-of-the-graduate-school">Faculty of the Graduate School</h5>
+        <table>
+          <thead>
+            <tr><th colspan="9"><strong>Membership and Roles of the Faculty of the Graduate School</strong></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td></td><td></td><td></td><td></td><td></td><td></td>
+              <td colspan="3"><strong>Allowed Committee Roles<sup>1</sup></strong></td>
+            </tr>
+            <tr>
+              <td></td>
+              <td><em>Appointment</em></td>
+              <td><em>Ranks</em></td>
+              <td><em>Initial Nomination</em></td>
+              <td><em>Term</em></td>
+              <td><em>Renewal Nomination</em></td>
+              <td><em>Chair</em></td>
+              <td><em>Co-chair</em></td>
+              <td><em>Serve</em></td>
+            </tr>
+            <tr>
+              <td>Graduate Faculty</td>
+              <td>Tenure Track</td>
+              <td>Assistant, Associate, Full, Regents, Emeritus Professor</td>
+              <td>Automatic</td>
+              <td>Annual</td>
+              <td>Automatic</td>
+              <td>✔</td><td>✔</td><td>✔</td>
+            </tr>
+            <tr>
+              <td>Auxiliary Graduate Faculty</td>
+              <td>Short-term Track</td>
+              <td>Adjunct</td>
+              <td>By chair or director</td>
+              <td>Three years</td>
+              <td>Renewed every three years</td>
+              <td></td><td>✔</td><td>✔</td>
+            </tr>
+          </tbody>
+        </table>
+      </main>`;
+    const extracted = extractSourcedSectionFromHtml(membershipHtml, "faculty-of-the-graduate-school", BASE);
+    expect(extracted?.fragmentHtml).toContain("<caption>");
+    expect(extracted?.fragmentHtml).toContain("Membership and Roles of the Faculty of the Graduate School");
+    expect(extracted?.fragmentHtml).toContain('colspan="3"');
+    expect(extracted?.fragmentHtml).not.toMatch(/<th[^>]*colspan="9"/);
+
+    const blocks = documentHtmlToBlocks(extracted!.fragmentHtml);
+    const table = blocks.find((block) => block.type === "table");
+    expect(table?.type).toBe("table");
+    if (table?.type !== "table") {
+      return;
+    }
+    expect(table.caption).toBe("Membership and Roles of the Faculty of the Graduate School");
+    expect(table.hasHeaderRow).toBe(true);
+    expect(table.rows[0]?.length).toBe(7);
+    expect(table.colSpans?.[0]?.[6]).toBe(3);
+    expect(table.rows[0]?.[6]).toMatch(/Allowed Committee Roles/);
+    expect(table.rows[1]?.length).toBe(9);
+    expect(table.rows[2]?.[0]).toBe("Graduate Faculty");
+    expect(table.rows[3]?.[6]).toBe("");
+    expect(table.rows[3]?.[7]).toBe("✔");
+
+    const roundTrip = documentHtmlToBlocks(blocksToDocumentHtml([table]));
+    const again = roundTrip.find((block) => block.type === "table");
+    expect(again?.type).toBe("table");
+    if (again?.type === "table") {
+      expect(again.colSpans?.[0]?.[6]).toBe(3);
+      expect(again.caption).toBe(table.caption);
+    }
+  });
+
   it("normalizes risky links and images before block parsing", () => {
     const extracted = extractSourcedSectionFromHtml(
       `<main>

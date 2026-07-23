@@ -4,70 +4,138 @@ import { RichTextEditable } from "@/components/RichTextEditable";
 import { textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 
+type TableBlock = Extract<ContentBlock, { type: "table" }>;
+
+function logicalWidth(row: string[], colSpans?: number[]): number {
+  return row.reduce((sum, _cell, index) => sum + Math.max(1, colSpans?.[index] ?? 1), 0);
+}
+
 export function TableBlockEditor({
   block,
   onChange,
 }: {
-  block: Extract<ContentBlock, { type: "table" }>;
+  block: TableBlock;
   onChange: (block: ContentBlock) => void;
 }) {
-  const columnCount = Math.max(1, ...block.rows.map((row) => row.length));
   const normalizedRows = block.rows.length > 0 ? block.rows : [[""]];
-  const normalizedRowsHtml = normalizedRows.map((row, rowIndex) =>
-    Array.from({ length: columnCount }, (_, columnIndex) => {
-      const html = block.rowsHtml?.[rowIndex]?.[columnIndex];
-      return html ?? textToRichText(row[columnIndex] ?? "");
-    }),
+  const columnCount = Math.max(
+    1,
+    ...normalizedRows.map((row, rowIndex) => logicalWidth(row, block.colSpans?.[rowIndex])),
   );
+  const hasSpans = Boolean(
+    block.colSpans?.some((row) => row.some((span) => span > 1)) ||
+      block.rowSpans?.some((row) => row.some((span) => span > 1)),
+  );
+
+  function cellHtml(rowIndex: number, columnIndex: number, text: string) {
+    return block.rowsHtml?.[rowIndex]?.[columnIndex] ?? textToRichText(text);
+  }
+
+  function withoutSpans(next: Partial<TableBlock>): TableBlock {
+    const { colSpans: _colSpans, rowSpans: _rowSpans, ...rest } = { ...block, ...next };
+    return rest;
+  }
 
   function updateCell(rowIndex: number, columnIndex: number, value: string, html: string) {
     const rows = normalizedRows.map((row, currentRowIndex) => {
+      if (currentRowIndex !== rowIndex) {
+        return [...row];
+      }
       const nextRow = [...row];
-      while (nextRow.length < columnCount) {
-        nextRow.push("");
-      }
-      if (currentRowIndex === rowIndex) {
-        nextRow[columnIndex] = value;
-      }
+      nextRow[columnIndex] = value;
       return nextRow;
     });
-    const rowsHtml = normalizedRowsHtml.map((row) => [...row]);
-    rowsHtml[rowIndex][columnIndex] = html;
-    onChange({ ...block, rows, rowsHtml });
+    const rowsHtml = normalizedRows.map((row, currentRowIndex) =>
+      row.map((cell, currentColumnIndex) => {
+        if (currentRowIndex === rowIndex && currentColumnIndex === columnIndex) {
+          return html;
+        }
+        return cellHtml(currentRowIndex, currentColumnIndex, cell);
+      }),
+    );
+    onChange({
+      ...block,
+      rows,
+      rowsHtml,
+      colSpans: block.colSpans,
+      rowSpans: block.rowSpans,
+    });
   }
 
   function addRow() {
-    onChange({
-      ...block,
-      rows: [...normalizedRows, Array.from({ length: columnCount }, () => "")],
-      rowsHtml: [...normalizedRowsHtml, Array.from({ length: columnCount }, () => "")],
-    });
+    onChange(
+      withoutSpans({
+        rows: [...normalizedRows, Array.from({ length: columnCount }, () => "")],
+        rowsHtml: [
+          ...normalizedRows.map((row, rowIndex) =>
+            Array.from({ length: columnCount }, (_, columnIndex) =>
+              cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
+            ),
+          ),
+          Array.from({ length: columnCount }, () => ""),
+        ],
+      }),
+    );
   }
 
   function removeRow() {
     if (normalizedRows.length <= 1) {
       return;
     }
-    onChange({ ...block, rows: normalizedRows.slice(0, -1), rowsHtml: normalizedRowsHtml.slice(0, -1) });
+    onChange(
+      withoutSpans({
+        rows: normalizedRows.slice(0, -1),
+        rowsHtml: normalizedRows.slice(0, -1).map((row, rowIndex) =>
+          Array.from({ length: columnCount }, (_, columnIndex) =>
+            cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
+          ),
+        ),
+      }),
+    );
   }
 
   function addColumn() {
-    onChange({
-      ...block,
-      rows: normalizedRows.map((row) => [...row, ""]),
-      rowsHtml: normalizedRowsHtml.map((row) => [...row, ""]),
-    });
+    onChange(
+      withoutSpans({
+        rows: normalizedRows.map((row) => {
+          const next = [...row];
+          while (next.length < columnCount) {
+            next.push("");
+          }
+          next.push("");
+          return next;
+        }),
+        rowsHtml: normalizedRows.map((row, rowIndex) => {
+          const next = Array.from({ length: columnCount }, (_, columnIndex) =>
+            cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
+          );
+          next.push("");
+          return next;
+        }),
+      }),
+    );
   }
 
   function removeColumn() {
     if (columnCount <= 1) {
       return;
     }
-    onChange({
-      ...block,
-      rows: normalizedRows.map((row) => row.slice(0, -1)),
-      rowsHtml: normalizedRowsHtml.map((row) => row.slice(0, -1)),
-    });
+    onChange(
+      withoutSpans({
+        rows: normalizedRows.map((row) => {
+          const next = [...row];
+          while (next.length < columnCount) {
+            next.push("");
+          }
+          return next.slice(0, -1);
+        }),
+        rowsHtml: normalizedRows.map((row, rowIndex) =>
+          Array.from({ length: columnCount }, (_, columnIndex) =>
+            cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
+          ).slice(0, -1),
+        ),
+      }),
+    );
   }
 
   return (
@@ -98,21 +166,35 @@ export function TableBlockEditor({
           First column is headers
         </label>
       </div>
+      {hasSpans && (
+        <p className="meta">
+          This table uses merged cells from its source. Cell text is editable; adding or removing
+          rows/columns clears the merges.
+        </p>
+      )}
       <div className="table-wrap">
         <table className="admin-table table-editor__table">
           <tbody>
             {normalizedRows.map((row, rowIndex) => (
               <tr key={rowIndex}>
-                {Array.from({ length: columnCount }, (_, columnIndex) => (
-                  <td key={`${rowIndex}-${columnIndex}`}>
-                    <RichTextEditable
-                      className="wysiwyg-table-cell"
-                      html={normalizedRowsHtml[rowIndex]?.[columnIndex]}
-                      onChange={(html, text) => updateCell(rowIndex, columnIndex, text, html)}
-                      text={row[columnIndex] ?? ""}
-                    />
-                  </td>
-                ))}
+                {row.map((cell, columnIndex) => {
+                  const colSpan = block.colSpans?.[rowIndex]?.[columnIndex] ?? 1;
+                  const rowSpan = block.rowSpans?.[rowIndex]?.[columnIndex] ?? 1;
+                  return (
+                    <td
+                      colSpan={colSpan > 1 ? colSpan : undefined}
+                      key={`${rowIndex}-${columnIndex}`}
+                      rowSpan={rowSpan > 1 ? rowSpan : undefined}
+                    >
+                      <RichTextEditable
+                        className="wysiwyg-table-cell"
+                        html={cellHtml(rowIndex, columnIndex, cell)}
+                        onChange={(html, text) => updateCell(rowIndex, columnIndex, text, html)}
+                        text={cell}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
