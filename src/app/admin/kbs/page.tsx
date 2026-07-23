@@ -419,7 +419,7 @@ export default function AdminKbsPage() {
                     onSelect: () => router.push(`/admin/pages?kb=${kb.id}`),
                   },
                   {
-                    label: "Styles",
+                    label: "Styles & page tree",
                     onSelect: () => router.push(`/admin/kbs/${kb.id}/styles`),
                   },
                   {

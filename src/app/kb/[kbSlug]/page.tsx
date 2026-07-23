@@ -10,7 +10,7 @@ import { TableOfContents } from "@/components/TableOfContents";
 import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
 import { buildPageTree, getAssetById, getKbById, getKbBySlug, getKbHomepagePage } from "@/lib/kb-store";
 import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
-import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
+import { DEFAULT_THEME, mergeTheme, resolvePublicTheme, themeToCssVars } from "@/lib/kb-theme";
 import { loadSiteSettings } from "@/lib/db";
 import { hasTocEntries } from "@/lib/toc";
 import { isPageViewPrefetch, recordPageViewLater } from "@/lib/page-views";
@@ -57,7 +57,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
   const homepagePage = await getKbHomepagePage(kb.id, includeStaff);
 
   const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
-  const effectiveTheme = kb.theme ? mergeTheme(kb.theme, baseTheme) : baseTheme;
+  const effectiveTheme = resolvePublicTheme(kb.theme, baseTheme);
   const themeVars = themeToCssVars(effectiveTheme) as CSSProperties;
 
   if (homepagePage) {
@@ -91,6 +91,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <KbSearchWidget kb={kb} />
             <strong>{kb.title}</strong>
             <PageTree
+              collapsible={effectiveTheme.layout.pageTreeCollapsible}
               currentPageId={homepagePage.id}
               homepagePageId={kb.homepagePageId}
               kbSlug={kb.slug}
@@ -172,7 +173,12 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
           <aside className="sidebar page-tree" aria-label="Knowledge base navigation">
             <KbSearchWidget kb={kb} />
             <strong>Browse {kb.title}</strong>
-            <PageTree homepagePageId={kb.homepagePageId} kbSlug={kb.slug} nodes={tree} />
+            <PageTree
+              collapsible={effectiveTheme.layout.pageTreeCollapsible}
+              homepagePageId={kb.homepagePageId}
+              kbSlug={kb.slug}
+              nodes={tree}
+            />
           </aside>
           <div className="flow">
             {/* <h2>Sections</h2> */}

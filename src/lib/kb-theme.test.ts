@@ -3,6 +3,7 @@ import {
   DEFAULT_THEME,
   contrastRatio,
   mergeTheme,
+  resolvePublicTheme,
   themeToCssVars,
   themeToEditorPalette,
 } from "@/lib/kb-theme";
@@ -74,14 +75,68 @@ describe("kb-theme", () => {
 
   it("fills, clamps, and emits layout column widths", () => {
     expect(mergeTheme({}).layout).toEqual(DEFAULT_THEME.layout);
+    expect(mergeTheme({}).layout.pageTreeCollapsible).toBe(false);
 
-    const t = mergeTheme({ layout: { navWidth: "9999px", tocWidth: "50%" } });
+    const t = mergeTheme({
+      layout: {
+        navWidth: "9999px",
+        tocWidth: "50%",
+        pageTreeFontSize: "3rem",
+        pageTreeItemGap: "0.1rem",
+        pageTreeIndent: "2rem",
+        pageTreeCollapsible: true,
+      },
+    });
     expect(t.layout.navWidth).toBe("480px");
     expect(t.layout.tocWidth).toBe(DEFAULT_THEME.layout.tocWidth);
+    expect(t.layout.pageTreeFontSize).toBe("1.25rem");
+    expect(t.layout.pageTreeItemGap).toBe("0.25rem");
+    expect(t.layout.pageTreeIndent).toBe("1.5rem");
+    expect(t.layout.pageTreeCollapsible).toBe(true);
 
-    const vars = themeToCssVars(mergeTheme({ layout: { navWidth: "320px", tocWidth: "240px" } }));
+    const vars = themeToCssVars(
+      mergeTheme({
+        layout: {
+          navWidth: "320px",
+          tocWidth: "240px",
+          pageTreeFontSize: "1rem",
+          pageTreeItemGap: "0.8rem",
+          pageTreeIndent: "1rem",
+        },
+      }),
+    );
     expect(vars["--nav-width"]).toBe("320px");
     expect(vars["--toc-width"]).toBe("240px");
+    expect(vars["--page-tree-size"]).toBe("1rem");
+    expect(vars["--page-tree-item-gap"]).toBe("0.8rem");
+    expect(vars["--page-tree-indent"]).toBe("1rem");
+  });
+
+  it("pins global page-tree chrome when resolving a public KB theme", () => {
+    const global = mergeTheme({
+      layout: {
+        navWidth: "300px",
+        pageTreeFontSize: "1.05rem",
+        pageTreeItemGap: "0.9rem",
+        pageTreeIndent: "1rem",
+        pageTreeCollapsible: false,
+      },
+    });
+    const resolved = resolvePublicTheme(
+      {
+        layout: {
+          navWidth: "200px",
+          pageTreeFontSize: "0.8rem",
+          pageTreeCollapsible: true,
+        },
+      },
+      global,
+    );
+    expect(resolved.layout.navWidth).toBe("300px");
+    expect(resolved.layout.pageTreeFontSize).toBe("1.05rem");
+    expect(resolved.layout.pageTreeItemGap).toBe("0.9rem");
+    expect(resolved.layout.pageTreeIndent).toBe("1rem");
+    expect(resolved.layout.pageTreeCollapsible).toBe(true);
   });
 
   it("computes WCAG contrast ratios", () => {

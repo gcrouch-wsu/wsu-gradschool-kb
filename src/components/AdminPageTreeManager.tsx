@@ -970,22 +970,24 @@ export function AdminPageTreeManager({
                   />
                 </div>
 
-                <div>
+                  <div className="tree-editor__main">
                   <div className="tree-editor__title-row">
-                    <strong>{page.title}</strong>
-                    {page.nodeKind === "group" && <span className="badge">Group heading</span>}
-                    {page.nodeKind === "link" && <span className="badge">Link</span>}
-                    {isHomepage && <span className="badge badge--verified">Homepage</span>}
-                    {page.path.length === 1 && <span className="badge badge--section">Section</span>}
-                    <span className={statusBadgeClass(page.status)}>{statusLabel(page.status)}</span>
-                    <span className={page.visibility === "staff" ? "badge badge--staff" : "badge"}>
-                      {page.visibility === "staff" ? "Staff only" : "Public"}
-                    </span>
-                    {page.nextReviewDate && new Date(page.nextReviewDate) <= new Date() && (
-                      <span className="badge badge--warning">Needs review</span>
-                    )}
+                    <strong className="tree-editor__title">{page.title}</strong>
+                    <div className="tree-editor__badges">
+                      {page.nodeKind === "group" && <span className="badge">Group heading</span>}
+                      {page.nodeKind === "link" && <span className="badge">Link</span>}
+                      {isHomepage && <span className="badge badge--verified">Homepage</span>}
+                      {page.path.length === 1 && <span className="badge badge--section">Section</span>}
+                      <span className={statusBadgeClass(page.status)}>{statusLabel(page.status)}</span>
+                      <span className={page.visibility === "staff" ? "badge badge--staff" : "badge"}>
+                        {page.visibility === "staff" ? "Staff only" : "Public"}
+                      </span>
+                      {page.nextReviewDate && new Date(page.nextReviewDate) <= new Date() && (
+                        <span className="badge badge--warning">Needs review</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="meta">
+                  <div className="meta tree-editor__path">
                     /{page.path.join("/")} · Updated {page.updatedDisplayDate}
                   </div>
                   {isHomepage && (page.status !== "published" || page.visibility === "staff") && (

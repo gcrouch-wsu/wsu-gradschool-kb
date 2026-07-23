@@ -614,6 +614,7 @@ export default function AdminSettingsPage() {
             dbEnabled={dbEnabled}
             initialTheme={settings.globalTheme || DEFAULT_THEME}
             kbTitle="Global Default"
+            scope="global"
             siteContentWidth={settings.contentWidth}
             onSave={async (newTheme) => {
               const nextSettings = { ...settings, globalTheme: newTheme };

@@ -765,7 +765,11 @@ p {
 }
 
 .sidebar li + li {
-  margin-top: 0.85rem;
+  margin-top: var(--page-tree-item-gap, 0.65rem);
+}
+
+.page-tree {
+  font-size: var(--page-tree-size, 0.95rem);
 }
 
 .page-tree strong {
@@ -777,10 +781,77 @@ p {
   color: var(--muted);
 }
 
-.page-tree ul ul {
+.page-tree__row {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.page-tree__toggle,
+.page-tree__toggle-spacer {
+  flex: none;
+  height: 1.5rem;
+  margin-top: 0.05rem;
+  width: 1.5rem;
+}
+
+.page-tree__toggle {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.page-tree__toggle:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.page-tree__toggle:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.page-tree__label {
+  align-items: flex-start;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
+}
+
+.page-tree__link {
+  display: inline;
+  min-width: 0;
+}
+
+.page-tree__title,
+.page-tree__group {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.page-tree__label .badge {
+  flex: none;
+  margin-left: 0;
+}
+
+.page-tree__branch {
   border-left: 2px solid var(--wash);
-  margin-top: 0.65rem;
-  padding-left: 1rem;
+  margin-top: 0.5rem;
+  padding-left: var(--page-tree-indent, 0.75rem);
+}
+
+.page-tree ul ul {
+  border-left: none;
+  margin-top: 0;
+  padding-left: 0;
 }
 
 .page-tree [aria-current="page"] {
@@ -3179,10 +3250,11 @@ article li > ol {
 
 .page-tree__group {
   color: var(--muted);
-  display: inline-block;
+  display: inline;
   font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0.05em;
+  overflow-wrap: anywhere;
   text-transform: uppercase;
 }
 
@@ -4186,10 +4258,30 @@ article ol ol ol {
 }
 
 .tree-editor__title-row {
-  align-items: center;
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tree-editor__title {
+  display: block;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.tree-editor__badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.35rem;
+}
+
+.tree-editor__badges .badge {
+  margin-left: 0;
+}
+
+.tree-editor__path {
+  overflow-wrap: anywhere;
 }
 
 .tree-editor__hint {
@@ -4197,8 +4289,9 @@ article ol ol ol {
 }
 
 .tree-editor__handle-group {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
+  flex-wrap: nowrap;
   gap: 0.35rem;
 }
 
@@ -4262,7 +4355,7 @@ article ol ol ol {
 }
 
 .tree-editor__row {
-  align-items: center;
+  align-items: start;
   background: var(--paper);
   border: 1.5px solid var(--line);
   border-radius: var(--radius-md);
@@ -4404,8 +4497,7 @@ article ol ol ol {
     gap: 0.35rem;
   }
 
-  .tree-editor__title-row strong {
-    flex-basis: 100%;
+  .tree-editor__title {
     line-height: 1.3;
   }
 

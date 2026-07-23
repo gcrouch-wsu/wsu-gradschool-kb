@@ -69,6 +69,14 @@ export interface ThemeTypography {
 export interface ThemeLayout {
   navWidth: string; // px; max width of the page-tree column on KB pages
   tocWidth: string; // px; max width of the table-of-contents rail on KB pages
+  /** Public page-tree link size (global chrome; not overridden per KB at render). */
+  pageTreeFontSize: string;
+  /** Vertical gap between page-tree items (global chrome). */
+  pageTreeItemGap: string;
+  /** Nested branch indent (global chrome). */
+  pageTreeIndent: string;
+  /** When true, public page-tree branches can expand/collapse (per-KB). */
+  pageTreeCollapsible: boolean;
 }
 
 export interface ThemeOption {
@@ -162,6 +170,10 @@ export const DEFAULT_THEME: KbTheme = {
   layout: {
     navWidth: "260px",
     tocWidth: "240px",
+    pageTreeFontSize: "0.95rem",
+    pageTreeItemGap: "0.65rem",
+    pageTreeIndent: "0.75rem",
+    pageTreeCollapsible: false,
   },
   editor: {
     fonts: [
@@ -360,6 +372,13 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
     layout: {
       navWidth: safeUnit(l.navWidth, "px", PX, base.layout.navWidth, 160, 480),
       tocWidth: safeUnit(l.tocWidth, "px", PX, base.layout.tocWidth, 160, 420),
+      pageTreeFontSize: safeUnit(l.pageTreeFontSize, "rem", REM, base.layout.pageTreeFontSize, 0.75, 1.25),
+      pageTreeItemGap: safeUnit(l.pageTreeItemGap, "rem", REM, base.layout.pageTreeItemGap, 0.25, 1.5),
+      pageTreeIndent: safeUnit(l.pageTreeIndent, "rem", REM, base.layout.pageTreeIndent, 0.35, 1.5),
+      pageTreeCollapsible:
+        typeof l.pageTreeCollapsible === "boolean"
+          ? l.pageTreeCollapsible
+          : base.layout.pageTreeCollapsible,
     },
     editor: {
       fonts: safeOptions(e.fonts, "font", base.editor.fonts),
@@ -494,5 +513,32 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--measure": theme.typography.measure === "0ch" ? "100%" : theme.typography.measure,
     "--nav-width": theme.layout.navWidth,
     "--toc-width": theme.layout.tocWidth,
+    "--page-tree-size": theme.layout.pageTreeFontSize,
+    "--page-tree-item-gap": theme.layout.pageTreeItemGap,
+    "--page-tree-indent": theme.layout.pageTreeIndent,
   };
+}
+
+/**
+ * Page-tree width/typography are site chrome from Global Styling. Apply them on top of a
+ * merged KB theme so per-KB Manage Styles cannot drift the public nav type/spacing.
+ * `pageTreeCollapsible` stays on the KB theme.
+ */
+export function withGlobalPageTreeChrome(theme: KbTheme, globalTheme: KbTheme): KbTheme {
+  return {
+    ...theme,
+    layout: {
+      ...theme.layout,
+      navWidth: globalTheme.layout.navWidth,
+      pageTreeFontSize: globalTheme.layout.pageTreeFontSize,
+      pageTreeItemGap: globalTheme.layout.pageTreeItemGap,
+      pageTreeIndent: globalTheme.layout.pageTreeIndent,
+    },
+  };
+}
+
+/** Merge KB overrides onto the global default, then pin global page-tree chrome. */
+export function resolvePublicTheme(kbTheme: unknown, globalTheme: KbTheme): KbTheme {
+  const merged = kbTheme ? mergeTheme(kbTheme, globalTheme) : globalTheme;
+  return withGlobalPageTreeChrome(merged, globalTheme);
 }

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ThemeEditor } from "@/components/ThemeEditor";
+import { ManageKbStylesEditor } from "@/components/ManageKbStylesEditor";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { isDatabaseEnabled, loadSiteSettings } from "@/lib/db";
 import { getKbById } from "@/lib/kb-store";
-import { DEFAULT_THEME, mergeTheme } from "@/lib/kb-theme";
+import { DEFAULT_THEME, mergeTheme, withGlobalPageTreeChrome } from "@/lib/kb-theme";
 
 export default async function ManageStylesPage({ params }: { params: Promise<{ kbId: string }> }) {
   const session = await getCurrentAdminSession();
@@ -33,7 +33,11 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
   }
 
   const settings = await loadSiteSettings();
-  const theme = kb.theme ? mergeTheme(kb.theme) : DEFAULT_THEME;
+  const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
+  const theme = withGlobalPageTreeChrome(
+    kb.theme ? mergeTheme(kb.theme, globalTheme) : globalTheme,
+    globalTheme,
+  );
 
   return (
     <div className="page-shell">
@@ -43,24 +47,17 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
       <h1>Manage Styles — {kb.title}</h1>
       <p className="lead">
         Adjust the brand colors, fonts, and type scale for this knowledge base. Changes apply to every public
-        page in <code>/kb/{kb.slug}</code> once saved.
+        page in <code>/kb/{kb.slug}</code> once saved. Page tree width and type size are set site-wide under
+        Site Settings → Global Styling. Enable <strong>Collapsible page tree</strong> in the Page &amp; column
+        widths section below if this KB&apos;s navigation is deep.
       </p>
-      <ThemeEditor
+      <ManageKbStylesEditor
         dbEnabled={isDatabaseEnabled()}
+        globalTheme={globalTheme}
         initialTheme={theme}
+        kbId={kb.id}
         kbTitle={kb.title}
         siteContentWidth={settings.contentWidth}
-        onSave={async (newTheme) => {
-          const res = await fetch(`/api/admin/kbs/${kb.id}/theme`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ theme: newTheme }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.message || "Failed to save styles");
-          }
-        }}
       />
     </div>
   );
