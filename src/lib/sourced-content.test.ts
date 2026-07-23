@@ -120,41 +120,42 @@ describe("extractSourcedSectionFromHtml", () => {
         <h5 id="faculty-of-the-graduate-school">Faculty of the Graduate School</h5>
         <table>
           <thead>
-            <tr><th colspan="9"><strong>Membership and Roles of the Faculty of the Graduate School</strong></th></tr>
+            <tr><th colspan="9" style="text-align: center;"><strong>Membership and Roles of the Faculty of the Graduate School</strong></th></tr>
           </thead>
           <tbody>
             <tr>
-              <td></td><td></td><td></td><td></td><td></td><td></td>
-              <td colspan="3"><strong>Allowed Committee Roles<sup>1</sup></strong></td>
+              <td style="text-align: center;"></td><td style="text-align: center;"></td><td style="text-align: center;"></td>
+              <td style="text-align: center;"></td><td style="text-align: center;"></td><td style="text-align: center;"></td>
+              <td colspan="3" style="text-align: center;"><strong>Allowed Committee Roles<sup>1</sup></strong></td>
             </tr>
             <tr>
-              <td></td>
-              <td><em>Appointment</em></td>
-              <td><em>Ranks</em></td>
-              <td><em>Initial Nomination</em></td>
-              <td><em>Term</em></td>
-              <td><em>Renewal Nomination</em></td>
-              <td><em>Chair</em></td>
-              <td><em>Co-chair</em></td>
-              <td><em>Serve</em></td>
+              <td style="text-align: center;"></td>
+              <td style="text-align: center;"><em>Appointment</em></td>
+              <td style="text-align: center;"><em>Ranks</em></td>
+              <td style="text-align: center;"><em>Initial Nomination</em></td>
+              <td style="text-align: center;"><em>Term</em></td>
+              <td style="text-align: center;"><em>Renewal Nomination</em></td>
+              <td style="text-align: center;"><em>Chair</em></td>
+              <td style="text-align: center;"><em>Co-chair</em></td>
+              <td style="text-align: center;"><em>Serve</em></td>
             </tr>
             <tr>
-              <td>Graduate Faculty</td>
-              <td>Tenure Track</td>
-              <td>Assistant, Associate, Full, Regents, Emeritus Professor</td>
-              <td>Automatic</td>
-              <td>Annual</td>
-              <td>Automatic</td>
-              <td>✔</td><td>✔</td><td>✔</td>
+              <td style="text-align: center;">Graduate Faculty</td>
+              <td style="text-align: center;">Tenure Track</td>
+              <td style="text-align: center;">Assistant, Associate, Full, Regents, Emeritus Professor</td>
+              <td style="text-align: center;">Automatic</td>
+              <td style="text-align: center;">Annual</td>
+              <td style="text-align: center;">Automatic</td>
+              <td style="text-align: center;">✔</td><td style="text-align: center;">✔</td><td style="text-align: center;">✔</td>
             </tr>
             <tr>
-              <td>Auxiliary Graduate Faculty</td>
-              <td>Short-term Track</td>
-              <td>Adjunct</td>
-              <td>By chair or director</td>
-              <td>Three years</td>
-              <td>Renewed every three years</td>
-              <td></td><td>✔</td><td>✔</td>
+              <td style="text-align: center;">Auxiliary Graduate Faculty</td>
+              <td style="text-align: center;">Short-term Track</td>
+              <td style="text-align: center;">Adjunct</td>
+              <td style="text-align: center;">By chair or director</td>
+              <td style="text-align: center;">Three years</td>
+              <td style="text-align: center;">Renewed every three years</td>
+              <td style="text-align: center;"></td><td style="text-align: center;">✔</td><td style="text-align: center;">✔</td>
             </tr>
           </tbody>
         </table>
@@ -176,6 +177,8 @@ describe("extractSourcedSectionFromHtml", () => {
     expect(table.rows[0]?.length).toBe(7);
     expect(table.colSpans?.[0]?.[6]).toBe(3);
     expect(table.rows[0]?.[6]).toMatch(/Allowed Committee Roles/);
+    expect(table.cellAligns?.[0]?.[6]).toBe("center");
+    expect(table.cellAligns?.[2]?.[0]).toBe("center");
     expect(table.rows[1]?.length).toBe(9);
     expect(table.rows[2]?.[0]).toBe("Graduate Faculty");
     expect(table.rows[3]?.[6]).toBe("");
@@ -186,6 +189,7 @@ describe("extractSourcedSectionFromHtml", () => {
     expect(again?.type).toBe("table");
     if (again?.type === "table") {
       expect(again.colSpans?.[0]?.[6]).toBe(3);
+      expect(again.cellAligns?.[2]?.[0]).toBe("center");
       expect(again.caption).toBe(table.caption);
     }
   });

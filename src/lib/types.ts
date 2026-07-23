@@ -177,6 +177,8 @@ export type ContentBlock =
       colSpans?: number[][];
       /** Parallel to `rows`: rowspan for each stored cell (default 1). */
       rowSpans?: number[][];
+      /** Parallel to `rows`: text-align for each stored cell (default left). */
+      cellAligns?: TextAlign[][];
     }
   | { blockId: string; type: "asset_link"; assetId: string; label?: string }
   | {

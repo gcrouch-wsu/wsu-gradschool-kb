@@ -1633,7 +1633,9 @@ Items are ordered by recommended priority.
   `rowSpans`, round-trips them through `documentHtmlToBlocks` / public render / KB export, and
   the sourced-import normalizer promotes a full-width thead title cell to `<caption>` so the
   remaining header rows keep their column alignment. Structural table edits in the admin editor
-  clear merges (with a note); cell text stays editable.
+  clear merges (with a note); cell text stays editable. Per-cell `text-align` from the source
+  (`cellAligns`) is preserved through import/render/export — word-to-html manuals center most
+  membership-matrix cells.
 - **Remaining (before flipping to done):** scheduled/automated staleness (cron polling the
   `wp-json` `modified` timestamp + review-dashboard "source updated" flags with the tri-state
   relink flow) — today checking is a per-block editor action, which fits the annual publication

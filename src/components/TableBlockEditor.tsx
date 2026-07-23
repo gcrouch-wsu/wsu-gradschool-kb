@@ -24,7 +24,8 @@ export function TableBlockEditor({
   );
   const hasSpans = Boolean(
     block.colSpans?.some((row) => row.some((span) => span > 1)) ||
-      block.rowSpans?.some((row) => row.some((span) => span > 1)),
+      block.rowSpans?.some((row) => row.some((span) => span > 1)) ||
+      block.cellAligns?.some((row) => row.some((align) => align !== "left")),
   );
 
   function cellHtml(rowIndex: number, columnIndex: number, text: string) {
@@ -32,7 +33,12 @@ export function TableBlockEditor({
   }
 
   function withoutSpans(next: Partial<TableBlock>): TableBlock {
-    const { colSpans: _colSpans, rowSpans: _rowSpans, ...rest } = { ...block, ...next };
+    const {
+      colSpans: _colSpans,
+      rowSpans: _rowSpans,
+      cellAligns: _cellAligns,
+      ...rest
+    } = { ...block, ...next };
     return rest;
   }
 
@@ -59,6 +65,7 @@ export function TableBlockEditor({
       rowsHtml,
       colSpans: block.colSpans,
       rowSpans: block.rowSpans,
+      cellAligns: block.cellAligns,
     });
   }
 
@@ -168,8 +175,8 @@ export function TableBlockEditor({
       </div>
       {hasSpans && (
         <p className="meta">
-          This table uses merged cells from its source. Cell text is editable; adding or removing
-          rows/columns clears the merges.
+          This table keeps merged cells and alignment from its source. Cell text is editable; adding
+          or removing rows/columns clears those source layouts.
         </p>
       )}
       <div className="table-wrap">
@@ -180,11 +187,13 @@ export function TableBlockEditor({
                 {row.map((cell, columnIndex) => {
                   const colSpan = block.colSpans?.[rowIndex]?.[columnIndex] ?? 1;
                   const rowSpan = block.rowSpans?.[rowIndex]?.[columnIndex] ?? 1;
+                  const align = block.cellAligns?.[rowIndex]?.[columnIndex];
                   return (
                     <td
                       colSpan={colSpan > 1 ? colSpan : undefined}
                       key={`${rowIndex}-${columnIndex}`}
                       rowSpan={rowSpan > 1 ? rowSpan : undefined}
+                      style={align && align !== "left" ? { textAlign: align } : undefined}
                     >
                       <RichTextEditable
                         className="wysiwyg-table-cell"
