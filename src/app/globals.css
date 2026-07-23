@@ -765,7 +765,11 @@ p {
 }
 
 .sidebar li + li {
-  margin-top: 0.65rem;
+  margin-top: var(--page-tree-item-gap, 0.65rem);
+}
+
+.page-tree {
+  font-size: var(--page-tree-size, 0.95rem);
 }
 
 .page-tree strong {
@@ -841,7 +845,7 @@ p {
 .page-tree__branch {
   border-left: 2px solid var(--wash);
   margin-top: 0.5rem;
-  padding-left: 0.75rem;
+  padding-left: var(--page-tree-indent, 0.75rem);
 }
 
 .page-tree ul ul {

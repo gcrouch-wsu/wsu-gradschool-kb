@@ -4,7 +4,7 @@ import { ThemeEditor } from "@/components/ThemeEditor";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { isDatabaseEnabled, loadSiteSettings } from "@/lib/db";
 import { getKbById } from "@/lib/kb-store";
-import { DEFAULT_THEME, mergeTheme } from "@/lib/kb-theme";
+import { DEFAULT_THEME, mergeTheme, withGlobalPageTreeChrome } from "@/lib/kb-theme";
 
 export default async function ManageStylesPage({ params }: { params: Promise<{ kbId: string }> }) {
   const session = await getCurrentAdminSession();
@@ -33,7 +33,11 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
   }
 
   const settings = await loadSiteSettings();
-  const theme = kb.theme ? mergeTheme(kb.theme) : DEFAULT_THEME;
+  const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
+  const theme = withGlobalPageTreeChrome(
+    kb.theme ? mergeTheme(kb.theme, globalTheme) : globalTheme,
+    globalTheme,
+  );
 
   return (
     <div className="page-shell">
@@ -43,18 +47,21 @@ export default async function ManageStylesPage({ params }: { params: Promise<{ k
       <h1>Manage Styles — {kb.title}</h1>
       <p className="lead">
         Adjust the brand colors, fonts, and type scale for this knowledge base. Changes apply to every public
-        page in <code>/kb/{kb.slug}</code> once saved.
+        page in <code>/kb/{kb.slug}</code> once saved. Page tree width and type size are set site-wide under
+        Site Settings → Global Styling; use the collapsible option below if this KB&apos;s tree is deep.
       </p>
       <ThemeEditor
         dbEnabled={isDatabaseEnabled()}
         initialTheme={theme}
         kbTitle={kb.title}
+        scope="kb"
         siteContentWidth={settings.contentWidth}
         onSave={async (newTheme) => {
+          const toSave = withGlobalPageTreeChrome(newTheme, globalTheme);
           const res = await fetch(`/api/admin/kbs/${kb.id}/theme`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ theme: newTheme }),
+            body: JSON.stringify({ theme: toSave }),
           });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));

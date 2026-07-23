@@ -87,16 +87,68 @@ const TYPO_FIELDS: {
   { key: "listIndent", label: "List indent", help: "List indentation", unit: "rem", min: 0.5, max: 3, step: 0.05 },
 ];
 
-const LAYOUT_FIELDS: {
+const LAYOUT_WIDTH_FIELDS: {
   key: "navWidth" | "tocWidth";
   label: string;
   help: string;
   min: number;
   max: number;
   step: number;
+  /** navWidth is global site chrome; tocWidth stays editable per KB too. */
+  scopes: Array<"global" | "kb">;
 }[] = [
-  { key: "navWidth", label: "Page tree width", help: "Max width of the left navigation column", min: 180, max: 360, step: 5 },
-  { key: "tocWidth", label: "TOC width", help: "Max width of the on-this-page rail", min: 200, max: 320, step: 5 },
+  {
+    key: "navWidth",
+    label: "Page tree width",
+    help: "Max width of the left navigation column (site-wide)",
+    min: 180,
+    max: 360,
+    step: 5,
+    scopes: ["global"],
+  },
+  {
+    key: "tocWidth",
+    label: "TOC width",
+    help: "Max width of the on-this-page rail",
+    min: 200,
+    max: 320,
+    step: 5,
+    scopes: ["global", "kb"],
+  },
+];
+
+const PAGE_TREE_TYPE_FIELDS: {
+  key: "pageTreeFontSize" | "pageTreeItemGap" | "pageTreeIndent";
+  label: string;
+  help: string;
+  min: number;
+  max: number;
+  step: number;
+}[] = [
+  {
+    key: "pageTreeFontSize",
+    label: "Page tree font size",
+    help: "Size of titles in the public page tree (site-wide)",
+    min: 0.8,
+    max: 1.15,
+    step: 0.025,
+  },
+  {
+    key: "pageTreeItemGap",
+    label: "Page tree item spacing",
+    help: "Vertical space between page-tree entries (site-wide)",
+    min: 0.35,
+    max: 1.25,
+    step: 0.05,
+  },
+  {
+    key: "pageTreeIndent",
+    label: "Page tree nest indent",
+    help: "How far nested pages indent under their parent (site-wide)",
+    min: 0.4,
+    max: 1.25,
+    step: 0.05,
+  },
 ];
 
 // Approximate px per "ch" at the default 16px body size; good enough for the layout hint.
@@ -137,6 +189,7 @@ export function ThemeEditor({
   onSave,
   siteContentWidth,
   contentWidthField,
+  scope = "kb",
 }: {
   kbTitle: string;
   initialTheme: KbTheme;
@@ -146,6 +199,11 @@ export function ThemeEditor({
   siteContentWidth?: number;
   /** Optional extra control (e.g. the site Max content width input) rendered inside the Layout fieldset. */
   contentWidthField?: ReactNode;
+  /**
+   * `global` — Site Settings: page-tree width/typography (site chrome).
+   * `kb` — Manage Styles: collapsible page tree (per knowledge base).
+   */
+  scope?: "global" | "kb";
 }) {
   const [theme, setTheme] = useState<KbTheme>(() => mergeTheme(initialTheme));
   const [saving, setSaving] = useState(false);
@@ -210,6 +268,12 @@ export function ThemeEditor({
   function setLayoutWidth(key: "navWidth" | "tocWidth", px: number) {
     setTheme((t) => ({ ...t, layout: { ...t.layout, [key]: `${px}px` } }));
   }
+  function setPageTreeType(
+    key: "pageTreeFontSize" | "pageTreeItemGap" | "pageTreeIndent",
+    rem: number,
+  ) {
+    setTheme((t) => ({ ...t, layout: { ...t.layout, [key]: `${rem}rem` } }));
+  }
   function setHeadingStyle<K extends keyof ThemeHeadingStyle>(level: HeadingLevel, key: K, value: ThemeHeadingStyle[K]) {
     setTheme((t) => ({
       ...t,
@@ -249,7 +313,14 @@ export function ThemeEditor({
     setError(null);
     setMessage(null);
     try {
-      await onSave(theme);
+      const toSave =
+        scope === "global"
+          ? {
+              ...theme,
+              layout: { ...theme.layout, pageTreeCollapsible: false },
+            }
+          : theme;
+      await onSave(toSave);
       setMessage("Styles saved.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save styles.");
@@ -551,7 +622,7 @@ export function ThemeEditor({
             />
             <span>No limit — the article fills the available width</span>
           </label>
-          {LAYOUT_FIELDS.map((field) => (
+          {LAYOUT_WIDTH_FIELDS.filter((field) => field.scopes.includes(scope)).map((field) => (
             <label className="theme-scale" key={field.key} title={field.help}>
               <span className="meta">{field.label}</span>
               <input
@@ -565,19 +636,42 @@ export function ThemeEditor({
               <span className="theme-scale__value">{theme.layout[field.key]}</span>
             </label>
           ))}
-          <label className="checkbox-inline">
-            <input
-              checked={theme.layout.pageTreeCollapsible}
-              onChange={(e) =>
-                setTheme((t) => ({
-                  ...t,
-                  layout: { ...t.layout, pageTreeCollapsible: e.target.checked },
-                }))
-              }
-              type="checkbox"
-            />
-            <span>Collapsible page tree — readers can expand and collapse nested sections</span>
-          </label>
+          {scope === "global" &&
+            PAGE_TREE_TYPE_FIELDS.map((field) => (
+              <label className="theme-scale" key={field.key} title={field.help}>
+                <span className="meta">{field.label}</span>
+                <input
+                  max={field.max}
+                  min={field.min}
+                  onChange={(e) => setPageTreeType(field.key, Number(e.target.value))}
+                  step={field.step}
+                  type="range"
+                  value={typoToNumber(theme.layout[field.key])}
+                />
+                <span className="theme-scale__value">{theme.layout[field.key]}</span>
+              </label>
+            ))}
+          {scope === "kb" && (
+            <label className="checkbox-inline">
+              <input
+                checked={theme.layout.pageTreeCollapsible}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    layout: { ...t.layout, pageTreeCollapsible: e.target.checked },
+                  }))
+                }
+                type="checkbox"
+              />
+              <span>Collapsible page tree — readers can expand and collapse nested sections</span>
+            </label>
+          )}
+          {scope === "global" && (
+            <p className="meta">
+              Page tree width and type size apply site-wide. Turn on collapsible branches per knowledge
+              base under Manage Styles.
+            </p>
+          )}
           {widthHint && <p className="alert alert--warning">{widthHint}</p>}
         </fieldset>
 

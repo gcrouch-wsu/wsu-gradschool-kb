@@ -621,8 +621,9 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   and export page files; minimally publish-gated; admin Type selector plus a dedicated
   settings form.
 - Page-tree wrapping + optional collapse (2026-07-23): admin tree rows keep titles and badges on
-  separate lines; public tree wraps long titles cleanly. Collapsible branches are opt-in via
-  Global Default Styling / per-KB Manage Styles (`layout.pageTreeCollapsible`, default off).
+  separate lines; public tree wraps long titles cleanly. Collapsible branches are opt-in per KB under
+  Manage Styles (`layout.pageTreeCollapsible`). Page tree width/font size/item gap/indent are
+  global site chrome under Site Settings → Global Styling (`resolvePublicTheme`).
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
