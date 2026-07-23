@@ -91,6 +91,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <KbSearchWidget kb={kb} />
             <strong>{kb.title}</strong>
             <PageTree
+              collapsible={effectiveTheme.layout.pageTreeCollapsible}
               currentPageId={homepagePage.id}
               homepagePageId={kb.homepagePageId}
               kbSlug={kb.slug}
@@ -172,7 +173,12 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
           <aside className="sidebar page-tree" aria-label="Knowledge base navigation">
             <KbSearchWidget kb={kb} />
             <strong>Browse {kb.title}</strong>
-            <PageTree homepagePageId={kb.homepagePageId} kbSlug={kb.slug} nodes={tree} />
+            <PageTree
+              collapsible={effectiveTheme.layout.pageTreeCollapsible}
+              homepagePageId={kb.homepagePageId}
+              kbSlug={kb.slug}
+              nodes={tree}
+            />
           </aside>
           <div className="flow">
             {/* <h2>Sections</h2> */}

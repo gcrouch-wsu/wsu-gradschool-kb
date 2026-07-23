@@ -88,7 +88,7 @@ const TYPO_FIELDS: {
 ];
 
 const LAYOUT_FIELDS: {
-  key: keyof KbTheme["layout"];
+  key: "navWidth" | "tocWidth";
   label: string;
   help: string;
   min: number;
@@ -207,7 +207,7 @@ export function ThemeEditor({
   function setTypography(key: keyof KbTheme["typography"], num: number, unit: string) {
     setTheme((t) => ({ ...t, typography: { ...t.typography, [key]: `${num}${unit}` } }));
   }
-  function setLayout(key: keyof KbTheme["layout"], px: number) {
+  function setLayoutWidth(key: "navWidth" | "tocWidth", px: number) {
     setTheme((t) => ({ ...t, layout: { ...t.layout, [key]: `${px}px` } }));
   }
   function setHeadingStyle<K extends keyof ThemeHeadingStyle>(level: HeadingLevel, key: K, value: ThemeHeadingStyle[K]) {
@@ -557,7 +557,7 @@ export function ThemeEditor({
               <input
                 max={field.max}
                 min={field.min}
-                onChange={(e) => setLayout(field.key, Number(e.target.value))}
+                onChange={(e) => setLayoutWidth(field.key, Number(e.target.value))}
                 step={field.step}
                 type="range"
                 value={parseFloat(theme.layout[field.key]) || 0}
@@ -565,6 +565,19 @@ export function ThemeEditor({
               <span className="theme-scale__value">{theme.layout[field.key]}</span>
             </label>
           ))}
+          <label className="checkbox-inline">
+            <input
+              checked={theme.layout.pageTreeCollapsible}
+              onChange={(e) =>
+                setTheme((t) => ({
+                  ...t,
+                  layout: { ...t.layout, pageTreeCollapsible: e.target.checked },
+                }))
+              }
+              type="checkbox"
+            />
+            <span>Collapsible page tree — readers can expand and collapse nested sections</span>
+          </label>
           {widthHint && <p className="alert alert--warning">{widthHint}</p>}
         </fieldset>
 

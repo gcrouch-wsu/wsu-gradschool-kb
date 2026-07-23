@@ -69,6 +69,8 @@ export interface ThemeTypography {
 export interface ThemeLayout {
   navWidth: string; // px; max width of the page-tree column on KB pages
   tocWidth: string; // px; max width of the table-of-contents rail on KB pages
+  /** When true, public page-tree branches can expand/collapse. */
+  pageTreeCollapsible: boolean;
 }
 
 export interface ThemeOption {
@@ -162,6 +164,7 @@ export const DEFAULT_THEME: KbTheme = {
   layout: {
     navWidth: "260px",
     tocWidth: "240px",
+    pageTreeCollapsible: false,
   },
   editor: {
     fonts: [
@@ -360,6 +363,10 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
     layout: {
       navWidth: safeUnit(l.navWidth, "px", PX, base.layout.navWidth, 160, 480),
       tocWidth: safeUnit(l.tocWidth, "px", PX, base.layout.tocWidth, 160, 420),
+      pageTreeCollapsible:
+        typeof l.pageTreeCollapsible === "boolean"
+          ? l.pageTreeCollapsible
+          : base.layout.pageTreeCollapsible,
     },
     editor: {
       fonts: safeOptions(e.fonts, "font", base.editor.fonts),

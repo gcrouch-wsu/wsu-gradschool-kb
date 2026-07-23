@@ -74,10 +74,12 @@ describe("kb-theme", () => {
 
   it("fills, clamps, and emits layout column widths", () => {
     expect(mergeTheme({}).layout).toEqual(DEFAULT_THEME.layout);
+    expect(mergeTheme({}).layout.pageTreeCollapsible).toBe(false);
 
-    const t = mergeTheme({ layout: { navWidth: "9999px", tocWidth: "50%" } });
+    const t = mergeTheme({ layout: { navWidth: "9999px", tocWidth: "50%", pageTreeCollapsible: true } });
     expect(t.layout.navWidth).toBe("480px");
     expect(t.layout.tocWidth).toBe(DEFAULT_THEME.layout.tocWidth);
+    expect(t.layout.pageTreeCollapsible).toBe(true);
 
     const vars = themeToCssVars(mergeTheme({ layout: { navWidth: "320px", tocWidth: "240px" } }));
     expect(vars["--nav-width"]).toBe("320px");

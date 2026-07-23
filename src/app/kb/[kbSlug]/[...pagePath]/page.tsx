@@ -131,6 +131,7 @@ export default async function KbArticlePage({
           <KbSearchWidget kb={kb} />
           <strong>{kb.title}</strong>
           <PageTree
+            collapsible={effectiveTheme.layout.pageTreeCollapsible}
             currentPageId={page.id}
             currentPath={currentPath}
             homepagePageId={kb.homepagePageId}

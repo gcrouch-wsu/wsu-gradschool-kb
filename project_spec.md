@@ -620,6 +620,9 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   (`kb_pages.node_kind`, migration `032`) excluded from search, pickers, homepage assignment,
   and export page files; minimally publish-gated; admin Type selector plus a dedicated
   settings form.
+- Page-tree wrapping + optional collapse (2026-07-23): admin tree rows keep titles and badges on
+  separate lines; public tree wraps long titles cleanly. Collapsible branches are opt-in via
+  Global Default Styling / per-KB Manage Styles (`layout.pageTreeCollapsible`, default off).
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
