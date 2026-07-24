@@ -126,7 +126,13 @@ function renderBlock(
               const tag =
                 (block.hasHeaderRow && rowIndex === 0) || (block.hasHeaderColumn && columnIndex === 0) ? "th" : "td";
               const html = block.rowsHtml?.[rowIndex]?.[columnIndex];
-              return `<${tag}>${html ? sanitizeRichText(html) : textToRichText(cell)}</${tag}>`;
+              const colSpan = block.colSpans?.[rowIndex]?.[columnIndex] ?? 1;
+              const rowSpan = block.rowSpans?.[rowIndex]?.[columnIndex] ?? 1;
+              const align = block.cellAligns?.[rowIndex]?.[columnIndex];
+              const colSpanAttr = colSpan > 1 ? ` colspan="${colSpan}"` : "";
+              const rowSpanAttr = rowSpan > 1 ? ` rowspan="${rowSpan}"` : "";
+              const alignAttr = align && align !== "left" ? ` style="text-align: ${align}"` : "";
+              return `<${tag}${colSpanAttr}${rowSpanAttr}${alignAttr}>${html ? sanitizeRichText(html) : textToRichText(cell)}</${tag}>`;
             })
             .join("");
           return `<tr>${cells}</tr>`;

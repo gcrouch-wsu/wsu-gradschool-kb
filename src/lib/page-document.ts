@@ -359,7 +359,12 @@ function serializeTable(block: Extract<ContentBlock, { type: "table" }>): string
           const isHeader = (block.hasHeaderRow && rowIndex === 0) || (block.hasHeaderColumn && colIndex === 0);
           const tag = isHeader ? "th" : "td";
           const inner = block.rowsHtml?.[rowIndex]?.[colIndex] ?? textToRichText(cell);
-          return `<${tag}>${inner}</${tag}>`;
+          const colSpan = block.colSpans?.[rowIndex]?.[colIndex] ?? 1;
+          const rowSpan = block.rowSpans?.[rowIndex]?.[colIndex] ?? 1;
+          const align = block.cellAligns?.[rowIndex]?.[colIndex];
+          const colSpanAttr = colSpan > 1 ? ` colspan="${colSpan}"` : "";
+          const rowSpanAttr = rowSpan > 1 ? ` rowspan="${rowSpan}"` : "";
+          return `<${tag}${colSpanAttr}${rowSpanAttr}${alignStyleAttr(align)}>${inner}</${tag}>`;
         })
         .join("");
       return `<tr>${cellHtml}</tr>`;
@@ -709,17 +714,48 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
       const hasHeaderColumn = node.getAttribute("data-header-column") === "true";
       const rows: string[][] = [];
       const rowsHtml: string[][] = [];
+      const colSpans: number[][] = [];
+      const rowSpans: number[][] = [];
+      const cellAligns: TextAlign[][] = [];
+      let hasNonDefaultSpan = false;
+      let hasNonDefaultAlign = false;
       for (const rowNode of node.querySelectorAll("tr")) {
         const row: string[] = [];
         const rowHtml: string[] = [];
-        for (const cellNode of rowNode.querySelectorAll("th,td")) {
+        const rowColSpans: number[] = [];
+        const rowRowSpans: number[] = [];
+        const rowAligns: TextAlign[] = [];
+        // Only direct cell children — nested tables (if any) must not leak cells.
+        for (const cellNode of rowNode.childNodes) {
+          if (!isElement(cellNode)) {
+            continue;
+          }
+          const cellTag = cellNode.tagName?.toLowerCase();
+          if (cellTag !== "th" && cellTag !== "td") {
+            continue;
+          }
           const { html: cellHtml, text } = inlineFields(cellNode);
+          const colSpan = Math.max(1, Number(cellNode.getAttribute("colspan") || "1") || 1);
+          const rowSpan = Math.max(1, Number(cellNode.getAttribute("rowspan") || "1") || 1);
+          const align = readTextAlign(cellNode) ?? "left";
+          if (colSpan > 1 || rowSpan > 1) {
+            hasNonDefaultSpan = true;
+          }
+          if (align !== "left") {
+            hasNonDefaultAlign = true;
+          }
           row.push(text);
           rowHtml.push(cellHtml);
+          rowColSpans.push(colSpan);
+          rowRowSpans.push(rowSpan);
+          rowAligns.push(align);
         }
         if (row.length > 0) {
           rows.push(row);
           rowsHtml.push(rowHtml);
+          colSpans.push(rowColSpans);
+          rowSpans.push(rowRowSpans);
+          cellAligns.push(rowAligns);
         }
       }
       blocks.push({
@@ -730,6 +766,8 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
         hasHeaderColumn,
         rows,
         rowsHtml,
+        ...(hasNonDefaultSpan ? { colSpans, rowSpans } : {}),
+        ...(hasNonDefaultAlign ? { cellAligns } : {}),
       });
       continue;
     }

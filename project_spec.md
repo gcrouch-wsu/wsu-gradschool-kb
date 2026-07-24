@@ -1640,6 +1640,15 @@ Items are ordered by recommended priority.
   restriction adds no SSRF protection within an already-allowlisted https origin, and would
   block future WSU source pages without a code change; the provenance callout always shows the
   exact source URL, so breadth is visible.
+- **Word-to-HTML table fidelity (2026-07-23):** the published P&P page is produced by
+  `wsu-gradschool-word-to-html`, which emits real `colspan`/`rowspan` (e.g. the Faculty of the
+  Graduate School membership matrix). The KB table model now stores optional `colSpans` /
+  `rowSpans`, round-trips them through `documentHtmlToBlocks` / public render / KB export, and
+  the sourced-import normalizer promotes a full-width thead title cell to `<caption>` so the
+  remaining header rows keep their column alignment. Structural table edits in the admin editor
+  clear merges (with a note); cell text stays editable. Per-cell `text-align` from the source
+  (`cellAligns`) is preserved through import/render/export — word-to-html manuals center most
+  membership-matrix cells.
 - **Remaining (before flipping to done):** scheduled/automated staleness (cron polling the
   `wp-json` `modified` timestamp + review-dashboard "source updated" flags with the tri-state
   relink flow) — today checking is a per-block editor action, which fits the annual publication

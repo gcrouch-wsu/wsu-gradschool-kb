@@ -172,6 +172,13 @@ export type ContentBlock =
       hasHeaderColumn: boolean;
       rows: string[][];
       rowsHtml?: string[][];
+      /** Parallel to `rows`: colspan for each stored cell (default 1). Used by
+       * word-to-html / P&P sources that emit multi-column header cells. */
+      colSpans?: number[][];
+      /** Parallel to `rows`: rowspan for each stored cell (default 1). */
+      rowSpans?: number[][];
+      /** Parallel to `rows`: text-align for each stored cell (default left). */
+      cellAligns?: TextAlign[][];
     }
   | { blockId: string; type: "asset_link"; assetId: string; label?: string }
   | {

@@ -335,8 +335,17 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
                           const CellTag = isHeader ? "th" : "td";
                           const headerScope =
                             block.hasHeaderRow && rowIndex === 0 ? "col" : block.hasHeaderColumn ? "row" : undefined;
+                          const colSpan = block.colSpans?.[rowIndex]?.[colIndex] ?? 1;
+                          const rowSpan = block.rowSpans?.[rowIndex]?.[colIndex] ?? 1;
+                          const align = block.cellAligns?.[rowIndex]?.[colIndex];
                           return (
-                            <CellTag key={`${block.blockId}-${rowIndex}-${colIndex}`} scope={headerScope}>
+                            <CellTag
+                              colSpan={colSpan > 1 ? colSpan : undefined}
+                              key={`${block.blockId}-${rowIndex}-${colIndex}`}
+                              rowSpan={rowSpan > 1 ? rowSpan : undefined}
+                              scope={headerScope}
+                              style={align && align !== "left" ? { textAlign: align } : undefined}
+                            >
                               <RichText html={block.rowsHtml?.[rowIndex]?.[colIndex]} text={cell} />
                             </CellTag>
                           );
