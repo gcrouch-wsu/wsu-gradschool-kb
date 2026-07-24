@@ -847,30 +847,52 @@ export async function activateAssetVersion(assetId: string, versionId: string): 
   return updated;
 }
 
+async function lookupActiveRedirect(kbId: string, fromPath: string): Promise<KbRedirect | null> {
+  if (isDatabaseEnabled()) {
+    return loadActiveRedirect(kbId, fromPath);
+  }
+  return (
+    runtimeRedirects().find(
+      (candidate) =>
+        candidate.kbId === kbId &&
+        candidate.fromPath === fromPath &&
+        candidate.status === "active",
+    ) ?? null
+  );
+}
+
+/**
+ * A page moved more than once (e.g. reorganized twice in one session) leaves a chain of
+ * redirects — each hop only records old -> new for that one move, so an older bookmark can
+ * land on an intermediate path that itself now redirects elsewhere. Follow the chain here
+ * (bounded, with a visited-set to guard against a cycle) so callers always get the final path.
+ */
 export async function getActiveRedirectTarget(
   kbId: string,
   path: string[],
 ): Promise<string[] | null> {
-  const fromPath = path.join("/");
+  let fromPath = path.join("/");
   if (!fromPath) {
     return null;
   }
-  let redirect: KbRedirect | null = null;
-  if (isDatabaseEnabled()) {
-    redirect = await loadActiveRedirect(kbId, fromPath);
-  } else {
-    redirect =
-      runtimeRedirects().find(
-        (candidate) =>
-          candidate.kbId === kbId &&
-          candidate.fromPath === fromPath &&
-          candidate.status === "active",
-      ) ?? null;
+  const visited = new Set<string>();
+  let resolved: string[] | null = null;
+  for (let hop = 0; hop < 10; hop += 1) {
+    if (visited.has(fromPath)) {
+      // Cycle: don't follow it back onto a path we've already visited. Bail out entirely
+      // rather than resolving to an arbitrary intermediate node in the loop.
+      resolved = null;
+      break;
+    }
+    visited.add(fromPath);
+    const redirect = await lookupActiveRedirect(kbId, fromPath);
+    if (!redirect?.toPath) {
+      break;
+    }
+    resolved = redirect.toPath.split("/").filter(Boolean);
+    fromPath = resolved.join("/");
   }
-  if (!redirect?.toPath) {
-    return null;
-  }
-  return redirect.toPath.split("/").filter(Boolean);
+  return resolved;
 }
 
 async function upsertPathRedirect(kbId: string, fromPath: string, toPath: string, reason: string) {
