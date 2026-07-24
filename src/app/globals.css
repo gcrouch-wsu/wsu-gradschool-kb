@@ -4304,6 +4304,17 @@ article ol ol ol {
   gap: 0.35rem;
 }
 
+.tree-editor__move-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.tree-editor__move-button {
+  height: 1.85rem;
+  width: 1.85rem;
+}
+
 .tree-editor__menu-anchor {
   position: relative;
 }
@@ -4395,7 +4406,7 @@ article ol ol ol {
   border-radius: 2px;
   content: "";
   height: 3px;
-  left: 0;
+  left: var(--tree-drop-indent, 0);
   position: absolute;
   right: 0;
 }
@@ -4499,6 +4510,10 @@ article ol ol ol {
 
   .tree-editor__handle-group {
     align-self: flex-start;
+  }
+
+  .tree-editor__move-buttons {
+    max-width: 4.2rem;
   }
 
   .tree-editor__title-row {

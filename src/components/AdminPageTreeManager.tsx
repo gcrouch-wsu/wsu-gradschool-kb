@@ -4,7 +4,6 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
-  ArrowUpDown,
   CircleCheck,
   CornerDownRight,
   CornerUpLeft,
@@ -13,8 +12,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
+import {
+  resolveDropProjection,
+  resolveReorderAnchor,
+  type DropZone,
+} from "@/lib/page-tree-drop";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 import type { KbPage, KnowledgeBase, PageStatus } from "@/lib/types";
 
@@ -23,7 +27,11 @@ type PageItem = Pick<
   "id" | "path" | "sortOrder" | "status" | "title" | "updatedDisplayDate" | "visibility" | "nextReviewDate" | "nodeKind"
 >;
 
-type DropZone = "before" | "after" | "into";
+type DropTargetState = {
+  id: string;
+  zone: DropZone;
+  insertDepth: number;
+};
 
 function pathKey(path: string[]) {
   return path.join("/");
@@ -295,7 +303,7 @@ function TreeRowMenu({
   );
 }
 
-interface PageTreeMoveMenuProps {
+interface PageTreeMoveButtonsProps {
   canMoveDown: boolean;
   canMoveInto: boolean;
   canMoveOut: boolean;
@@ -307,7 +315,7 @@ interface PageTreeMoveMenuProps {
   pageTitle: string;
 }
 
-function PageTreeMoveMenu({
+function PageTreeMoveButtons({
   canMoveDown,
   canMoveInto,
   canMoveOut,
@@ -317,39 +325,46 @@ function PageTreeMoveMenu({
   onMoveOut,
   onMoveUp,
   pageTitle,
-}: PageTreeMoveMenuProps) {
+}: PageTreeMoveButtonsProps) {
   return (
-    <TreeRowMenu
-      items={[
-        {
-          label: "Move up",
-          icon: <ArrowUp aria-hidden size={16} strokeWidth={1.75} />,
-          disabled: !canMoveUp,
-          onSelect: onMoveUp,
-        },
-        {
-          label: "Move down",
-          icon: <ArrowDown aria-hidden size={16} strokeWidth={1.75} />,
-          disabled: !canMoveDown,
-          onSelect: onMoveDown,
-        },
-        {
-          label: "Nest under previous page",
-          icon: <CornerDownRight aria-hidden size={16} strokeWidth={1.75} />,
-          disabled: !canMoveInto,
-          onSelect: onMoveInto,
-        },
-        {
-          label: "Move out one level",
-          icon: <CornerUpLeft aria-hidden size={16} strokeWidth={1.75} />,
-          disabled: !canMoveOut,
-          onSelect: onMoveOut,
-        },
-      ]}
-      menuLabel={`Move options for ${pageTitle}`}
-      triggerContent={<ArrowUpDown aria-hidden size={16} strokeWidth={1.75} />}
-      triggerLabel={`Move ${pageTitle}`}
-    />
+    <div className="tree-editor__move-buttons" role="group" aria-label={`Reorder ${pageTitle}`}>
+      <button
+        aria-label={`Move ${pageTitle} up`}
+        className="icon-button tree-editor__move-button"
+        disabled={!canMoveUp}
+        onClick={onMoveUp}
+        type="button"
+      >
+        <ArrowUp aria-hidden size={16} strokeWidth={1.75} />
+      </button>
+      <button
+        aria-label={`Move ${pageTitle} down`}
+        className="icon-button tree-editor__move-button"
+        disabled={!canMoveDown}
+        onClick={onMoveDown}
+        type="button"
+      >
+        <ArrowDown aria-hidden size={16} strokeWidth={1.75} />
+      </button>
+      <button
+        aria-label={`Indent ${pageTitle} under the previous page`}
+        className="icon-button tree-editor__move-button"
+        disabled={!canMoveInto}
+        onClick={onMoveInto}
+        type="button"
+      >
+        <CornerDownRight aria-hidden size={16} strokeWidth={1.75} />
+      </button>
+      <button
+        aria-label={`Outdent ${pageTitle} one level`}
+        className="icon-button tree-editor__move-button"
+        disabled={!canMoveOut}
+        onClick={onMoveOut}
+        type="button"
+      >
+        <CornerUpLeft aria-hidden size={16} strokeWidth={1.75} />
+      </button>
+    </div>
   );
 }
 
@@ -577,7 +592,8 @@ export function AdminPageTreeManager({
   const [trackedInitialPages, setTrackedInitialPages] = useState(initialPages);
   const [showArchived, setShowArchived] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ id: string; zone: DropZone } | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
+  const treeListRef = useRef<HTMLUListElement>(null);
   const [busy, setBusy] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [homepageBusyId, setHomepageBusyId] = useState<string | null>(null);
@@ -626,10 +642,20 @@ export function AdminPageTreeManager({
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = (event.clientY - rect.top) / Math.max(1, rect.height);
-    const zone: DropZone = ratio < 0.3 ? "before" : ratio > 0.7 ? "after" : "into";
+    const treeLeft = treeListRef.current?.getBoundingClientRect().left ?? rect.left;
+    const targetDepth = Math.max(0, target.path.length - 1);
+    const { zone, insertDepth } = resolveDropProjection(
+      event.clientX,
+      event.clientY,
+      rect.top,
+      rect.height,
+      treeLeft,
+      targetDepth,
+    );
     setDropTarget((current) =>
-      current?.id === target.id && current.zone === zone ? current : { id: target.id, zone },
+      current?.id === target.id && current.zone === zone && current.insertDepth === insertDepth
+        ? current
+        : { id: target.id, zone, insertDepth },
     );
   }
 
@@ -644,7 +670,10 @@ export function AdminPageTreeManager({
 
   function rowDrop(event: React.DragEvent<HTMLDivElement>, target: PageItem) {
     event.preventDefault();
-    const zone = dropTarget?.id === target.id ? dropTarget.zone : "into";
+    // Prefer last projected target; if dragover never fired, reorder after — never nest by accident.
+    const zone = dropTarget?.id === target.id ? dropTarget.zone : "after";
+    const insertDepth =
+      dropTarget?.id === target.id ? dropTarget.insertDepth : Math.max(0, target.path.length - 1);
     const dragged = pages.find((page) => page.id === draggedId);
     setDropTarget(null);
     if (!draggedId || !dragged || !canDropOn(target)) {
@@ -658,16 +687,26 @@ export function AdminPageTreeManager({
       setPages((current) => movePage(current, draggedId, target.path, Math.max(0, ...childOrders) + 10));
       announceMove(`${dragged.title} nested under ${target.title}.`);
     } else {
-      const targetParent = target.path.slice(0, -1);
+      const { parentPath, anchorPath, position } = resolveReorderAnchor(
+        target.path,
+        zone,
+        insertDepth,
+      );
+      const anchor =
+        pages.find((page) => pathKey(page.path) === pathKey(anchorPath)) ?? target;
       setPages((current) =>
         movePage(
           current,
           draggedId,
-          targetParent,
-          zone === "before" ? target.sortOrder - 1 : target.sortOrder + 1,
+          parentPath,
+          position === "before" ? anchor.sortOrder - 1 : anchor.sortOrder + 1,
         ),
       );
-      announceMove(`${dragged.title} moved ${zone === "before" ? "above" : "below"} ${target.title}.`);
+      const depthNote =
+        anchorPath.length < target.path.length ? ` (outdented to /${anchorPath.join("/")})` : "";
+      announceMove(
+        `${dragged.title} moved ${position === "before" ? "above" : "below"} ${anchor.title}${depthNote}.`,
+      );
     }
     setDraggedId(null);
   }
@@ -889,13 +928,18 @@ export function AdminPageTreeManager({
       </div>
 
       <p className="meta">
-        Drag a page onto the <strong>middle</strong>{" "}
-        of another page to nest it underneath; drop near a row&apos;s{" "}
-        <strong>top or bottom edge</strong> to reorder at the same level. The arrows menu and Alt
-        + arrow keys do the same from the keyboard.
+        Use the arrow buttons to move up/down or indent/outdent. Drag works the same way: drop on
+        the <strong>middle</strong> of a row to nest, on the <strong>top or bottom edge</strong> to
+        reorder, or drag <strong>left</strong> while over a nested row to outdent. Alt + arrow keys
+        on the grip also work.
       </p>
 
-      <ul aria-label={`${kb.title} page tree editor`} className="tree-editor" role="tree">
+      <ul
+        aria-label={`${kb.title} page tree editor`}
+        className="tree-editor"
+        ref={treeListRef}
+        role="tree"
+      >
         {displayPages.map((page) => {
           const depth = Math.max(0, page.path.length - 1);
           const siblings = getSiblings(visiblePages, page);
@@ -933,6 +977,13 @@ export function AdminPageTreeManager({
                 onDragLeave={(event) => rowDragLeave(event, page)}
                 onDragOver={(event) => rowDragOver(event, page)}
                 onDrop={(event) => rowDrop(event, page)}
+                style={
+                  dropTarget?.id === page.id && dropTarget.zone !== "into"
+                    ? ({
+                        "--tree-drop-indent": `${dropTarget.insertDepth * 1.25}rem`,
+                      } as CSSProperties)
+                    : undefined
+                }
               >
                 <div className="tree-editor__handle-group">
                   <button
@@ -958,7 +1009,7 @@ export function AdminPageTreeManager({
                   >
                     <GripVertical aria-hidden size={18} strokeWidth={1.75} />
                   </button>
-                  <PageTreeMoveMenu
+                  <PageTreeMoveButtons
                     canMoveDown={canMoveDown}
                     canMoveInto={canMoveInto}
                     canMoveOut={canMoveOut}
