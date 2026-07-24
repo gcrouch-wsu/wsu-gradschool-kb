@@ -756,6 +756,9 @@ Other tracked work:
   broader integration + a11y coverage; a real rate-limit load test; production monitoring/log review
   and rollback checklist; reader feedback, SEO/discoverability, and third-party error tracking are
   tracked in §12.
+- **Confluence interop (§12 FB-37)**: a bidirectional migration bridge — importing a Confluence space
+  export into a KB, and exporting a KB in a form Confluence can import — to lower the switching cost
+  for teams still evaluating or partially migrated off Confluence. Concept only; not scoped or started.
 
 ---
 
@@ -1812,6 +1815,41 @@ Items are ordered by recommended priority.
     nodes in its draft buckets (admin-only noise under the minimal non-page gate), and
     `PageTree` renders a manually DB-inserted `http://` link defensively even though every app
     validator only accepts `https://` or internal `/`.
+
+### FB-37 — Confluence import/export bridge (concept)
+
+`[AI-AGENT-TASK] id:FB-37  priority:low  area:migration  effort:L  status:open`
+
+- **Concept only, maintainer-requested (2026-07-23): not scoped, not started.** The idea is a
+  two-way bridge with Confluence, complementing the existing one-way DOCX staged import and the
+  existing owner-only KB export (§9, `/api/admin/kbs/[kbId]/export`):
+  - **Import:** accept a Confluence space export (the `.html`-per-page + attachments archive, as
+    seen in this session's manual `confluence/` export) and stage it through a review flow similar
+    to `/admin/import` — map the Confluence page tree to KB pages/groups, convert each page's HTML
+    into the block model via a Confluence-flavored variant of the DOCX importer's HTML cleanup
+    (strip Confluence-specific macros/chrome, promote embedded images to managed assets, preserve
+    or rebuild the tree hierarchy), and let an editor review/commit staged pages rather than
+    auto-publishing.
+  - **Export:** produce a Confluence-importable archive from a KB — most likely reusing the
+    existing bulk KB export's page-HTML + asset-bytes output (`kb.json` + standalone semantic page
+    HTML) but reshaped to whatever structure Confluence's importer expects (per-page HTML files
+    plus a manifest), so a KB (or subtree) can round-trip back into Confluence if a team needs to.
+  - **Why:** several WSU units are mid-migration off Confluence; a bridge lowers switching cost in
+    both directions and gives a fallback path if a team needs to hand content back to a
+    Confluence-only stakeholder.
+  - **Open questions before scoping:** how much Confluence-macro fidelity is worth preserving on
+    import (many macros have no KB equivalent and should probably degrade to plain text/links, the
+    same philosophy already applied to the "P&P sourced-content" allowlisted-fetch feature, FB-34);
+    whether export targets Confluence's native import format or a generic HTML archive Confluence
+    can ingest via its own importer; and whether this belongs behind the existing `/admin/import`
+    surface (extended with a "source" selector) or a new dedicated surface.
+  - **Touch points (anticipated, unconfirmed):** `src/app/admin/import/**` (import staging model,
+    if the DOCX importer's UI/review flow is reused), `src/lib/kb-store.ts` bulk-export path
+    (if export reuses the existing ZIP), new Confluence-HTML-to-block conversion logic analogous
+    to the DOCX importer's HTML handling.
+  - **Acceptance:** not yet defined — this item needs a scoping pass (confirm intent, pick
+    import-only vs. both directions, define the staging/review UX) before it can carry real
+    acceptance criteria.
 
 ---
 
