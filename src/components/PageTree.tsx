@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
 import type { PageTreeNode } from "@/lib/types";
@@ -75,11 +75,12 @@ function TreeLabel({
   if (kind === "link" && (externalLink || internalLink)) {
     return (
       <a
-        className="page-tree__link"
+        className="page-tree__link page-tree__link--external"
         href={node.page.linkUrl}
         {...(node.page.linkNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       >
         <span className="page-tree__title">{node.page.title}</span>
+        <ExternalLink aria-hidden className="page-tree__link-icon" size={13} strokeWidth={2} />
         {node.page.linkNewTab && <span className="sr-only"> (opens in a new tab)</span>}
       </a>
     );

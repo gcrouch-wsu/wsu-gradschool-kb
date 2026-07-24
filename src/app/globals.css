@@ -831,6 +831,15 @@ p {
   min-width: 0;
 }
 
+.page-tree__link-icon {
+  color: var(--muted);
+  display: inline-block;
+  flex: none;
+  margin-left: 0.3em;
+  transform: translateY(0.1em);
+  vertical-align: text-bottom;
+}
+
 .page-tree__title,
 .page-tree__group {
   overflow-wrap: anywhere;

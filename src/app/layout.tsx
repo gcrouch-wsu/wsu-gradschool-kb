@@ -7,6 +7,8 @@ import { hasSiteBrand, SiteBrand } from "@/components/SiteBrand";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { loadSiteSettings } from "@/lib/db";
 import { DEFAULT_THEME, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
+import { logError } from "@/lib/log";
+import { DEFAULT_SITE_SETTINGS } from "@/lib/site-settings";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,7 +27,22 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const pathname = (await headers()).get("x-pathname") ?? "";
   const isAdminShell = pathname.startsWith("/admin") && !pathname.startsWith("/admin/sign-in");
 
-  const [session, settings] = await Promise.all([getCurrentAdminSession(), loadSiteSettings()]);
+  // A transient failure in either call (e.g. a momentary DB hiccup) must not take down the
+  // whole root layout — that would drop to global-error.tsx, which renders with no header at
+  // all and strands a signed-in owner/admin/editor with no way back to /admin. Degrade to safe
+  // defaults instead: an unreadable session is treated as signed-out (fail closed, same as a
+  // genuine anonymous visitor), and site settings fall back to the same defaults used when no
+  // database is configured.
+  const [session, settings] = await Promise.all([
+    getCurrentAdminSession().catch((error: unknown) => {
+      logError(error, { route: "RootLayout", surface: "getCurrentAdminSession" });
+      return null;
+    }),
+    loadSiteSettings().catch((error: unknown) => {
+      logError(error, { route: "RootLayout", surface: "loadSiteSettings" });
+      return DEFAULT_SITE_SETTINGS;
+    }),
+  ]);
 
   const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const themeVars: CSSProperties = {

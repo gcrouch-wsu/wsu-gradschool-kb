@@ -889,9 +889,10 @@ export function AdminPageTreeManager({
       </div>
 
       <p className="meta">
-        Drag a page onto the <strong>middle</strong> of another page to nest it underneath; drop
-        near a row&apos;s <strong>top or bottom edge</strong> to reorder at the same level. The
-        arrows menu and Alt + arrow keys do the same from the keyboard.
+        Drag a page onto the <strong>middle</strong>{" "}
+        of another page to nest it underneath; drop near a row&apos;s{" "}
+        <strong>top or bottom edge</strong> to reorder at the same level. The arrows menu and Alt
+        + arrow keys do the same from the keyboard.
       </p>
 
       <ul aria-label={`${kb.title} page tree editor`} className="tree-editor" role="tree">

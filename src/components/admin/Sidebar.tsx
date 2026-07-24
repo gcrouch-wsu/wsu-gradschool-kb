@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  ArrowRightLeft,
   BookOpen,
   BarChart3,
+  ClipboardCheck,
   FileText,
   FolderOpen,
   LayoutDashboard,
@@ -38,7 +40,9 @@ export function Sidebar({ branding, isCollapsed, session }: SidebarProps) {
 
         <nav className="admin-shell__nav">
           <SidebarLink exact href="/admin" icon={LayoutDashboard} label="Dashboard" />
+          <SidebarLink href="/admin/review" icon={ClipboardCheck} label="Review" />
           <SidebarLink href="/admin/pages" icon={FileText} label="Pages" />
+          <SidebarLink href="/admin/redirects" icon={ArrowRightLeft} label="Redirects" />
           <SidebarLink href="/admin/assets" icon={FolderOpen} label="Assets" />
           {isOwner && <SidebarLink href="/admin/kbs" icon={BookOpen} label="Knowledge bases" />}
           {isOwner && <SidebarLink href="/admin/users" icon={Users} label="Users" />}
