@@ -4,6 +4,7 @@ import { isDatabaseEnabled } from "@/lib/db";
 import { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS } from "@/lib/session-constants";
 import type { KnowledgeBase, UserRole } from "@/lib/types";
 import { loadUserByEmail, loadUserById, isUserAssignedToKb, listUserAssignments } from "@/lib/db-users";
+import { logError } from "@/lib/log";
 
 export { ADMIN_COOKIE_NAME, IDLE_TTL_SECONDS };
 
@@ -158,7 +159,15 @@ export async function readAdminSessionToken(token: string | undefined): Promise<
     }
 
     if (session.source === "managed") {
-      const user = await loadUserById(session.userId);
+      let user;
+      try {
+        user = await loadUserById(session.userId);
+      } catch (error) {
+        // A transient DB failure here must not read as "this session doesn't exist" without a
+        // trace — log it, then fail closed the same way an actually-invalid session does.
+        logError(error, { surface: "readAdminSessionToken.loadUserById" });
+        return null;
+      }
       if (!user || user.updatedAt !== session.version) {
         return null;
       }
@@ -181,8 +190,16 @@ export async function readAdminSessionToken(token: string | undefined): Promise<
 }
 
 export async function getCurrentAdminSession() {
-  const cookieStore = await cookies();
-  return readAdminSessionToken(cookieStore.get(ADMIN_COOKIE_NAME)?.value);
+  try {
+    const cookieStore = await cookies();
+    return await readAdminSessionToken(cookieStore.get(ADMIN_COOKIE_NAME)?.value);
+  } catch (error) {
+    // Defense in depth: readAdminSessionToken already fails closed on its own DB read, but any
+    // other unexpected failure here (e.g. a broken cookies() call) should degrade the same way —
+    // treat the caller as signed out rather than throwing and taking the whole page down with it.
+    logError(error, { surface: "getCurrentAdminSession" });
+    return null;
+  }
 }
 
 export function getAdminCookieOptions(maxAge = IDLE_TTL_SECONDS) {
@@ -195,13 +212,34 @@ export function getAdminCookieOptions(maxAge = IDLE_TTL_SECONDS) {
   };
 }
 
+// These two DB reads back nearly every page render (session role alone isn't enough for
+// editor/viewer accounts — access is per-KB). A transient DB hiccup here must not crash the
+// page: fail closed (deny access) and log, the same way an unassigned user is already denied.
+async function listUserAssignmentsSafe(userId: string): Promise<string[]> {
+  try {
+    return await listUserAssignments(userId);
+  } catch (error) {
+    logError(error, { surface: "listUserAssignments" });
+    return [];
+  }
+}
+
+async function isUserAssignedToKbSafe(userId: string, kbId: string): Promise<boolean> {
+  try {
+    return await isUserAssignedToKb(userId, kbId);
+  } catch (error) {
+    logError(error, { surface: "isUserAssignedToKb" });
+    return false;
+  }
+}
+
 async function assignedKbIdsForSession(session: AdminSession): Promise<string[]> {
   if (!isDatabaseEnabled()) {
     return session.userId === "seed-viewer-private-staff" || session.userId === "seed-editor-private-staff"
       ? ["kb-private-staff"]
       : [];
   }
-  return listUserAssignments(session.userId);
+  return listUserAssignmentsSafe(session.userId);
 }
 
 export async function canAccessKb(session: AdminSession, kbId: string): Promise<boolean> {
@@ -212,7 +250,7 @@ export async function canAccessKb(session: AdminSession, kbId: string): Promise<
     if (!isDatabaseEnabled()) {
       return (await assignedKbIdsForSession(session)).includes(kbId);
     }
-    return isUserAssignedToKb(session.userId, kbId);
+    return isUserAssignedToKbSafe(session.userId, kbId);
   }
   return false;
 }
@@ -241,7 +279,7 @@ export async function getKbReadAccess(
   }
   if (session.role === "editor" || session.role === "viewer") {
     const assigned = isDatabaseEnabled()
-      ? await isUserAssignedToKb(session.userId, kb.id)
+      ? await isUserAssignedToKbSafe(session.userId, kb.id)
       : (await assignedKbIdsForSession(session)).includes(kb.id);
     if (session.role === "editor") {
       return {

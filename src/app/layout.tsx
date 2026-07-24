@@ -27,17 +27,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const pathname = (await headers()).get("x-pathname") ?? "";
   const isAdminShell = pathname.startsWith("/admin") && !pathname.startsWith("/admin/sign-in");
 
-  // A transient failure in either call (e.g. a momentary DB hiccup) must not take down the
-  // whole root layout — that would drop to global-error.tsx, which renders with no header at
-  // all and strands a signed-in owner/admin/editor with no way back to /admin. Degrade to safe
-  // defaults instead: an unreadable session is treated as signed-out (fail closed, same as a
-  // genuine anonymous visitor), and site settings fall back to the same defaults used when no
-  // database is configured.
+  // getCurrentAdminSession() already fails closed internally on a transient DB hiccup (see
+  // src/lib/auth.ts). loadSiteSettings() has no such guard, and a failure here must not take
+  // down the whole root layout either — that would drop to global-error.tsx, which renders with
+  // no header at all and strands a signed-in owner/admin/editor with no way back to /admin.
   const [session, settings] = await Promise.all([
-    getCurrentAdminSession().catch((error: unknown) => {
-      logError(error, { route: "RootLayout", surface: "getCurrentAdminSession" });
-      return null;
-    }),
+    getCurrentAdminSession(),
     loadSiteSettings().catch((error: unknown) => {
       logError(error, { route: "RootLayout", surface: "loadSiteSettings" });
       return DEFAULT_SITE_SETTINGS;
