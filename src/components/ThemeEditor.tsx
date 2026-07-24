@@ -274,6 +274,18 @@ export function ThemeEditor({
   ) {
     setTheme((t) => ({ ...t, layout: { ...t.layout, [key]: `${rem}rem` } }));
   }
+  function setPageTreeGroupColor(value: string) {
+    setTheme((t) => ({ ...t, layout: { ...t.layout, pageTreeGroupColor: value } }));
+  }
+  function setPageTreeGroupWeight(value: string) {
+    setTheme((t) => ({ ...t, layout: { ...t.layout, pageTreeGroupWeight: value } }));
+  }
+  function setPageTreeGroupTracking(em: number) {
+    setTheme((t) => ({ ...t, layout: { ...t.layout, pageTreeGroupTracking: `${em}em` } }));
+  }
+  function setPageTreeGroupTransform(value: KbTheme["layout"]["pageTreeGroupTransform"]) {
+    setTheme((t) => ({ ...t, layout: { ...t.layout, pageTreeGroupTransform: value } }));
+  }
   function setHeadingStyle<K extends keyof ThemeHeadingStyle>(level: HeadingLevel, key: K, value: ThemeHeadingStyle[K]) {
     setTheme((t) => ({
       ...t,
@@ -674,6 +686,50 @@ export function ThemeEditor({
                 <span className="theme-scale__value">{theme.layout[field.key]}</span>
               </label>
             ))}
+          {scope === "global" && (
+            <div className="theme-heading-style" style={{ marginTop: "0.75rem" }}>
+              <span className="meta">Group heading style (non-clickable section labels in the page tree)</span>
+              <div className="theme-color__inputs">
+                <input
+                  aria-label="Group heading color"
+                  onChange={(e) => setPageTreeGroupColor(e.target.value)}
+                  type="color"
+                  value={theme.layout.pageTreeGroupColor}
+                />
+                <input
+                  className="input"
+                  onChange={(e) => setPageTreeGroupColor(e.target.value)}
+                  value={theme.layout.pageTreeGroupColor}
+                />
+              </div>
+              <DropdownSelect
+                label="Weight"
+                onChange={(value) => setPageTreeGroupWeight(value)}
+                options={HEADING_WEIGHT_OPTIONS}
+                searchable={false}
+                value={theme.layout.pageTreeGroupWeight}
+              />
+              <DropdownSelect
+                label="Case"
+                onChange={(value) => setPageTreeGroupTransform(value as KbTheme["layout"]["pageTreeGroupTransform"])}
+                options={HEADING_TRANSFORM_OPTIONS}
+                searchable={false}
+                value={theme.layout.pageTreeGroupTransform}
+              />
+              <label className="theme-scale" title="Letter-spacing for group headings">
+                <span className="meta">Letter-spacing</span>
+                <input
+                  max={0.12}
+                  min={-0.02}
+                  onChange={(e) => setPageTreeGroupTracking(Number(e.target.value))}
+                  step={0.005}
+                  type="range"
+                  value={typoToNumber(theme.layout.pageTreeGroupTracking)}
+                />
+                <span className="theme-scale__value">{theme.layout.pageTreeGroupTracking}</span>
+              </label>
+            </div>
+          )}
           {scope === "global" && (
             <p className="meta">
               Page tree width and type size apply site-wide. Turn on collapsible branches per knowledge

@@ -18,6 +18,7 @@ HTML.md
 *.doc
 *.docx
 *.doc.docx
+confluence/
 
 .vercel
 .env*

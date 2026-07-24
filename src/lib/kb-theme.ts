@@ -77,6 +77,14 @@ export interface ThemeLayout {
   pageTreeIndent: string;
   /** When true, public page-tree branches can expand/collapse (per-KB). */
   pageTreeCollapsible: boolean;
+  /** Group-heading (non-clickable divider) text color in the public page tree (global chrome). */
+  pageTreeGroupColor: string;
+  /** Group-heading font weight in the public page tree (global chrome). */
+  pageTreeGroupWeight: string;
+  /** Group-heading letter-spacing in the public page tree (global chrome). */
+  pageTreeGroupTracking: string;
+  /** Group-heading text case in the public page tree (global chrome). */
+  pageTreeGroupTransform: HeadingTextTransform;
 }
 
 export interface ThemeOption {
@@ -174,6 +182,10 @@ export const DEFAULT_THEME: KbTheme = {
     pageTreeItemGap: "0.65rem",
     pageTreeIndent: "0.75rem",
     pageTreeCollapsible: false,
+    pageTreeGroupColor: "#6b6466",
+    pageTreeGroupWeight: "700",
+    pageTreeGroupTracking: "0em",
+    pageTreeGroupTransform: "none",
   },
   editor: {
     fonts: [
@@ -379,6 +391,23 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
         typeof l.pageTreeCollapsible === "boolean"
           ? l.pageTreeCollapsible
           : base.layout.pageTreeCollapsible,
+      pageTreeGroupColor: safeHex(l.pageTreeGroupColor, base.layout.pageTreeGroupColor),
+      pageTreeGroupWeight:
+        typeof l.pageTreeGroupWeight === "string" &&
+        (HEADING_WEIGHTS as readonly string[]).includes(l.pageTreeGroupWeight)
+          ? l.pageTreeGroupWeight
+          : base.layout.pageTreeGroupWeight,
+      pageTreeGroupTracking: safeUnit(
+        l.pageTreeGroupTracking,
+        "em",
+        EM,
+        base.layout.pageTreeGroupTracking,
+        -0.02,
+        0.12,
+      ),
+      pageTreeGroupTransform: HEADING_TEXT_TRANSFORMS.includes(l.pageTreeGroupTransform as HeadingTextTransform)
+        ? (l.pageTreeGroupTransform as HeadingTextTransform)
+        : base.layout.pageTreeGroupTransform,
     },
     editor: {
       fonts: safeOptions(e.fonts, "font", base.editor.fonts),
@@ -516,6 +545,10 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--page-tree-size": theme.layout.pageTreeFontSize,
     "--page-tree-item-gap": theme.layout.pageTreeItemGap,
     "--page-tree-indent": theme.layout.pageTreeIndent,
+    "--page-tree-group-color": theme.layout.pageTreeGroupColor,
+    "--page-tree-group-weight": theme.layout.pageTreeGroupWeight,
+    "--page-tree-group-tracking": theme.layout.pageTreeGroupTracking,
+    "--page-tree-group-transform": theme.layout.pageTreeGroupTransform,
   };
 }
 
@@ -533,6 +566,10 @@ export function withGlobalPageTreeChrome(theme: KbTheme, globalTheme: KbTheme): 
       pageTreeFontSize: globalTheme.layout.pageTreeFontSize,
       pageTreeItemGap: globalTheme.layout.pageTreeItemGap,
       pageTreeIndent: globalTheme.layout.pageTreeIndent,
+      pageTreeGroupColor: globalTheme.layout.pageTreeGroupColor,
+      pageTreeGroupWeight: globalTheme.layout.pageTreeGroupWeight,
+      pageTreeGroupTracking: globalTheme.layout.pageTreeGroupTracking,
+      pageTreeGroupTransform: globalTheme.layout.pageTreeGroupTransform,
     },
   };
 }

@@ -857,6 +857,16 @@ p {
   padding-left: var(--page-tree-indent, 0.75rem);
 }
 
+/* Extra whitespace ahead of a top-level group heading reads as a section break without
+   relying on loud typography (ALL CAPS/heavy weight) to signal the grouping. */
+.page-tree > ul > li:has(> .page-tree__row .page-tree__group) {
+  margin-top: 1.25rem;
+}
+
+.page-tree > ul > li:first-child {
+  margin-top: 0;
+}
+
 .page-tree ul ul {
   border-left: none;
   margin-top: 0;
@@ -3258,13 +3268,13 @@ article li > ol {
 }
 
 .page-tree__group {
-  color: var(--muted);
+  color: var(--page-tree-group-color, var(--muted));
   display: inline;
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
+  font-size: var(--page-tree-size, 0.95rem);
+  font-weight: var(--page-tree-group-weight, 700);
+  letter-spacing: var(--page-tree-group-tracking, 0em);
   overflow-wrap: anywhere;
-  text-transform: uppercase;
+  text-transform: var(--page-tree-group-transform, none);
 }
 
 .kb-search-widget__label {

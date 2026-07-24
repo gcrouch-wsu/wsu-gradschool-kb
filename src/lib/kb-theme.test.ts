@@ -85,6 +85,10 @@ describe("kb-theme", () => {
         pageTreeItemGap: "0.1rem",
         pageTreeIndent: "2rem",
         pageTreeCollapsible: true,
+        pageTreeGroupColor: "#ff00ff",
+        pageTreeGroupWeight: "500",
+        pageTreeGroupTracking: "9em",
+        pageTreeGroupTransform: "capitalize",
       },
     });
     expect(t.layout.navWidth).toBe("480px");
@@ -93,6 +97,17 @@ describe("kb-theme", () => {
     expect(t.layout.pageTreeItemGap).toBe("0.25rem");
     expect(t.layout.pageTreeIndent).toBe("1.5rem");
     expect(t.layout.pageTreeCollapsible).toBe(true);
+    expect(t.layout.pageTreeGroupColor).toBe("#ff00ff");
+    expect(t.layout.pageTreeGroupWeight).toBe("500");
+    expect(t.layout.pageTreeGroupTracking).toBe("0.12em");
+    expect(t.layout.pageTreeGroupTransform).toBe("capitalize");
+
+    expect(mergeTheme({ layout: { pageTreeGroupWeight: "not-a-weight" } }).layout.pageTreeGroupWeight).toBe(
+      DEFAULT_THEME.layout.pageTreeGroupWeight,
+    );
+    expect(
+      mergeTheme({ layout: { pageTreeGroupTransform: "blink" } }).layout.pageTreeGroupTransform,
+    ).toBe(DEFAULT_THEME.layout.pageTreeGroupTransform);
 
     const vars = themeToCssVars(
       mergeTheme({
@@ -102,6 +117,10 @@ describe("kb-theme", () => {
           pageTreeFontSize: "1rem",
           pageTreeItemGap: "0.8rem",
           pageTreeIndent: "1rem",
+          pageTreeGroupColor: "#334455",
+          pageTreeGroupWeight: "600",
+          pageTreeGroupTracking: "0.02em",
+          pageTreeGroupTransform: "uppercase",
         },
       }),
     );
@@ -110,6 +129,10 @@ describe("kb-theme", () => {
     expect(vars["--page-tree-size"]).toBe("1rem");
     expect(vars["--page-tree-item-gap"]).toBe("0.8rem");
     expect(vars["--page-tree-indent"]).toBe("1rem");
+    expect(vars["--page-tree-group-color"]).toBe("#334455");
+    expect(vars["--page-tree-group-weight"]).toBe("600");
+    expect(vars["--page-tree-group-tracking"]).toBe("0.02em");
+    expect(vars["--page-tree-group-transform"]).toBe("uppercase");
   });
 
   it("pins global page-tree chrome when resolving a public KB theme", () => {
@@ -120,6 +143,10 @@ describe("kb-theme", () => {
         pageTreeItemGap: "0.9rem",
         pageTreeIndent: "1rem",
         pageTreeCollapsible: false,
+        pageTreeGroupColor: "#111111",
+        pageTreeGroupWeight: "600",
+        pageTreeGroupTracking: "0.03em",
+        pageTreeGroupTransform: "capitalize",
       },
     });
     const resolved = resolvePublicTheme(
@@ -128,6 +155,10 @@ describe("kb-theme", () => {
           navWidth: "200px",
           pageTreeFontSize: "0.8rem",
           pageTreeCollapsible: true,
+          pageTreeGroupColor: "#eeeeee",
+          pageTreeGroupWeight: "300",
+          pageTreeGroupTracking: "0em",
+          pageTreeGroupTransform: "none",
         },
       },
       global,
@@ -137,6 +168,10 @@ describe("kb-theme", () => {
     expect(resolved.layout.pageTreeItemGap).toBe("0.9rem");
     expect(resolved.layout.pageTreeIndent).toBe("1rem");
     expect(resolved.layout.pageTreeCollapsible).toBe(true);
+    expect(resolved.layout.pageTreeGroupColor).toBe("#111111");
+    expect(resolved.layout.pageTreeGroupWeight).toBe("600");
+    expect(resolved.layout.pageTreeGroupTracking).toBe("0.03em");
+    expect(resolved.layout.pageTreeGroupTransform).toBe("capitalize");
   });
 
   it("computes WCAG contrast ratios", () => {
