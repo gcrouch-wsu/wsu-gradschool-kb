@@ -466,6 +466,12 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 8. Conventions & gotchas (read before changing these areas)
 
+- **Admin ↔ public shell is pathname-driven on the client.** Root layout SSR picks `admin-app`
+  classes from `x-pathname`, but soft navigations do not re-run that layout. `AdminAppClassSync`
+  keeps the classes in sync; `PublicSiteChrome` / `PublicSiteFooter` follow `usePathname()` so the
+  public header (including the **Admin** full-load link) appears after leaving `/admin` without a
+  reload. Prefer plain `<a>` / `location.assign` when intentionally crossing the boundary (View
+  page, View public, top-bar Knowledge bases).
 - **Postgres folds constant expressions at plan time.** The edit-lock abort guard divides by the
   *non-constant* updated-row count — `SELECT 1 / (SELECT count(*) FROM updated)`. A literal `1 / 0`
   is folded and raises on **every** save, not just conflicts. Keep the divisor runtime-evaluated.

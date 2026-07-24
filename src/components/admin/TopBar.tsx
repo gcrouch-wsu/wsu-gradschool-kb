@@ -30,7 +30,9 @@ export function TopBar({ isSidebarCollapsed, session, onToggleSidebar }: TopBarP
             <PanelLeftClose aria-hidden size={18} strokeWidth={1.75} />
           )}
         </button>
-        <Link href="/">Knowledge bases</Link>
+        {/* Plain anchor: leaving the admin shell needs a full page load. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- intentional hard nav */}
+        <a href="/">Knowledge bases</a>
         <Link aria-current="page" className="is-active" href="/admin">
           Admin
         </Link>
