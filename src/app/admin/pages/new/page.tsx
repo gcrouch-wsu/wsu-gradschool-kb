@@ -94,7 +94,14 @@ export default function NewPageScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to create page");
 
-      router.push(nodeKind === "page" ? `/admin/pages/${data.pageId}` : "/admin/pages");
+      const selectedKb = kbs.find((kb) => kb.id === kbId);
+      router.push(
+        nodeKind === "page"
+          ? `/admin/pages/${data.pageId}`
+          : selectedKb
+            ? `/admin/pages?kb=${encodeURIComponent(selectedKb.slug)}`
+            : "/admin/pages",
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Action failed");
     } finally {

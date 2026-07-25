@@ -80,6 +80,12 @@ describe("summary-draft helpers", () => {
     expect(cleanSummaryDraft('  "Summary: Hello world."  ')).toBe("Hello world.");
     expect(cleanSummaryDraft("<think>plan</think>\nFinal answer here.")).toBe("Final answer here.");
   });
+
+  it("caps cleaned drafts at SUMMARY_DRAFT_MAX_CHARS", async () => {
+    const { SUMMARY_DRAFT_MAX_CHARS } = await import("@/lib/summary-draft-core");
+    const long = "word ".repeat(SUMMARY_DRAFT_MAX_CHARS);
+    expect(cleanSummaryDraft(long).length).toBe(SUMMARY_DRAFT_MAX_CHARS);
+  });
 });
 
 describe("requestSummaryDraftFromGateway", () => {

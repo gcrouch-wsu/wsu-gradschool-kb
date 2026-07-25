@@ -4,6 +4,7 @@ import type { ContentBlock } from "@/lib/types";
 export {
   DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
   SUMMARY_DRAFT_MAX_BODY_CHARS,
+  SUMMARY_DRAFT_MAX_CHARS,
   assessPageReadyForSummaryDraft,
   buildSummaryDraftPrompt,
   cleanSummaryDraft,

@@ -3,6 +3,9 @@ import type { ContentBlock } from "@/lib/types";
 
 export const SUMMARY_DRAFT_MAX_BODY_CHARS = 100_000;
 
+/** Cap on cleaned AI draft text written into the summary field. */
+export const SUMMARY_DRAFT_MAX_CHARS = 2_500;
+
 /** Default system prompt used when Site Settings has no custom AI summary prompt. */
 export const DEFAULT_AI_SUMMARY_SYSTEM_PROMPT = [
   "You write page summaries for a university graduate-school knowledge base.",
@@ -159,7 +162,7 @@ export function cleanSummaryDraft(raw: string): string {
   text = text.replace(/^["“]|["”]$/g, "").trim();
   text = text.replace(/^Summary:\s*/i, "").trim();
   text = text.replace(/^["“]|["”]$/g, "").trim();
-  return text.replace(/\s+/g, " ").slice(0, 900);
+  return text.replace(/\s+/g, " ").slice(0, SUMMARY_DRAFT_MAX_CHARS);
 }
 
 export function getAiGatewayConfig(): {

@@ -209,13 +209,14 @@ gate. This is content tooling, not part of the deployed app.
 
 ## Managing Pages
 
-Signed-in admins manage pages at `/admin/pages`: reopen drafts, edit metadata and content,
-move a page under a different parent, choose a KB homepage page, and publish. The page-tree editor
-supports drag reorder, re-nesting, inline edit, setting/clearing the KB homepage, and publishing
-drafts directly from the tree. **Copy / move to another KB** is available from the page editor
-overflow menu and each tree row menu: copies land as drafts in the destination KB; moves keep
-status, take child pages along, clear a source homepage assignment if needed, and leave absolute
-`/kb/...` redirects from the old public URLs when the page was published.
+Signed-in admins manage pages at `/admin/pages`: choose a knowledge base from the view selector,
+then reopen drafts, edit metadata and content, move a page under a different parent, choose a KB
+homepage page, and publish. The page-tree editor supports drag reorder, re-nesting, inline edit,
+setting/clearing the KB homepage, and publishing drafts directly from the tree. **Copy / move to
+another KB** is available from the page editor overflow menu and each tree row menu: copies land as
+drafts in the destination KB; moves keep status, take child pages along, clear a source homepage
+assignment if needed, and leave absolute `/kb/...` redirects from the old public URLs when the page
+was published.
 
 Besides regular pages, the tree supports two non-page node kinds: **group headings**
 (non-clickable organizational labels pages nest under; their URLs render the not-found page) and
@@ -295,9 +296,10 @@ Editors/Viewers with a **search + chips** KB assignment picker (type to filter, 
 
 - *Mutations* (page/asset/import/redirect changes) are guarded by `requireKbAccess` — editors can
   only modify their assigned KBs, and Viewers are rejected before mutations run.
-- *List views* — the `/admin/pages` and `/admin/assets` screens, and the `GET /api/admin/assets`
-  endpoint, are filtered to the editor's assigned KBs so they can't browse or enumerate others'
-  content. The `GET /api/admin/users` directory is owner-only.
+- *List views* — `/admin/pages` and `/admin/assets` are scoped per knowledge base (view selector)
+  and filtered to the editor's assigned KBs so they can't browse or enumerate others' content. The
+  `GET /api/admin/assets` endpoint is likewise filtered. The `GET /api/admin/users` directory is
+  owner-only.
 - *Public reads* — the home KB list, KB landing/article routes, per-KB search, global search, page
   trees, and file routes use the read-access helper. Unauthorized private content returns 404;
   authorized private assets use `Cache-Control: private, no-store`.

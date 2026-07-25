@@ -67,24 +67,23 @@ function PagesPreset() {
   return (
     <div className="page-shell admin-pages">
       <PageHeaderSkeleton withActions />
-      <div className="route-loading__grid-2">
-        {Array.from({ length: 2 }, (_, cardIndex) => (
-          <section className="card admin-pages__kb-card" key={cardIndex}>
-            <div className="route-loading__header-row" style={{ marginBottom: "0.5rem" }}>
-              <SkeletonLine maxWidth="12rem" width="70%" />
-              <SkeletonButton small />
-            </div>
-            <div className="route-loading__tree">
-              <SkeletonTreeLine />
-              <SkeletonTreeLine indent={1} />
-              <SkeletonTreeLine indent={1} />
-              <SkeletonTreeLine indent={2} />
-              <SkeletonTreeLine />
-              <SkeletonTreeLine indent={1} />
-            </div>
-          </section>
-        ))}
+      <div className="route-loading__block" style={{ marginBottom: "1rem" }}>
+        <SkeletonLine maxWidth="18rem" width="40%" />
       </div>
+      <section className="card admin-pages__kb-card">
+        <div className="route-loading__header-row" style={{ marginBottom: "0.5rem" }}>
+          <SkeletonLine maxWidth="12rem" width="70%" />
+          <SkeletonButton small />
+        </div>
+        <div className="route-loading__tree">
+          <SkeletonTreeLine />
+          <SkeletonTreeLine indent={1} />
+          <SkeletonTreeLine indent={1} />
+          <SkeletonTreeLine indent={2} />
+          <SkeletonTreeLine />
+          <SkeletonTreeLine indent={1} />
+        </div>
+      </section>
     </div>
   );
 }

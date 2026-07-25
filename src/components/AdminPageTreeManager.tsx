@@ -1330,7 +1330,7 @@ export function AdminPageTreeManager({
           onComplete={({ mode, editHref }) => {
             setRelocateTarget(null);
             if (mode === "move") {
-              window.location.assign("/admin/pages");
+              window.location.assign(`/admin/pages?kb=${encodeURIComponent(kb.slug)}`);
               return;
             }
             window.location.assign(editHref);
