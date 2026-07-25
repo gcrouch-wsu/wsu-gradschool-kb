@@ -11,7 +11,7 @@ import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
-import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft";
+import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -1001,31 +1001,6 @@ export function AdminPageEditorForm({
         )}
         {actionButtons}
 
-        <fieldset className="fieldset editor-content" disabled={isLocked}>
-          <legend>Content</legend>
-          <div className={`editor-readiness ${readinessIssues.length === 0 ? "is-ready" : ""}`}>
-            <strong>Publishing readiness</strong>
-            {readinessIssues.length === 0 ? (
-              <p className="meta">No accessibility or governance blockers detected in the current draft.</p>
-            ) : (
-              <ul className="issue-list">
-                {readinessIssues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <PageDocumentEditor
-            blocks={blocks}
-            editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
-            kbId={kb.id}
-            kbSlug={kb.slug}
-            key={`${page.id}:${editorEpoch}`}
-            onChange={setBlocks}
-            pageUrl={previewUrl}
-          />
-        </fieldset>
-
         <details
           className="editor-details"
           onToggle={(event) => setGovernanceOpen(event.currentTarget.open)}
@@ -1212,6 +1187,31 @@ export function AdminPageEditorForm({
         </fieldset>
           </div>
         </details>
+
+        <fieldset className="fieldset editor-content" disabled={isLocked}>
+          <legend>Content</legend>
+          <div className={`editor-readiness ${readinessIssues.length === 0 ? "is-ready" : ""}`}>
+            <strong>Publishing readiness</strong>
+            {readinessIssues.length === 0 ? (
+              <p className="meta">No accessibility or governance blockers detected in the current draft.</p>
+            ) : (
+              <ul className="issue-list">
+                {readinessIssues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <PageDocumentEditor
+            blocks={blocks}
+            editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
+            kbId={kb.id}
+            kbSlug={kb.slug}
+            key={`${page.id}:${editorEpoch}`}
+            onChange={setBlocks}
+            pageUrl={previewUrl}
+          />
+        </fieldset>
 
         <details className="editor-details">
           <summary className="editor-details__summary">Revision history</summary>

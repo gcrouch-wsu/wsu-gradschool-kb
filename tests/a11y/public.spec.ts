@@ -28,6 +28,7 @@ for (const route of PUBLIC_ROUTES) {
 
 test("home search widget is hidden by default", async ({ page }) => {
   await page.goto("/");
+  await expect(page.locator(".kb-search-widget")).toHaveCount(0);
   await expect(page.getByRole("search")).toHaveCount(0);
 });
 

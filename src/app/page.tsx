@@ -100,7 +100,7 @@ export default async function HomePage({
                 </div>
               ) : (
                 <>
-                  <form className="kb-list__filter" method="get" role="search">
+                  <form aria-label="Filter knowledge bases" className="kb-list__filter" method="get">
                     <label className="sr-only" htmlFor="kb-list-filter">
                       Filter knowledge bases
                     </label>

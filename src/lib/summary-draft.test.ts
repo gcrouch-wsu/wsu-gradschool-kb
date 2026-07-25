@@ -5,7 +5,7 @@ import {
   cleanSummaryDraft,
   formatBlocksForSummary,
   requestSummaryDraftFromGateway,
-} from "@/lib/summary-draft";
+} from "@/lib/summary-draft-core";
 import type { ContentBlock } from "@/lib/types";
 
 function longBody(): ContentBlock[] {
