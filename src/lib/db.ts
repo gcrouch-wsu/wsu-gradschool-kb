@@ -568,7 +568,9 @@ export async function updatePages(
             verified_by = ${page.verifiedBy ?? null},
             node_kind = ${page.nodeKind ?? "page"},
             link_url = ${page.linkUrl ?? ""},
-            link_new_tab = ${page.linkNewTab ?? false}
+            link_new_tab = ${page.linkNewTab ?? false},
+            locked_by = ${page.lockedBy ?? null},
+            locked_at = ${page.lockedAt ?? null}
           WHERE id = ${page.id}
             AND (locked_by IS NULL OR locked_by = ${editorEmail} OR locked_at < now())
           RETURNING id
@@ -604,7 +606,9 @@ export async function updatePages(
         verified_by = ${page.verifiedBy ?? null},
         node_kind = ${page.nodeKind ?? "page"},
         link_url = ${page.linkUrl ?? ""},
-        link_new_tab = ${page.linkNewTab ?? false}
+        link_new_tab = ${page.linkNewTab ?? false},
+        locked_by = ${page.lockedBy ?? null},
+        locked_at = ${page.lockedAt ?? null}
       WHERE id = ${page.id}
     `;
   });

@@ -2180,59 +2180,67 @@ export interface RelocatePageResult {
 /**
  * Copy or move a page (and optionally its descendants) into another knowledge base.
  * Move requires a different KB; published moves leave absolute `/kb/...` redirects on the source KB.
+ * Loads only the source/destination KB page lists (not the full site dataset) so large sites
+ * don't time out serverless relocate requests.
  */
 export async function relocatePage(input: RelocatePageInput): Promise<RelocatePageResult> {
-  const dataset = await getDataset();
-  const source = dataset.pages.find((page) => page.id === input.pageId);
+  const source = await getPageByIdForAdmin(input.pageId);
   if (!source) {
     throw new Error("Page not found.");
   }
-  const sourceKb = dataset.knowledgeBases.find((kb) => kb.id === source.kbId);
-  const targetKb = dataset.knowledgeBases.find((kb) => kb.id === input.targetKbId);
+
+  const [sourceKb, targetKb] = await Promise.all([getKbById(source.kbId), getKbById(input.targetKbId)]);
   if (!sourceKb || !targetKb) {
     throw new Error("Knowledge base not found.");
-  }
-
-  const parentPath = input.parentPath ?? [];
-  if (parentPath.length > 0) {
-    const parentExists = dataset.pages.some(
-      (page) => page.kbId === input.targetKbId && page.path.join("/") === parentPath.join("/"),
-    );
-    if (!parentExists) {
-      throw new Error("Parent page not found in the destination knowledge base.");
-    }
   }
 
   if (input.mode === "move" && input.targetKbId === source.kbId) {
     throw new Error("Use Nest under or the page tree to reorganize within the same knowledge base.");
   }
 
-  const includeChildren = input.includeChildren !== false;
-  const subtree = collectSubtree(dataset.pages, source);
-  if (!includeChildren && subtree.length > 1) {
-    if (input.mode === "move") {
-      throw new Error("Move always includes child pages. Move or delete children first to relocate only this page.");
+  const parentPath = input.parentPath ?? [];
+  const [sourcePages, destinationPages] = await Promise.all([
+    getAllPagesForAdmin(source.kbId),
+    input.targetKbId === source.kbId
+      ? Promise.resolve(null)
+      : getAllPagesForAdmin(input.targetKbId),
+  ]);
+  const destPages = destinationPages ?? sourcePages;
+
+  if (parentPath.length > 0) {
+    const parentExists = destPages.some((page) => page.path.join("/") === parentPath.join("/"));
+    if (!parentExists) {
+      throw new Error("Parent page not found in the destination knowledge base.");
     }
+  }
+
+  const rootInTree = sourcePages.find((page) => page.id === source.id) ?? source;
+  const includeChildren = input.includeChildren !== false;
+  const subtree = collectSubtree(sourcePages, rootInTree);
+  if (!includeChildren && subtree.length > 1 && input.mode === "move") {
+    throw new Error("Move always includes child pages. Move or delete children first to relocate only this page.");
   }
   const pagesToRelocate =
     input.mode === "move" || includeChildren ? subtree : subtree.filter((page) => page.id === source.id);
 
   if (input.mode === "copy") {
     return copyPagesAcrossKb({
-      source,
+      source: rootInTree,
       targetKb,
       parentPath,
       pagesToRelocate,
+      destinationPages: destPages,
       authorEmail: input.authorEmail ?? "",
     });
   }
 
   return movePagesAcrossKb({
-    source,
+    source: rootInTree,
     sourceKb,
     targetKb,
     parentPath,
     pagesToRelocate,
+    destinationPages: destPages,
     authorEmail: input.authorEmail ?? "",
   });
 }
@@ -2242,12 +2250,14 @@ async function copyPagesAcrossKb({
   targetKb,
   parentPath,
   pagesToRelocate,
+  destinationPages,
   authorEmail,
 }: {
   source: KbPage;
   targetKb: KnowledgeBase;
   parentPath: string[];
   pagesToRelocate: KbPage[];
+  destinationPages: KbPage[];
   authorEmail: string;
 }): Promise<RelocatePageResult> {
   const idMap = new Map<string, string>();
@@ -2256,7 +2266,7 @@ async function copyPagesAcrossKb({
   }
 
   const created: KbPage[] = [];
-  const workingPages = [...(await getDataset()).pages];
+  const workingPages = [...destinationPages];
 
   for (const page of pagesToRelocate) {
     let destParent = parentPath;
@@ -2335,6 +2345,7 @@ async function movePagesAcrossKb({
   targetKb,
   parentPath,
   pagesToRelocate,
+  destinationPages,
   authorEmail,
 }: {
   source: KbPage;
@@ -2342,16 +2353,16 @@ async function movePagesAcrossKb({
   targetKb: KnowledgeBase;
   parentPath: string[];
   pagesToRelocate: KbPage[];
+  destinationPages: KbPage[];
   authorEmail: string;
 }): Promise<RelocatePageResult> {
-  const dataset = await getDataset();
   const pathBefore = new Map(pagesToRelocate.map((page) => [page.id, [...page.path]]));
 
   if (sourceKb.homepagePageId && pagesToRelocate.some((page) => page.id === sourceKb.homepagePageId)) {
     await setKbHomepagePage(sourceKb.id, null);
   }
 
-  const workingPages = dataset.pages.filter((page) => !pagesToRelocate.some((moved) => moved.id === page.id));
+  const workingPages = [...destinationPages];
   const moved: KbPage[] = [];
   const today = new Date().toISOString().slice(0, 10);
 
@@ -2403,8 +2414,10 @@ async function movePagesAcrossKb({
   }
 
   const revisions = moved.map((page) => revisionWriteForPage(page, authorEmail, "save"));
+  // Skip the editorEmail lock guard: relocate is an explicit admin action and must succeed
+  // even when the page is open/locked in another tab. Locks are cleared on the written rows.
   if (isDatabaseEnabled()) {
-    await updatePages(moved, authorEmail || undefined, revisions);
+    await updatePages(moved, undefined, revisions);
   } else {
     for (const page of moved) {
       storeRuntimePage(page);

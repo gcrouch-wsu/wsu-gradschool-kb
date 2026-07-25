@@ -26,7 +26,7 @@ export function RelocatePageDialog({
   pageId: string;
   pageTitle: string;
   sourceKbId: string;
-  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug">>;
+  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
   initialMode?: RelocateMode;
   onCancel: () => void;
   onComplete: (result: { mode: RelocateMode; pageId: string; editHref: string }) => void;
@@ -52,6 +52,7 @@ export function RelocatePageDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadingParents = Boolean(targetKbId) && parentsForKb !== targetKbId;
+  const effectiveParentPath = parentsForKb === targetKbId ? parentPath : "";
 
   useEffect(() => {
     if (!targetKbId) {
@@ -89,6 +90,10 @@ export function RelocatePageDialog({
       setError("Choose a destination knowledge base.");
       return;
     }
+    if (loadingParents) {
+      setError("Still loading destination pages. Try again in a moment.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -98,7 +103,7 @@ export function RelocatePageDialog({
         body: JSON.stringify({
           mode,
           targetKbId,
-          parentPath: parentPath ? parentPath.split("/") : [],
+          parentPath: effectiveParentPath ? effectiveParentPath.split("/") : [],
           includeChildren: mode === "move" ? true : includeChildren,
         }),
       });
@@ -123,9 +128,10 @@ export function RelocatePageDialog({
   }
 
   const kbOptions = availableKbs.map((kb) => ({
-    label: kb.title,
+    label: kb.visibility === "private" ? `${kb.title} (Private)` : kb.title,
     value: kb.id,
     description: kb.slug,
+    searchText: `${kb.title} ${kb.slug} ${kb.visibility === "private" ? "private" : "public"}`,
   }));
 
   const parentOptions = [
@@ -233,11 +239,11 @@ export function RelocatePageDialog({
             </button>
             <button
               className="button"
-              disabled={busy || kbOptions.length === 0 || !targetKbId}
+              disabled={busy || kbOptions.length === 0 || !targetKbId || loadingParents}
               onClick={() => void submit()}
               type="button"
             >
-              {busy ? "Working…" : mode === "copy" ? "Copy page" : "Move page"}
+              {busy ? "Working…" : loadingParents ? "Loading…" : mode === "copy" ? "Copy page" : "Move page"}
             </button>
           </div>
         </div>

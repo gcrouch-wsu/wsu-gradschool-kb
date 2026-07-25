@@ -12,7 +12,12 @@ export default async function AdminPagesPage() {
   }
 
   const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
-  const destinationKbs = kbs.map((kb) => ({ id: kb.id, title: kb.title, slug: kb.slug }));
+  const destinationKbs = kbs.map((kb) => ({
+    id: kb.id,
+    title: kb.title,
+    slug: kb.slug,
+    visibility: kb.visibility,
+  }));
   const groups = await Promise.all(
     kbs.map(async (kb) => ({
       kb,

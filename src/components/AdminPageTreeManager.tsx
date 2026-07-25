@@ -598,7 +598,7 @@ export function AdminPageTreeManager({
   kb,
 }: {
   canDelete: boolean;
-  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug">>;
+  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
   initialPages: PageItem[];
   kb: KnowledgeBase;
 }) {

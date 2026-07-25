@@ -295,7 +295,7 @@ export function AdminPageEditorForm({
   kb: KnowledgeBase;
   page: KbPage;
   parentOptions: ParentOption[];
-  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug">>;
+  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
 }) {
   const [title, setTitle] = useState(page.title);
   const [slug, setSlug] = useState(page.slug);

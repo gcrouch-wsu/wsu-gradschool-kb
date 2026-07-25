@@ -71,6 +71,7 @@ export default async function AdminEditPage({
     id: candidate.id,
     title: candidate.title,
     slug: candidate.slug,
+    visibility: candidate.visibility,
   }));
 
   return (
