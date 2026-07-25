@@ -862,6 +862,34 @@ export function AdminPageEditorForm({
         )}
         {actionButtons}
 
+        <fieldset className="fieldset editor-content" disabled={isLocked}>
+          <legend>Content</legend>
+          <div className={`editor-readiness ${readinessIssues.length === 0 ? "is-ready" : ""}`}>
+            <strong>Publishing readiness</strong>
+            {readinessIssues.length === 0 ? (
+              <p className="meta">No accessibility or governance blockers detected in the current draft.</p>
+            ) : (
+              <ul className="issue-list">
+                {readinessIssues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <PageDocumentEditor
+            blocks={blocks}
+            editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
+            kbId={kb.id}
+            kbSlug={kb.slug}
+            key={`${page.id}:${editorEpoch}`}
+            onChange={setBlocks}
+            pageUrl={previewUrl}
+          />
+        </fieldset>
+
+        <details className="editor-details">
+          <summary className="editor-details__summary">Page settings &amp; governance</summary>
+          <div className="editor-details__body">
         <fieldset className="fieldset" disabled={isLocked}>
           <legend>Page Settings</legend>
           <label>
@@ -892,7 +920,7 @@ export function AdminPageEditorForm({
               onChange={(event) => setShowPrintButton(event.target.checked)}
               type="checkbox"
             />
-            <span>Show the PDF export button</span>
+            <span>Show the Print / Save as PDF button</span>
           </label>
           <DropdownSelect
             disabled={isLocked}
@@ -994,42 +1022,21 @@ export function AdminPageEditorForm({
             </button>
           </div>
         </fieldset>
-
-        <fieldset className="fieldset editor-content" disabled={isLocked}>
-          <legend>Content</legend>
-          <div className={`editor-readiness ${readinessIssues.length === 0 ? "is-ready" : ""}`}>
-            <strong>Publishing readiness</strong>
-            {readinessIssues.length === 0 ? (
-              <p className="meta">No accessibility or governance blockers detected in the current draft.</p>
-            ) : (
-              <ul className="issue-list">
-                {readinessIssues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-              </ul>
-            )}
           </div>
-          <PageDocumentEditor
-            blocks={blocks}
-            editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
-            kbId={kb.id}
-            kbSlug={kb.slug}
-            key={`${page.id}:${editorEpoch}`}
-            onChange={setBlocks}
-            pageUrl={previewUrl}
-          />
-        </fieldset>
+        </details>
 
-        <fieldset className="fieldset">
-          <legend>History</legend>
-          <PageHistoryPanel
-            isLocked={isLocked}
-            kbSlug={kb.slug}
-            onRestored={() => window.location.reload()}
-            pageId={page.id}
-            reloadToken={historyToken}
-          />
-        </fieldset>
+        <details className="editor-details">
+          <summary className="editor-details__summary">Revision history</summary>
+          <div className="editor-details__body">
+            <PageHistoryPanel
+              isLocked={isLocked}
+              kbSlug={kb.slug}
+              onRestored={() => window.location.reload()}
+              pageId={page.id}
+              reloadToken={historyToken}
+            />
+          </div>
+        </details>
 
         {actionButtons}
       </form>

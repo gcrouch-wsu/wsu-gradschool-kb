@@ -633,6 +633,10 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
 - Page-tree indent/outdent UX (2026-07-23): admin tree exposes visible up/down/indent/outdent
   buttons; drag uses vertical bands plus horizontal depth for outdent, with a safe non-nesting
   drop fallback (`src/lib/page-tree-drop.ts`).
+- Go-live readiness pack (2026-07-25): FB-25 manual release checklist + §13 release sign-off; shared
+  cron auth + `GET /api/health`; generated KB landings drop redundant section cards; public heading
+  copy-link + prev/next nav; editor Content-first with collapsible settings/history; honest Print /
+  Save as PDF labeling; Review dashboard on-demand P&P sourced-content scan (`sourced-review.ts`).
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
@@ -1277,6 +1281,38 @@ Items are ordered by recommended priority.
   - **Cross-browser / responsive:** the suite runs Chromium only, so **Firefox and mobile-width passes
     remain manual** before a production claim.
   - **WCAG audit**: the manual WCAG 2.1 AA checklist below is still outstanding.
+
+#### Manual release gate (copy/paste checklist)
+
+**Automated (must be green in CI before release):**
+- [ ] `npm run check` (type-check)
+- [ ] `npm run lint`
+- [ ] `npm test`
+- [ ] `npm run build`
+- [ ] `npm run test:a11y`
+- [ ] `npm run test:editor`
+- [ ] `npm run test:db` against the Neon **test** branch (required when migrations/DB behavior change)
+
+**Editor — Chrome + Firefox (desktop) and ~375px width:**
+- [ ] Create/edit paragraph, H2/H3, bold/link
+- [ ] Bulleted + numbered lists; Tab / Shift+Tab nesting
+- [ ] Info box with nested list; save → public render
+- [ ] Table cell bold + link; public table headers
+- [ ] Image insert + alt dialog; public `img[alt]`
+- [ ] Paste from Word/Outlook (basic formatting survives)
+- [ ] Excerpt + P&P sourced insert; draft preview matches intent
+- [ ] Unsaved guard / Restore draft; History restore
+- [ ] Publish blocked until readiness issues clear; publish succeeds when ready
+
+**Public + admin WCAG 2.1 AA sample pass:**
+- [ ] Keyboard-only: home, KB landing, article (tree + TOC), search combobox, sign-in, edit page
+- [ ] Visible focus; skip link; landmarks/headings make sense
+- [ ] Labels/names on controls; dialogs trap focus and restore it
+- [ ] Contrast on body, links, badges, buttons (sample pages)
+- [ ] Zoom to 200% / narrow viewport: no loss of content or function
+- [ ] Tables expose header scope; images have alt; video embeds have titles
+- [ ] Mobile: page tree, article, TOC stack without horizontal scroll traps
+
 - **Finding:** the app is accessibility-oriented and has a publish gate plus public axe smoke tests,
   but it should not be called ADA/WCAG compliant until a full manual audit and cross-browser workflow
   pass are complete. The page editor has historically failed in browser-only ways that unit tests do
@@ -1886,7 +1922,17 @@ Items are ordered by recommended priority.
 
 ### Cron Secrets
 
-- Cron routes require `Authorization: Bearer $CRON_SECRET`.
+- Cron routes require `Authorization: Bearer $CRON_SECRET` (shared helper `isCronAuthorized` in
+  `src/lib/cron-auth.ts`).
+- Manual probe examples (replace host + secret):
+
+```bash
+curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/audit-cleanup
+curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/revision-cleanup
+curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/review-digest
+curl -sS https://YOUR_HOST/api/health
+```
+
 - Rotate `CRON_SECRET` by updating Vercel environment variables, redeploying, and confirming the scheduled routes still authorize.
 - Treat missing email/provider configuration as non-fatal unless the specific cron route documents otherwise.
 - `/api/admin/cron/review-digest` sends weekly review-date digests when an email provider is configured; without one it logs recipients/subjects as structured JSON and reports skipped deliveries.
@@ -1894,6 +1940,7 @@ Items are ordered by recommended priority.
 
 ### Post-Deploy Checks
 
+- Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Verify migration `029_kb_visibility` applied: in Neon SQL Editor, run
   `SELECT id FROM _schema_migrations WHERE id = '029_kb_visibility';`, then confirm existing public
   KBs show `visibility = 'public'` with
@@ -1908,7 +1955,17 @@ Items are ordered by recommended priority.
 - Test owner KB export on a media-heavy KB after deploy. The ZIP response is streamed and asset bytes are loaded one entry at a time; if an asset fetch fails mid-stream the download is truncated and a structured `kb-export` error is logged, so verify the downloaded ZIP opens cleanly.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
 - `/admin/usage` loads aggregate view counts when `DATABASE_URL` is configured.
+- `/admin/review` → **Check sourced content** runs without error (lists only changed/missing/unreachable P&P sources).
 - Logs are structured JSON and suitable for forwarding through Vercel log drains.
+
+### Release sign-off
+
+Before calling a build production-ready for Grad School go-live (Confluence interop optional):
+
+1. Complete the **Manual release gate** under §12 FB-25 (automated CI + Chrome/Firefox/mobile editor + WCAG sample).
+2. Complete this section’s Deploy / Cron / Post-Deploy checks.
+3. Content IA: prefer a KB homepage page for editorial landings; generated landings use the page tree only (no duplicate section cards). Enable the KB search widget where readers need it; add redirects for retired URLs.
+4. Confirm Print / Save as PDF is understood as **browser print-to-PDF**, not a tagged PDF generator.
 
 ---
 

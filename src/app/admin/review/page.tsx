@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ReviewSourcedScan } from "@/components/ReviewSourcedScan";
 import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
 import { getAdminReviewDashboard } from "@/lib/admin-review";
 
@@ -16,12 +17,16 @@ export default async function AdminReviewPage() {
       <p className="eyebrow">Admin</p>
       <h1>Review dashboard</h1>
       <p className="lead">
-        Pilot migration checklist: staged imports awaiting review, drafts ready to publish, publish
-        blockers, broken asset references, and unused assets.
+        Governance checklist: staged imports, drafts ready to publish, publish blockers, broken asset
+        references, unused assets, and P&amp;P sourced-content freshness.
       </p>
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
+        {" · "}
+        <Link href="/admin/redirects">Redirects</Link>
       </p>
+
+      <ReviewSourcedScan />
 
       <section className="card" style={{ marginTop: "1.5rem" }}>
         <h2>Staged imports ({review.stagedImports.length})</h2>

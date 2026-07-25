@@ -73,15 +73,16 @@ owner-provisioned until then.
 
 Remaining QA work before a production-compliance claim:
 
-- Complete and document manual Chrome + Firefox + mobile-width editor passes.
-- Complete a manual WCAG 2.1 AA audit of public pages and admin/editor workflows before making any
-  WCAG/ADA compliance claim.
-- Keep extending the editor Playwright suite whenever a new browser-only editor bug is found.
+- Complete the **Manual release gate** in `project_spec.md` §12 FB-25 (Chrome + Firefox + mobile-width
+  editor passes and a WCAG 2.1 AA sample audit). Automated CI (`test:a11y`, `test:editor`, and
+  live-DB when configured) must stay green.
+- Follow §13 **Release sign-off** (deploy/cron/post-deploy + IA/search/redirects checklist).
 
 Further enhancements are tracked in `project_spec.md` §12: a maintained rich-text editor framework
 migration, SEO/discoverability, reader feedback, public reading polish, proposed-edits workflow,
 public API, KB templates/advanced settings, large-file asset handling, and third-party error
-tracking. The deploy/rollback runbook is `project_spec.md` §13.
+tracking. The deploy/rollback runbook is `project_spec.md` §13. Confluence bidirectional interop
+(FB-37) remains optional and deferred.
 
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
 axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:

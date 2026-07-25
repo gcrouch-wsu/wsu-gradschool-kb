@@ -21,7 +21,7 @@ test.describe("PDF export", () => {
     });
 
     await page.goto(TARGET_PAGE_PUBLIC_PATH);
-    const exportButton = page.getByRole("button", { name: "Export PDF" });
+    const exportButton = page.getByRole("button", { name: "Print / Save as PDF" });
     await expect(exportButton).toBeVisible();
     await page.waitForLoadState("networkidle");
 

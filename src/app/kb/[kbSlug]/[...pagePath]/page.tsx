@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
+import { ArticlePageNav } from "@/components/ArticlePageNav";
 import { KbSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
@@ -204,6 +205,13 @@ export default async function KbArticlePage({
               </div>
             </>
           )}
+
+          <ArticlePageNav
+            currentPageId={page.id}
+            homepagePageId={kb.homepagePageId}
+            kbSlug={kb.slug}
+            nodes={tree}
+          />
         </article>
         {showTocRail && (
           <aside className="toc-rail">

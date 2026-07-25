@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HeadingAnchor } from "@/components/HeadingAnchor";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { excerptAttributionLabel, resolveExcerptForRead } from "@/lib/excerpts";
 import { formatDate } from "@/lib/format";
@@ -153,12 +154,15 @@ async function CardBlock({ block }: { block: Extract<ContentBlock, { type: "card
 }
 
 function ProcedureSectionBlock({ block }: { block: Extract<ContentBlock, { type: "procedure_section" }> }) {
-  const HeadingTag = block.level === 3 ? "h3" : "h2";
   return (
     <section className="procedure-section" aria-labelledby={block.blockId}>
-      <HeadingTag className="anchor-heading procedure-section__title" id={block.blockId}>
+      <HeadingAnchor
+        as={block.level === 3 ? "h3" : "h2"}
+        className="anchor-heading procedure-section__title"
+        id={block.blockId}
+      >
         {block.title}
-      </HeadingTag>
+      </HeadingAnchor>
       <div className="procedure-section__blocks flow">
         <PageBlocks blocks={block.blocks} />
       </div>
@@ -261,23 +265,23 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
             );
           case "heading":
             return block.level === 2 ? (
-              <h2
-                className="anchor-heading"
+              <HeadingAnchor
+                as="h2"
                 id={block.blockId}
                 key={block.blockId}
                 style={block.align ? { textAlign: block.align } : undefined}
               >
                 <RichText html={block.html} text={block.text} />
-              </h2>
+              </HeadingAnchor>
             ) : (
-              <h3
-                className="anchor-heading"
+              <HeadingAnchor
+                as="h3"
                 id={block.blockId}
                 key={block.blockId}
                 style={block.align ? { textAlign: block.align } : undefined}
               >
                 <RichText html={block.html} text={block.text} />
-              </h3>
+              </HeadingAnchor>
             );
           case "list": {
             const children = block.items.map((item, index) => (
