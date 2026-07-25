@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { getPageByIdForAdmin } from "@/lib/kb-store";
+import { loadSiteSettings } from "@/lib/db";
 import { logError } from "@/lib/log";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -11,6 +10,8 @@ import {
   requestSummaryDraftFromGateway,
 } from "@/lib/summary-draft";
 import type { ContentBlock } from "@/lib/types";
+import { NextResponse } from "next/server";
+import { getPageByIdForAdmin } from "@/lib/kb-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -73,9 +74,11 @@ export async function POST(
   try {
     const expanded = await expandBlocksForSummary(blocks);
     const bodyText = formatBlocksForSummary(expanded).trim() || readiness.bodyText;
+    const siteSettings = await loadSiteSettings();
     const summary = await requestSummaryDraftFromGateway({
       title: title.trim(),
       bodyText,
+      systemPrompt: siteSettings.aiSummaryPrompt,
       ...config,
     });
     return NextResponse.json({ ok: true, summary });

@@ -1,9 +1,19 @@
 import { blocksToPlainText } from "@/lib/revision-diff";
 import type { ContentBlock } from "@/lib/types";
 
-const MIN_BODY_CHARS = 120;
-/** Free models on Gateway still accept large prompts; keep headroom under ~256k tokens. */
 export const SUMMARY_DRAFT_MAX_BODY_CHARS = 100_000;
+
+/** Default system prompt used when Site Settings has no custom AI summary prompt. */
+export const DEFAULT_AI_SUMMARY_SYSTEM_PROMPT = [
+  "You write page summaries for a university graduate-school knowledge base.",
+  "You MUST base the summary on the FULL page content provided (all sections), not only the opening paragraphs.",
+  "Cover the page purpose and the main topics from every major section in the outline.",
+  "Return only the summary text: usually 2–4 plain sentences (more only if needed for multi-section pages).",
+  "No markdown, no bullet lists, no quotation marks wrapping the whole answer, no title prefix, no preamble.",
+  "Tone: clear, neutral, governance-appropriate. Do not invent facts not present in the page.",
+].join(" ");
+
+const MIN_BODY_CHARS = 120;
 
 function stripHtml(html: string): string {
   return html
@@ -109,7 +119,11 @@ export function assessPageReadyForSummaryDraft(input: {
   return { ok: true, bodyText };
 }
 
-export function buildSummaryDraftPrompt(title: string, bodyText: string): {
+export function buildSummaryDraftPrompt(
+  title: string,
+  bodyText: string,
+  systemPrompt = DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
+): {
   system: string;
   user: string;
 } {
@@ -118,15 +132,9 @@ export function buildSummaryDraftPrompt(title: string, bodyText: string): {
       ? `${bodyText.slice(0, SUMMARY_DRAFT_MAX_BODY_CHARS)}\n\n[Truncated for length — prefer earlier and later sections equally in the summary.]`
       : bodyText;
   const outline = extractOutline(clipped);
+  const system = systemPrompt.trim() || DEFAULT_AI_SUMMARY_SYSTEM_PROMPT;
   return {
-    system: [
-      "You write page summaries for a university graduate-school knowledge base.",
-      "You MUST base the summary on the FULL page content provided (all sections), not only the opening paragraphs.",
-      "Cover the page purpose and the main topics from every major section in the outline.",
-      "Return only the summary text: usually 2–4 plain sentences (more only if needed for multi-section pages).",
-      "No markdown, no bullet lists, no quotation marks wrapping the whole answer, no title prefix, no preamble.",
-      "Tone: clear, neutral, governance-appropriate. Do not invent facts not present in the page.",
-    ].join(" "),
+    system,
     user: [
       `Page title: ${title}`,
       "",
@@ -174,8 +182,13 @@ export async function requestSummaryDraftFromGateway(input: {
   endpoint: string;
   apiKey: string;
   model: string;
+  systemPrompt?: string;
 }): Promise<string> {
-  const { system, user } = buildSummaryDraftPrompt(input.title, input.bodyText);
+  const { system, user } = buildSummaryDraftPrompt(
+    input.title,
+    input.bodyText,
+    input.systemPrompt ?? DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
+  );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000);
   let response: Response;

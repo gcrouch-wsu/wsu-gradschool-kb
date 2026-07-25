@@ -44,6 +44,8 @@ export interface SiteSettings {
   footerLinks: NavLink[];
   contactInfo: string;
   globalTheme: KbTheme | null;
+  /** System prompt for Draft with AI page summaries. Empty = built-in default. */
+  aiSummaryPrompt: string;
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -77,6 +79,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   ],
   contactInfo: "Contact us: gradschool@wsu.edu",
   globalTheme: null,
+  aiSummaryPrompt: "",
 };
 
 const MAX_LENGTHS: Record<string, number> = {
@@ -196,5 +199,9 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
     kbListTitleSize: safeBrandSize(input.kbListTitleSize),
     kbListTitleWeight: safeBrandWeight(input.kbListTitleWeight),
     kbListTitleFont: safeBrandFont(input.kbListTitleFont),
+    aiSummaryPrompt:
+      typeof input.aiSummaryPrompt === "string"
+        ? input.aiSummaryPrompt.trim().slice(0, 8_000)
+        : DEFAULT_SITE_SETTINGS.aiSummaryPrompt,
   };
 }

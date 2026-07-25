@@ -835,6 +835,12 @@ const migrations: Migration[] = [
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_asset_usages_page ON kb_asset_usages (page_id)`;
     },
   },
+  {
+    id: "037_ai_summary_prompt",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS ai_summary_prompt TEXT NOT NULL DEFAULT ''`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

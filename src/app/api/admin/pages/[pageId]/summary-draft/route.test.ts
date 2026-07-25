@@ -115,10 +115,18 @@ describe("POST /api/admin/pages/[pageId]/summary-draft", () => {
     vi.stubEnv("AI_MODEL", "test-model");
     await mockAuthedPage();
     const summaryDraft = await import("@/lib/summary-draft");
-    vi.spyOn(summaryDraft, "requestSummaryDraftFromGateway").mockResolvedValue("A short editable draft.");
+    const requestSpy = vi
+      .spyOn(summaryDraft, "requestSummaryDraftFromGateway")
+      .mockResolvedValue("A short editable draft.");
     const response = await post({ title: "Ready", blocks: longBlocks });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data).toEqual({ ok: true, summary: "A short editable draft." });
+    expect(requestSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Ready",
+        systemPrompt: "",
+      }),
+    );
   });
 });

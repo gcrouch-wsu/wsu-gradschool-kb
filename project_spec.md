@@ -383,7 +383,7 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) →
   app-side backfills.
-- **Current head: `036_asset_usages`.** Notable recent migrations: page-tree node kinds (`032`),
+- **Current head: `037_ai_summary_prompt`.** Notable recent migrations: page-tree node kinds (`032`),
   per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback (`035`),
   persisted asset-usage index (`036`). Earlier migrations cover FTS, edit locks, revisions,
   page views, KB visibility, search widget, branding, and rate limits — see
@@ -797,7 +797,7 @@ curl -sS https://YOUR_HOST/api/health
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `036_asset_usages` (and earlier ids such as `029_kb_visibility`). Existing public
+  should include `037_ai_summary_prompt` (and earlier ids such as `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.
 - Public KB list renders without loading draft-only content.

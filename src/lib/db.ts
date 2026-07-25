@@ -298,6 +298,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     header_alignment?: string;
     hero_alignment?: string;
     content_width?: number;
+    ai_summary_prompt?: string;
   }>;
   const row = rows[0];
   if (!row) {
@@ -330,6 +331,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     headerAlignment: row.header_alignment,
     heroAlignment: row.hero_alignment,
     contentWidth: row.content_width,
+    aiSummaryPrompt: row.ai_summary_prompt,
   });
 }
 
@@ -344,6 +346,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       kb_list_title_color, kb_list_title_size, kb_list_title_weight, kb_list_title_font,
       brand_text, brand_text_color, brand_text_size, brand_text_weight, brand_text_font,
       logo_url, logo_width, header_alignment, hero_alignment, content_width,
+      ai_summary_prompt,
       updated_at
     )
     VALUES (
@@ -355,6 +358,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       ${settings.brandText}, ${settings.brandTextColor}, ${settings.brandTextSize}, ${settings.brandTextWeight}, ${settings.brandTextFont},
       ${settings.logoUrl}, ${settings.logoWidth},
       ${settings.headerAlignment}, ${settings.heroAlignment}, ${settings.contentWidth},
+      ${settings.aiSummaryPrompt},
       now()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -384,6 +388,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       header_alignment = EXCLUDED.header_alignment,
       hero_alignment = EXCLUDED.hero_alignment,
       content_width = EXCLUDED.content_width,
+      ai_summary_prompt = EXCLUDED.ai_summary_prompt,
       updated_at = now()
   `;
 }

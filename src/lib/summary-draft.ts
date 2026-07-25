@@ -2,6 +2,7 @@ import { resolveExcerptForExport } from "@/lib/excerpts";
 import type { ContentBlock } from "@/lib/types";
 
 export {
+  DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
   SUMMARY_DRAFT_MAX_BODY_CHARS,
   assessPageReadyForSummaryDraft,
   buildSummaryDraftPrompt,

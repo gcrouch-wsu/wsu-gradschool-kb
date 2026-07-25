@@ -8,6 +8,7 @@ import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { PageLoader } from "@/components/PageLoader";
 import { ThemeEditor } from "@/components/ThemeEditor";
 import { DEFAULT_THEME, SAFE_FONTS } from "@/lib/kb-theme";
+import { DEFAULT_AI_SUMMARY_SYSTEM_PROMPT } from "@/lib/summary-draft-core";
 import {
   ALIGNMENTS,
   BRAND_TEXT_WEIGHTS,
@@ -41,7 +42,7 @@ export default function AdminSettingsPage() {
   const [dbEnabled, setDbEnabled] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [activeTab, setActiveTab] = useState<"general" | "branding" | "home" | "styling">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "branding" | "home" | "styling" | "ai">("general");
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -185,6 +186,13 @@ export default function AdminSettingsPage() {
           onClick={() => setActiveTab("styling")}
         >
           Global Styling
+        </button>
+        <button
+          className={`tab-button ${activeTab === "ai" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("ai")}
+          type="button"
+        >
+          AI Summary Prompt
         </button>
       </div>
 
@@ -632,6 +640,57 @@ export default function AdminSettingsPage() {
             }}
           />
         </section>
+      )}
+
+      {settings && activeTab === "ai" && (
+        <form className="form form--wide" onSubmit={handleSave}>
+          <section className="card">
+            <h2>AI Summary Prompt</h2>
+            <p className="meta">
+              Used when an editor clicks <strong>Draft with AI</strong> on a page. This is the system
+              instruction sent to the model. The app still attaches the page title, section outline, and
+              full page body automatically. Leave blank to use the built-in default.
+            </p>
+            <label>
+              <span className="meta">System prompt</span>
+              <textarea
+                className="input"
+                onChange={(e) => update("aiSummaryPrompt", e.target.value)}
+                placeholder={DEFAULT_AI_SUMMARY_SYSTEM_PROMPT}
+                rows={12}
+                value={settings.aiSummaryPrompt}
+              />
+            </label>
+            <p className="meta">
+              {settings.aiSummaryPrompt.trim()
+                ? "Custom prompt is active."
+                : "Using the built-in default prompt (shown as placeholder)."}
+            </p>
+            <div className="admin-actions" style={{ marginTop: "1rem", gap: "0.75rem" }}>
+              <button
+                className="button button--small button--ghost"
+                disabled={saving}
+                onClick={() => update("aiSummaryPrompt", DEFAULT_AI_SUMMARY_SYSTEM_PROMPT)}
+                type="button"
+              >
+                Load default into editor
+              </button>
+              <button
+                className="button button--small button--ghost"
+                disabled={saving || !settings.aiSummaryPrompt}
+                onClick={() => update("aiSummaryPrompt", "")}
+                type="button"
+              >
+                Clear (use built-in default)
+              </button>
+            </div>
+          </section>
+          <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
+            <button className="button" disabled={saving || !dbEnabled} type="submit">
+              {saving ? "Saving…" : "Save AI summary prompt"}
+            </button>
+          </div>
+        </form>
       )}
     </div>
   );
