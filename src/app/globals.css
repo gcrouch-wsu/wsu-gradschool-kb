@@ -972,8 +972,11 @@ p {
 }
 
 /* The gap *below* a heading (e.g. heading -> list, or page title -> lead) is its
-   own knob, usually tighter than the gap between unrelated blocks. */
-.flow > :is(h1, h2, h3, h4) + * {
+   own knob, usually tighter than the gap between unrelated blocks.
+   Public HeadingAnchor wraps h2/h3 in .heading-with-anchor (sibling copy-link
+   pattern), so that wrapper must match the same direct-child rule. */
+.flow > :is(h1, h2, h3, h4) + *,
+.flow > .heading-with-anchor + * {
   margin-top: var(--space-after-heading);
 }
 
