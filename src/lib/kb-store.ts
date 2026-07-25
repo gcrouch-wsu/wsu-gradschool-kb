@@ -1641,6 +1641,7 @@ export interface UpdatePageInput {
   showSummary?: boolean;
   showPrintButton?: boolean;
   nextReviewDate?: string | null;
+  publishAt?: string | null;
   linkUrl?: string;
   linkNewTab?: boolean;
   // Optional so ordinary editor saves (which don't touch related links) leave
@@ -1806,6 +1807,7 @@ export async function updatePage(
           showSummary: input.showSummary ?? page.showSummary,
           showPrintButton: input.showPrintButton ?? page.showPrintButton,
           nextReviewDate: input.nextReviewDate ?? page.nextReviewDate,
+          publishAt: input.publishAt !== undefined ? input.publishAt : page.publishAt,
           linkUrl: input.linkUrl ?? page.linkUrl,
           linkNewTab: input.linkNewTab ?? page.linkNewTab,
         };
@@ -1969,6 +1971,54 @@ export async function updatePageStatus(pageId: string, status: PageStatus): Prom
   }
 
   return updated;
+}
+
+/** Cron helper: publish drafts whose publishAt is due and that clear the publish gate. */
+export async function publishDueDraftPages(now = new Date()): Promise<{
+  attempted: number;
+  published: string[];
+  blocked: Array<{ pageId: string; issues: string[] }>;
+}> {
+  const { checkExcerptSourceForPublish } = await import("@/lib/excerpts");
+  const { validatePageForPublish } = await import("@/lib/publish-gate");
+  const dataset = await getDataset();
+  const due = dataset.pages.filter((page) => {
+    if (page.status !== "draft") return false;
+    if ((page.nodeKind ?? "page") !== "page" && (page.nodeKind ?? "page") !== "group" && (page.nodeKind ?? "page") !== "link") {
+      return false;
+    }
+    if (!page.publishAt) return false;
+    const when = new Date(page.publishAt);
+    return !Number.isNaN(when.getTime()) && when.getTime() <= now.getTime();
+  });
+
+  const published: string[] = [];
+  const blocked: Array<{ pageId: string; issues: string[] }> = [];
+
+  for (const page of due) {
+    const kb = dataset.knowledgeBases.find((candidate) => candidate.id === page.kbId);
+    const issues = await validatePageForPublish(page, getAssetStatusById, checkExcerptSourceForPublish, {
+      requireSummary: kb?.requireSummary !== false,
+    });
+    if (issues.length > 0) {
+      blocked.push({ pageId: page.id, issues });
+      continue;
+    }
+    await updatePageStatus(page.id, "published");
+    // Clear schedule after publish so the cron doesn't re-attempt.
+    const cleared: KbPage = {
+      ...(await getPageByIdForAdmin(page.id))!,
+      publishAt: null,
+    };
+    if (isDatabaseEnabled()) {
+      await updatePages([cleared]);
+    } else {
+      storeRuntimePage(cleared);
+    }
+    published.push(page.id);
+  }
+
+  return { attempted: due.length, published, blocked };
 }
 
 export interface PageLayoutItem {

@@ -151,7 +151,12 @@ async function CardBlock({
   const backgroundClass = `card--bg-${block.background}`;
   return (
     <section className={`card ${backgroundClass}`}>
-      {block.title && <strong className="card__title">{block.title}</strong>}
+      {block.title &&
+        (block.titleLevel === 3 ? (
+          <h3 className="card__title">{block.title}</h3>
+        ) : (
+          <h2 className="card__title">{block.title}</h2>
+        ))}
       <div className="card__blocks flow">
         <PageBlocks blocks={block.blocks} showHeadingCopyLinks={showHeadingCopyLinks} />
       </div>

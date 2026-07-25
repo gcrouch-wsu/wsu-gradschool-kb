@@ -85,6 +85,9 @@ export interface KbPage {
   verifiedAt?: string | null;
   verifiedBy?: string | null;
 
+  /** ISO datetime; cron publishes the draft when due (gate must still pass). */
+  publishAt?: string | null;
+
   nodeKind?: PageNodeKind;
   linkUrl?: string;
   linkNewTab?: boolean;
@@ -187,6 +190,8 @@ export type ContentBlock =
       blockId: string;
       type: "card";
       title?: string;
+      /** Outline level for the card title when shown as a heading. Default 2. */
+      titleLevel?: 2 | 3;
       background: "paper" | "wash" | "crimson";
       blocks: ContentBlock[];
     }

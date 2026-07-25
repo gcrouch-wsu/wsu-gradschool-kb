@@ -792,6 +792,29 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS require_summary BOOLEAN NOT NULL DEFAULT TRUE`;
     },
   },
+  {
+    id: "034_page_publish_at",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS publish_at TIMESTAMPTZ`;
+    },
+  },
+  {
+    id: "035_page_feedback",
+    async up(sql) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kb_page_feedback (
+          id TEXT PRIMARY KEY,
+          page_id TEXT NOT NULL,
+          kb_id TEXT NOT NULL,
+          helpful BOOLEAN NOT NULL,
+          comment TEXT NOT NULL DEFAULT '',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_feedback_page ON kb_page_feedback (page_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_feedback_kb ON kb_page_feedback (kb_id, created_at DESC)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

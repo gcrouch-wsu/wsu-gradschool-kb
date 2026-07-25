@@ -14,6 +14,14 @@
     {
       "path": "/api/admin/cron/review-digest",
       "schedule": "0 15 * * 1"
+    },
+    {
+      "path": "/api/admin/cron/sourced-staleness",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/admin/cron/scheduled-publish",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

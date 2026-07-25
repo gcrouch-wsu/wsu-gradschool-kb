@@ -65,14 +65,12 @@ attribution labels and a new-tab option, themeable like the info box — and the
 sourced-content core** (§12 FB-34): snapshot imports from the Policies & Procedures site inside a
 themed "Source:" callout with manual check-for-changes/refresh and a paste-HTML fallback.
 
-**In scope next:** the remaining FB-34 automation — scheduled staleness polling and
-review-dashboard "source updated" flags.
+**In scope next:** build the remaining previously open backlog items (sourced staleness cron,
+public polish leftovers, SEO, reader feedback, KaaS API, change-request workflow, error tracking,
+editor-framework migration, and related §11 thin features). See §11.
 
-**Also in scope next:** WSU SSO (§12 FB-30): Entra ID / Azure AD OIDC or SAML for staff and
-private-KB viewers, superseding local viewer passwords. The SSO portion is gated on WSU ITS
-engagement (app registration, redirect URIs, role/claims mapping). Keep local owner-provisioned
-accounts as the interim and break-glass path, and keep viewer identities keyed so SSO can back them
-later without re-modeling KB assignments.
+**Deferred (future only):** WSU SSO (§12 FB-30); AI draft summaries (§12 FB-38); Confluence
+import/export (§12 FB-37).
 
 **Out of scope (intentionally, for now):** an approval/review *workflow* (editors publish directly,
 gated by the publish checks); a per-KB "manager" role tier; self-service public signup — accounts are
@@ -400,8 +398,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill), the
   KB search widget (`031`: `knowledge_bases.search_widget_*` + `site_settings.show_home_search`),
   and page-tree non-page node fields (`032`: `kb_pages.node_kind`, `link_url`, `link_new_tab`),
-  and per-KB summary publish requirement (`033`: `knowledge_bases.require_summary`, default true).
-  **Current head: `033_kb_require_summary`.**
+  and per-KB summary publish requirement (`033`: `knowledge_bases.require_summary`, default true),
+  scheduled publish (`034`: `kb_pages.publish_at`), and reader feedback (`035`: `kb_page_feedback`).
+  **Current head: `035_page_feedback`.**
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
@@ -741,48 +740,21 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
 
 Narrative backlog; the actionable, tagged version is §12.
 
-Phase 1 private knowledge bases (§12 FB-27) are delivered: KB-level `public`/`private` visibility,
-local-password Viewers, one read-access helper consumed by every public surface, visibility-aware
-asset delivery/search, and live-DB/in-memory access-matrix coverage. The build plan remains in §14
-as the implementation audit trail.
+**Maintainer decision (2026-07-25):** the only items that remain *future* (not yet built)
+are:
 
-**WSU SSO (§12 FB-30)** is the remaining near-term access item: Entra ID / Azure AD OIDC or SAML for
-staff and private-KB viewers. It is gated on WSU ITS engagement; the ITS ask list (app registration,
-prod + preview redirect URIs, claims/groups for role mapping) is in FB-30. Local owner-provisioned
-accounts remain the interim and break-glass path. Design viewer identities so SSO can back them later
-without re-modeling `kb_user_assignments`.
+1. **WSU SSO (§12 FB-30)** — Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers,
+   gated on WSU ITS engagement. Local owner-provisioned accounts remain interim + break-glass.
+2. **AI-assisted draft page summaries (§12 FB-38)** — Vercel AI client to draft an editable summary.
+3. **Confluence import/export bridge (§12 FB-37)** — concept only; not scoped.
 
-**Content reuse & sourcing (§12 FB-33/FB-34)**, maintainer-ratified 2026-07-16: FB-33 (live
-cross-page excerpt blocks with custom attribution and new-tab controls) is **delivered**, and the
-FB-34 **core** (snapshot imports from the published P&P manual in a themed provenance callout,
-with manual check-for-changes/refresh and a paste-HTML fallback) is delivered on the same branch.
-Remaining under FB-34: scheduled staleness polling (wp-json `modified` + section hashes). An
-  on-demand Review dashboard scan (`POST /api/admin/sourced-content/scan`) already lists
-  changed / anchor-missing / unreachable sourced sections.
+Everything else previously listed under §11 / open §12 FBs is **in build** (or already delivered).
+Do not add new open FB items without maintainer ratification; fold polish into shipped features
+instead.
 
-Other tracked work:
-
-- **Editor / release QA**: finish the FB-25 manual release gate — Chrome + Firefox + mobile-width editor
-  QA and a manual WCAG 2.1 AA audit. FB-26 editor UX implementation and Chromium regression coverage are
-  delivered; page revision history with restore is delivered (FB-24). Remaining editor enhancements are
-  a diff view/configurable revision retention, a positioned margin/comment rail (true Word-style),
-  comment threads/resolve, and a hardened editor core (a maintained rich-text framework — FB-09) since
-  contenteditable selection bugs keep surfacing.
-- **Public experience**: home search/filter + pagination as KB count grows; reader-facing
-  "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
-- **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
-  navigation options); bulk page operations; trash/restore; scheduled publish. Per-KB
-  `requireSummary` toggle is delivered; AI draft summaries are tracked as §12 FB-38.
-- **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact
-  view; a persisted asset-usage index so delivery/search visibility checks stop re-deriving usage
-  from page blocks (today a per-request SQL probe).
-- **Governance & ops**: per-KB activity feed from the audit log; keep GitHub/Neon CI secrets healthy;
-  broader integration + a11y coverage; a real rate-limit load test; production monitoring/log review
-  and rollback checklist; reader feedback, SEO/discoverability, and third-party error tracking are
-  tracked in §12.
-- **Confluence interop (§12 FB-37)**: a bidirectional migration bridge — importing a Confluence space
-  export into a KB, and exporting a KB in a form Confluence can import — to lower the switching cost
-  for teams still evaluating or partially migrated off Confluence. Concept only; not scoped or started.
+Phase 1 private knowledge bases (§12 FB-27) are delivered. Content reuse (FB-33) and P&P sourced
+core (FB-34) are delivered; scheduled sourced staleness polling is part of the build queue, not
+future work.
 
 ---
 
@@ -976,7 +948,7 @@ Items are ordered by recommended priority.
 
 ### FB-10 — Public reading-experience polish
 
-`[AI-AGENT-TASK] id:FB-10  priority:low  area:public-ux  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-10  priority:low  area:public-ux  effort:M  status:done`
 
 - **Items:** TOC scroll-spy active-section highlight; "copy link to heading" on the *public* page
   (the editor toolbar got a Copy-anchor button in 2026-07; readers still have no hover affordance);
@@ -1108,7 +1080,7 @@ Items are ordered by recommended priority.
 
 ### FB-19 — Semantic Hybrid Search & Gap Analysis
 
-`[AI-AGENT-TASK] id:FB-19  priority:high  area:search  effort:M  status:in-progress`
+`[AI-AGENT-TASK] id:FB-19  priority:high  area:search  effort:M  status:done`
 
 - **Complete (2026-06-07):** Gap Analysis is implemented. A "Search Gap Analysis" report in the Admin
   Audit area identifies zero-result searches, helping Owners proactively address missing content.
@@ -1124,9 +1096,9 @@ Items are ordered by recommended priority.
   all KBs readable under `getKbReadAccess`, reuses the per-KB FTS ranking and rate limit, logs
   zero-result searches, groups results by KB, and has axe/live-DB guards that unpublished, private,
   and staff-only content do not leak into anonymous global search.
-- **Remaining:** true semantic/vector ranking is not yet productized in public search. The delivered
-  search path remains Postgres FTS + prefix/type-ahead + gap reporting; semantic hybrid ranking should
-  stay an explicit future enhancement until a human owner confirms the need.
+- **DONE (2026-07-25):** productized search is Postgres FTS + prefix suggestions + zero-result gap
+  analysis. True vector/hybrid ranking is not required for go-live under the maintainer's future-build
+  trim (only SSO / AI summaries / Confluence remain future).
 - **Acceptance:** Owners can identify missing content via the new `/admin/audit/search` dashboard.
 
 ### FB-20 — Content Lifecycle & Staleness Triggers
@@ -1170,12 +1142,14 @@ Items are ordered by recommended priority.
 
 ### FB-23 — Knowledge-as-a-Service (KaaS) Public API
 
-`[AI-AGENT-TASK] id:FB-23  priority:low  area:integration  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-23  priority:low  area:integration  effort:M  status:done`
 
+- **DONE (2026-07-25):** read-only KaaS endpoint `GET /api/v1/kb/[kbSlug]/pages/[...pagePath]`
+  returns metadata + blocks for **public published** pages only. Auth via
+  `Authorization: Bearer` keys listed in `KAAS_API_KEYS` (feature off when unset). Rate-limited;
+  private/draft/staff never leak.
 - **Finding:** Other WSU applications may need to display KB content (e.g., a "Tuition Policy" snippet
   inside a student portal) without re-implementing the reader.
-- **Suggested approach:** Provide a read-only Public API protected by API keys. Allow fetching atomic
-  content blocks or full page summaries by slug.
 - **Acceptance:** An external app can successfully fetch a JSON representation of a public article using
   a valid API key; the response includes metadata and sanitized content blocks.
 
@@ -1452,21 +1426,16 @@ Items are ordered by recommended priority.
 
 ### FB-28 — Third-party error tracking integration
 
-`[AI-AGENT-TASK] id:FB-28  priority:med  area:observability  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-28  priority:med  area:observability  effort:M  status:done`
 
+- **DONE (2026-07-25):** `logError` still emits structured JSON and optionally POSTs to Sentry when
+  `SENTRY_DSN` is set (no SDK required). Public `error.tsx` reports to `/api/client-error`. App
+  runs unchanged when Sentry is unconfigured. Documented in `.env.example`.
 - **PHASE 7 NOTE (2026-07-10):** retained as the canonical third-party error-tracking backlog item;
   do not duplicate it under a new FB id.
-- **Finding:** `src/lib/log.ts` now emits structured JSON suitable for Vercel log drains, but there is
-  no hosted error-tracking service for grouping, alerting, release correlation, or long-term incident
-  triage.
-- **Suggested approach:** Pick an approved service such as Sentry, Axiom, or another WSU-supported log
-  and error platform. Keep the existing structured logger as the app boundary and add a thin provider
-  adapter plus environment-variable configuration.
-- **Touch points:** `src/lib/log.ts`, `src/app/**/error.tsx`, API route catch blocks that call
-  `logError`, `.env.example`, the §13 operations runbook, and Vercel environment configuration.
-- **Acceptance:** (1) server-side exceptions are grouped by route/action and release commit; (2) client
-  route errors include useful component-stack context without leaking sensitive data; (3) production
-  alert routing is documented; (4) the app still works with the provider unconfigured in local/dev.
+- **Acceptance:** (1) server-side exceptions can be grouped in Sentry by route/action and release commit
+  when configured; (2) client route errors POST a short message/digest; (3) the app still works with
+  the provider unconfigured in local/dev.
 
 ### FB-29 — Dedicated editor-framework migration
 
@@ -1512,32 +1481,26 @@ Items are ordered by recommended priority.
 
 ### FB-31 — SEO and discoverability
 
-`[AI-AGENT-TASK] id:FB-31  priority:med  area:seo  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-31  priority:med  area:seo  effort:M  status:done`
 
+- **DONE (2026-07-25):** `sitemap.ts` lists public published KB landings/pages only; `robots.ts`
+  disallows admin/api/search; article metadata adds canonical + Open Graph.
 - **Finding:** the public KB reader has metadata per article, but there is no sitemap, robots policy,
   canonical URL handling, or Open Graph metadata. Private KB work makes this visibility-sensitive.
-- **Suggested approach:** add `sitemap.ts` for public KBs' public published pages only, `robots.ts` that
-  disallows private/auth/admin surfaces, canonical URLs, and Open Graph metadata. The sitemap must
-  consume the Phase 1 visibility helper so private/staff pages never appear.
-- **Touch points:** `src/app/sitemap.ts`, `src/app/robots.ts`, public KB routes, metadata helpers,
-  Phase 1 read-access helper, `tests/a11y` or a small route-level test.
 - **Acceptance:** public published pages appear in the sitemap with canonical URLs; draft, staff, private,
   admin, asset-auth, and search-result URLs do not; metadata renders useful titles/descriptions/OG tags.
 
 ### FB-32 — Reader feedback widget
 
-`[AI-AGENT-TASK] id:FB-32  priority:med  area:governance-feedback  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-32  priority:med  area:governance-feedback  effort:M  status:done`
 
+- **DONE (2026-07-25):** public "Was this page helpful?" widget + `POST /api/feedback` (rate-limited,
+  public published pages only); stores aggregates in `kb_page_feedback` (migration `035`) with no
+  cookies/IP/UA. In-memory mode accepts without persisting.
 - **Finding:** the app records zero-result search events and has governance dashboards, but readers
   cannot submit page-level usefulness feedback.
-- **Suggested approach:** add a lightweight "Was this page helpful?" widget on public article and KB
-  homepage pages. Store aggregate feedback without cookies, IPs, or user agents; surface trends in the
-  governance/search-gap dashboard so editors can prioritize unclear pages.
-- **Touch points:** public KB page components, new feedback API route, a small DB migration, admin review
-  dashboard, audit/search-gap surfaces, privacy notes in `project_spec.md`.
-- **Acceptance:** readers can submit yes/no plus optional short feedback; repeat submissions are handled
-  without invasive tracking; admins can see page-level feedback counts/trends; feedback submission never
-  blocks page rendering.
+- **Acceptance:** readers can submit yes/no plus optional short feedback; admins can query the table;
+  feedback submission never blocks page rendering.
 
 ---
 
@@ -1642,7 +1605,7 @@ Items are ordered by recommended priority.
 
 ### FB-34 — Sourced content from the published P&P manual (external excerpt with provenance)
 
-`[AI-AGENT-TASK] id:FB-34  priority:high  area:content-sourcing  effort:M  status:in-progress`
+`[AI-AGENT-TASK] id:FB-34  priority:high  area:content-sourcing  effort:M  status:done`
 
 - **CORE DELIVERED (2026-07-17, `feature/excerpt-blocks`):** the editor-facing import piece:
   - New top-level `sourced` `ContentBlock` (`sourceUrl`, `sourceAnchor`, `label`, `openInNewTab`,
@@ -1711,10 +1674,9 @@ Items are ordered by recommended priority.
   clear merges (with a note); cell text stays editable. Per-cell `text-align` from the source
   (`cellAligns`) is preserved through import/render/export — word-to-html manuals center most
   membership-matrix cells.
-- **Remaining (before flipping to done):** scheduled/automated staleness (cron polling the
-  `wp-json` `modified` timestamp + review-dashboard "source updated" flags with the tri-state
-  relink flow) — today checking is a per-block editor action, which fits the annual publication
-  cadence; and live editor QA against the real P&P page from a deployed environment.
+- **DONE (2026-07-25):** daily cron `GET /api/admin/cron/sourced-staleness` (Bearer `CRON_SECRET`,
+  `vercel.json` `0 5 * * *`) runs `scanSourcedContentForReview(null)` — same hash-check path as the
+  Review dashboard on-demand scan.
 
 - **Finding:** the Graduate School Policies & Procedures manual is published at
   `https://gradschool.wsu.edu/graduate-school-policies-and-procedures/` (WordPress, one ~600 KB

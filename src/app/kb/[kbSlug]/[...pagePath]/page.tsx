@@ -7,6 +7,7 @@ import { KbSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
+import { ReaderFeedbackWidget } from "@/components/ReaderFeedbackWidget";
 import { TableOfContents } from "@/components/TableOfContents";
 import { hasTocEntries } from "@/lib/toc";
 import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
@@ -47,6 +48,15 @@ export async function generateMetadata({
   return {
     title: `${page.title} · ${kb.title}`,
     description: page.summary || undefined,
+    alternates: {
+      canonical: `/kb/${kb.slug}/${pagePath.join("/")}`,
+    },
+    openGraph: {
+      title: page.title,
+      description: page.summary || undefined,
+      type: "article",
+      url: `/kb/${kb.slug}/${pagePath.join("/")}`,
+    },
   };
 }
 
@@ -209,6 +219,10 @@ export default async function KbArticlePage({
                 ))}
               </div>
             </>
+          )}
+
+          {kb.visibility === "public" && page.visibility === "public" && page.status === "published" && (
+            <ReaderFeedbackWidget pageId={page.id} />
           )}
 
           <ArticlePageNav

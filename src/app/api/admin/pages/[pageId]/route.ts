@@ -32,6 +32,7 @@ interface UpdateBody {
   showSummary?: unknown;
   showPrintButton?: unknown;
   nextReviewDate?: unknown;
+  publishAt?: unknown;
   linkUrl?: unknown;
   linkNewTab?: unknown;
 }
@@ -73,6 +74,12 @@ export async function PATCH(
   const showSummary = typeof body.showSummary === "boolean" ? body.showSummary : undefined;
   const showPrintButton = typeof body.showPrintButton === "boolean" ? body.showPrintButton : undefined;
   const nextReviewDate = typeof body.nextReviewDate === "string" ? body.nextReviewDate : undefined;
+  const publishAt =
+    body.publishAt === null
+      ? null
+      : typeof body.publishAt === "string"
+        ? body.publishAt.trim() || null
+        : undefined;
   const visibility: PageVisibility = body.visibility === "staff" ? "staff" : "public";
   const status: PageStatus = body.status === "published" ? "published" : "draft";
   const sortOrder = typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : undefined;
@@ -145,6 +152,7 @@ export async function PATCH(
       showSummary,
       showPrintButton,
       nextReviewDate,
+      publishAt,
       linkUrl,
       linkNewTab,
     }, guard.session.email);

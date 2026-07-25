@@ -711,6 +711,22 @@ function SectionEditor({
               />
             </label>
             <label>
+              <span className="meta">Title level</span>
+              <select
+                className="input"
+                onChange={(e) =>
+                  onUpdateCard({
+                    ...section.block,
+                    titleLevel: e.target.value === "3" ? 3 : 2,
+                  })
+                }
+                value={section.block.titleLevel === 3 ? "3" : "2"}
+              >
+                <option value="2">H2</option>
+                <option value="3">H3</option>
+              </select>
+            </label>
+            <label>
               <span className="meta">Background</span>
               <select
                 className="input"

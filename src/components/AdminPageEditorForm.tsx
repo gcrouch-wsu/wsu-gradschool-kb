@@ -312,6 +312,7 @@ export function AdminPageEditorForm({
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
   const [relocateOpen, setRelocateOpen] = useState(false);
   const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
+  const [publishAt, setPublishAt] = useState(page.publishAt ?? "");
   const [verifiedAt, setVerifiedAt] = useState(page.verifiedAt);
   const [verifiedBy, setVerifiedBy] = useState(page.verifiedBy);
   const [busy, setBusy] = useState<EditableStatus | null>(null);
@@ -662,6 +663,7 @@ export function AdminPageEditorForm({
           showSummary,
           showPrintButton,
           nextReviewDate,
+          publishAt: publishAt.trim() || null,
         }),
       });
       if (response.status === 401) {
@@ -1033,6 +1035,15 @@ export function AdminPageEditorForm({
               onChange={(event) => setNextReviewDate(event.target.value)}
               type="date"
               value={nextReviewDate || ""}
+            />
+          </label>
+          <label>
+            <span className="meta">Schedule publish (optional)</span>
+            <input
+              className="input"
+              onChange={(event) => setPublishAt(event.target.value)}
+              type="datetime-local"
+              value={publishAt ? publishAt.slice(0, 16) : ""}
             />
           </label>
           {verifiedAt && (

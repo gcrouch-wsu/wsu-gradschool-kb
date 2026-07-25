@@ -305,8 +305,9 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
     }
     case "card": {
       const titleAttr = block.title ? ` data-title="${escapeHtml(block.title)}"` : "";
+      const levelAttr = block.titleLevel === 3 ? ` data-title-level="3"` : "";
       const inner = blocksToDocumentHtml(block.blocks, kbSlug);
-      return `<section class="doc-card doc-card--${block.background}" data-block-id="${id}" data-background="${block.background}"${titleAttr}>${inner}</section>`;
+      return `<section class="doc-card doc-card--${block.background}" data-block-id="${id}" data-background="${block.background}"${titleAttr}${levelAttr}>${inner}</section>`;
     }
     case "procedure_section": {
       const tag = block.level === 3 ? "h3" : "h2";
@@ -590,6 +591,7 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
         blockId: blockIdFrom(node),
         type: "card",
         title: node.getAttribute("data-title") || undefined,
+        titleLevel: node.getAttribute("data-title-level") === "3" ? 3 : 2,
         background:
           (node.getAttribute("data-background") as Extract<ContentBlock, { type: "card" }>["background"]) || "paper",
         blocks: documentHtmlToBlocks(node.innerHTML, depth + 1),
