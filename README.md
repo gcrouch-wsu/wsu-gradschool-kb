@@ -79,7 +79,8 @@ AI_MODEL=inclusionai/ling-3.0-flash-free
 
 Without these, the API returns a clear “not configured” error. Drafts never auto-save — review and
 Save as usual. Customize the system prompt under **Admin → Settings → AI Summary Prompt** (blank
-uses the built-in default).
+uses the built-in default). Cleaned AI drafts are capped at 2,500 characters; typed summaries have
+no hard max.
 
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
 axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions; optionally

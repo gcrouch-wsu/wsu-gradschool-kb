@@ -336,6 +336,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
     covers body/heading line-height, body/heading letter-spacing, block spacing, the heading→content
     gap (`spaceAfterHeading`), list item spacing, list indent, and the article reading measure — all
     emitted as CSS variables by `themeToCssVars` and consumed by the `.flow` rhythm system (see §8).
+  - **AI Summary Prompt** — editable system prompt for editor **Draft with AI** (`aiSummaryPrompt`;
+    blank uses the built-in default in `summary-draft-core.ts`). Title, section outline, and page body
+    are still attached by the app; cleaned drafts are capped at 2,500 characters.
 - All values are validated/clamped in `normalizeSiteSettings`; blank fields are blank-safe (the public
   shell omits empty elements and collapses an empty hero rather than rendering stray chrome). Falls
   back to defaults when unset or no DB. Owner-only in the UI and at the API (`GET`/`PUT`).
@@ -432,7 +435,9 @@ share the page lock and the process-global in-memory store.
   may fetch from; defaults to `gradschool.wsu.edu` when unset.
 - `AI_PROVIDER_ENDPOINT` / `AI_API_KEY` / `AI_MODEL` — optional Vercel AI Gateway (OpenAI-compatible
   chat completions) for editor **Draft with AI** summaries. When unset, the summary-draft route
-  returns 501. Recommended model: `inclusionai/ling-3.0-flash-free`.
+  returns 501. Recommended model: `inclusionai/ling-3.0-flash-free`. System prompt comes from
+  site settings (`aiSummaryPrompt`) or the built-in default; cleaned drafts are capped at 2,500
+  characters.
 
 **CI** (`.github/workflows/ci.yml`): on pushes to `main` and on PRs, runs type-check, lint, unit
 tests, production build, public-page axe smoke tests, and the Chromium editor regression suite against
@@ -565,7 +570,8 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   procedure sections, excerpts, P&P sourced blocks, editor notes (inline + margin rail), captions
   vs alt text, continued numbering, draft backup/restore, draft preview, publish readiness panel.
 - Optional **Draft with AI** for page summaries (Gateway env vars; page must have title + enough
-  body; never auto-saves).
+  body; never auto-saves). System prompt is editable under **Admin → Settings → AI Summary Prompt**
+  (blank = built-in default); cleaned drafts are capped at 2,500 characters.
 - Managed assets: stable URLs, versions, usage index, direct-to-Blob large uploads when configured,
   responsive `?w=` / `srcset` image variants, private/staff-aware delivery, archive-first delete.
 - Search: Postgres FTS (global + per-KB), visibility prune, search widget with live suggestions.
