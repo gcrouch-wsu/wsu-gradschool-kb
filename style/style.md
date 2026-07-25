@@ -360,7 +360,7 @@ These mirror the live editor **Publishing readiness** checklist and `validatePag
 | Links | No vague text; no empty `href` |
 | Assets | Images/files referenced must be active in the library |
 | Excerpts | `doc-excerpt` blocks must reference an existing, published page and a section that still exists on it |
-| Governance (page metadata, not in HTML) | Title, summary, responsible office, contact email, last reviewed date |
+| Governance (page metadata, not in HTML) | Title, responsible office, contact email, last reviewed date; summary when the KB requires it |
 
 When reviewing HTML-only files, **note metadata gaps** the author must fill in the editor (summary, dates, etc.).
 

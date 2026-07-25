@@ -47,6 +47,13 @@ describe("validatePageForPublish", () => {
     expect(await validatePageForPublish(page, activeResolver)).toContain("Page is missing a summary.");
   });
 
+  it("skips the summary check when the KB does not require one", async () => {
+    const page = { ...validPage(), summary: "  " };
+    expect(await validatePageForPublish(page, activeResolver, undefined, { requireSummary: false })).not.toContain(
+      "Page is missing a summary.",
+    );
+  });
+
   it("requires a valid contact email", async () => {
     const page = { ...validPage(), contactEmail: "not-an-email" };
     expect(await validatePageForPublish(page, activeResolver)).toContain(

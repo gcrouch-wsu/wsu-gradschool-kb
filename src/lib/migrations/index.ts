@@ -786,6 +786,12 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS link_new_tab BOOLEAN NOT NULL DEFAULT FALSE`;
     },
   },
+  {
+    id: "033_kb_require_summary",
+    async up(sql) {
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS require_summary BOOLEAN NOT NULL DEFAULT TRUE`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       search_widget_enabled?: boolean;
       search_widget_scope?: string;
       search_widget_label?: string;
+      require_summary?: boolean;
     }>;
     const allKbs: KnowledgeBase[] = rows.map((row) => ({
       id: row.id,
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
       searchWidgetEnabled: Boolean(row.search_widget_enabled),
       searchWidgetScope: row.search_widget_scope === "all" ? "all" : "kb",
       searchWidgetLabel: row.search_widget_label ?? "",
+      requireSummary: row.require_summary !== false,
     }));
     const kbs = await filterKbsForSession(guard.session, allKbs);
     return NextResponse.json({ kbs });

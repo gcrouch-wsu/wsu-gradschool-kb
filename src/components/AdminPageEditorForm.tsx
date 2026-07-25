@@ -536,8 +536,9 @@ export function AdminPageEditorForm({
   }
   const readinessIssues = useMemo(() => {
     const next: string[] = [];
+    const requireSummary = kb.requireSummary !== false;
     if (!title.trim()) next.push("Add a page title.");
-    if (!summary.trim()) next.push("Add a summary.");
+    if (requireSummary && !summary.trim()) next.push("Add a summary.");
     if (!ownerLabel.trim()) next.push("Add a responsible office.");
     if (!contactEmail.trim() || !EMAIL_PATTERN.test(contactEmail.trim())) {
       next.push("Add a valid contact email.");
@@ -563,7 +564,7 @@ export function AdminPageEditorForm({
     if (linkIssues.vague) next.push("Replace vague link text such as \"click here\".");
     if (linkIssues.empty) next.push("Add destinations for empty links.");
     return next;
-  }, [blocks, contactEmail, lastReviewedDate, ownerLabel, summary, title]);
+  }, [blocks, contactEmail, kb.requireSummary, lastReviewedDate, ownerLabel, summary, title]);
   const [governanceOpen, setGovernanceOpen] = useState(false);
   useEffect(() => {
     markProblemLinks();
@@ -922,7 +923,14 @@ export function AdminPageEditorForm({
             <input className="input" onChange={(event) => setSlug(event.target.value)} value={slug} />
           </label>
           <label>
-            <span className="meta">Summary{summaryError && <span className="field-error-tag"> — required</span>}</span>
+            <span className="meta">
+              Summary
+              {kb.requireSummary === false
+                ? " (optional for this KB)"
+                : summaryError
+                  ? <span className="field-error-tag"> — required</span>
+                  : null}
+            </span>
             <textarea
               aria-invalid={summaryError || undefined}
               className={`input${summaryError ? " input--error" : ""}`}

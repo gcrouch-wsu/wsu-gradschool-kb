@@ -136,7 +136,7 @@ surfaces are added):
 | `/admin/review` | Owner/Admin/assigned Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
 | `/admin/usage` | Owner/Admin/assigned Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`; Viewers redirect to `/`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
 | `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
-| `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation, and Owner-only user management can assign Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
+| `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only except `PATCH /api/admin/kbs/[kbId]` which also lets **Admin** toggle `requireSummary`. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation, and Owner-only user management can assign Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
 | `/admin/kbs/[kbId]/styles` and KB theme APIs | Owner only | Server page and theme API both require `session.role === "owner"`. | `src/app/admin/kbs/[kbId]/styles/page.tsx`, `src/app/api/admin/kbs/[kbId]/theme/route.ts` |
 | Excerpt picker + preview APIs | Owner/Admin/Editor (viewers rejected) | `GET /api/admin/excerpt-sources` filters KBs/pages/headings by the caller's read access (`filterKbsForReadAccess` / `getReadableExcerptSourcePageForPicker` — staff-ancestor rules included); `POST /api/admin/excerpt-preview` resolves refs with the caller's session via `resolveExcerptForRead`. Both use `requireAdminMutation`. | `src/app/api/admin/excerpt-sources/route.ts`, `src/app/api/admin/excerpt-preview/route.ts`, `src/lib/excerpts.ts` |
 | Sourced-content import/check APIs | Owner/Admin/Editor (viewers rejected) | `POST /api/admin/sourced-content` and `…/check` use `requireAdminMutation`; outbound fetches are gated by `parseAllowedSourceUrl` (https + host allowlist) — no KB scoping needed, no KB data is read. | `src/app/api/admin/sourced-content/route.ts`, `src/app/api/admin/sourced-content/check/route.ts`, `src/lib/sourced-content.ts` |
@@ -281,10 +281,11 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 
 ### Publish gate (`src/lib/publish-gate.ts`)
 - `validatePageForPublish` returns human-readable blocking issues (empty = publishable). Checks:
-  required metadata (title, summary, responsible office, valid contact email, last-reviewed date),
-  heading-hierarchy skips, tables without a header row/column, images missing alt text (unless
-  decorative), references to non-active assets, and vague/empty link text. Because editors publish
-  directly, this gate is the primary quality control.
+  required metadata (title, responsible office, valid contact email, last-reviewed date; **summary
+  when the KB's `requireSummary` is true**, the default), heading-hierarchy skips, tables without a
+  header row/column, images missing alt text (unless decorative), references to non-active assets,
+  and vague/empty link text. Because editors publish directly, this gate is the primary quality
+  control. New pages default `contactEmail` to the creating editor's signed-in email.
 
 ### Assets (`src/lib/kb-store.ts`, `src/lib/asset-lifecycle.ts`)
 - Stable public route `/kb/{kbSlug}/files/{assetSlug}` serves the **active version**, so replacing a
@@ -760,7 +761,8 @@ Other tracked work:
 - **Public experience**: home search/filter + pagination as KB count grows; reader-facing
   "copy link to heading"; previous/next page navigation; card title H2/H3 level selector.
 - **KB management**: KB templates and advanced per-KB settings (default visibility, nav options,
-  navigation options); bulk page operations; trash/restore; scheduled publish.
+  navigation options); bulk page operations; trash/restore; scheduled publish. Per-KB
+  `requireSummary` toggle is delivered; AI draft summaries are tracked as §12 FB-38.
 - **Assets**: direct-to-Blob large uploads; image variants/resizing; bulk import; richer usage/impact
   view; a persisted asset-usage index so delivery/search visibility checks stop re-deriving usage
   from page blocks (today a per-request SQL probe).
@@ -1897,6 +1899,31 @@ Items are ordered by recommended priority.
   - **Acceptance:** not yet defined — this item needs a scoping pass (confirm intent, pick
     import-only vs. both directions, define the staging/review UX) before it can carry real
     acceptance criteria.
+
+### FB-38 — AI-assisted draft page summaries (Vercel AI)
+
+`[AI-AGENT-TASK] id:FB-38  priority:med  area:editor  effort:M  status:open`
+
+- **Maintainer-requested (2026-07-25):** when a page is missing a summary (or the author wants a
+  starting point), offer a **Generate draft summary** action in the page editor that calls a
+  Vercel AI SDK / AI Gateway client and fills the summary field with a short editable draft.
+  Authors must still review and edit before publish — never auto-publish AI text.
+- **Suggested shape:**
+  - Server route (e.g. `POST /api/admin/pages/[pageId]/summary-draft`) gated by
+    `requireAdminMutation` + `requireKbAccess`, rate-limited, returns `{ summary }` only.
+  - Prompt inputs: page title + plain-text extraction from blocks (reuse the FTS/block text
+    extractor idea; cap tokens). Output: 1–2 sentences, no markdown, governance-neutral tone.
+  - UI: button next to the Summary field; disabled while empty body / while streaming; writes
+    into the existing controlled `summary` state (dirty = true) so Save still owns persistence.
+  - Respect per-KB `requireSummary` — the button is useful whether or not the gate requires a
+    summary (optional KBs still benefit from search snippets).
+- **Env / ops:** configure via Vercel AI Gateway (or AI SDK provider env vars); document in
+  README / §13; do not log page body content to third parties beyond the model provider.
+- **Acceptance (draft):** button produces a non-empty draft for a page with real body text;
+  author can edit before save; unauthorized callers get 401/403; rate limit returns 429; unit or
+  hermetic test covers the route with a mocked model client (no live model calls in CI).
+- **Touch points (anticipated):** `src/components/AdminPageEditorForm.tsx`, new API route under
+  `src/app/api/admin/pages/[pageId]/`, `package.json` AI SDK deps, README env notes.
 
 ---
 

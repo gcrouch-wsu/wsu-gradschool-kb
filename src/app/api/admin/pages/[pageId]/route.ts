@@ -101,6 +101,7 @@ export async function PATCH(
   }
 
   if (status === "published") {
+    const kb = await getKbById(existingPage!.kbId);
     const issues = await validatePageForPublish(
       {
         title,
@@ -115,6 +116,7 @@ export async function PATCH(
       },
       getAssetStatusById,
       checkExcerptSourceForPublish,
+      { requireSummary: kb?.requireSummary !== false },
     );
     if (issues.length > 0) {
       return NextResponse.json(

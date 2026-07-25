@@ -67,6 +67,7 @@ export default async function AdminPagesPage() {
             </div>
             <AdminPageTreeManager
               canDelete={session.role === "owner" || session.role === "admin"}
+              canManagePublishPolicy={session.role === "owner" || session.role === "admin"}
               destinationKbs={destinationKbs}
               initialPages={pages}
               kb={kb}

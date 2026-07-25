@@ -28,6 +28,7 @@ import {
   getSql,
   updateAssetRecord,
   updateKbHomepagePageId,
+  updateKbRequireSummary,
   updatePages,
   updatePageStatusColumn,
   updatePageLifecycle,
@@ -71,6 +72,7 @@ const globalForRuntime = globalThis as unknown as {
   __kbRuntimeVersions?: Map<string, AssetVersion[]>;
   __kbRuntimeRedirects?: KbRedirect[];
   __kbRuntimeKbHomepages?: Map<string, string | null>;
+  __kbRuntimeKbRequireSummary?: Map<string, boolean>;
   __kbRuntimePageRevisions?: PageRevision[];
   __kbDeletedAssetIds?: Set<string>;
   __kbDeletedPageIds?: Set<string>;
@@ -102,6 +104,31 @@ function runtimeKbHomepages(): Map<string, string | null> {
     globalForRuntime.__kbRuntimeKbHomepages = new Map();
   }
   return globalForRuntime.__kbRuntimeKbHomepages;
+}
+
+function runtimeKbRequireSummary(): Map<string, boolean> {
+  if (!globalForRuntime.__kbRuntimeKbRequireSummary) {
+    globalForRuntime.__kbRuntimeKbRequireSummary = new Map();
+  }
+  return globalForRuntime.__kbRuntimeKbRequireSummary;
+}
+
+function applyKbRuntimeOverrides(kbs: KnowledgeBase[]): KnowledgeBase[] {
+  const homepageOverrides = runtimeKbHomepages();
+  const requireSummaryOverrides = runtimeKbRequireSummary();
+  if (homepageOverrides.size === 0 && requireSummaryOverrides.size === 0) {
+    return kbs;
+  }
+  return kbs.map((kb) => {
+    let next = kb;
+    if (homepageOverrides.has(kb.id)) {
+      next = { ...next, homepagePageId: homepageOverrides.get(kb.id) ?? null };
+    }
+    if (requireSummaryOverrides.has(kb.id)) {
+      next = { ...next, requireSummary: requireSummaryOverrides.get(kb.id) !== false };
+    }
+    return next;
+  });
 }
 
 async function loadVersions(assetId: string): Promise<AssetVersion[]> {
@@ -166,12 +193,14 @@ function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
   const extraPages = runtimePages();
   const extraAssets = runtimeAssets();
   const homepageOverrides = runtimeKbHomepages();
+  const requireSummaryOverrides = runtimeKbRequireSummary();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
   if (
     extraPages.length === 0 &&
     extraAssets.length === 0 &&
     homepageOverrides.size === 0 &&
+    requireSummaryOverrides.size === 0 &&
     deletedPages.size === 0 &&
     deletedAssets.size === 0
   ) {
@@ -181,9 +210,7 @@ function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
   const seedPageIds = new Set(dbDataset.pages.map((page) => page.id));
   const seedAssetIds = new Set(dbDataset.assets.map((asset) => asset.id));
   return {
-    knowledgeBases: dbDataset.knowledgeBases.map((kb) =>
-      homepageOverrides.has(kb.id) ? { ...kb, homepagePageId: homepageOverrides.get(kb.id) ?? null } : kb,
-    ),
+    knowledgeBases: applyKbRuntimeOverrides(dbDataset.knowledgeBases),
     pages: [
       ...dbDataset.pages
         .filter((page) => !deletedPages.has(page.id))
@@ -204,12 +231,14 @@ const getDataset = cache(async (): Promise<KbDataset> => {
   const extra = runtimePages();
   const extraAssets = runtimeAssets();
   const homepageOverrides = runtimeKbHomepages();
+  const requireSummaryOverrides = runtimeKbRequireSummary();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
   if (
     extra.length === 0 &&
     extraAssets.length === 0 &&
     homepageOverrides.size === 0 &&
+    requireSummaryOverrides.size === 0 &&
     deletedPages.size === 0 &&
     deletedAssets.size === 0
   ) {
@@ -217,9 +246,7 @@ const getDataset = cache(async (): Promise<KbDataset> => {
   }
   const pageOverrides = new Map(extra.map((page) => [page.id, page]));
   return {
-    knowledgeBases: seedDataset.knowledgeBases.map((kb) =>
-      homepageOverrides.has(kb.id) ? { ...kb, homepagePageId: homepageOverrides.get(kb.id) ?? null } : kb,
-    ),
+    knowledgeBases: applyKbRuntimeOverrides(seedDataset.knowledgeBases),
     pages: [
       ...seedDataset.pages
         .filter((page) => !deletedPages.has(page.id))
@@ -414,6 +441,28 @@ export async function setKbHomepagePage(kbId: string, pageId: string | null): Pr
     await updateKbHomepagePageId(kbId, normalizedPageId);
   } else {
     runtimeKbHomepages().set(kbId, normalizedPageId);
+  }
+
+  return updated;
+}
+
+export async function setKbRequireSummary(kbId: string, requireSummary: boolean): Promise<KnowledgeBase> {
+  const dataset = await getDataset();
+  const kb = dataset.knowledgeBases.find((candidate) => candidate.id === kbId);
+  if (!kb) {
+    throw new Error("Knowledge base not found.");
+  }
+
+  const updated: KnowledgeBase = {
+    ...kb,
+    requireSummary,
+    updatedOn: new Date().toISOString().slice(0, 10),
+  };
+
+  if (isDatabaseEnabled()) {
+    await updateKbRequireSummary(kbId, requireSummary);
+  } else {
+    runtimeKbRequireSummary().set(kbId, requireSummary);
   }
 
   return updated;
@@ -1542,7 +1591,10 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     status: input.status ?? "draft",
     visibility: input.visibility ?? "public",
     ownerLabel: input.ownerLabel?.trim() || kb.title,
-    contactEmail: input.contactEmail?.trim() ?? "",
+    contactEmail:
+      input.contactEmail?.trim() ||
+      (input.authorEmail?.includes("@") ? input.authorEmail.trim() : "") ||
+      "",
     lastReviewedDate: today,
     updatedDisplayDate: today,
     blocks: input.blocks,

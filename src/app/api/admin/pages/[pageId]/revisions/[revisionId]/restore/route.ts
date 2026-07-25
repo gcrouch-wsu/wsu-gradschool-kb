@@ -39,7 +39,10 @@ export async function POST(
 
   // Restoring a published revision re-publishes it, so it must clear the publish
   // gate — mirror the normal save route's 422-with-issues response.
-  const issues = await validateRevisionForRestore(revision, getAssetStatusById, checkExcerptSourceForPublish);
+  const kb = await getKbById(page.kbId);
+  const issues = await validateRevisionForRestore(revision, getAssetStatusById, checkExcerptSourceForPublish, {
+    requireSummary: kb?.requireSummary !== false,
+  });
   if (issues.length > 0) {
     return NextResponse.json(
       {

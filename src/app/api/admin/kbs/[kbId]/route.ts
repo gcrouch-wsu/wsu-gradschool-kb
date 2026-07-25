@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, getSql, ensureSchema, deleteKb } from "@/lib/db";
+import { setKbRequireSummary } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import { slugify } from "@/lib/slug";
@@ -11,12 +12,10 @@ export async function PATCH(
   const guard = await requireAdminMutation(request);
   if (!guard.ok) return guard.response;
 
-  if (guard.session.role !== "owner") {
-    return NextResponse.json({ message: "Only owners can update KBs." }, { status: 403 });
-  }
-
-  if (!isDatabaseEnabled()) {
-    return NextResponse.json({ message: "Database is not enabled." }, { status: 501 });
+  const isOwner = guard.session.role === "owner";
+  const isAdmin = guard.session.role === "admin";
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ message: "Only owners or admins can update KBs." }, { status: 403 });
   }
 
   const { kbId } = await context.params;
@@ -25,10 +24,46 @@ export async function PATCH(
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
   }
 
-  await ensureSchema();
-  const sql = getSql();
+  // Admins may only toggle publish-policy flags (requireSummary). Full KB edits stay owner-only.
+  if (!isOwner) {
+    const keys = Object.keys(body).filter((key) => body[key] !== undefined);
+    if (keys.length === 0 || keys.some((key) => key !== "requireSummary")) {
+      return NextResponse.json(
+        { message: "Admins can only update whether a summary is required to publish." },
+        { status: 403 },
+      );
+    }
+  }
 
   try {
+    if (body.requireSummary !== undefined) {
+      await setKbRequireSummary(kbId, body.requireSummary !== false);
+    }
+
+    if (!isOwner) {
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!isDatabaseEnabled()) {
+      // requireSummary already handled above for in-memory; other owner fields need DB.
+      if (
+        body.title !== undefined ||
+        body.description !== undefined ||
+        body.status !== undefined ||
+        body.visibility !== undefined ||
+        body.slug !== undefined ||
+        body.searchWidgetEnabled !== undefined ||
+        body.searchWidgetScope !== undefined ||
+        body.searchWidgetLabel !== undefined
+      ) {
+        return NextResponse.json({ message: "Database is not enabled." }, { status: 501 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    await ensureSchema();
+    const sql = getSql();
+
     const updates: {
       updated_on: string;
       title?: string;
@@ -69,7 +104,7 @@ export async function PATCH(
       updates.slug = slug;
     }
 
-    if (Object.keys(updates).length > 1) { 
+    if (Object.keys(updates).length > 1) {
         if (updates.title) await sql`UPDATE knowledge_bases SET title = ${updates.title} WHERE id = ${kbId}`;
         if (updates.description !== undefined) await sql`UPDATE knowledge_bases SET description = ${updates.description} WHERE id = ${kbId}`;
         if (updates.status) await sql`UPDATE knowledge_bases SET status = ${updates.status} WHERE id = ${kbId}`;

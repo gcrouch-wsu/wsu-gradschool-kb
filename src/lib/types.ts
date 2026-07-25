@@ -46,6 +46,8 @@ export interface KnowledgeBase {
   searchWidgetEnabled?: boolean;
   searchWidgetScope?: SearchWidgetScope;
   searchWidgetLabel?: string;
+  /** When false, publish does not require a page summary. Default true. */
+  requireSummary?: boolean;
 
   theme?: import("@/lib/kb-theme").KbTheme;
 }

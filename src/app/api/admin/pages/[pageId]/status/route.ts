@@ -49,12 +49,17 @@ export async function PATCH(
     if (!existing) {
       return NextResponse.json({ message: "Page not found." }, { status: 404 });
     }
-    const issues = await validatePageForPublish(existing, getAssetStatusById, checkExcerptSourceForPublish);
+    const kb = await getKbById(existing.kbId);
+    const issues = await validatePageForPublish(existing, getAssetStatusById, checkExcerptSourceForPublish, {
+      requireSummary: kb?.requireSummary !== false,
+    });
     if (issues.length > 0) {
       return NextResponse.json(
         {
           message: "This page cannot be published yet. Open the editor to resolve the issues below.",
           issues,
+          pageId: existing.id,
+          pageTitle: existing.title,
         },
         { status: 422 },
       );

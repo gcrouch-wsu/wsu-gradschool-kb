@@ -23,11 +23,52 @@ export type AssetStatusResolver = (assetId: string) => Promise<string | null>;
 // imports; callers pass checkExcerptSourceForPublish from src/lib/excerpts.ts.
 export type ExcerptSourceChecker = (ref: ExcerptBlockRef) => Promise<ExcerptSourceState>;
 
+export interface PublishGateOptions {
+  /** When false, a blank summary does not block publish. Default true. */
+  requireSummary?: boolean;
+}
+
 const EXCERPT_ISSUES: Record<Exclude<ExcerptSourceState, "ok">, string> = {
   missing: "An included excerpt references a page that no longer exists. Remove or repoint the excerpt.",
   unpublished: "An included excerpt references a page that is not published.",
   section_missing: "An included excerpt references a section that no longer exists on its source page.",
 };
+
+/** Sync metadata checks used by the publish gate and the Pages tree badges. */
+export function collectMetadataPublishIssues(
+  page: PublishablePage,
+  options: PublishGateOptions = {},
+): string[] {
+  const issues: string[] = [];
+  const requireSummary = options.requireSummary !== false;
+
+  if ((page.nodeKind ?? "page") !== "page") {
+    if (!page.title.trim()) {
+      issues.push("Page is missing a title.");
+    }
+    if (page.nodeKind === "link" && !/^(https:\/\/|\/)/.test((page.linkUrl ?? "").trim())) {
+      issues.push("A link item needs a destination: an https:// URL or an internal path starting with /.");
+    }
+    return issues;
+  }
+
+  if (!page.title.trim()) {
+    issues.push("Page is missing a title.");
+  }
+  if (requireSummary && !page.summary.trim()) {
+    issues.push("Page is missing a summary.");
+  }
+  if (!page.ownerLabel.trim()) {
+    issues.push("Page is missing a responsible office label.");
+  }
+  if (!page.contactEmail.trim() || !EMAIL_PATTERN.test(page.contactEmail.trim())) {
+    issues.push("Page needs a valid contact email.");
+  }
+  if (!page.lastReviewedDate.trim()) {
+    issues.push("Page is missing a last reviewed date.");
+  }
+  return issues;
+}
 
 function collectHtml(block: ContentBlock): string[] {
   switch (block.type) {
@@ -52,35 +93,14 @@ export async function validatePageForPublish(
   page: PublishablePage,
   resolveAssetStatus: AssetStatusResolver,
   checkExcerptSource?: ExcerptSourceChecker,
+  options: PublishGateOptions = {},
 ): Promise<string[]> {
-  const issues: string[] = [];
+  const issues = collectMetadataPublishIssues(page, options);
 
   // Group headings and links are tree structure, not content: they publish on
   // a title (and a valid destination for links) alone.
   if ((page.nodeKind ?? "page") !== "page") {
-    if (!page.title.trim()) {
-      issues.push("Page is missing a title.");
-    }
-    if (page.nodeKind === "link" && !/^(https:\/\/|\/)/.test((page.linkUrl ?? "").trim())) {
-      issues.push("A link item needs a destination: an https:// URL or an internal path starting with /.");
-    }
     return issues;
-  }
-
-  if (!page.title.trim()) {
-    issues.push("Page is missing a title.");
-  }
-  if (!page.summary.trim()) {
-    issues.push("Page is missing a summary.");
-  }
-  if (!page.ownerLabel.trim()) {
-    issues.push("Page is missing a responsible office label.");
-  }
-  if (!page.contactEmail.trim() || !EMAIL_PATTERN.test(page.contactEmail.trim())) {
-    issues.push("Page needs a valid contact email.");
-  }
-  if (!page.lastReviewedDate.trim()) {
-    issues.push("Page is missing a last reviewed date.");
   }
 
   let seenLevel2 = false;
@@ -188,6 +208,7 @@ export async function validateRevisionForRestore(
   >,
   resolveAssetStatus: AssetStatusResolver,
   checkExcerptSource?: ExcerptSourceChecker,
+  options: PublishGateOptions = {},
 ): Promise<string[]> {
   if (revision.status !== "published") {
     return [];
@@ -206,5 +227,6 @@ export async function validateRevisionForRestore(
     },
     resolveAssetStatus,
     checkExcerptSource,
+    options,
   );
 }

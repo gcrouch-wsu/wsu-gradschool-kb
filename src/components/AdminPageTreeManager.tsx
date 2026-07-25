@@ -22,11 +22,25 @@ import {
   type DropZone,
 } from "@/lib/page-tree-drop";
 import { useModalA11y } from "@/lib/use-modal-a11y";
+import { collectMetadataPublishIssues } from "@/lib/publish-gate";
 import type { KbPage, KnowledgeBase, PageStatus } from "@/lib/types";
 
 type PageItem = Pick<
   KbPage,
-  "id" | "path" | "sortOrder" | "status" | "title" | "updatedDisplayDate" | "visibility" | "nextReviewDate" | "nodeKind"
+  | "id"
+  | "path"
+  | "sortOrder"
+  | "status"
+  | "title"
+  | "updatedDisplayDate"
+  | "visibility"
+  | "nextReviewDate"
+  | "nodeKind"
+  | "summary"
+  | "ownerLabel"
+  | "contactEmail"
+  | "lastReviewedDate"
+  | "linkUrl"
 >;
 
 type DropTargetState = {
@@ -593,11 +607,13 @@ function ConfirmDeleteDialog({
 
 export function AdminPageTreeManager({
   canDelete,
+  canManagePublishPolicy = false,
   destinationKbs,
   initialPages,
   kb,
 }: {
   canDelete: boolean;
+  canManagePublishPolicy?: boolean;
   destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
   initialPages: PageItem[];
   kb: KnowledgeBase;
@@ -613,9 +629,13 @@ export function AdminPageTreeManager({
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [homepageBusyId, setHomepageBusyId] = useState<string | null>(null);
   const [homepagePageId, setHomepagePageId] = useState<string | null>(kb.homepagePageId ?? null);
+  const [requireSummary, setRequireSummary] = useState(kb.requireSummary !== false);
+  const [requireSummaryBusy, setRequireSummaryBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
+  const [blockedPageId, setBlockedPageId] = useState<string | null>(null);
+  const [blockedPageTitle, setBlockedPageTitle] = useState<string | null>(null);
   const [liveMessage, setLiveMessage] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PageItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PageItem | null>(null);
@@ -638,6 +658,32 @@ export function AdminPageTreeManager({
     [pages],
   );
   const hasUnsavedChanges = layoutSignature(pages) !== layoutSignature(savedBaseline);
+  const gateOptions = useMemo(() => ({ requireSummary }), [requireSummary]);
+  const metadataBlockedIds = useMemo(() => {
+    const blocked = new Set<string>();
+    for (const page of pages) {
+      if (page.status !== "draft") continue;
+      const issuesForPage = collectMetadataPublishIssues(
+        {
+          title: page.title,
+          slug: page.path[page.path.length - 1] ?? "",
+          summary: page.summary ?? "",
+          ownerLabel: page.ownerLabel ?? "",
+          contactEmail: page.contactEmail ?? "",
+          lastReviewedDate: page.lastReviewedDate ?? "",
+          blocks: [],
+          nodeKind: page.nodeKind,
+          linkUrl: page.linkUrl,
+        },
+        gateOptions,
+      );
+      if (issuesForPage.length > 0) {
+        blocked.add(page.id);
+      }
+    }
+    return blocked;
+  }, [pages, gateOptions]);
+  const metadataBlockedCount = metadataBlockedIds.size;
 
   function announceMove(text: string) {
     setLiveMessage(text);
@@ -811,6 +857,8 @@ export function AdminPageTreeManager({
     setError(null);
     setMessage(null);
     setIssues([]);
+    setBlockedPageId(null);
+    setBlockedPageTitle(null);
     try {
       const response = await fetch(`/api/admin/pages/${pageId}/status`, {
         method: "PATCH",
@@ -821,6 +869,12 @@ export function AdminPageTreeManager({
       if (!response.ok) {
         if (Array.isArray(data.issues) && data.issues.length > 0) {
           setIssues(data.issues as string[]);
+          setBlockedPageId(typeof data.pageId === "string" ? data.pageId : pageId);
+          setBlockedPageTitle(
+            typeof data.pageTitle === "string"
+              ? data.pageTitle
+              : pages.find((page) => page.id === pageId)?.title ?? "This page",
+          );
         }
         throw new Error(data.message ?? "Could not update page status.");
       }
@@ -842,6 +896,29 @@ export function AdminPageTreeManager({
       setError(caught instanceof Error ? caught.message : "Could not update page status.");
     } finally {
       setStatusBusyId(null);
+    }
+  }
+
+  async function setRequireSummaryPreference(next: boolean) {
+    setRequireSummaryBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/kbs/${kb.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requireSummary: next }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "Could not update summary requirement.");
+      }
+      setRequireSummary(next);
+      setMessage(next ? "Summary is required to publish pages in this KB." : "Summary is optional for this KB.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update summary requirement.");
+    } finally {
+      setRequireSummaryBusy(false);
     }
   }
 
@@ -904,12 +981,26 @@ export function AdminPageTreeManager({
       {error && <p className="error">{error}</p>}
       {issues.length > 0 && (
         <div className="error" role="alert">
-          <strong>Publishing is blocked until these are fixed:</strong>
+          <strong>
+            Publishing is blocked
+            {blockedPageTitle ? (
+              <>
+                {" "}
+                for <em>{blockedPageTitle}</em>
+              </>
+            ) : null}{" "}
+            until these are fixed:
+          </strong>
           <ul className="issue-list">
             {issues.map((issue) => (
               <li key={issue}>{issue}</li>
             ))}
           </ul>
+          {blockedPageId && (
+            <p className="meta" style={{ marginTop: "0.5rem" }}>
+              <Link href={`/admin/pages/${blockedPageId}`}>Open editor to fix</Link>
+            </p>
+          )}
         </div>
       )}
       {message && <p className="alert alert--success">{message}</p>}
@@ -941,6 +1032,22 @@ export function AdminPageTreeManager({
             Show archived ({archivedCount})
           </label>
         )}
+        {canManagePublishPolicy && (
+          <label className="meta" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+            <input
+              checked={requireSummary}
+              disabled={requireSummaryBusy}
+              onChange={(event) => setRequireSummaryPreference(event.target.checked)}
+              type="checkbox"
+            />
+            Require summary to publish
+          </label>
+        )}
+        {metadataBlockedCount > 0 && (
+          <span className="badge badge--warning">
+            {metadataBlockedCount} draft{metadataBlockedCount === 1 ? "" : "s"} need publish info
+          </span>
+        )}
       </div>
 
       <p className="meta">
@@ -966,6 +1073,8 @@ export function AdminPageTreeManager({
           const canMoveDown = posinset < siblings.length;
           const canMoveInto = posinset > 1;
           const canMoveOut = depth > 0;
+          const isMetadataBlocked = metadataBlockedIds.has(page.id);
+          const isPublishAttemptBlocked = blockedPageId === page.id;
 
           return (
             <li
@@ -989,7 +1098,9 @@ export function AdminPageTreeManager({
               <div
                 className={`tree-editor__row${
                   dropTarget?.id === page.id ? ` is-drop-${dropTarget.zone}` : ""
-                }${draggedId === page.id ? " is-dragging" : ""}`}
+                }${draggedId === page.id ? " is-dragging" : ""}${
+                  isPublishAttemptBlocked || isMetadataBlocked ? " is-publish-blocked" : ""
+                }`}
                 onDragLeave={(event) => rowDragLeave(event, page)}
                 onDragOver={(event) => rowDragOver(event, page)}
                 onDrop={(event) => rowDrop(event, page)}
@@ -1053,6 +1164,7 @@ export function AdminPageTreeManager({
                       {page.nextReviewDate && new Date(page.nextReviewDate) <= new Date() && (
                         <span className="badge badge--warning">Needs review</span>
                       )}
+                      {isMetadataBlocked && <span className="badge badge--warning">Can&apos;t publish yet</span>}
                     </div>
                   </div>
                   <div className="meta tree-editor__path">

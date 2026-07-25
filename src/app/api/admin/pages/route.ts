@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       slug: body.slug,
       parentPath: body.parentPath,
       summary: body.summary || "",
+      contactEmail: typeof body.contactEmail === "string" ? body.contactEmail : guard.session.email,
       blocks:
         nodeKind === "page"
           ? [{ blockId: `block-${crypto.randomUUID()}`, type: "paragraph", text: "New page content..." }]

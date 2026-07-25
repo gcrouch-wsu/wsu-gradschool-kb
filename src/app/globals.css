@@ -4521,6 +4521,12 @@ article ol ol ol {
   opacity: 0.45;
 }
 
+.tree-editor__row.is-publish-blocked {
+  border-color: #d97706;
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.25);
+}
+
 .tree-editor__row.is-drop-before::before,
 .tree-editor__row.is-drop-after::after {
   background: var(--wsu-crimson);

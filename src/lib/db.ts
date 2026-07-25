@@ -188,6 +188,7 @@ interface KbRow {
   search_widget_enabled?: boolean;
   search_widget_scope?: string;
   search_widget_label?: string;
+  require_summary?: boolean;
   theme?: unknown;
 }
 
@@ -256,6 +257,7 @@ function mapKb(row: KbRow): KnowledgeBase {
     searchWidgetEnabled: Boolean(row.search_widget_enabled),
     searchWidgetScope: row.search_widget_scope === "all" ? "all" : "kb",
     searchWidgetLabel: row.search_widget_label ?? "",
+    requireSummary: row.require_summary !== false,
     theme: row.theme ? mergeTheme(row.theme) : undefined,
   };
 }
@@ -397,6 +399,16 @@ export async function updateKbHomepagePageId(kbId: string, homepagePageId: strin
   await sql`
     UPDATE knowledge_bases
     SET home_page_id = ${homepagePageId}, updated_on = ${new Date().toISOString().slice(0, 10)}
+    WHERE id = ${kbId}
+  `;
+}
+
+export async function updateKbRequireSummary(kbId: string, requireSummary: boolean): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE knowledge_bases
+    SET require_summary = ${requireSummary}, updated_on = ${new Date().toISOString().slice(0, 10)}
     WHERE id = ${kbId}
   `;
 }

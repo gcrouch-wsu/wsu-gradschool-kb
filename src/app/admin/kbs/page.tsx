@@ -269,6 +269,14 @@ export default function AdminKbsPage() {
                       />
                       <span className="meta">Show a search box on this KB&apos;s pages</span>
                     </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <input
+                        checked={editData.requireSummary ?? kb.requireSummary !== false}
+                        onChange={(e) => setEditData({ ...editData, requireSummary: e.target.checked })}
+                        type="checkbox"
+                      />
+                      <span className="meta">Require a page summary before publish</span>
+                    </label>
                     <select
                       aria-label="Search box scope"
                       className="input"
@@ -341,6 +349,11 @@ export default function AdminKbsPage() {
                   {kb.searchWidgetEnabled && (
                     <div className="meta" style={{ marginTop: "0.5rem" }}>
                       Search box: {kb.searchWidgetScope === "all" ? "all KBs" : "this KB"}
+                    </div>
+                  )}
+                  {kb.requireSummary === false && (
+                    <div className="meta" style={{ marginTop: "0.5rem" }}>
+                      Summary optional for publish
                     </div>
                   )}
                 </>
