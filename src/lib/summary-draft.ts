@@ -1,8 +1,10 @@
+import { resolveExcerptForExport } from "@/lib/excerpts";
 import { blocksToPlainText } from "@/lib/revision-diff";
 import type { ContentBlock } from "@/lib/types";
 
 const MIN_BODY_CHARS = 120;
-const MAX_BODY_CHARS = 12_000;
+/** Free models on Gateway still accept large prompts; keep headroom under ~256k tokens. */
+const MAX_BODY_CHARS = 100_000;
 
 export function getAiGatewayConfig(): {
   endpoint: string;
@@ -18,6 +20,133 @@ export function getAiGatewayConfig(): {
   return { endpoint, apiKey, model };
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/(div|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .trim();
+}
+
+/** Expand live excerpts so the model sees included section text, not a stub. */
+export async function expandBlocksForSummary(blocks: ContentBlock[]): Promise<ContentBlock[]> {
+  const out: ContentBlock[] = [];
+  for (const block of blocks) {
+    if (block.type === "excerpt") {
+      const resolved = await resolveExcerptForExport(block);
+      if (resolved.state === "ok") {
+        const label = block.label?.trim() || resolved.sectionTitle || resolved.sourceTitle;
+        out.push({
+          blockId: `${block.blockId}-excerpt-label`,
+          type: "heading",
+          level: 3,
+          text: `Included from: ${label}`,
+        });
+        out.push(...resolved.blocks);
+      } else {
+        out.push({
+          blockId: `${block.blockId}-excerpt-missing`,
+          type: "paragraph",
+          text: `[Excerpt unavailable: ${block.label || block.sourcePageId}]`,
+        });
+      }
+      continue;
+    }
+    if (block.type === "card") {
+      out.push({ ...block, blocks: await expandBlocksForSummary(block.blocks) });
+      continue;
+    }
+    if (block.type === "procedure_section") {
+      out.push({ ...block, blocks: await expandBlocksForSummary(block.blocks) });
+      continue;
+    }
+    if (block.type === "sourced") {
+      out.push({ ...block, blocks: await expandBlocksForSummary(block.blocks) });
+      continue;
+    }
+    out.push(block);
+  }
+  return out;
+}
+
+/** Plain text optimized for summarization (heading markers + full body). */
+export function formatBlocksForSummary(blocks: ContentBlock[]): string {
+  const lines: string[] = [];
+  for (const block of blocks) {
+    switch (block.type) {
+      case "heading": {
+        const text = stripHtml(block.html ?? block.text ?? "");
+        if (text) lines.push(`${"#".repeat(block.level)} ${text}`);
+        break;
+      }
+      case "paragraph":
+      case "alert":
+        lines.push(stripHtml(block.html ?? block.text ?? ""));
+        break;
+      case "list":
+        for (let i = 0; i < block.items.length; i += 1) {
+          const html = block.itemHtml?.[i];
+          lines.push(`- ${stripHtml(html ?? block.items[i] ?? "")}`);
+        }
+        break;
+      case "card":
+        if (block.title) lines.push(`### ${block.title}`);
+        lines.push(formatBlocksForSummary(block.blocks));
+        break;
+      case "procedure_section":
+        lines.push(`## ${block.title}`);
+        lines.push(formatBlocksForSummary(block.blocks));
+        break;
+      case "sourced":
+        lines.push(`## ${block.headingText || block.label || "Source"}`);
+        lines.push(formatBlocksForSummary(block.blocks));
+        break;
+      case "table":
+        for (const row of block.rows ?? []) {
+          lines.push(row.map((cell) => stripHtml(cell)).join(" | "));
+        }
+        break;
+      case "image":
+        if (block.alt) lines.push(`[Image: ${block.alt}]`);
+        break;
+      case "asset_link":
+        lines.push(`[File: ${block.label || block.assetId}]`);
+        break;
+      case "video":
+        if (block.title) lines.push(`[Video: ${block.title}]`);
+        break;
+      case "section_divider":
+        lines.push("---");
+        break;
+      case "excerpt":
+        // Should already be expanded; keep a stub if not.
+        lines.push(`[Excerpt: ${block.label || block.sourcePageId}]`);
+        break;
+      default:
+        break;
+    }
+  }
+  return lines
+    .map((line) => line.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function extractOutline(bodyText: string): string {
+  const headings = bodyText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^#{2,3}\s+\S/.test(line));
+  if (headings.length === 0) return "(no section headings)";
+  return headings.join("\n");
+}
+
 export function assessPageReadyForSummaryDraft(input: {
   title: string;
   blocks: ContentBlock[];
@@ -26,7 +155,8 @@ export function assessPageReadyForSummaryDraft(input: {
   if (!title) {
     return { ok: false, message: "Add a page title before drafting a summary with AI." };
   }
-  const bodyText = blocksToPlainText(input.blocks).trim();
+  // Readiness can use the fast flattener; the route expands excerpts before prompting.
+  const bodyText = formatBlocksForSummary(input.blocks).trim() || blocksToPlainText(input.blocks).trim();
   if (bodyText.length < MIN_BODY_CHARS) {
     return {
       ok: false,
@@ -42,16 +172,29 @@ export function buildSummaryDraftPrompt(title: string, bodyText: string): {
 } {
   const clipped =
     bodyText.length > MAX_BODY_CHARS
-      ? `${bodyText.slice(0, MAX_BODY_CHARS)}\n\n[Truncated for length.]`
+      ? `${bodyText.slice(0, MAX_BODY_CHARS)}\n\n[Truncated for length — prefer earlier and later sections equally in the summary.]`
       : bodyText;
+  const outline = extractOutline(clipped);
   return {
     system: [
-      "You write short page summaries for a university graduate-school knowledge base.",
-      "Return only the summary text: one or two plain sentences.",
-      "No markdown, no bullet lists, no quotation marks wrapping the whole answer, no title prefix.",
+      "You write page summaries for a university graduate-school knowledge base.",
+      "You MUST base the summary on the FULL page content provided (all sections), not only the opening paragraphs.",
+      "Cover the page purpose and the main topics from every major section in the outline.",
+      "Return only the summary text: usually 2–4 plain sentences (more only if needed for multi-section pages).",
+      "No markdown, no bullet lists, no quotation marks wrapping the whole answer, no title prefix, no preamble.",
       "Tone: clear, neutral, governance-appropriate. Do not invent facts not present in the page.",
     ].join(" "),
-    user: `Page title: ${title}\n\nPage content:\n${clipped}\n\nWrite the summary now.`,
+    user: [
+      `Page title: ${title}`,
+      "",
+      "Section outline (must be reflected in the summary):",
+      outline,
+      "",
+      "Full page content:",
+      clipped,
+      "",
+      "Write a summary of the entire page now.",
+    ].join("\n"),
   };
 }
 
@@ -61,10 +204,12 @@ export function cleanSummaryDraft(raw: string): string {
   if (fenced) {
     text = fenced[1].trim();
   }
+  // Drop common chain-of-thought wrappers some free models emit.
+  text = text.replace(/^[\s\S]*?<\/think>/i, "").trim();
   text = text.replace(/^["“]|["”]$/g, "").trim();
   text = text.replace(/^Summary:\s*/i, "").trim();
   text = text.replace(/^["“]|["”]$/g, "").trim();
-  return text.replace(/\s+/g, " ").slice(0, 600);
+  return text.replace(/\s+/g, " ").slice(0, 900);
 }
 
 export async function requestSummaryDraftFromGateway(input: {
@@ -76,7 +221,7 @@ export async function requestSummaryDraftFromGateway(input: {
 }): Promise<string> {
   const { system, user } = buildSummaryDraftPrompt(input.title, input.bodyText);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45_000);
+  const timer = setTimeout(() => controller.abort(), 60_000);
   let response: Response;
   try {
     response = await fetch(input.endpoint, {
@@ -89,7 +234,7 @@ export async function requestSummaryDraftFromGateway(input: {
       body: JSON.stringify({
         model: input.model,
         temperature: 0.2,
-        max_tokens: 200,
+        max_tokens: 450,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },

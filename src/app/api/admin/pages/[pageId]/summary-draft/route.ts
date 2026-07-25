@@ -5,6 +5,8 @@ import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import {
   assessPageReadyForSummaryDraft,
+  expandBlocksForSummary,
+  formatBlocksForSummary,
   getAiGatewayConfig,
   requestSummaryDraftFromGateway,
 } from "@/lib/summary-draft";
@@ -21,6 +23,7 @@ type Body = {
 /**
  * Draft a page summary via Vercel AI Gateway.
  * Uses the editor's current title + blocks (must be complete enough to summarize).
+ * Expands live excerpts so the model sees included section text.
  * Does not persist — the client writes into the summary field for human edit + Save.
  */
 export async function POST(
@@ -68,9 +71,11 @@ export async function POST(
   }
 
   try {
+    const expanded = await expandBlocksForSummary(blocks);
+    const bodyText = formatBlocksForSummary(expanded).trim() || readiness.bodyText;
     const summary = await requestSummaryDraftFromGateway({
       title: title.trim(),
-      bodyText: readiness.bodyText,
+      bodyText,
       ...config,
     });
     return NextResponse.json({ ok: true, summary });

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   assessPageReadyForSummaryDraft,
+  buildSummaryDraftPrompt,
   cleanSummaryDraft,
+  formatBlocksForSummary,
   requestSummaryDraftFromGateway,
 } from "@/lib/summary-draft";
 import type { ContentBlock } from "@/lib/types";
@@ -19,6 +21,19 @@ function longBody(): ContentBlock[] {
       type: "paragraph",
       text: "Students must complete all required forms before the published deadline and meet residency rules for the term in question. ".repeat(
         3,
+      ),
+    },
+    {
+      blockId: "h2",
+      type: "heading",
+      level: 2,
+      text: "Deadlines",
+    },
+    {
+      blockId: "p2",
+      type: "paragraph",
+      text: "Submit materials by the published term deadline listed on the calendar. Late packets are returned. ".repeat(
+        2,
       ),
     },
   ];
@@ -50,8 +65,20 @@ describe("summary-draft helpers", () => {
     }
   });
 
+  it("formats headings for the model and includes them in the outline", () => {
+    const text = formatBlocksForSummary(longBody());
+    expect(text).toContain("## Eligibility");
+    expect(text).toContain("## Deadlines");
+    const prompt = buildSummaryDraftPrompt("Assistantships", text);
+    expect(prompt.user).toContain("Section outline");
+    expect(prompt.user).toContain("## Eligibility");
+    expect(prompt.user).toContain("## Deadlines");
+    expect(prompt.system).toMatch(/FULL page content/i);
+  });
+
   it("cleans model output", () => {
     expect(cleanSummaryDraft('  "Summary: Hello world."  ')).toBe("Hello world.");
+    expect(cleanSummaryDraft("<think>plan</think>\nFinal answer here.")).toBe("Final answer here.");
   });
 });
 
@@ -72,7 +99,7 @@ describe("requestSummaryDraftFromGateway", () => {
 
     const summary = await requestSummaryDraftFromGateway({
       title: "Assistantships",
-      bodyText: "Students must complete all required forms. ".repeat(10),
+      bodyText: formatBlocksForSummary(longBody()),
       endpoint: "https://ai.example/v1/chat/completions",
       apiKey: "vck_test",
       model: "inclusionai/ling-3.0-flash-free",
@@ -89,11 +116,13 @@ describe("requestSummaryDraftFromGateway", () => {
     });
     const payload = JSON.parse(String(init.body)) as {
       model: string;
+      max_tokens: number;
       messages: Array<{ role: string; content: string }>;
     };
     expect(payload.model).toBe("inclusionai/ling-3.0-flash-free");
-    expect(payload.messages[0]?.role).toBe("system");
-    expect(payload.messages[1]?.content).toContain("Assistantships");
+    expect(payload.max_tokens).toBeGreaterThanOrEqual(400);
+    expect(payload.messages[1]?.content).toContain("## Eligibility");
+    expect(payload.messages[1]?.content).toContain("Write a summary of the entire page now.");
   });
 
   it("accepts output_text when choices are absent", async () => {
