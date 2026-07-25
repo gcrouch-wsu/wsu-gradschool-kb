@@ -7,12 +7,14 @@ import {
   CircleCheck,
   CornerDownRight,
   CornerUpLeft,
+  FolderInput,
   GripVertical,
   House,
 } from "lucide-react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { RelocatePageDialog } from "@/components/RelocatePageDialog";
 import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import {
   resolveDropProjection,
@@ -377,6 +379,7 @@ interface PageTreeOverflowMenuProps {
   onDelete: () => void;
   onHomepage: () => void;
   onPublishToggle: () => void;
+  onRelocate: () => void;
   page: PageItem;
   statusBusy: boolean;
 }
@@ -390,6 +393,7 @@ function PageTreeOverflowMenu({
   onDelete,
   onHomepage,
   onPublishToggle,
+  onRelocate,
   page,
   statusBusy,
 }: PageTreeOverflowMenuProps) {
@@ -402,6 +406,14 @@ function PageTreeOverflowMenu({
         label: homepageBusy ? "Setting..." : "Set Home",
         disabled: homepageBusy,
         onSelect: onHomepage,
+      });
+    }
+
+    if (page.status !== "archived") {
+      entries.push({
+        icon: <FolderInput aria-hidden size={16} strokeWidth={1.75} />,
+        label: "Copy / move to KB…",
+        onSelect: onRelocate,
       });
     }
 
@@ -442,6 +454,7 @@ function PageTreeOverflowMenu({
     onDelete,
     onHomepage,
     onPublishToggle,
+    onRelocate,
     page.nodeKind,
     page.status,
     statusBusy,
@@ -580,10 +593,12 @@ function ConfirmDeleteDialog({
 
 export function AdminPageTreeManager({
   canDelete,
+  destinationKbs,
   initialPages,
   kb,
 }: {
   canDelete: boolean;
+  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug">>;
   initialPages: PageItem[];
   kb: KnowledgeBase;
 }) {
@@ -604,6 +619,7 @@ export function AdminPageTreeManager({
   const [liveMessage, setLiveMessage] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PageItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PageItem | null>(null);
+  const [relocateTarget, setRelocateTarget] = useState<PageItem | null>(null);
 
   if (trackedInitialPages !== initialPages) {
     const normalized = normalizeSiblingOrders(initialPages);
@@ -1063,6 +1079,7 @@ export function AdminPageTreeManager({
                     onDelete={() => setDeleteTarget(page)}
                     onHomepage={() => setHomepage(page.id)}
                     onPublishToggle={() => setPageStatus(page.id, nextStatusForToggle(page.status))}
+                    onRelocate={() => setRelocateTarget(page)}
                     page={page}
                     statusBusy={statusBusyId === page.id}
                   />
@@ -1089,6 +1106,24 @@ export function AdminPageTreeManager({
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => handleDelete(deleteTarget.id)}
           pageTitle={deleteTarget.title}
+        />
+      )}
+
+      {relocateTarget && (
+        <RelocatePageDialog
+          destinationKbs={destinationKbs}
+          onCancel={() => setRelocateTarget(null)}
+          onComplete={({ mode, editHref }) => {
+            setRelocateTarget(null);
+            if (mode === "move") {
+              window.location.assign("/admin/pages");
+              return;
+            }
+            window.location.assign(editHref);
+          }}
+          pageId={relocateTarget.id}
+          pageTitle={relocateTarget.title}
+          sourceKbId={kb.id}
         />
       )}
     </div>

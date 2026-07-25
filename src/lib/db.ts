@@ -544,6 +544,7 @@ export async function updatePages(
         WITH updated AS (
           UPDATE kb_pages
           SET
+            kb_id = ${page.kbId},
             slug = ${page.slug},
             path = ${path},
             sort_order = ${page.sortOrder},
@@ -579,6 +580,7 @@ export async function updatePages(
     return sql`
       UPDATE kb_pages
       SET
+        kb_id = ${page.kbId},
         slug = ${page.slug},
         path = ${path},
         sort_order = ${page.sortOrder},

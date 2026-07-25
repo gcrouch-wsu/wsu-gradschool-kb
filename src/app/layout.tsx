@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   title: "WSU Knowledge Base",
   description:
     "Washington State University knowledge base platform. Browse published knowledge bases, including the Graduate School knowledge base.",
+  icons: {
+    icon: [{ url: "/icon", type: "image/png", sizes: "32x32" }],
+  },
 };
 
 export const dynamic = "force-dynamic";

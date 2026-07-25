@@ -6,6 +6,7 @@ import { DraftPreviewModal } from "@/components/DraftPreviewModal";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { PageHistoryPanel } from "@/components/PageHistoryPanel";
+import { RelocatePageDialog } from "@/components/RelocatePageDialog";
 import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
@@ -289,10 +290,12 @@ export function AdminPageEditorForm({
   kb,
   page,
   parentOptions,
+  destinationKbs,
 }: {
   kb: KnowledgeBase;
   page: KbPage;
   parentOptions: ParentOption[];
+  destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug">>;
 }) {
   const [title, setTitle] = useState(page.title);
   const [slug, setSlug] = useState(page.slug);
@@ -307,6 +310,7 @@ export function AdminPageEditorForm({
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
   const [showPrintButton, setShowPrintButton] = useState(page.showPrintButton !== false);
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
+  const [relocateOpen, setRelocateOpen] = useState(false);
   const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
   const [verifiedAt, setVerifiedAt] = useState(page.verifiedAt);
   const [verifiedBy, setVerifiedBy] = useState(page.verifiedBy);
@@ -695,6 +699,12 @@ export function AdminPageEditorForm({
 
   const publishedOverflowItems: OverflowMenuItem[] = [
     {
+      label: "Copy / move to another KB…",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setRelocateOpen(true),
+    },
+    { divider: true, label: "", onSelect: () => {} },
+    {
       label: lifecycleBusy ? "Unpublishing..." : "Unpublish",
       disabled: lifecycleBusy || isLocked,
       onSelect: () => setLifecycleStatus("draft"),
@@ -709,6 +719,12 @@ export function AdminPageEditorForm({
   ];
 
   const draftOverflowItems: OverflowMenuItem[] = [
+    {
+      label: "Copy / move to another KB…",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setRelocateOpen(true),
+    },
+    { divider: true, label: "", onSelect: () => {} },
     {
       danger: true,
       label: lifecycleBusy ? "Archiving..." : "Archive",
@@ -1045,6 +1061,18 @@ export function AdminPageEditorForm({
 
         {actionButtons}
       </form>
+      {relocateOpen && (
+        <RelocatePageDialog
+          destinationKbs={destinationKbs}
+          onCancel={() => setRelocateOpen(false)}
+          onComplete={({ editHref }) => {
+            window.location.assign(editHref);
+          }}
+          pageId={page.id}
+          pageTitle={title || page.title}
+          sourceKbId={kb.id}
+        />
+      )}
     </div>
   );
 }

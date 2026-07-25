@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminPageEditorForm } from "@/components/AdminPageEditorForm";
 import { TreeNodeSettingsForm } from "@/components/TreeNodeSettingsForm";
-import { canAccessKb, getCurrentAdminSession } from "@/lib/auth";
-import { getAllPageSummariesForAdmin, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
+import { canAccessKb, filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
+import { getAllKbsForAdmin, getAllPageSummariesForAdmin, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 function hasPathPrefix(path: string[], prefix: string[]) {
   return prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment);
@@ -67,18 +67,30 @@ export default async function AdminEditPage({
       status: candidate.status,
     }));
 
+  const destinationKbs = (await filterKbsForSession(session, await getAllKbsForAdmin())).map((candidate) => ({
+    id: candidate.id,
+    title: candidate.title,
+    slug: candidate.slug,
+  }));
+
   return (
     <div className="page-shell">
       <p className="eyebrow">Admin</p>
       <h1>Edit Page</h1>
       <p className="lead">
         Save changes as a draft while you work, publish when the page is ready, or move the page under a
-        different parent to control the KB tree.
+        different parent to control the KB tree. Use the overflow menu to copy or move this page to
+        another knowledge base.
       </p>
       <p className="meta">
         <Link href="/admin/pages">Back to pages</Link>
       </p>
-      <AdminPageEditorForm kb={kb} page={page} parentOptions={parentOptions} />
+      <AdminPageEditorForm
+        destinationKbs={destinationKbs}
+        kb={kb}
+        page={page}
+        parentOptions={parentOptions}
+      />
     </div>
   );
 }

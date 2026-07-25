@@ -861,22 +861,27 @@ async function lookupActiveRedirect(kbId: string, fromPath: string): Promise<KbR
   );
 }
 
+export type ActiveRedirectTarget =
+  | { kind: "path"; path: string[] }
+  | { kind: "href"; href: string };
+
 /**
  * A page moved more than once (e.g. reorganized twice in one session) leaves a chain of
  * redirects — each hop only records old -> new for that one move, so an older bookmark can
  * land on an intermediate path that itself now redirects elsewhere. Follow the chain here
  * (bounded, with a visited-set to guard against a cycle) so callers always get the final path.
+ * Cross-KB moves store an absolute `/kb/...` target and stop the chain there.
  */
 export async function getActiveRedirectTarget(
   kbId: string,
   path: string[],
-): Promise<string[] | null> {
+): Promise<ActiveRedirectTarget | null> {
   let fromPath = path.join("/");
   if (!fromPath) {
     return null;
   }
   const visited = new Set<string>();
-  let resolved: string[] | null = null;
+  let resolved: ActiveRedirectTarget | null = null;
   for (let hop = 0; hop < 10; hop += 1) {
     if (visited.has(fromPath)) {
       // Cycle: don't follow it back onto a path we've already visited. Bail out entirely
@@ -889,8 +894,13 @@ export async function getActiveRedirectTarget(
     if (!redirect?.toPath) {
       break;
     }
-    resolved = redirect.toPath.split("/").filter(Boolean);
-    fromPath = resolved.join("/");
+    if (redirect.toPath.startsWith("/")) {
+      resolved = { kind: "href", href: redirect.toPath };
+      break;
+    }
+    const nextPath = redirect.toPath.split("/").filter(Boolean);
+    resolved = { kind: "path", path: nextPath };
+    fromPath = nextPath.join("/");
   }
   return resolved;
 }
@@ -2101,3 +2111,327 @@ export async function removeRedirect(redirectId: string): Promise<void> {
     list.splice(index, 1);
   }
 }
+
+function remintBlockIds(blocks: ContentBlock[]): ContentBlock[] {
+  return blocks.map((block) => {
+    const blockId = `block-${crypto.randomUUID()}`;
+    if (block.type === "card" || block.type === "procedure_section" || block.type === "sourced") {
+      return { ...block, blockId, blocks: remintBlockIds(block.blocks) };
+    }
+    return { ...block, blockId };
+  });
+}
+
+function allocateUniqueSlug(
+  pages: KbPage[],
+  kbId: string,
+  parentPath: string[],
+  preferred: string,
+  excludePageId?: string,
+): string {
+  const baseSlug = slugify(preferred);
+  assertPageSlugAllowed(baseSlug);
+  const siblingSlugs = new Set(
+    pages
+      .filter(
+        (page) =>
+          page.id !== excludePageId &&
+          page.kbId === kbId &&
+          page.path.length === parentPath.length + 1 &&
+          page.path.slice(0, -1).join("/") === parentPath.join("/"),
+      )
+      .map((page) => page.path[page.path.length - 1]),
+  );
+  let slug = baseSlug;
+  let suffix = 2;
+  while (siblingSlugs.has(slug)) {
+    slug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+  return slug;
+}
+
+function collectSubtree(pages: KbPage[], root: KbPage): KbPage[] {
+  return pages
+    .filter((page) => page.kbId === root.kbId && hasPathPrefix(page.path, root.path))
+    .sort((a, b) => a.path.length - b.path.length || a.sortOrder - b.sortOrder);
+}
+
+export type RelocateMode = "copy" | "move";
+
+export interface RelocatePageInput {
+  pageId: string;
+  targetKbId: string;
+  parentPath?: string[];
+  mode: RelocateMode;
+  /** When false, copy only the root page. Move always includes descendants. */
+  includeChildren?: boolean;
+  authorEmail?: string;
+}
+
+export interface RelocatePageResult {
+  rootPage: KbPage;
+  pages: KbPage[];
+  mode: RelocateMode;
+  sourceKbId: string;
+  targetKbId: string;
+}
+
+/**
+ * Copy or move a page (and optionally its descendants) into another knowledge base.
+ * Move requires a different KB; published moves leave absolute `/kb/...` redirects on the source KB.
+ */
+export async function relocatePage(input: RelocatePageInput): Promise<RelocatePageResult> {
+  const dataset = await getDataset();
+  const source = dataset.pages.find((page) => page.id === input.pageId);
+  if (!source) {
+    throw new Error("Page not found.");
+  }
+  const sourceKb = dataset.knowledgeBases.find((kb) => kb.id === source.kbId);
+  const targetKb = dataset.knowledgeBases.find((kb) => kb.id === input.targetKbId);
+  if (!sourceKb || !targetKb) {
+    throw new Error("Knowledge base not found.");
+  }
+
+  const parentPath = input.parentPath ?? [];
+  if (parentPath.length > 0) {
+    const parentExists = dataset.pages.some(
+      (page) => page.kbId === input.targetKbId && page.path.join("/") === parentPath.join("/"),
+    );
+    if (!parentExists) {
+      throw new Error("Parent page not found in the destination knowledge base.");
+    }
+  }
+
+  if (input.mode === "move" && input.targetKbId === source.kbId) {
+    throw new Error("Use Nest under or the page tree to reorganize within the same knowledge base.");
+  }
+
+  const includeChildren = input.includeChildren !== false;
+  const subtree = collectSubtree(dataset.pages, source);
+  if (!includeChildren && subtree.length > 1) {
+    if (input.mode === "move") {
+      throw new Error("Move always includes child pages. Move or delete children first to relocate only this page.");
+    }
+  }
+  const pagesToRelocate =
+    input.mode === "move" || includeChildren ? subtree : subtree.filter((page) => page.id === source.id);
+
+  if (input.mode === "copy") {
+    return copyPagesAcrossKb({
+      source,
+      targetKb,
+      parentPath,
+      pagesToRelocate,
+      authorEmail: input.authorEmail ?? "",
+    });
+  }
+
+  return movePagesAcrossKb({
+    source,
+    sourceKb,
+    targetKb,
+    parentPath,
+    pagesToRelocate,
+    authorEmail: input.authorEmail ?? "",
+  });
+}
+
+async function copyPagesAcrossKb({
+  source,
+  targetKb,
+  parentPath,
+  pagesToRelocate,
+  authorEmail,
+}: {
+  source: KbPage;
+  targetKb: KnowledgeBase;
+  parentPath: string[];
+  pagesToRelocate: KbPage[];
+  authorEmail: string;
+}): Promise<RelocatePageResult> {
+  const idMap = new Map<string, string>();
+  for (const page of pagesToRelocate) {
+    idMap.set(page.id, `page-${crypto.randomUUID()}`);
+  }
+
+  const created: KbPage[] = [];
+  const workingPages = [...(await getDataset()).pages];
+
+  for (const page of pagesToRelocate) {
+    let destParent = parentPath;
+    if (page.id !== source.id) {
+      const parentOldPath = page.path.slice(0, -1);
+      const parentOld = pagesToRelocate.find((candidate) => candidate.path.join("/") === parentOldPath.join("/"));
+      if (!parentOld) {
+        throw new Error("Could not resolve parent while copying page tree.");
+      }
+      const parentNew = created.find((candidate) => candidate.id === idMap.get(parentOld.id));
+      if (!parentNew) {
+        throw new Error("Could not resolve parent while copying page tree.");
+      }
+      destParent = parentNew.path;
+    }
+
+    const slug = allocateUniqueSlug(workingPages, targetKb.id, destParent, page.slug);
+    const today = new Date().toISOString().slice(0, 10);
+    const maxSiblingOrder = Math.max(
+      0,
+      ...workingPages
+        .filter(
+          (candidate) =>
+            candidate.kbId === targetKb.id &&
+            candidate.path.length === destParent.length + 1 &&
+            candidate.path.slice(0, -1).join("/") === destParent.join("/"),
+        )
+        .map((candidate) => candidate.sortOrder),
+    );
+
+    const relatedPageIds = page.relatedPageIds.map((id) => idMap.get(id) ?? id);
+
+    const copy: KbPage = {
+      ...page,
+      id: idMap.get(page.id)!,
+      kbId: targetKb.id,
+      slug,
+      path: [...destParent, slug],
+      sortOrder: maxSiblingOrder + 10,
+      status: "draft",
+      blocks: remintBlockIds(page.blocks),
+      relatedPageIds,
+      relatedAssetIds: [...page.relatedAssetIds],
+      updatedDisplayDate: today,
+      lastReviewedDate: page.lastReviewedDate || today,
+      lockedBy: null,
+      lockedAt: null,
+      verifiedAt: null,
+      verifiedBy: null,
+    };
+
+    const initialRevision = revisionWriteForPage(copy, authorEmail, "save");
+    if (isDatabaseEnabled()) {
+      await insertPage(copy, initialRevision);
+    } else {
+      runtimePages().push(copy);
+      runtimePageRevisions().push(runtimeRevisionFromWrite(initialRevision, nextMemoryRevisionNumber(copy.id)));
+    }
+    workingPages.push(copy);
+    created.push(copy);
+  }
+
+  const rootPage = created.find((page) => page.id === idMap.get(source.id))!;
+  return {
+    rootPage,
+    pages: created,
+    mode: "copy",
+    sourceKbId: source.kbId,
+    targetKbId: targetKb.id,
+  };
+}
+
+async function movePagesAcrossKb({
+  source,
+  sourceKb,
+  targetKb,
+  parentPath,
+  pagesToRelocate,
+  authorEmail,
+}: {
+  source: KbPage;
+  sourceKb: KnowledgeBase;
+  targetKb: KnowledgeBase;
+  parentPath: string[];
+  pagesToRelocate: KbPage[];
+  authorEmail: string;
+}): Promise<RelocatePageResult> {
+  const dataset = await getDataset();
+  const pathBefore = new Map(pagesToRelocate.map((page) => [page.id, [...page.path]]));
+
+  if (sourceKb.homepagePageId && pagesToRelocate.some((page) => page.id === sourceKb.homepagePageId)) {
+    await setKbHomepagePage(sourceKb.id, null);
+  }
+
+  const workingPages = dataset.pages.filter((page) => !pagesToRelocate.some((moved) => moved.id === page.id));
+  const moved: KbPage[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  const ordered = [...pagesToRelocate].sort((a, b) => a.path.length - b.path.length);
+  for (const page of ordered) {
+    let destParent = parentPath;
+    if (page.id !== source.id) {
+      const parentOldPath = page.path.slice(0, -1);
+      const parentMoved = moved.find(
+        (candidate) => pathBefore.get(candidate.id)?.join("/") === parentOldPath.join("/"),
+      );
+      if (!parentMoved) {
+        throw new Error("Could not resolve parent while moving page tree.");
+      }
+      destParent = parentMoved.path;
+    }
+
+    const slug = allocateUniqueSlug(
+      workingPages.concat(moved),
+      targetKb.id,
+      destParent,
+      page.slug,
+      page.id,
+    );
+    const maxSiblingOrder = Math.max(
+      0,
+      ...workingPages
+        .concat(moved)
+        .filter(
+          (candidate) =>
+            candidate.kbId === targetKb.id &&
+            candidate.path.length === destParent.length + 1 &&
+            candidate.path.slice(0, -1).join("/") === destParent.join("/"),
+        )
+        .map((candidate) => candidate.sortOrder),
+    );
+
+    const next: KbPage = {
+      ...page,
+      kbId: targetKb.id,
+      slug,
+      path: [...destParent, slug],
+      sortOrder: page.id === source.id ? maxSiblingOrder + 10 : page.sortOrder,
+      updatedDisplayDate: today,
+      lockedBy: null,
+      lockedAt: null,
+    };
+    moved.push(next);
+  }
+
+  const revisions = moved.map((page) => revisionWriteForPage(page, authorEmail, "save"));
+  if (isDatabaseEnabled()) {
+    await updatePages(moved, authorEmail || undefined, revisions);
+  } else {
+    for (const page of moved) {
+      storeRuntimePage(page);
+    }
+    for (const revision of revisions) {
+      runtimePageRevisions().push(runtimeRevisionFromWrite(revision, nextMemoryRevisionNumber(revision.pageId)));
+    }
+  }
+
+  for (const page of moved) {
+    if (page.status !== "published") continue;
+    const oldPath = pathBefore.get(page.id);
+    if (!oldPath) continue;
+    const oldKey = oldPath.join("/");
+    if (!oldKey) continue;
+    const href = `/kb/${targetKb.slug}/${page.path.join("/")}`;
+    await upsertPathRedirect(sourceKb.id, oldKey, href, "auto-cross-kb-move");
+  }
+
+  const rootPage = moved.find((page) => page.id === source.id)!;
+  return {
+    rootPage,
+    pages: moved,
+    mode: "move",
+    sourceKbId: sourceKb.id,
+    targetKbId: targetKb.id,
+  };
+}
+
+

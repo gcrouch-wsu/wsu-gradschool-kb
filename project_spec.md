@@ -126,7 +126,7 @@ surfaces are added):
 | `/admin` | Owner/Admin/Editor | Signed-in non-viewer session only; navigation hides owner/admin-only links but is not the authorization boundary. Viewers redirect to `/` before the admin shell renders. | `src/app/admin/layout.tsx`, `src/app/admin/page.tsx` |
 | `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Editors | The pages list uses `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
 | `/admin/pages/[pageId]` | Owner/Admin/assigned Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
-| Page mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | `PATCH`, status, layout, lock, and create routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/pages/**/route.ts` |
+| Page mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | `PATCH`, status, layout, lock, create, and relocate routes use `requireAdminMutation` plus `requireKbAccess` (relocate requires access to **both** source and destination KBs); permanent delete also checks owner/admin. | `src/app/api/admin/pages/**/route.ts`, `src/lib/kb-store.ts` (`relocatePage`) |
 | KB homepage API | Owner/Admin/assigned Editor | Sets or clears `knowledge_bases.home_page_id`; route uses `requireAdminMutation` plus `requireKbAccess(kbId)`. | `src/app/api/admin/kbs/[kbId]/homepage/route.ts` |
 | `/admin/assets` and asset picker API | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; picker `GET /api/admin/assets` requires a session and `requireKbAccess(kbId)`. | `src/app/admin/assets/page.tsx`, `src/app/api/admin/assets/route.ts` |
 | `/admin/assets/[assetId]` | Owner/Admin/assigned Editor | Detail page resolves the asset's home KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/assets/[assetId]/page.tsx` |
@@ -640,6 +640,10 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   Content-first with settings auto-open when readiness blockers exist; honest Print / Save as PDF
   labeling; Review dashboard on-demand P&P sourced-content scan with concurrency/dedupe
   (`sourced-review.ts`).
+- Cross-KB page copy/move (2026-07-25): `relocatePage` + `POST /api/admin/pages/[pageId]/relocate`
+  with dual-KB access checks; copies become drafts with reminted block ids; moves update `kb_id`,
+  take descendants, clear source homepage if needed, and write absolute `/kb/...` redirects on the
+  source KB for published paths.
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.

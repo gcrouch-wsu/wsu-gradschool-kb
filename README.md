@@ -212,7 +212,10 @@ gate. This is content tooling, not part of the deployed app.
 Signed-in admins manage pages at `/admin/pages`: reopen drafts, edit metadata and content,
 move a page under a different parent, choose a KB homepage page, and publish. The page-tree editor
 supports drag reorder, re-nesting, inline edit, setting/clearing the KB homepage, and publishing
-drafts directly from the tree.
+drafts directly from the tree. **Copy / move to another KB** is available from the page editor
+overflow menu and each tree row menu: copies land as drafts in the destination KB; moves keep
+status, take child pages along, clear a source homepage assignment if needed, and leave absolute
+`/kb/...` redirects from the old public URLs when the page was published.
 
 Besides regular pages, the tree supports two non-page node kinds: **group headings**
 (non-clickable organizational labels pages nest under; their URLs render the not-found page) and

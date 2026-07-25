@@ -69,8 +69,13 @@ export default async function KbArticlePage({
 
   let effectivePath = pagePath;
   const redirectTarget = await getActiveRedirectTarget(kb.id, pagePath);
-  if (redirectTarget) {
-    const targetPage = await getPageByPath(kb.id, redirectTarget, includeStaff);
+  if (redirectTarget?.kind === "href") {
+    const pageAtOld = await getPageByPath(kb.id, pagePath, includeStaff);
+    if (!pageAtOld || (pageAtOld.nodeKind ?? "page") !== "page") {
+      permanentRedirect(redirectTarget.href);
+    }
+  } else if (redirectTarget?.kind === "path") {
+    const targetPage = await getPageByPath(kb.id, redirectTarget.path, includeStaff);
     if (!targetPage || (targetPage.nodeKind ?? "page") !== "page") {
       notFound();
     }
@@ -79,9 +84,9 @@ export default async function KbArticlePage({
       notFound();
     }
     if (!pageAtOld) {
-      permanentRedirect(`/kb/${kb.slug}/${redirectTarget.join("/")}`);
+      permanentRedirect(`/kb/${kb.slug}/${redirectTarget.path.join("/")}`);
     }
-    effectivePath = redirectTarget;
+    effectivePath = redirectTarget.path;
   }
 
   const page = await getPageByPath(kb.id, effectivePath, includeStaff);

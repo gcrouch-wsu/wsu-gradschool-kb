@@ -12,6 +12,7 @@ export default async function AdminPagesPage() {
   }
 
   const kbs = await filterKbsForSession(session, await getAllKbsForAdmin());
+  const destinationKbs = kbs.map((kb) => ({ id: kb.id, title: kb.title, slug: kb.slug }));
   const groups = await Promise.all(
     kbs.map(async (kb) => ({
       kb,
@@ -35,7 +36,8 @@ export default async function AdminPagesPage() {
       </div>
       <p className="lead">
         Manage imported and seeded pages. Use this screen to reopen drafts, publish content, and move pages
-        under the correct parent in the KB tree.
+        under the correct parent in the KB tree. Use each row&rsquo;s menu to copy or move a page to another
+        knowledge base.
       </p>
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
@@ -60,6 +62,7 @@ export default async function AdminPagesPage() {
             </div>
             <AdminPageTreeManager
               canDelete={session.role === "owner" || session.role === "admin"}
+              destinationKbs={destinationKbs}
               initialPages={pages}
               kb={kb}
             />

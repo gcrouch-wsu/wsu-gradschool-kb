@@ -11,7 +11,7 @@ describe("redirect chain resolution (in-memory)", () => {
     const kb = await getKbBySlug("graduate-school-staff");
     await upsertManualRedirect({ kbId: kb!.id, fromPath: "old-a", toPath: "new-a" });
 
-    expect(await getActiveRedirectTarget(kb!.id, ["old-a"])).toEqual(["new-a"]);
+    expect(await getActiveRedirectTarget(kb!.id, ["old-a"])).toEqual({ kind: "path", path: ["new-a"] });
   });
 
   it("follows a multi-hop redirect chain to the final path", async () => {
@@ -21,7 +21,7 @@ describe("redirect chain resolution (in-memory)", () => {
     await upsertManualRedirect({ kbId: kb!.id, fromPath: "old-b", toPath: "mid-b" });
     await upsertManualRedirect({ kbId: kb!.id, fromPath: "mid-b", toPath: "final-b" });
 
-    expect(await getActiveRedirectTarget(kb!.id, ["old-b"])).toEqual(["final-b"]);
+    expect(await getActiveRedirectTarget(kb!.id, ["old-b"])).toEqual({ kind: "path", path: ["final-b"] });
   });
 
   it("does not follow a cycle back onto itself", async () => {

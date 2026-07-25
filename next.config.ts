@@ -14,6 +14,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  async rewrites() {
+    // Browsers probe these by default; map them to the App Router icon so deploys
+    // don't log harmless 404s for missing static favicon files.
+    return [
+      { source: "/favicon.ico", destination: "/icon" },
+      { source: "/favicon.png", destination: "/icon" },
+    ];
+  },
   async headers() {
 
     return [
