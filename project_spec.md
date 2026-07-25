@@ -616,7 +616,8 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
 - P&P sourced-content core (FB-34, 2026-07-17, PR #12): "P&P source" editor insert importing an
   allowlisted external section as a snapshot in a themed `sourceBox*` provenance callout, with
   manual check-for-changes/refresh, paste-HTML fallback, gate/export recursion, and FTS indexing
-  (migration `030`). Automated staleness polling remains open under FB-34.
+  (migration `030`). Review-dashboard on-demand sourced scan shipped (2026-07-25); scheduled
+  `wp-json` staleness polling remains open under FB-34.
 - KB search widget + live suggestions (FB-35, 2026-07-18, PRs #14–#16): owner-configurable
   sidebar/home search boxes, document-only asset results in reader-facing search, and a
   progressive-enhancement suggestion combobox backed by the public `GET /api/search` endpoint
@@ -738,8 +739,9 @@ without re-modeling `kb_user_assignments`.
 cross-page excerpt blocks with custom attribution and new-tab controls) is **delivered**, and the
 FB-34 **core** (snapshot imports from the published P&P manual in a themed provenance callout,
 with manual check-for-changes/refresh and a paste-HTML fallback) is delivered on the same branch.
-Remaining under FB-34: scheduled staleness polling (wp-json `modified` + section hashes) and
-review-dashboard "source updated" flags.
+Remaining under FB-34: scheduled staleness polling (wp-json `modified` + section hashes). An
+  on-demand Review dashboard scan (`POST /api/admin/sourced-content/scan`) already lists
+  changed / anchor-missing / unreachable sourced sections.
 
 Other tracked work:
 
