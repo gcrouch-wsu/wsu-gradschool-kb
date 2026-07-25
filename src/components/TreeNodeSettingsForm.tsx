@@ -10,7 +10,11 @@ export function TreeNodeSettingsForm({ page }: { page: KbPage }) {
   const router = useRouter();
   const isLink = page.nodeKind === "link";
   const [title, setTitle] = useState(page.title);
-  const [status, setStatus] = useState<PageStatus>(page.status === "published" ? "published" : "draft");
+  const [status, setStatus] = useState<PageStatus>(
+    page.status === "published" || page.status === "proposed" || page.status === "archived"
+      ? page.status
+      : "draft",
+  );
   const [visibility, setVisibility] = useState<PageVisibility>(page.visibility);
   const [linkUrl, setLinkUrl] = useState(page.linkUrl ?? "");
   const [linkNewTab, setLinkNewTab] = useState(Boolean(page.linkNewTab));
@@ -84,6 +88,7 @@ export function TreeNodeSettingsForm({ page }: { page: KbPage }) {
           <span className="meta">Status</span>
           <select className="input" onChange={(e) => setStatus(e.target.value as PageStatus)} value={status}>
             <option value="draft">Draft (hidden from readers)</option>
+            <option value="proposed">Proposed (awaiting review)</option>
             <option value="published">Published (shown in the tree)</option>
           </select>
         </label>

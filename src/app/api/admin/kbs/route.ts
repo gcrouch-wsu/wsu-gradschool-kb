@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, getSql, ensureSchema } from "@/lib/db";
 import { filterKbsForSession } from "@/lib/auth";
+import { seedKbStarterTemplate } from "@/lib/kb-templates";
 import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import { slugify } from "@/lib/slug";
@@ -101,6 +102,10 @@ export async function POST(request: Request) {
       INSERT INTO knowledge_bases (id, slug, title, description, status, visibility, updated_on)
       VALUES (${kb.id}, ${kb.slug}, ${kb.title}, ${kb.description}, ${kb.status}, ${kb.visibility}, ${kb.updatedOn})
     `;
+
+    if (body.seedTemplate === true) {
+      await seedKbStarterTemplate(kb.id, guard.session.email);
+    }
 
     return NextResponse.json({ ok: true, kb });
   } catch (error) {

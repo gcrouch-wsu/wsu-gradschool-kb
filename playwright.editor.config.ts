@@ -29,6 +29,30 @@ export default defineConfig({
       },
       testIgnore: /auth\.setup\.ts/,
     },
+    // Firefox + mobile-width: on by default locally; in CI set EDITOR_CROSS_BROWSER=1
+    // before a release candidate (keeps routine CI time bounded).
+    ...((process.env.EDITOR_CROSS_BROWSER === "1" || !isCi)
+      ? [
+          {
+            name: "firefox",
+            dependencies: ["setup"],
+            use: {
+              ...devices["Desktop Firefox"],
+              storageState: "tests/editor/.auth/state.json",
+            },
+            testIgnore: /auth\.setup\.ts/,
+          },
+          {
+            name: "mobile-chrome",
+            dependencies: ["setup"],
+            use: {
+              ...devices["Pixel 5"],
+              storageState: "tests/editor/.auth/state.json",
+            },
+            testIgnore: /auth\.setup\.ts/,
+          },
+        ]
+      : []),
   ],
   // Runs against a production build (`next build` + `next start`), not `next dev`.
   // The per-request CSP in src/proxy.ts uses a nonce + `strict-dynamic`; the dev

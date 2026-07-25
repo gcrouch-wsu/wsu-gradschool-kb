@@ -81,7 +81,8 @@ export async function PATCH(
         ? body.publishAt.trim() || null
         : undefined;
   const visibility: PageVisibility = body.visibility === "staff" ? "staff" : "public";
-  const status: PageStatus = body.status === "published" ? "published" : "draft";
+  const status: PageStatus =
+    body.status === "published" ? "published" : body.status === "proposed" ? "proposed" : "draft";
   const sortOrder = typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : undefined;
   const parentPath = Array.isArray(body.parentPath)
     ? body.parentPath.filter((segment): segment is string => typeof segment === "string")
@@ -158,7 +159,12 @@ export async function PATCH(
     }, guard.session.email);
     await recordAuditEvent({
       session: guard.session,
-      action: status === "published" ? "page.published" : "page.updated",
+      action:
+        status === "published"
+          ? "page.published"
+          : status === "proposed"
+            ? "page.proposed"
+            : "page.updated",
       entityType: "page",
       entityId: page.id,
       entityLabel: page.title,

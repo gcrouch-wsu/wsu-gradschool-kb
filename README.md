@@ -33,8 +33,10 @@ current implementation status.
   only.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
-  WCAG-minded UI, automated public-page axe smoke tests in CI, and **print-to-PDF export** over
-  semantic HTML.
+  WCAG-minded UI, automated public-page axe smoke tests in CI, proposed-edits review, reader
+  feedback, revision compare/restore, trash, and **print-to-PDF export** over semantic HTML.
+- **AI draft summaries** (optional): write a page summary manually, or **Draft with AI** once the
+  page has a title and enough body content (Vercel AI Gateway env vars; draft never auto-saves).
 - **Operations**: weekly review-date digest cron, owner-only bulk KB ZIP export, privacy-light
   usage analytics, structured JSON error logs, and deploy/rollback runbook documentation.
 - **Importing**: DOCX staged import with style/image extraction and review.
@@ -45,48 +47,42 @@ current implementation status.
 
 ## Current Status
 
-As of 2026-07-14, the public/private KB release baseline is merged to `main` (PR #11) and deployed
-to production; `main` passes full CI including the Neon live-DB access-matrix suites.
-Completed release work includes the multi-KB reader, private KB visibility, owner-provisioned Viewer
-accounts, visibility-aware search and asset delivery, admin/editor workflow, managed assets, imports,
-audit/governance surfaces, revision history with restore, print-to-PDF export, owner site
-settings/branding, and the Chromium editor regression suite. Production-readiness work includes
-weekly review-date notifications, bulk KB export (streamed ZIP), privacy-light usage analytics,
-global cross-KB search, targeted read loaders, migration concurrency locking, and structured
-operations docs.
+As of 2026-07-25, the public/private KB platform is on `main` and in active use for Grad School
+content work. See `project_spec.md` §9 for the shipped surface list (reader, editor, assets, search,
+governance, AI draft summaries, admin/ops) and §10 for known limitations.
 
-Content reuse & sourcing (2026-07-17, PR #12): **cross-page excerpt blocks** (FB-33, delivered) —
-a page can include another page's section as a live "Included from" callout with a custom
-attribution label and new-tab option, resolved per reader at render time — and the **P&P
-sourced-content core** (FB-34): sections imported from the Policies & Procedures site as
-snapshots inside a "Source:" callout, with check-for-changes/refresh controls and a paste-HTML
-fallback. The draft-preview modal resolves excerpts so preview matches the published render.
+**Future only** (`project_spec.md` §11 / §12):
 
-Search & navigation (2026-07-18/19, PRs #14–#17): the owner-configurable **KB search widget**
-with **live in-place suggestions** (FB-35), document-only asset results in reader-facing search,
-first-class drag **re-nesting** in the page-tree manager (PR #13), and page-tree **group
-headings and links** (FB-36, migration `032_tree_node_kinds`).
+1. **Editor framework migration** (FB-09 / FB-29) — plan in `docs/editor-framework-migration.md`
+2. **WSU SSO** (FB-30) — gated on WSU ITS engagement (Entra ID / Azure AD OIDC or SAML)
+3. **Confluence import/export bridge** (FB-37) — concept only; not scoped
 
-Still gated on WSU ITS engagement: **WSU SSO** (`project_spec.md` §12 FB-30), via Entra ID / Azure
-AD OIDC or SAML for staff and private-KB viewers. All authentication stays local and
-owner-provisioned until then.
+All authentication stays local and owner-provisioned until SSO lands.
 
-Remaining QA work before a production-compliance claim:
+**Before a production-compliance / a11y claim:**
 
-- Complete the **Manual release gate** in `project_spec.md` §12 FB-25 (Chrome + Firefox + mobile-width
-  editor passes and a WCAG 2.1 AA sample audit). Automated CI (`test:a11y`, `test:editor`, and
-  live-DB when configured) must stay green.
+- Complete the **Manual release gate** in `docs/release-gate.md` (and `project_spec.md` §12 FB-25):
+  Chrome + Firefox + mobile-width editor passes and a WCAG 2.1 AA sample audit. For cross-browser
+  Playwright: `EDITOR_CROSS_BROWSER=1` after installing Firefox.
 - Follow §13 **Release sign-off** (deploy/cron/post-deploy + IA/search/redirects checklist).
 
-Further enhancements are tracked in `project_spec.md` §12: a maintained rich-text editor framework
-migration, SEO/discoverability, reader feedback, public reading polish, proposed-edits workflow,
-public API, KB templates/advanced settings, large-file asset handling, and third-party error
-tracking. The deploy/rollback runbook is `project_spec.md` §13. Confluence bidirectional interop
-(FB-37) remains optional and deferred.
+The deploy/rollback runbook is `project_spec.md` §13.
+
+**AI draft summaries** (optional Gateway): in the page editor under Summary, write manually or use
+**Draft with AI** once the page has a title and enough body content:
+
+```text
+AI_PROVIDER_ENDPOINT=https://ai-gateway.vercel.sh/v1/chat/completions
+AI_API_KEY=
+AI_MODEL=inclusionai/ling-3.0-flash-free
+```
+
+Without these, the API returns a clear “not configured” error. Drafts never auto-save — review and
+Save as usual.
 
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
-axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions). Type-check:
-`npm run check`.
+axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions; optionally
+Firefox + mobile-width with `EDITOR_CROSS_BROWSER=1`). Type-check: `npm run check`.
 
 **Live-database tests:** `npm run test:db` runs the KI-1, page-revision, review-digest, KB-export,
 page-view, and private-KB access-matrix integration suites against a real Neon database —
@@ -170,21 +166,23 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
 Schema changes are applied automatically on first request via versioned migrations in
-`src/lib/migrations/` (tracked in `_schema_migrations`). The current head is
-`032_tree_node_kinds`, which adds page-tree group/link node fields; `031_search_widget` adds
-owner-configurable KB search widget columns and the optional home search toggle;
-`030_sourced_blocks_search` extends full-text search to index content inside imported sourced
-blocks; `029_kb_visibility` added `knowledge_bases.visibility` (existing KBs default to `public`).
-No manual Neon console migration is required. Earlier migrations include asset versions, redirects,
-staged imports, users / KB assignments, KB homepage page selection, TOC settings, edit-lock columns,
-and full-text search (`tsvector` columns, GIN indices, and a block-text extractor).
+`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `036_asset_usages`**
+(persisted page↔asset usage index). Recent migrations also cover reader feedback (`035`),
+scheduled publish (`034`), per-KB summary requirement (`033`), page-tree group/link nodes (`032`),
+search widget (`031`), sourced-block FTS (`030`), and KB visibility (`029`). No manual Neon console
+migration is required. See `src/lib/migrations/index.ts` for the full sequence (assets, redirects,
+imports, users/assignments, homepage, TOC, edit locks, FTS, revisions, page views, etc.).
 
 ## Managed assets
 
 Signed-in admins can manage files at `/admin/assets`:
 
-- Upload PDF/Word/text documents (stored in Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set).
-- Replace a file by uploading a **draft version**, review **where the asset is used**, then **activate** so the public URL (`/kb/{kbSlug}/files/{assetSlug}`) serves the new file without changing the slug.
+- Upload PDF/Word/text documents (stored in Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set;
+  large documents can use direct-to-Blob upload when configured).
+- Replace a file by uploading a **draft version**, review **where the asset is used** (persisted
+  usage index), then **activate** so the public URL (`/kb/{kbSlug}/files/{assetSlug}`) serves the
+  new file without changing the slug. Public article images can request width variants via `?w=` /
+  `srcset`.
 - Archive before permanent deletion. Only Owners/Admins can delete, and deletion is blocked while
   a page references the asset.
 - When a **published** page is moved or renamed, an automatic redirect is recorded from the old path to the new one.
@@ -240,7 +238,8 @@ The document editor is a WYSIWYG surface with a wrapping toolbar:
 - **Review**: the **Editor note** button comments on selected text or pins a comment at the cursor
   between words/punctuation. Notes are editor-only and removed from public pages/search.
 - **Page display**: page settings can show/hide the summary lead paragraph and the public **PDF
-  export** button. Existing and new pages default to showing the export button.
+  export** button. Existing and new pages default to showing the export button. Summary can be
+  written manually or drafted with AI when the page body is complete enough (optional Gateway env).
 - **Media**: the **Media** button opens a picker to insert images/files from the asset library,
   upload a new image or document, or embed a YouTube/Vimeo/direct video. Library images prefill
   alt text from the asset default when one exists.
@@ -314,5 +313,5 @@ the right rail covers headings within the current page, so public article breadc
 omitted. Tables scroll horizontally on narrow screens. Article and KB-homepage pages can show a
 default-on **PDF export** button, which uses the browser's print-to-PDF over semantic,
 print-styled HTML. (This relies on the browser's print engine; it is not a server-side tagged/PDF-UA
-generator — see `project_spec.md` FB-14.)
+generator — see `project_spec.md` §10).
  

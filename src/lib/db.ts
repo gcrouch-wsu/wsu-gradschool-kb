@@ -718,6 +718,7 @@ export async function deletePage(pageId: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
   await sql.transaction([
+    sql`DELETE FROM kb_asset_usages WHERE page_id = ${pageId}`,
     sql`DELETE FROM kb_page_revisions WHERE page_id = ${pageId}`,
     sql`DELETE FROM kb_pages WHERE id = ${pageId}`,
   ]);

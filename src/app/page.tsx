@@ -1,15 +1,16 @@
-import type { Metadata } from "next";
-import Link from "next/link";
 import { HOME_KB_PAGE_SIZE, KbListPagination } from "@/components/KbListPagination";
 import { HomeSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { filterKbsForReadAccess, getCurrentAdminSession } from "@/lib/auth";
+import { filterHomeKbs, paginateHomeKbs } from "@/lib/home-kb-filter";
 import { getAllKbsForAdmin, getPublishedKbs } from "@/lib/kb-store";
 import { loadSiteSettings } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_THEME, fontStack, mergeTheme, themeToCssVars } from "@/lib/kb-theme";
 import type { KnowledgeBase } from "@/lib/types";
 import type { CSSProperties } from "react";
+import Link from "next/link";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "WSU Knowledge Base",
@@ -33,15 +34,18 @@ async function getHomeKbs(): Promise<HomeKb[]> {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ kbPage?: string }>;
+  searchParams: Promise<{ kbPage?: string; q?: string }>;
 }) {
-  const { kbPage } = await searchParams;
+  const { kbPage, q } = await searchParams;
+  const filterQuery = (q ?? "").trim();
   const [settings, kbs] = await Promise.all([loadSiteSettings(), getHomeKbs()]);
+  const filteredKbs = filterHomeKbs(kbs, filterQuery);
   const requestedPage = Math.max(1, Number.parseInt(kbPage ?? "1", 10) || 1);
-  const totalPages = Math.max(1, Math.ceil(kbs.length / HOME_KB_PAGE_SIZE));
-  const currentPage = Math.min(requestedPage, totalPages);
-  const pageStart = (currentPage - 1) * HOME_KB_PAGE_SIZE;
-  const pageKbs = kbs.slice(pageStart, pageStart + HOME_KB_PAGE_SIZE);
+  const { pageItems: pageKbs, currentPage, totalPages } = paginateHomeKbs(
+    filteredKbs,
+    requestedPage,
+    HOME_KB_PAGE_SIZE,
+  );
   const globalTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
 
   const themeVars: CSSProperties = {
@@ -96,25 +100,53 @@ export default async function HomePage({
                 </div>
               ) : (
                 <>
-                  <ul className="kb-list">
-                    {pageKbs.map((kb) => (
-                      <li className="kb-list__item" key={kb.id}>
-                        <div className="kb-list__main">
-                          <h3 className="kb-list__title">
-                            <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
-                            {kb.isDraft && <span className="badge badge--draft">Draft</span>}
-                          </h3>
-                          {kb.description && <p className="kb-list__desc">{kb.description}</p>}
-                        </div>
-                        <p className="kb-list__meta meta">Updated {formatDate(kb.updatedOn)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                  <KbListPagination
-                    currentPage={currentPage}
-                    totalItems={kbs.length}
-                    totalPages={totalPages}
-                  />
+                  <form className="kb-list__filter" method="get" role="search">
+                    <label className="sr-only" htmlFor="kb-list-filter">
+                      Filter knowledge bases
+                    </label>
+                    <input
+                      className="input"
+                      defaultValue={filterQuery}
+                      id="kb-list-filter"
+                      name="q"
+                      placeholder="Filter by title or description"
+                      type="search"
+                    />
+                    <button className="button button--small" type="submit">
+                      Filter
+                    </button>
+                    {filterQuery ? (
+                      <Link className="button button--small button--ghost" href="/">
+                        Clear
+                      </Link>
+                    ) : null}
+                  </form>
+                  {filteredKbs.length === 0 ? (
+                    <p className="meta">No knowledge bases match “{filterQuery}”.</p>
+                  ) : (
+                    <>
+                      <ul className="kb-list">
+                        {pageKbs.map((kb) => (
+                          <li className="kb-list__item" key={kb.id}>
+                            <div className="kb-list__main">
+                              <h3 className="kb-list__title">
+                                <Link href={`/kb/${kb.slug}`}>{kb.title}</Link>
+                                {kb.isDraft && <span className="badge badge--draft">Draft</span>}
+                              </h3>
+                              {kb.description && <p className="kb-list__desc">{kb.description}</p>}
+                            </div>
+                            <p className="kb-list__meta meta">Updated {formatDate(kb.updatedOn)}</p>
+                          </li>
+                        ))}
+                      </ul>
+                      <KbListPagination
+                        currentPage={currentPage}
+                        query={filterQuery}
+                        totalItems={filteredKbs.length}
+                        totalPages={totalPages}
+                      />
+                    </>
+                  )}
                 </>
               )}
             </>

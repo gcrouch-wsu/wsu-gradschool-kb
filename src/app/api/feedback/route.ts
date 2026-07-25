@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ensureSchema, getSql, isDatabaseEnabled } from "@/lib/db";
 import { getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
-import { rateLimit } from "@/lib/rate-limit";
+import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 
 type FeedbackBody = {
   pageId?: unknown;
@@ -11,11 +11,12 @@ type FeedbackBody = {
 };
 
 /**
- * Public, privacy-light page feedback (FB-32). Accepted only for published public
+ * Public, privacy-light page feedback. Accepted only for published public
  * pages in published public KBs. No cookies/IP/UA stored.
  */
 export async function POST(request: Request) {
-  const limit = await rateLimit("page-feedback", 40, 60);
+  const clientKey = clientKeyFromHeaders(request.headers);
+  const limit = await rateLimit(`page-feedback:${clientKey}`, 40, 60);
   if (!limit.allowed) {
     return NextResponse.json({ message: "Too many requests." }, { status: 429 });
   }

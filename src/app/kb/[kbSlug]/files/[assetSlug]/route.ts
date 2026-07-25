@@ -2,6 +2,11 @@ import { notFound } from "next/navigation";
 import { NextResponse } from "next/server";
 import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
 import { isTrustedAssetUrl } from "@/lib/blob";
+import {
+  isResizableImageMime,
+  parseImageWidthParam,
+  resizeImageBuffer,
+} from "@/lib/image-variants";
 import { assetHasPublicPublishedUsage, getAssetForDelivery, getKbBySlug } from "@/lib/kb-store";
 import { videoDeliveryUrl } from "@/lib/video";
 
@@ -44,6 +49,28 @@ async function fetchTrustedAssetBody(url: string) {
   return response;
 }
 
+async function bufferFromUpstream(url: string): Promise<{ body: Buffer; contentType: string } | null> {
+  const upstream = await fetchTrustedAssetBody(url);
+  if (!upstream) return null;
+  const arrayBuffer = await upstream.arrayBuffer();
+  return {
+    body: Buffer.from(arrayBuffer),
+    contentType: upstream.headers.get("content-type") || "application/octet-stream",
+  };
+}
+
+async function maybeResize(
+  body: Buffer,
+  mimeType: string,
+  width: number | null,
+): Promise<{ body: Buffer; contentType: string }> {
+  if (!width || !isResizableImageMime(mimeType)) {
+    return { body, contentType: mimeType };
+  }
+  const resized = await resizeImageBuffer(body, mimeType, width);
+  return resized ?? { body, contentType: mimeType };
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ kbSlug: string; assetSlug: string }> },
@@ -71,6 +98,8 @@ export async function GET(
     notFound();
   }
   const requiresAuthorization = !(kb.visibility === "public" && kb.status === "published" && readerVisibleUsage);
+  const requestedWidth = parseImageWidthParam(new URL(request.url).searchParams.get("w"));
+  const wantsResize = Boolean(requestedWidth && asset.assetType === "image");
 
   if (asset.assetType === "video") {
     const target = videoDeliveryUrl(asset);
@@ -83,28 +112,29 @@ export async function GET(
     });
   }
 
-  const etag = `"${asset.versionId}"`;
-  const extension = fileExtension(asset.mimeType);
+  const etag = `"${asset.versionId}${wantsResize ? `-w${requestedWidth}` : ""}"`;
+  const extension = wantsResize ? "webp" : fileExtension(asset.mimeType);
   const disposition = asset.mimeType.toLowerCase().includes("svg") ? "attachment" : "inline";
-  const headers = {
+  const baseHeaders = {
     "Cache-Control": cacheControl(requiresAuthorization),
     "Content-Disposition": `${disposition}; filename="${asset.slug}.${extension}"`,
-    "Content-Type": asset.mimeType,
     ETag: etag,
     "X-Content-Type-Options": "nosniff",
   };
 
   if (!requiresAuthorization && request.headers.get("if-none-match") === etag) {
-    return new Response(null, { status: 304, headers });
+    return new Response(null, { status: 304, headers: baseHeaders });
   }
 
   if (asset.body.startsWith("data:")) {
     const decoded = dataUriToResponseBody(asset.body);
-    if (decoded) {
-      return new Response(decoded.body, {
-        headers: { ...headers, "Content-Type": decoded.contentType },
-      });
+    if (!decoded) {
+      notFound();
     }
+    const output = await maybeResize(decoded.body, decoded.contentType, requestedWidth);
+    return new Response(new Uint8Array(output.body), {
+      headers: { ...baseHeaders, "Content-Type": output.contentType },
+    });
   }
 
   if (asset.body.startsWith("http://") || asset.body.startsWith("https://")) {
@@ -112,21 +142,28 @@ export async function GET(
       notFound();
     }
 
-    if (requiresAuthorization) {
-      const upstream = await fetchTrustedAssetBody(asset.body);
+    // Always stream when resizing so ?w= works. Also stream authorized private assets
+    // (never 307 to a public Blob URL). Public full-size images may still redirect.
+    if (requiresAuthorization || wantsResize || asset.assetType === "image") {
+      const upstream = await bufferFromUpstream(asset.body);
       if (!upstream) {
         notFound();
       }
-      return new Response(upstream.body, {
-        headers: {
-          ...headers,
-          "Content-Type": upstream.headers.get("content-type") || asset.mimeType,
-        },
+      const output = await maybeResize(
+        upstream.body,
+        upstream.contentType || asset.mimeType,
+        wantsResize ? requestedWidth : null,
+      );
+      return new Response(new Uint8Array(output.body), {
+        headers: { ...baseHeaders, "Content-Type": output.contentType },
       });
     }
 
-    return NextResponse.redirect(asset.body, { status: 307, headers });
+    return NextResponse.redirect(asset.body, { status: 307, headers: baseHeaders });
   }
 
-  return new Response(asset.body, { headers });
+  const output = await maybeResize(Buffer.from(asset.body), asset.mimeType, requestedWidth);
+  return new Response(new Uint8Array(output.body), {
+    headers: { ...baseHeaders, "Content-Type": output.contentType },
+  });
 }

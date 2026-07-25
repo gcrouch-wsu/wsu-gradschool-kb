@@ -22,6 +22,7 @@
     "node-html-parser": "^7.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sharp": "^0.35.3",
     "word-extractor": "^1.0.4"
   },
   "overrides": {
@@ -33,10 +34,15 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/sharp": "^0.31.1",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.7",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.60.1",
     "vitest": "^4.1.8"
+  },
+  "allowScripts": {
+    "sharp@0.34.5": true,
+    "sharp@0.35.3": true
   }
 }

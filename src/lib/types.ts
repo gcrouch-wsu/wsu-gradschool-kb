@@ -1,6 +1,6 @@
 export type KbStatus = "draft" | "published" | "archived";
 export type KbVisibility = "public" | "private";
-export type PageStatus = "draft" | "published" | "archived";
+export type PageStatus = "draft" | "proposed" | "published" | "archived";
 export type AssetStatus = "draft" | "active" | "archived";
 export type AssetType = "document" | "image" | "video";
 export type AssetVersionStatus = "draft" | "active" | "replaced" | "archived";

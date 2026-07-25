@@ -20,7 +20,14 @@ describe("relocatePage (in-memory)", () => {
     const source = await createPage({
       kbId: sourceKb!.id,
       title: "Copy me across KBs",
-      blocks: [{ blockId: "b1", type: "paragraph", text: "Hello" }],
+      blocks: [
+        {
+          blockId: "b1",
+          type: "paragraph",
+          text: "Hello",
+          html: `<a href="/kb/${sourceKb!.slug}/somewhere">Somewhere</a>`,
+        },
+      ],
       status: "published",
       authorEmail: "editor@example.edu",
     });
@@ -39,6 +46,12 @@ describe("relocatePage (in-memory)", () => {
     expect(result.rootPage.status).toBe("draft");
     expect(result.rootPage.id).not.toBe(source.id);
     expect(result.rootPage.blocks[0]?.blockId).not.toBe(source.blocks[0]?.blockId);
+    const copiedBlock = result.rootPage.blocks[0];
+    expect(copiedBlock?.type).toBe("paragraph");
+    if (copiedBlock?.type === "paragraph") {
+      expect(copiedBlock.html).toContain(`/kb/${destKb!.slug}/somewhere`);
+      expect(copiedBlock.html).not.toContain(`/kb/${sourceKb!.slug}/somewhere`);
+    }
 
     const original = await getPageByIdForAdmin(source.id);
     expect(original?.kbId).toBe(sourceKb!.id);

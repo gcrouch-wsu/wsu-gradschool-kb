@@ -47,6 +47,8 @@ import {
   type NewVersionInput,
 } from "@/lib/asset-lifecycle";
 import { assertPageSlugAllowed, slugify } from "@/lib/slug";
+import { isStaffVisiblePageStatus } from "@/lib/page-status";
+import { rewriteKbLinksInBlocks } from "@/lib/kb-link-rewrite";
 import type {
   Asset,
   AssetUsage,
@@ -315,7 +317,7 @@ function publishedPages(dataset: KbDataset, kbId: string) {
 function visiblePages(dataset: KbDataset, kbId: string, includeStaff: boolean) {
   if (includeStaff) {
     return dataset.pages.filter(
-      (page) => page.kbId === kbId && (page.status === "published" || page.status === "draft"),
+      (page) => page.kbId === kbId && isStaffVisiblePageStatus(page.status),
     );
   }
   const published = publishedPages(dataset, kbId);
@@ -392,7 +394,7 @@ export async function getKbHomepagePage(kbId: string, includeStaff: boolean): Pr
       return null;
     }
     if (includeStaff) {
-      return page.status === "published" || page.status === "draft" ? page : null;
+      return isStaffVisiblePageStatus(page.status) ? page : null;
     }
     if (page.status !== "published") {
       return null;
@@ -515,7 +517,7 @@ export async function getPageByPath(
       return null;
     }
     if (includeStaff) {
-      return page.status === "published" || page.status === "draft" ? page : null;
+      return isStaffVisiblePageStatus(page.status) ? page : null;
     }
     if (page.status !== "published") {
       return null;
@@ -585,6 +587,12 @@ export async function getAssetHomeKbId(assetId: string): Promise<string | null> 
 export async function getAssetUsages(assetId: string): Promise<AssetUsage[]> {
   const normalizedId = normalizeRecordId(assetId);
   if (isDatabaseEnabled()) {
+    const { listIndexedUsagesForAsset } = await import("@/lib/asset-usages");
+    const indexed = await listIndexedUsagesForAsset(normalizedId);
+    if (indexed && indexed.length > 0) {
+      return indexed;
+    }
+    // Fall back to a live scan when the index is empty (e.g. pre-migration pages).
     const asset = await getDbAssetById(normalizedId);
     if (!asset) {
       return [];
@@ -821,11 +829,11 @@ export async function getAssetAdminDetail(assetId: string): Promise<AssetAdminDe
     }
     const versions = await loadVersions(assetId);
     const synced = versions.length > 0 ? applyActiveVersionToAsset(asset, versions) : asset;
-    const [kb, pages] = await Promise.all([getDbKnowledgeBaseById(asset.homeKbId), getDbPagesForKb(asset.homeKbId)]);
+    const [kb, usages] = await Promise.all([getDbKnowledgeBaseById(asset.homeKbId), getAssetUsages(assetId)]);
     return {
       asset: synced,
       versions,
-      usages: extractAssetUsages(pages, assetId),
+      usages,
       publicUrl: kb && asset.status === "active" ? `/kb/${kb.slug}/files/${asset.slug}` : null,
     };
   }
@@ -1284,7 +1292,7 @@ export async function searchKb(
             return false;
           }
           if (canReadStaffPages(page.kbId)) {
-            return page.status === "published" || page.status === "draft";
+            return isStaffVisiblePageStatus(page.status);
           }
           if (page.status !== "published") {
             return false;
@@ -1615,6 +1623,8 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
   const initialRevision = revisionWriteForPage(page, input.authorEmail ?? "", "save");
   if (isDatabaseEnabled()) {
     await insertPage(page, initialRevision);
+    const { rebuildAssetUsagesForPage } = await import("@/lib/asset-usages");
+    await rebuildAssetUsagesForPage(page);
   } else {
     runtimePages().push(page);
     runtimePageRevisions().push(runtimeRevisionFromWrite(initialRevision, nextMemoryRevisionNumber(page.id)));
@@ -1830,6 +1840,8 @@ export async function updatePage(
 
   if (isDatabaseEnabled()) {
     await updatePages(changedPages, editorEmail, [revisionWrite]);
+    const { rebuildAssetUsagesForPage } = await import("@/lib/asset-usages");
+    await rebuildAssetUsagesForPage(updated);
   } else {
     changedPages.forEach(storeRuntimePage);
     runtimePageRevisions().push(runtimeRevisionFromWrite(revisionWrite, nextMemoryRevisionNumber(updated.id)));
@@ -1966,6 +1978,8 @@ export async function updatePageStatus(pageId: string, status: PageStatus): Prom
   if (isDatabaseEnabled()) {
 
     await updatePageStatusColumn(existing.id, updated.status, updated.updatedDisplayDate);
+    const { rebuildAssetUsagesForPage } = await import("@/lib/asset-usages");
+    await rebuildAssetUsagesForPage(updated);
   } else {
     storeRuntimePage(updated);
   }
@@ -2228,6 +2242,16 @@ function remintBlockIds(blocks: ContentBlock[]): ContentBlock[] {
   });
 }
 
+function prepareRelocatedBlocks(
+  blocks: ContentBlock[],
+  fromSlug: string,
+  toSlug: string,
+  remint: boolean,
+): ContentBlock[] {
+  const rewritten = rewriteKbLinksInBlocks(blocks, fromSlug, toSlug);
+  return remint ? remintBlockIds(rewritten) : rewritten;
+}
+
 function allocateUniqueSlug(
   pages: KbPage[],
   kbId: string,
@@ -2332,6 +2356,7 @@ export async function relocatePage(input: RelocatePageInput): Promise<RelocatePa
   if (input.mode === "copy") {
     return copyPagesAcrossKb({
       source: rootInTree,
+      sourceKb,
       targetKb,
       parentPath,
       pagesToRelocate,
@@ -2353,6 +2378,7 @@ export async function relocatePage(input: RelocatePageInput): Promise<RelocatePa
 
 async function copyPagesAcrossKb({
   source,
+  sourceKb,
   targetKb,
   parentPath,
   pagesToRelocate,
@@ -2360,6 +2386,7 @@ async function copyPagesAcrossKb({
   authorEmail,
 }: {
   source: KbPage;
+  sourceKb: KnowledgeBase;
   targetKb: KnowledgeBase;
   parentPath: string[];
   pagesToRelocate: KbPage[];
@@ -2413,7 +2440,7 @@ async function copyPagesAcrossKb({
       path: [...destParent, slug],
       sortOrder: maxSiblingOrder + 10,
       status: "draft",
-      blocks: remintBlockIds(page.blocks),
+      blocks: prepareRelocatedBlocks(page.blocks, sourceKb.slug, targetKb.slug, true),
       relatedPageIds,
       relatedAssetIds: [...page.relatedAssetIds],
       updatedDisplayDate: today,
@@ -2512,6 +2539,7 @@ async function movePagesAcrossKb({
       slug,
       path: [...destParent, slug],
       sortOrder: page.id === source.id ? maxSiblingOrder + 10 : page.sortOrder,
+      blocks: prepareRelocatedBlocks(page.blocks, sourceKb.slug, targetKb.slug, false),
       updatedDisplayDate: today,
       lockedBy: null,
       lockedAt: null,

@@ -815,6 +815,26 @@ const migrations: Migration[] = [
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_page_feedback_kb ON kb_page_feedback (kb_id, created_at DESC)`;
     },
   },
+  {
+    id: "036_asset_usages",
+    async up(sql) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kb_asset_usages (
+          id TEXT PRIMARY KEY,
+          asset_id TEXT NOT NULL,
+          page_id TEXT NOT NULL,
+          kb_id TEXT NOT NULL,
+          block_id TEXT,
+          usage_type TEXT NOT NULL,
+          page_title TEXT NOT NULL DEFAULT '',
+          page_status TEXT NOT NULL DEFAULT 'draft',
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_asset_usages_asset ON kb_asset_usages (asset_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_asset_usages_page ON kb_asset_usages (page_id)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

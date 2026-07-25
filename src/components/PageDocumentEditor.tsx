@@ -7,6 +7,7 @@ import { ExcerptSectionEditor } from "@/components/ExcerptSectionEditor";
 import { SourcedSectionEditor } from "@/components/SourcedSectionEditor";
 import { LinkDialog } from "@/components/LinkDialog";
 import { NoteDialog } from "@/components/NoteDialog";
+import { EditorNotesRail } from "@/components/EditorNotesRail";
 import { MediaPicker } from "@/components/MediaPicker";
 import { PageEditorDebugPanel } from "@/components/PageEditorDebugPanel";
 import { TableBlockEditor } from "@/components/TableBlockEditor";
@@ -425,27 +426,30 @@ export function PageDocumentEditor({
         />
       )}
 
-      <div className="block-list">
-        {sections.map((section, index) => (
-          <SectionEditor
-            index={index}
-            isFirst={index === 0}
-            isLast={index === sections.length - 1}
-            kbId={kbId}
-            key={section.type === "flow" ? `flow-${index}` : section.block.blockId}
-            kbSlug={kbSlug}
-            onMove={moveSection}
-            onRemove={() => removeSection(index)}
-            onUpdateFlow={(html, isBlur) => updateFlowSection(index, html, isBlur)}
-            onUpdateTable={(next) => updateTableSection(index, next)}
-            onUpdateCard={(next) => updateCardSection(index, next)}
-            onUpdateProcedureSection={(next) => updateProcedureSection(index, next)}
-            onUpdateVideo={(next) => updateVideoSection(index, next)}
-            onUpdateExcerpt={(next) => updateExcerptSection(index, next)}
-            onUpdateSourced={(next) => updateSourcedSection(index, next)}
-            section={section}
-          />
-        ))}
+      <div className="editor-canvas">
+        <div className="block-list">
+          {sections.map((section, index) => (
+            <SectionEditor
+              index={index}
+              isFirst={index === 0}
+              isLast={index === sections.length - 1}
+              kbId={kbId}
+              key={section.type === "flow" ? `flow-${index}` : section.block.blockId}
+              kbSlug={kbSlug}
+              onMove={moveSection}
+              onRemove={() => removeSection(index)}
+              onUpdateFlow={(html, isBlur) => updateFlowSection(index, html, isBlur)}
+              onUpdateTable={(next) => updateTableSection(index, next)}
+              onUpdateCard={(next) => updateCardSection(index, next)}
+              onUpdateProcedureSection={(next) => updateProcedureSection(index, next)}
+              onUpdateVideo={(next) => updateVideoSection(index, next)}
+              onUpdateExcerpt={(next) => updateExcerptSection(index, next)}
+              onUpdateSourced={(next) => updateSourcedSection(index, next)}
+              section={section}
+            />
+          ))}
+        </div>
+        <EditorNotesRail />
       </div>
         </>
       )}

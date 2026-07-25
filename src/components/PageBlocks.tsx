@@ -245,6 +245,8 @@ async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "ima
   }
 
   const widthPercent = Math.min(100, Math.max(25, block.widthPercent ?? 100));
+  const { buildManagedImageSrcSet } = await import("@/lib/image-variants");
+  const srcSet = src.startsWith("/kb/") ? buildManagedImageSrcSet(src) : undefined;
 
   const horizontalMargin =
     block.align === "center"
@@ -258,7 +260,13 @@ async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "ima
       style={{ maxWidth: `${widthPercent}%`, ...horizontalMargin }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img alt={block.decorative ? "" : block.alt ?? ""} loading="lazy" src={src} />
+      <img
+        alt={block.decorative ? "" : block.alt ?? ""}
+        loading="lazy"
+        sizes="(max-width: 768px) 100vw, min(720px, 100vw)"
+        src={src}
+        srcSet={srcSet}
+      />
       {block.caption && <figcaption>{block.caption}</figcaption>}
     </figure>
   );

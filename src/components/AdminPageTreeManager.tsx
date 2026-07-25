@@ -142,24 +142,28 @@ function layoutSignature(pages: PageItem[]) {
 function statusLabel(status: PageStatus) {
   if (status === "published") return "Published";
   if (status === "archived") return "Archived";
+  if (status === "proposed") return "Proposed";
   return "Draft";
 }
 
 function statusBadgeClass(status: PageStatus) {
   if (status === "published") return "badge badge--verified";
   if (status === "archived") return "badge badge--archived";
+  if (status === "proposed") return "badge badge--warning";
   return "badge badge--draft";
 }
 
 function publishToggleLabel(status: PageStatus) {
   if (status === "published") return "Unpublish";
   if (status === "archived") return "Restore to draft";
+  if (status === "proposed") return "Approve & publish";
   return "Publish";
 }
 
 function publishToggleBusyLabel(status: PageStatus) {
   if (status === "published") return "Unpublishing...";
   if (status === "archived") return "Restoring...";
+  if (status === "proposed") return "Approving...";
   return "Publishing...";
 }
 
@@ -640,6 +644,8 @@ export function AdminPageTreeManager({
   const [deleteTarget, setDeleteTarget] = useState<PageItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PageItem | null>(null);
   const [relocateTarget, setRelocateTarget] = useState<PageItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   if (trackedInitialPages !== initialPages) {
     const normalized = normalizeSiblingOrders(initialPages);
@@ -890,12 +896,72 @@ export function AdminPageTreeManager({
           ? "Page published."
           : status === "archived"
             ? "Page archived. It is hidden from the public site."
-            : "Page saved as draft.",
+            : status === "proposed"
+              ? "Page submitted for review."
+              : "Page saved as draft.",
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not update page status.");
     } finally {
       setStatusBusyId(null);
+    }
+  }
+
+  function toggleSelected(pageId: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(pageId)) next.delete(pageId);
+      else next.add(pageId);
+      return next;
+    });
+  }
+
+  async function bulkSetStatus(status: Extract<PageStatus, "archived" | "draft">) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const verb = status === "archived" ? "archive" : "restore";
+    if (!window.confirm(`${verb === "archive" ? "Archive" : "Restore"} ${ids.length} selected page(s)?`)) {
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    setMessage(null);
+    let okCount = 0;
+    const failures: string[] = [];
+    for (const pageId of ids) {
+      try {
+        const response = await fetch(`/api/admin/pages/${pageId}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          failures.push(data.message ?? pageId);
+          continue;
+        }
+        okCount += 1;
+        setPages((current) =>
+          current.map((page) =>
+            page.id === pageId
+              ? { ...page, status, updatedDisplayDate: new Date().toISOString().slice(0, 10) }
+              : page,
+          ),
+        );
+      } catch (caught) {
+        failures.push(caught instanceof Error ? caught.message : pageId);
+      }
+    }
+    setSelectedIds(new Set());
+    setBulkBusy(false);
+    if (failures.length > 0) {
+      setError(`Updated ${okCount}; ${failures.length} failed. ${failures[0]}`);
+    } else {
+      setMessage(
+        status === "archived"
+          ? `Archived ${okCount} page${okCount === 1 ? "" : "s"}.`
+          : `Restored ${okCount} page${okCount === 1 ? "" : "s"} to draft.`,
+      );
     }
   }
 
@@ -1029,8 +1095,36 @@ export function AdminPageTreeManager({
               onChange={(event) => setShowArchived(event.target.checked)}
               type="checkbox"
             />
-            Show archived ({archivedCount})
+            Show archived / trash ({archivedCount})
           </label>
+        )}
+        {selectedIds.size > 0 && (
+          <>
+            <button
+              className="button button--small"
+              disabled={bulkBusy}
+              onClick={() => void bulkSetStatus("archived")}
+              type="button"
+            >
+              {bulkBusy ? "Working…" : `Archive selected (${selectedIds.size})`}
+            </button>
+            <button
+              className="button button--small button--ghost"
+              disabled={bulkBusy}
+              onClick={() => void bulkSetStatus("draft")}
+              type="button"
+            >
+              Restore selected to draft
+            </button>
+            <button
+              className="button button--small button--ghost"
+              disabled={bulkBusy}
+              onClick={() => setSelectedIds(new Set())}
+              type="button"
+            >
+              Clear selection
+            </button>
+          </>
         )}
         {canManagePublishPolicy && (
           <label className="meta" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
@@ -1113,6 +1207,14 @@ export function AdminPageTreeManager({
                 }
               >
                 <div className="tree-editor__handle-group">
+                  <label className="tree-editor__select">
+                    <input
+                      checked={selectedIds.has(page.id)}
+                      onChange={() => toggleSelected(page.id)}
+                      type="checkbox"
+                    />
+                    <span className="sr-only">Select {page.title}</span>
+                  </label>
                   <button
                     aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowRight Alt+ArrowLeft"
                     aria-label={`Drag to reorder ${page.title}. Alt + arrow keys also move this page.`}

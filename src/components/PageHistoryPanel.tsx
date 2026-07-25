@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DraftPreviewModal } from "@/components/DraftPreviewModal";
 import { formatTimestamp } from "@/lib/format";
+import { diffLines, revisionPlainDocument, type DiffLine } from "@/lib/revision-diff";
 import type { PageRevision, PageRevisionSummary } from "@/lib/types";
 
 // Read-only revision history for a page. Lists saved revisions, lets an editor
-// preview any one in public styling, and restore it — restore creates a new
-// save/revision rather than rewriting history.
+// preview any one in public styling, compare two revisions, and restore —
+// restore creates a new save/revision rather than rewriting history.
 export function PageHistoryPanel({
   pageId,
   kbSlug,
@@ -36,6 +37,11 @@ export function PageHistoryPanel({
   // not make that row's restore button read "Working…" (or vice versa).
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [compareLeft, setCompareLeft] = useState<string | null>(null);
+  const [compareRight, setCompareRight] = useState<string | null>(null);
+  const [diffBusy, setDiffBusy] = useState(false);
+  const [diffLinesResult, setDiffLinesResult] = useState<DiffLine[] | null>(null);
+  const [diffLabels, setDiffLabels] = useState<{ left: string; right: string } | null>(null);
   const activeRef = useRef(true);
 
   const loading = refreshing || loadedToken !== reloadToken;
@@ -149,6 +155,69 @@ export function PageHistoryPanel({
     }
   }
 
+  function toggleCompare(revisionId: string) {
+    setDiffLinesResult(null);
+    setDiffLabels(null);
+    if (compareLeft === revisionId) {
+      setCompareLeft(null);
+      return;
+    }
+    if (compareRight === revisionId) {
+      setCompareRight(null);
+      return;
+    }
+    if (!compareLeft) {
+      setCompareLeft(revisionId);
+      return;
+    }
+    if (!compareRight) {
+      setCompareRight(revisionId);
+      return;
+    }
+    setCompareLeft(revisionId);
+    setCompareRight(null);
+  }
+
+  async function runCompare() {
+    if (!compareLeft || !compareRight) return;
+    setDiffBusy(true);
+    setError(null);
+    setDiffLinesResult(null);
+    try {
+      const [leftRes, rightRes] = await Promise.all([
+        fetch(`/api/admin/pages/${pageId}/revisions/${compareLeft}`),
+        fetch(`/api/admin/pages/${pageId}/revisions/${compareRight}`),
+      ]);
+      const leftData = await leftRes.json().catch(() => ({}));
+      const rightData = await rightRes.json().catch(() => ({}));
+      if (!leftRes.ok || !leftData.revision || !rightRes.ok || !rightData.revision) {
+        throw new Error("Could not load revisions to compare.");
+      }
+      const left = leftData.revision as PageRevision;
+      const right = rightData.revision as PageRevision;
+      // Always show older → newer so removals/additions read naturally.
+      const olderFirst = left.revisionNumber <= right.revisionNumber;
+      const before = olderFirst ? left : right;
+      const after = olderFirst ? right : left;
+      if (activeRef.current) {
+        setDiffLabels({
+          left: `#${before.revisionNumber}`,
+          right: `#${after.revisionNumber}`,
+        });
+        setDiffLinesResult(diffLines(revisionPlainDocument(before), revisionPlainDocument(after)));
+      }
+    } catch (caught) {
+      if (activeRef.current) {
+        setError({
+          token: reloadToken,
+          text: caught instanceof Error ? caught.message : "Could not compare revisions.",
+        });
+      }
+    } finally {
+      if (activeRef.current) setDiffBusy(false);
+    }
+  }
+
   return (
     <div className="page-history">
       <div className="page-history__head">
@@ -164,7 +233,8 @@ export function PageHistoryPanel({
         </button>
       </div>
       <p className="meta">
-        Every save records a revision. Restoring a revision saves it as a new version, so nothing is lost.
+        Every save records a revision. Select two revisions and compare, or restore one as a new
+        version so nothing is lost.
       </p>
 
       {/* Persistent live region so screen readers announce errors from refresh,
@@ -178,41 +248,105 @@ export function PageHistoryPanel({
       ) : revisions.length === 0 ? (
         <p className="meta">No revisions yet. The next save will create the first one.</p>
       ) : (
-        <ul className="page-history__list">
-          {revisions.map((revision) => (
-            <li className="page-history__item" key={revision.id}>
-              <div className="page-history__meta">
-                <span className="page-history__number">#{revision.revisionNumber}</span>
-                {revision.action === "restore" && <span className="badge badge--draft">restored</span>}
-                <span className="badge">{revision.status}</span>
-                <span className="meta">
-                  {revision.authorEmail || "unknown"} · {formatTimestamp(revision.createdAt)}
+        <>
+          <div className="page-history__compare-bar">
+            <button
+              className="button button--small"
+              disabled={!compareLeft || !compareRight || diffBusy}
+              onClick={runCompare}
+              type="button"
+            >
+              {diffBusy ? "Comparing…" : "Compare selected"}
+            </button>
+            {(compareLeft || compareRight) && (
+              <button
+                className="button button--small button--ghost"
+                onClick={() => {
+                  setCompareLeft(null);
+                  setCompareRight(null);
+                  setDiffLinesResult(null);
+                  setDiffLabels(null);
+                }}
+                type="button"
+              >
+                Clear selection
+              </button>
+            )}
+          </div>
+          <ul className="page-history__list">
+            {revisions.map((revision) => {
+              const selected = compareLeft === revision.id || compareRight === revision.id;
+              return (
+                <li className="page-history__item" key={revision.id}>
+                  <div className="page-history__meta">
+                    <label className="page-history__compare-pick">
+                      <input
+                        checked={selected}
+                        onChange={() => toggleCompare(revision.id)}
+                        type="checkbox"
+                      />
+                      <span className="sr-only">Select revision #{revision.revisionNumber} to compare</span>
+                    </label>
+                    <span className="page-history__number">#{revision.revisionNumber}</span>
+                    {revision.action === "restore" && <span className="badge badge--draft">restored</span>}
+                    <span className="badge">{revision.status}</span>
+                    <span className="meta">
+                      {revision.authorEmail || "unknown"} · {formatTimestamp(revision.createdAt)}
+                    </span>
+                  </div>
+                  <div className="page-history__actions">
+                    <button
+                      aria-busy={viewingId === revision.id}
+                      className="button button--small button--ghost"
+                      disabled={viewingId === revision.id}
+                      onClick={() => viewRevision(revision.id)}
+                      type="button"
+                    >
+                      {viewingId === revision.id ? "Loading…" : "View"}
+                    </button>
+                    <button
+                      aria-busy={restoringId === revision.id}
+                      className="button button--small"
+                      disabled={isLocked || restoringId === revision.id}
+                      onClick={() => restoreRevision(revision)}
+                      title={isLocked ? "This page is locked — you cannot restore right now." : undefined}
+                      type="button"
+                    >
+                      {restoringId === revision.id ? "Working…" : "Restore this version"}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
+      {diffLinesResult && diffLabels && (
+        <div className="page-history__diff" aria-label={`Diff ${diffLabels.left} to ${diffLabels.right}`}>
+          <h3 className="page-history__diff-title">
+            Compare {diffLabels.left} → {diffLabels.right}
+          </h3>
+          <pre className="page-history__diff-body">
+            {diffLinesResult.map((line, index) => (
+              <div
+                className={
+                  line.kind === "add"
+                    ? "page-history__diff-line is-add"
+                    : line.kind === "remove"
+                      ? "page-history__diff-line is-remove"
+                      : "page-history__diff-line"
+                }
+                key={`${index}-${line.kind}-${line.text.slice(0, 24)}`}
+              >
+                <span className="page-history__diff-mark" aria-hidden>
+                  {line.kind === "add" ? "+" : line.kind === "remove" ? "−" : " "}
                 </span>
+                {line.text || " "}
               </div>
-              <div className="page-history__actions">
-                <button
-                  aria-busy={viewingId === revision.id}
-                  className="button button--small button--ghost"
-                  disabled={viewingId === revision.id}
-                  onClick={() => viewRevision(revision.id)}
-                  type="button"
-                >
-                  {viewingId === revision.id ? "Loading…" : "View"}
-                </button>
-                <button
-                  aria-busy={restoringId === revision.id}
-                  className="button button--small"
-                  disabled={isLocked || restoringId === revision.id}
-                  onClick={() => restoreRevision(revision)}
-                  title={isLocked ? "This page is locked — you cannot restore right now." : undefined}
-                  type="button"
-                >
-                  {restoringId === revision.id ? "Working…" : "Restore this version"}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </pre>
+        </div>
       )}
 
       {preview && (

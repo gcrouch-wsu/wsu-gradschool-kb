@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ReviewProposedActions } from "@/components/ReviewProposedActions";
 import { ReviewSourcedScan } from "@/components/ReviewSourcedScan";
 import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
 import { getAdminReviewDashboard } from "@/lib/admin-review";
@@ -10,6 +11,7 @@ export default async function AdminReviewPage() {
     redirect("/admin/sign-in?next=/admin/review");
   }
 
+  const canApprove = session.role === "owner" || session.role === "admin";
   const review = await getAdminReviewDashboard(await accessibleKbIds(session));
 
   return (
@@ -17,16 +19,62 @@ export default async function AdminReviewPage() {
       <p className="eyebrow">Admin</p>
       <h1>Review dashboard</h1>
       <p className="lead">
-        Governance checklist: staged imports, drafts ready to publish, publish blockers, broken asset
-        references, unused assets, and P&amp;P sourced-content freshness.
+        Governance checklist: proposed edits, staged imports, drafts ready to publish, publish
+        blockers, reader feedback, broken asset references, unused assets, and P&amp;P sourced-content
+        freshness.
       </p>
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
         {" · "}
         <Link href="/admin/redirects">Redirects</Link>
+        {" · "}
+        <Link href="/admin/trash">Trash</Link>
       </p>
 
       <ReviewSourcedScan />
+
+      <section className="card" style={{ marginTop: "1.5rem" }}>
+        <h2>Proposed edits awaiting review ({review.proposedPages.length})</h2>
+        <ReviewProposedActions canApprove={canApprove} pages={review.proposedPages} />
+      </section>
+
+      <section className="card" style={{ marginTop: "1.5rem" }}>
+        <h2>Reader feedback ({review.feedback.length})</h2>
+        {review.feedback.length === 0 ? (
+          <p className="meta">No page feedback yet.</p>
+        ) : (
+          <ul className="import-outline">
+            {review.feedback.map((row) => (
+              <li key={row.pageId}>
+                <Link href={`/admin/pages/${row.pageId}`}>{row.pageTitle}</Link>
+                <span className="meta">
+                  {" "}
+                  · {row.helpful} helpful · {row.notHelpful} not helpful
+                  {row.withComment > 0 ? ` · ${row.withComment} with comments` : ""}
+                  {row.lastAt ? ` · last ${row.lastAt}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {review.feedbackComments.length > 0 ? (
+          <>
+            <h3 style={{ marginTop: "1.25rem", fontSize: "1rem" }}>Recent comments</h3>
+            <ul className="import-outline">
+              {review.feedbackComments.map((row) => (
+                <li key={row.id}>
+                  <Link href={`/admin/pages/${row.pageId}`}>{row.pageTitle}</Link>
+                  <span className="meta">
+                    {" "}
+                    · {row.helpful ? "helpful" : "not helpful"} · {row.createdAt}
+                  </span>
+                  <p style={{ margin: "0.35rem 0 0" }}>{row.comment}</p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </section>
 
       <section className="card" style={{ marginTop: "1.5rem" }}>
         <h2>Staged imports ({review.stagedImports.length})</h2>

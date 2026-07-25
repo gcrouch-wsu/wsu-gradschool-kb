@@ -1,6 +1,12 @@
 import { extractAssetUsages } from "@/lib/asset-lifecycle";
 import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { getAllAssetsForAdmin, getAllKbsForAdmin, getAllPagesForAdmin, getAssetStatusById } from "@/lib/kb-store";
+import {
+  listPageFeedbackAggregates,
+  listRecentFeedbackComments,
+  type PageFeedbackAggregate,
+  type PageFeedbackComment,
+} from "@/lib/page-feedback";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { listStagedImportsForAdmin } from "@/lib/staged-imports";
 import type { KbPage } from "@/lib/types";
@@ -36,12 +42,23 @@ export interface ReviewDraftReady {
   kbSlug: string;
 }
 
+export interface ReviewProposedPage {
+  pageId: string;
+  title: string;
+  path: string;
+  kbSlug: string;
+  updatedDisplayDate: string;
+}
+
 export interface AdminReviewDashboard {
   draftPagesReady: ReviewDraftReady[];
   draftPagesBlocked: ReviewDraftPage[];
+  proposedPages: ReviewProposedPage[];
   brokenReferences: ReviewBrokenReference[];
   unusedAssets: ReviewUnusedAsset[];
   stagedImports: Awaited<ReturnType<typeof listStagedImportsForAdmin>>;
+  feedback: PageFeedbackAggregate[];
+  feedbackComments: PageFeedbackComment[];
 }
 
 export async function getAdminReviewDashboard(
@@ -63,7 +80,9 @@ export async function getAdminReviewDashboard(
   const draftPagesBlocked: ReviewDraftPage[] = [];
 
   for (const page of draftPages) {
-    const issues = await validatePageForPublish(page, getAssetStatusById, checkExcerptSourceForPublish);
+    const issues = await validatePageForPublish(page, getAssetStatusById, checkExcerptSourceForPublish, {
+      requireSummary: kbById.get(page.kbId)?.requireSummary !== false,
+    });
     const kb = kbById.get(page.kbId);
     if (issues.length === 0) {
       draftPagesReady.push({
@@ -83,6 +102,19 @@ export async function getAdminReviewDashboard(
       });
     }
   }
+
+  const proposedPages: ReviewProposedPage[] = allPages
+    .filter((page) => page.status === "proposed")
+    .map((page) => {
+      const kb = kbById.get(page.kbId);
+      return {
+        pageId: page.id,
+        title: page.title,
+        path: page.path.join("/"),
+        kbSlug: kb?.slug ?? "",
+        updatedDisplayDate: page.updatedDisplayDate,
+      };
+    });
 
   const brokenReferences: ReviewBrokenReference[] = [];
   for (const page of allPages) {
@@ -128,13 +160,18 @@ export async function getAdminReviewDashboard(
 
   const allAssets = await getAllAssetsForAdmin();
   const assets = allowed === null ? allAssets : allAssets.filter((asset) => allowed.has(asset.homeKbId));
+  const { listIndexedUsedAssetIds } = await import("@/lib/asset-usages");
+  const indexedUsed = await listIndexedUsedAssetIds(allowedKbIds);
   const unusedAssets: ReviewUnusedAsset[] = [];
   for (const asset of assets) {
     if (asset.status !== "active") {
       continue;
     }
-    const usages = extractAssetUsages(allPages, asset.id);
-    if (usages.length === 0) {
+    const isUsed =
+      indexedUsed !== null
+        ? indexedUsed.has(asset.id)
+        : extractAssetUsages(allPages, asset.id).length > 0;
+    if (!isUsed) {
       const kb = kbById.get(asset.homeKbId);
       unusedAssets.push({
         assetId: asset.id,
@@ -149,11 +186,17 @@ export async function getAdminReviewDashboard(
   const stagedImports =
     allowed === null ? allStagedImports : allStagedImports.filter((row) => allowed.has(row.kbId));
 
+  const feedback = await listPageFeedbackAggregates(allowedKbIds);
+  const feedbackComments = await listRecentFeedbackComments(allowedKbIds);
+
   return {
     draftPagesReady,
     draftPagesBlocked,
+    proposedPages,
     brokenReferences,
     unusedAssets,
     stagedImports,
+    feedback,
+    feedbackComments,
   };
 }

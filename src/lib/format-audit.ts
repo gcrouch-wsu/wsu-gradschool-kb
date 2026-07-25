@@ -29,6 +29,8 @@ export function formatAuditAction(entry: AuditLogEntry): string {
       return `Updated page “${label}”`;
     case "page.published":
       return `Published page “${label}”`;
+    case "page.proposed":
+      return `Submitted page “${label}” for review`;
     case "page.archived":
       return `Archived page “${label}”`;
     case "page.deleted":

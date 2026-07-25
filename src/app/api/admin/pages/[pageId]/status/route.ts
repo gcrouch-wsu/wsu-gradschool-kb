@@ -33,15 +33,28 @@ export async function PATCH(
   const status: PageStatus | null =
     body?.status === "published" ||
     body?.status === "draft" ||
+    body?.status === "proposed" ||
     body?.status === "archived"
       ? body.status
       : null;
 
   if (!status) {
     return NextResponse.json(
-      { message: "Status must be draft, published, or archived." },
+      { message: "Status must be draft, proposed, published, or archived." },
       { status: 400 },
     );
+  }
+
+  // Editors submit for review; only owners/admins publish proposed pages
+  // (editors may still publish drafts directly when policy allows).
+  if (status === "published" && guard.session.role === "editor") {
+    const current = await getPageByIdForAdmin(pageId);
+    if (current?.status === "proposed") {
+      return NextResponse.json(
+        { message: "Only an owner or admin can approve a proposed page." },
+        { status: 403 },
+      );
+    }
   }
 
   if (status === "published") {
@@ -75,7 +88,9 @@ export async function PATCH(
           ? "page.published"
           : status === "archived"
             ? "page.archived"
-            : "page.drafted",
+            : status === "proposed"
+              ? "page.proposed"
+              : "page.drafted",
       entityType: "page",
       entityId: page.id,
       entityLabel: page.title,

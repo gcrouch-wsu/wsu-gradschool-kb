@@ -74,20 +74,55 @@ export function AdminAssetUploadForm({
 
     try {
       if (uploadType === "file") {
-        const formData = new FormData();
-        formData.append("file", file!);
-        formData.append("kbId", kbId);
-        if (title.trim()) formData.append("title", title.trim());
-        if (description.trim()) formData.append("description", description.trim());
+        // Prefer direct-to-Blob for larger files when object storage is available.
+        // If the token endpoint is unavailable (501), fall back to multipart.
+        let usedDirect = false;
+        if (file!.size > 4 * 1024 * 1024) {
+          try {
+            const { upload } = await import("@vercel/blob/client");
+            const blob = await upload(file!.name, file!, {
+              access: "public",
+              handleUploadUrl: "/api/admin/assets/upload",
+              contentType: file!.type,
+            });
+            const response = await fetch("/api/admin/assets/documents", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                kbId,
+                title: title.trim() || undefined,
+                description: description.trim() || undefined,
+                blobUrl: blob.url,
+                mimeType: file!.type,
+                originalFilename: file!.name,
+                fileSizeBytes: file!.size,
+              }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message ?? "Upload failed.");
+            const assetId = data.asset?.id;
+            setCreatedUrl(assetId ? `/admin/assets/${assetId}` : data.url ?? null);
+            usedDirect = true;
+          } catch {
+            usedDirect = false;
+          }
+        }
+        if (!usedDirect) {
+          const formData = new FormData();
+          formData.append("file", file!);
+          formData.append("kbId", kbId);
+          if (title.trim()) formData.append("title", title.trim());
+          if (description.trim()) formData.append("description", description.trim());
 
-        const response = await fetch("/api/admin/assets/documents", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Upload failed.");
-        const assetId = data.asset?.id;
-        setCreatedUrl(assetId ? `/admin/assets/${assetId}` : data.url ?? null);
+          const response = await fetch("/api/admin/assets/documents", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message ?? "Upload failed.");
+          const assetId = data.asset?.id;
+          setCreatedUrl(assetId ? `/admin/assets/${assetId}` : data.url ?? null);
+        }
       } else {
         const response = await fetch("/api/admin/assets/videos", {
           method: "POST",

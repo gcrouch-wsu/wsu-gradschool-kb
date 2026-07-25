@@ -34,6 +34,7 @@ export default function AdminKbsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [newSlug, setNewSlug] = useState("");
   const [newVisibility, setNewVisibility] = useState<KbVisibility>("public");
+  const [seedTemplate, setSeedTemplate] = useState(true);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<KnowledgeBase>>({});
@@ -67,6 +68,7 @@ export default function AdminKbsPage() {
           slug: newSlug,
           status: "draft",
           visibility: newVisibility,
+          seedTemplate,
         }),
       });
       if (!res.ok) {
@@ -79,6 +81,7 @@ export default function AdminKbsPage() {
       setNewDescription("");
       setNewSlug("");
       setNewVisibility("public");
+      setSeedTemplate(true);
       showSuccess("Knowledge base created.");
     } catch (err) {
       showError(err instanceof Error ? err.message : "Error creating KB");
@@ -91,6 +94,7 @@ export default function AdminKbsPage() {
     setNewDescription("");
     setNewSlug("");
     setNewVisibility("public");
+    setSeedTemplate(true);
   }
 
   async function handleUpdate(kbId: string) {
@@ -224,6 +228,14 @@ export default function AdminKbsPage() {
               <option value="public">Public</option>
               <option value="private">Private</option>
             </select>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <input
+              checked={seedTemplate}
+              onChange={(e) => setSeedTemplate(e.target.checked)}
+              type="checkbox"
+            />
+            <span className="meta">Seed starter pages (Getting started + Contacts)</span>
           </label>
         </ModalForm>
       )}

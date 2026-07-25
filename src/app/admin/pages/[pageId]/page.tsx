@@ -87,6 +87,7 @@ export default async function AdminEditPage({
         <Link href="/admin/pages">Back to pages</Link>
       </p>
       <AdminPageEditorForm
+        canApproveProposed={session.role === "owner" || session.role === "admin"}
         destinationKbs={destinationKbs}
         kb={kb}
         page={page}

@@ -1,19 +1,25 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export const HOME_KB_PAGE_SIZE = 2;
+export const HOME_KB_PAGE_SIZE = 12;
 
 type KbListPaginationProps = {
   currentPage: number;
   totalItems: number;
   totalPages: number;
+  /** Preserve home list filter across page links. */
+  query?: string;
 };
 
-function pageHref(page: number) {
-  return page <= 1 ? "/" : `/?kbPage=${page}`;
+function pageHref(page: number, query?: string) {
+  const params = new URLSearchParams();
+  if (page > 1) params.set("kbPage", String(page));
+  if (query?.trim()) params.set("q", query.trim());
+  const qs = params.toString();
+  return qs ? `/?${qs}` : "/";
 }
 
-export function KbListPagination({ currentPage, totalItems, totalPages }: KbListPaginationProps) {
+export function KbListPagination({ currentPage, totalItems, totalPages, query }: KbListPaginationProps) {
   if (totalPages <= 1) {
     return null;
   }
@@ -33,7 +39,7 @@ export function KbListPagination({ currentPage, totalItems, totalPages }: KbList
             <span className="sr-only">Previous page</span>
           </span>
         ) : (
-          <Link aria-label="Previous page" className="kb-list__page-btn" href={pageHref(currentPage - 1)}>
+          <Link aria-label="Previous page" className="kb-list__page-btn" href={pageHref(currentPage - 1, query)}>
             <ChevronLeft aria-hidden size={16} strokeWidth={1.75} />
           </Link>
         )}
@@ -46,7 +52,7 @@ export function KbListPagination({ currentPage, totalItems, totalPages }: KbList
             <span className="sr-only">Next page</span>
           </span>
         ) : (
-          <Link aria-label="Next page" className="kb-list__page-btn" href={pageHref(currentPage + 1)}>
+          <Link aria-label="Next page" className="kb-list__page-btn" href={pageHref(currentPage + 1, query)}>
             <ChevronRight aria-hidden size={16} strokeWidth={1.75} />
           </Link>
         )}

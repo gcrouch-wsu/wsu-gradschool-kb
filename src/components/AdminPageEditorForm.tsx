@@ -11,6 +11,7 @@ import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
+import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -33,7 +34,7 @@ interface ParentOption {
   status: PageStatus;
 }
 
-type EditableStatus = "draft" | "published";
+type EditableStatus = "draft" | "published" | "proposed";
 
 interface OverflowMenuItem {
   danger?: boolean;
@@ -291,11 +292,13 @@ export function AdminPageEditorForm({
   page,
   parentOptions,
   destinationKbs,
+  canApproveProposed = false,
 }: {
   kb: KnowledgeBase;
   page: KbPage;
   parentOptions: ParentOption[];
   destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
+  canApproveProposed?: boolean;
 }) {
   const [title, setTitle] = useState(page.title);
   const [slug, setSlug] = useState(page.slug);
@@ -317,6 +320,8 @@ export function AdminPageEditorForm({
   const [verifiedBy, setVerifiedBy] = useState(page.verifiedBy);
   const [busy, setBusy] = useState<EditableStatus | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [summaryDraftBusy, setSummaryDraftBusy] = useState(false);
+  const [summaryDraftHint, setSummaryDraftHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
@@ -601,12 +606,62 @@ export function AdminPageEditorForm({
           ? "Page published."
           : status === "archived"
             ? "Page archived. It is hidden from the public site."
-            : "Page is now a draft.",
+            : status === "proposed"
+              ? "Page submitted for review."
+              : "Page is now a draft.",
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not update page status.");
     } finally {
       setLifecycleBusy(false);
+    }
+  }
+
+  const summaryDraftReadiness = useMemo(
+    () => assessPageReadyForSummaryDraft({ title, blocks }),
+    [title, blocks],
+  );
+
+  async function draftSummaryWithAi() {
+    if (lockError || summaryDraftBusy) return;
+    if (!summaryDraftReadiness.ok) {
+      setSummaryDraftHint(summaryDraftReadiness.message);
+      return;
+    }
+    if (
+      summary.trim() &&
+      !window.confirm("Replace the current summary with an AI draft? You can still edit it before saving.")
+    ) {
+      return;
+    }
+    setSummaryDraftBusy(true);
+    setSummaryDraftHint(null);
+    setError(null);
+    try {
+      const response = await fetch(`/api/admin/pages/${page.id}/summary-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, blocks }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        markSessionExpired();
+        throw new Error("Your session expired. Sign in again to draft a summary.");
+      }
+      if (!response.ok) {
+        throw new Error(
+          typeof data.message === "string" ? data.message : "Could not draft a summary with AI.",
+        );
+      }
+      if (typeof data.summary !== "string" || !data.summary.trim()) {
+        throw new Error("The AI draft was empty.");
+      }
+      setSummary(data.summary.trim());
+      setSummaryDraftHint("AI draft inserted — review and edit before saving.");
+    } catch (caught) {
+      setSummaryDraftHint(caught instanceof Error ? caught.message : "Could not draft a summary with AI.");
+    } finally {
+      setSummaryDraftBusy(false);
     }
   }
 
@@ -696,9 +751,17 @@ export function AdminPageEditorForm({
       ? "badge badge--verified"
       : savedStatus === "archived"
         ? "badge badge--archived"
-        : "badge badge--draft";
+        : savedStatus === "proposed"
+          ? "badge badge--warning"
+          : "badge badge--draft";
   const statusPillText =
-    savedStatus === "published" ? "● Published" : savedStatus === "archived" ? "● Archived" : "● Draft";
+    savedStatus === "published"
+      ? "● Published"
+      : savedStatus === "archived"
+        ? "● Archived"
+        : savedStatus === "proposed"
+          ? "● Proposed"
+          : "● Draft";
 
   const publishedOverflowItems: OverflowMenuItem[] = [
     {
@@ -736,6 +799,27 @@ export function AdminPageEditorForm({
     },
   ];
 
+  const proposedOverflowItems: OverflowMenuItem[] = [
+    {
+      label: "Copy / move to another KB…",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setRelocateOpen(true),
+    },
+    { divider: true, label: "", onSelect: () => {} },
+    {
+      label: lifecycleBusy ? "Returning..." : "Return to draft",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setLifecycleStatus("draft"),
+    },
+    { divider: true, label: "", onSelect: () => {} },
+    {
+      danger: true,
+      label: lifecycleBusy ? "Archiving..." : "Archive",
+      disabled: lifecycleBusy || isLocked,
+      onSelect: () => setLifecycleStatus("archived"),
+    },
+  ];
+
   const actionButtons = (
     <div className="import-actions">
       <span className={statusPillClass}>{statusPillText}</span>
@@ -763,30 +847,65 @@ export function AdminPageEditorForm({
           >
             {busy === "draft" ? "Saving..." : "Save draft"}
           </button>
-          {savedStatus === "draft" ? (
-            <button
-              className="button"
-              disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
-              onClick={() => submit("published")}
-              type="button"
-            >
-              {busy === "published" ? "Publishing..." : "Save & publish"}
-            </button>
-          ) : (
+          {savedStatus === "proposed" ? (
             <>
+              <button
+                className="button"
+                disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                onClick={() => submit("proposed")}
+                type="button"
+              >
+                {busy === "proposed" ? "Saving…" : "Save proposal"}
+              </button>
+              {canApproveProposed ? (
+                <button
+                  className="button"
+                  disabled={lifecycleBusy || isLocked}
+                  onClick={() => setLifecycleStatus("published")}
+                  type="button"
+                >
+                  {lifecycleBusy ? "Approving…" : "Approve & publish"}
+                </button>
+              ) : null}
+            </>
+          ) : savedStatus === "draft" ? (
+            <>
+              <button
+                className="button button--ghost"
+                disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                onClick={() => submit("proposed")}
+                type="button"
+              >
+                {busy === "proposed" ? "Submitting…" : "Submit for review"}
+              </button>
               <button
                 className="button"
                 disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
                 onClick={() => submit("published")}
                 type="button"
               >
-                {busy === "published" ? "Saving..." : "Save changes"}
+                {busy === "published" ? "Publishing..." : "Save & publish"}
               </button>
             </>
+          ) : (
+            <button
+              className="button"
+              disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+              onClick={() => submit("published")}
+              type="button"
+            >
+              {busy === "published" ? "Saving..." : "Save changes"}
+            </button>
           )}
           <ActionOverflowMenu
             disabled={lifecycleBusy || isLocked}
-            items={savedStatus === "published" ? publishedOverflowItems : draftOverflowItems}
+            items={
+              savedStatus === "published"
+                ? publishedOverflowItems
+                : savedStatus === "proposed"
+                  ? proposedOverflowItems
+                  : draftOverflowItems
+            }
           />
         </>
       )}
@@ -924,23 +1043,52 @@ export function AdminPageEditorForm({
             <span className="meta">Slug</span>
             <input className="input" onChange={(event) => setSlug(event.target.value)} value={slug} />
           </label>
-          <label>
-            <span className="meta">
-              Summary
-              {kb.requireSummary === false
-                ? " (optional for this KB)"
-                : summaryError
-                  ? <span className="field-error-tag"> — required</span>
-                  : null}
-            </span>
-            <textarea
-              aria-invalid={summaryError || undefined}
-              className={`input${summaryError ? " input--error" : ""}`}
-              onChange={(event) => setSummary(event.target.value)}
-              rows={3}
-              value={summary}
-            />
-          </label>
+          <div className="summary-field">
+            <label>
+              <span className="meta">
+                Summary
+                {kb.requireSummary === false
+                  ? " (optional for this KB)"
+                  : summaryError
+                    ? <span className="field-error-tag"> — required</span>
+                    : null}
+              </span>
+              <textarea
+                aria-invalid={summaryError || undefined}
+                className={`input${summaryError ? " input--error" : ""}`}
+                onChange={(event) => {
+                  setSummary(event.target.value);
+                  if (summaryDraftHint) setSummaryDraftHint(null);
+                }}
+                placeholder="Write a short summary, or draft one with AI once the page content is complete."
+                rows={3}
+                value={summary}
+              />
+            </label>
+            <div className="summary-field__actions">
+              <button
+                className="button button--small button--ghost"
+                disabled={isLocked || summaryDraftBusy || !summaryDraftReadiness.ok}
+                onClick={() => void draftSummaryWithAi()}
+                title={
+                  summaryDraftReadiness.ok
+                    ? "Draft a summary from the current title and page body"
+                    : summaryDraftReadiness.message
+                }
+                type="button"
+              >
+                {summaryDraftBusy ? "Drafting…" : "Draft with AI"}
+              </button>
+              <p className="meta">
+                {summaryDraftBusy
+                  ? "Using the current title and body — does not save until you click Save."
+                  : summaryDraftReadiness.ok
+                    ? "Write the summary yourself, or draft with AI from this page's content."
+                    : summaryDraftReadiness.message}
+              </p>
+            </div>
+            {summaryDraftHint ? <p className="meta summary-field__hint">{summaryDraftHint}</p> : null}
+          </div>
           <label className="checkbox-inline">
             <input checked={showSummary} onChange={(event) => setShowSummary(event.target.checked)} type="checkbox" />
             <span>Show the summary as a lead paragraph on the page</span>
