@@ -47,11 +47,12 @@ describe("validatePageForPublish", () => {
     expect(await validatePageForPublish(page, activeResolver)).toContain("Page is missing a summary.");
   });
 
-  it("skips the summary check when the KB does not require one", async () => {
-    const page = { ...validPage(), summary: "  " };
-    expect(await validatePageForPublish(page, activeResolver, undefined, { requireSummary: false })).not.toContain(
-      "Page is missing a summary.",
-    );
+  it("skips the summary check when the KB does not require one, but keeps other metadata checks", async () => {
+    const page = { ...validPage(), summary: "  ", ownerLabel: "", contactEmail: "not-an-email" };
+    const issues = await validatePageForPublish(page, activeResolver, undefined, { requireSummary: false });
+    expect(issues).not.toContain("Page is missing a summary.");
+    expect(issues).toContain("Page is missing a responsible office label.");
+    expect(issues).toContain("Page needs a valid contact email.");
   });
 
   it("requires a valid contact email", async () => {

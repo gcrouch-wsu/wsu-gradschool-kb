@@ -399,8 +399,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   (`029`: `knowledge_bases.visibility`, defaulting existing rows to `public`), sourced-block FTS
   indexing (`030`: `kb_extract_blocks_text` recurses into `sourced` blocks + vector backfill), the
   KB search widget (`031`: `knowledge_bases.search_widget_*` + `site_settings.show_home_search`),
-  and page-tree non-page node fields (`032`: `kb_pages.node_kind`, `link_url`, `link_new_tab`).
-  **Current head: `032_tree_node_kinds`.**
+  and page-tree non-page node fields (`032`: `kb_pages.node_kind`, `link_url`, `link_new_tab`),
+  and per-KB summary publish requirement (`033`: `knowledge_bases.require_summary`, default true).
+  **Current head: `033_kb_require_summary`.**
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_redirects`,
   `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`, `kb_audit_log`,
   `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`.
@@ -644,7 +645,8 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
 - Cross-KB page copy/move (2026-07-25): `relocatePage` + `POST /api/admin/pages/[pageId]/relocate`
   with dual-KB access checks; copies become drafts with reminted block ids; moves update `kb_id`,
   take descendants, clear source homepage if needed, and write absolute `/kb/...` redirects on the
-  source KB for published paths.
+  source KB for published paths **only when the destination KB is public** (private destinations
+  skip redirects so the private slug is not disclosed).
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
@@ -690,7 +692,14 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   public redirects, sitemap exposure, or "sign in to view" affordances for private KB
   landing/article/search/asset URLs. Unauthorized private content returns `notFound()` so KB
   existence is not distinguishable, and authorized private asset responses use
-  `Cache-Control: private, no-store`.
+  `Cache-Control: private, no-store`. Cross-KB **moves into a private KB therefore do not write**
+  a public redirect at the old URL (a `Location: /kb/{private-slug}/…` would disclose the private
+  KB). Old public bookmarks for a page moved into a private KB will 404 / soft-404 instead.
+- **Cross-KB copy/move does not rewrite body links or re-home assets.** `remintBlockIds` only
+  remints `blockId` values — typed `<a href="/kb/old-slug/…">` links in rich text stay as-is and
+  can break or point at the wrong KB after relocate. `relatedAssetIds` are preserved; assets remain
+  on their home KB and the file route still gates on that home KB's read access, so a reader of
+  the destination KB who cannot read the source KB may see broken images/files.
 - **Not-found page responses carry HTTP 200, by framework design.** Page routes stream behind the
   root `loading.tsx` boundary, so the status code is committed before authorization or existence
   checks run; the 404 boundary UI then streams into a 200 response. This applies identically to

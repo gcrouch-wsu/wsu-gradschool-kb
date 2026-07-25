@@ -77,6 +77,32 @@ describe("relocatePage (in-memory)", () => {
     });
   });
 
+  it("does not leave a public redirect when moving a published page into a private KB", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const sourceKb = await getKbBySlug("graduate-school");
+    const destKb = await getKbBySlug("graduate-school-staff", true);
+    expect(destKb?.visibility).toBe("private");
+    const source = await createPage({
+      kbId: sourceKb!.id,
+      title: "Move me into private",
+      blocks: [{ blockId: "b1", type: "paragraph", text: "Secret move" }],
+      status: "published",
+      authorEmail: "editor@example.edu",
+    });
+    const oldPath = [...source.path];
+
+    const result = await relocatePage({
+      pageId: source.id,
+      targetKbId: destKb!.id,
+      parentPath: [],
+      mode: "move",
+      authorEmail: "editor@example.edu",
+    });
+
+    expect(result.rootPage.kbId).toBe(destKb!.id);
+    expect(await getActiveRedirectTarget(sourceKb!.id, oldPath)).toBeNull();
+  });
+
   it("rejects same-KB moves", async () => {
     vi.stubEnv("DATABASE_URL", "");
     const sourceKb = await getKbBySlug("graduate-school");

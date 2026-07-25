@@ -2481,6 +2481,9 @@ async function movePagesAcrossKb({
 
   for (const page of moved) {
     if (page.status !== "published") continue;
+    // Do not emit a public redirect into a private KB — the Location would disclose
+    // the private slug (contradicts §10: unauthorized private content is indistinguishable).
+    if (targetKb.visibility === "private") continue;
     const oldPath = pathBefore.get(page.id);
     if (!oldPath) continue;
     const oldKey = oldPath.join("/");

@@ -163,7 +163,10 @@ export function RelocatePageDialog({
         <div className="media-picker__body form">
           <p className="meta">
             Relocate &ldquo;{pageTitle}&rdquo; to another knowledge base. Copies become drafts.
-            Moves keep status and leave redirects from the old public URL when the page was published.
+            Moves keep status. Published pages moved into a <strong>public</strong> KB leave a
+            redirect from the old URL; moves into a <strong>private</strong> KB do not (a public
+            redirect would reveal that KB). Typed <code>/kb/…</code> links in the page body are not
+            rewritten, and related assets stay on their home KB.
           </p>
 
           <fieldset className="fieldset" style={{ margin: 0 }}>
