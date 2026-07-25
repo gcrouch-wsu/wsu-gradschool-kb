@@ -972,8 +972,11 @@ p {
 }
 
 /* The gap *below* a heading (e.g. heading -> list, or page title -> lead) is its
-   own knob, usually tighter than the gap between unrelated blocks. */
-.flow > :is(h1, h2, h3, h4) + * {
+   own knob, usually tighter than the gap between unrelated blocks.
+   Public HeadingAnchor wraps h2/h3 in .heading-with-anchor (sibling copy-link
+   pattern), so that wrapper must match the same direct-child rule. */
+.flow > :is(h1, h2, h3, h4) + *,
+.flow > .heading-with-anchor + * {
   margin-top: var(--space-after-heading);
 }
 
@@ -2057,6 +2060,114 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
 .anchor-heading {
   scroll-margin-top: 100px;
 }
+
+.heading-with-anchor {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.heading-with-anchor__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.heading-anchor-copy {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  padding: 0.15rem 0.45rem;
+  text-transform: uppercase;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.heading-with-anchor:hover .heading-anchor-copy,
+.heading-with-anchor:focus-within .heading-anchor-copy {
+  opacity: 1;
+}
+
+.heading-anchor-copy:hover,
+.heading-anchor-copy:focus-visible {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.heading-anchor-copy:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.article-page-nav {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+}
+
+.article-page-nav__link {
+  display: grid;
+  gap: 0.2rem;
+  text-decoration: none;
+}
+
+.article-page-nav__link:hover strong {
+  text-decoration: underline;
+}
+
+.article-page-nav__link--next {
+  text-align: right;
+}
+
+.editor-details {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+}
+
+.editor-details__summary {
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+
+.editor-details__summary::-webkit-details-marker {
+  display: none;
+}
+
+.editor-details__summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.45rem;
+  transition: transform 0.15s ease;
+}
+
+.editor-details[open] > .editor-details__summary::before {
+  transform: rotate(90deg);
+}
+
+.editor-details__body {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.editor-details__body .fieldset {
+  margin: 0;
+}
+
 
 .toc {
   background: var(--wash);

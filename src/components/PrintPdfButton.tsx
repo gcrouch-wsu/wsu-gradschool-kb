@@ -96,9 +96,10 @@ export function PrintPdfButton() {
       className="button button--small button--ghost print-hide"
       disabled={preparing}
       onClick={printPdf}
+      title="Opens the browser print dialog so you can print or save as PDF. This is browser print-to-PDF over the page HTML, not a separate tagged-PDF file."
       type="button"
     >
-      {preparing ? "Preparing PDF..." : "Export PDF"}
+      {preparing ? "Preparing…" : "Print / Save as PDF"}
     </button>
   );
 }
