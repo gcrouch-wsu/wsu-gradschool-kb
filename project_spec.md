@@ -646,7 +646,8 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   with dual-KB access checks; copies become drafts with reminted block ids; moves update `kb_id`,
   take descendants, clear source homepage if needed, and write absolute `/kb/...` redirects on the
   source KB for published paths **only when the destination KB is public** (private destinations
-  skip redirects so the private slug is not disclosed).
+  skip redirects so the private slug is not disclosed). Covered by in-memory + live-DB relocate
+  tests (subtree move, lock bypass/clear, private no-redirect, copy via `insertPage`).
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.

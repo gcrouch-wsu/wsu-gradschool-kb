@@ -92,4 +92,19 @@ describe("PATCH /api/admin/kbs/[kbId] requireSummary auth", () => {
     expect(response.status).toBe(200);
     expect(setFlag).toHaveBeenCalledWith("kb-grad-school", true);
   });
+
+  it("keeps DELETE owner-only", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const security = await import("@/lib/security");
+    vi.spyOn(security, "requireAdminMutation").mockResolvedValue({
+      ok: true,
+      email: "admin@example.edu",
+      session: session("admin"),
+    });
+    const { DELETE } = await import("@/app/api/admin/kbs/[kbId]/route");
+    const response = await DELETE(new Request("http://localhost/api/admin/kbs/kb-grad-school", { method: "DELETE" }), {
+      params: Promise.resolve({ kbId: "kb-grad-school" }),
+    });
+    expect(response.status).toBe(403);
+  });
 });

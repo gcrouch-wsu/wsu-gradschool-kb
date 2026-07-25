@@ -1752,7 +1752,9 @@ export async function updatePage(
       (page) => page.kbId === existing.kbId && page.path.join("/") === parentPath.join("/"),
     );
     if (!parentExists) {
-      throw new Error("Parent page not found.");
+      throw new Error(
+        "Parent page not found. If this page was moved to another knowledge base or reorganized, reload the editor and save again.",
+      );
     }
   }
 
@@ -1998,7 +2000,9 @@ export async function updatePageLayout(
         (candidate) => candidate.path.join("/") === item.parentPath.join("/"),
       );
       if (!parentExists) {
-        throw new Error("Parent page not found.");
+        throw new Error(
+          "Parent page not found. If this page was moved to another knowledge base or reorganized, reload the editor and save again.",
+        );
       }
     }
     const next = nextById.get(page.id)!;
