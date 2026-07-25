@@ -36,6 +36,18 @@ export function ReviewSourcedScan() {
     }
   }
 
+  const statusMessage = error
+    ? error
+    : busy
+      ? "Checking sourced content…"
+      : checked !== null && findings
+        ? `Checked ${checked} sourced section${checked === 1 ? "" : "s"}. ${
+            findings.length === 0
+              ? "All reachable sources match the stored snapshot."
+              : `${findings.length} need attention.`
+          }`
+        : "";
+
   return (
     <section className="card" style={{ marginTop: "1.5rem" }}>
       <h2>P&amp;P sourced content</h2>
@@ -45,33 +57,32 @@ export function ReviewSourcedScan() {
         from the page editor — never auto-updated.
       </p>
       <p style={{ marginTop: "0.75rem" }}>
-        <button className="button button--small" disabled={busy} onClick={runScan} type="button">
+        <button
+          aria-busy={busy}
+          className="button button--small"
+          disabled={busy}
+          onClick={runScan}
+          type="button"
+        >
           {busy ? "Checking sources…" : "Check sourced content"}
         </button>
       </p>
-      {error && <p className="error">{error}</p>}
-      {checked !== null && findings && (
-        <>
-          <p className="meta" style={{ marginTop: "0.75rem" }}>
-            Checked {checked} sourced section{checked === 1 ? "" : "s"}.{" "}
-            {findings.length === 0
-              ? "All reachable sources match the stored snapshot."
-              : `${findings.length} need attention.`}
-          </p>
-          {findings.length > 0 && (
-            <ul className="import-outline">
-              {findings.map((row) => (
-                <li key={`${row.pageId}-${row.blockId}`}>
-                  <Link href={`/admin/pages/${row.pageId}`}>{row.pageTitle}</Link>
-                  <span className="meta">
-                    {" "}
-                    · {stateLabel(row.state)} · {row.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
+      <div aria-live="polite" className="meta" role="status" style={{ marginTop: "0.75rem" }}>
+        {statusMessage && !error && <p className="meta">{statusMessage}</p>}
+        {error && <p className="error">{error}</p>}
+      </div>
+      {checked !== null && findings && findings.length > 0 && (
+        <ul className="import-outline">
+          {findings.map((row) => (
+            <li key={`${row.pageId}-${row.blockId}`}>
+              <Link href={`/admin/pages/${row.pageId}`}>{row.pageTitle}</Link>
+              <span className="meta">
+                {" "}
+                · {stateLabel(row.state)} · {row.label}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

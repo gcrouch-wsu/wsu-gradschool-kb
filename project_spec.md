@@ -636,8 +636,10 @@ regressions, and the Neon live-DB integration suites (including the private-KB a
   drop fallback (`src/lib/page-tree-drop.ts`).
 - Go-live readiness pack (2026-07-25): FB-25 manual release checklist + §13 release sign-off; shared
   cron auth + `GET /api/health`; generated KB landings drop redundant section cards; public heading
-  copy-link + prev/next nav; editor Content-first with collapsible settings/history; honest Print /
-  Save as PDF labeling; Review dashboard on-demand P&P sourced-content scan (`sourced-review.ts`).
+  copy-link (sibling of heading, not nested) + prev/next nav on articles and homepage pages; editor
+  Content-first with settings auto-open when readiness blockers exist; honest Print / Save as PDF
+  labeling; Review dashboard on-demand P&P sourced-content scan with concurrency/dedupe
+  (`sourced-review.ts`).
 - Page revision history with restore: every create/save snapshots the page, restores are new saves,
   baseline revisions are backfilled by migration `027`, and daily retention cleanup is scheduled.
 - Owner/Admin audit log; archive-first permanent delete with reference safeguards.
@@ -1309,6 +1311,9 @@ Items are ordered by recommended priority.
 **Public + admin WCAG 2.1 AA sample pass:**
 - [ ] Keyboard-only: home, KB landing, article (tree + TOC), search combobox, sign-in, edit page
 - [ ] Visible focus; skip link; landmarks/headings make sense
+- [ ] Screen reader: a public H2/H3 is announced as the heading text only (no "Copy link to this heading" appended)
+- [ ] Editor: when Publishing readiness lists blockers, Page settings & governance is open so title/summary/governance fields are visible
+- [ ] Homepage-assigned KB landing shows previous/next page nav when the tree has 2+ pages
 - [ ] Labels/names on controls; dialogs trap focus and restore it
 - [ ] Contrast on body, links, badges, buttons (sample pages)
 - [ ] Zoom to 200% / narrow viewport: no loss of content or function

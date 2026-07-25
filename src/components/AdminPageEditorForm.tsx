@@ -560,6 +560,7 @@ export function AdminPageEditorForm({
     if (linkIssues.empty) next.push("Add destinations for empty links.");
     return next;
   }, [blocks, contactEmail, lastReviewedDate, ownerLabel, summary, title]);
+  const [governanceOpen, setGovernanceOpen] = useState(false);
   useEffect(() => {
     markProblemLinks();
     markHeadingOrderProblems();
@@ -887,7 +888,11 @@ export function AdminPageEditorForm({
           />
         </fieldset>
 
-        <details className="editor-details">
+        <details
+          className="editor-details"
+          onToggle={(event) => setGovernanceOpen(event.currentTarget.open)}
+          open={readinessIssues.length > 0 || governanceOpen}
+        >
           <summary className="editor-details__summary">Page settings &amp; governance</summary>
           <div className="editor-details__body">
         <fieldset className="fieldset" disabled={isLocked}>

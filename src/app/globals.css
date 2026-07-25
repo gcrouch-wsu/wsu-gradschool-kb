@@ -2144,6 +2144,17 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   display: none;
 }
 
+.editor-details__summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.45rem;
+  transition: transform 0.15s ease;
+}
+
+.editor-details[open] > .editor-details__summary::before {
+  transform: rotate(90deg);
+}
+
 .editor-details__body {
   display: grid;
   gap: 1rem;

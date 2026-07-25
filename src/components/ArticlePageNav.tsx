@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { PageTreeNode } from "@/lib/types";
 
-function flattenPages(
+/** Depth-first page order used for previous/next; skips group/link nodes. */
+export function flattenPages(
   nodes: PageTreeNode[],
   kbSlug: string,
   homepagePageId?: string | null,

@@ -8,12 +8,15 @@ export function HeadingAnchor({
   as: Tag,
   style,
   className = "anchor-heading",
+  showCopyLink = true,
 }: {
   id: string;
   children: ReactNode;
   as: "h2" | "h3";
   style?: CSSProperties;
   className?: string;
+  /** When false, render a plain heading (used inside excerpt/sourced embeds). */
+  showCopyLink?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -28,9 +31,21 @@ export function HeadingAnchor({
     }
   }
 
+  if (!showCopyLink) {
+    return (
+      <Tag className={className} id={id} style={style}>
+        {children}
+      </Tag>
+    );
+  }
+
+  // Button is a sibling of the heading (not a child) so its accessible name does not
+  // pollute the heading name for screen-reader users navigating by headings.
   return (
-    <Tag className={`${className} heading-with-anchor`} id={id} style={style}>
-      <span className="heading-with-anchor__text">{children}</span>
+    <div className="heading-with-anchor">
+      <Tag className={`${className} heading-with-anchor__text`} id={id} style={style}>
+        {children}
+      </Tag>
       <button
         aria-label={copied ? "Link copied" : "Copy link to this heading"}
         className="heading-anchor-copy print-hide"
@@ -39,6 +54,6 @@ export function HeadingAnchor({
       >
         {copied ? "Copied" : "Link"}
       </button>
-    </Tag>
+    </div>
   );
 }

@@ -95,7 +95,7 @@ async function ExcerptBlock({ block }: { block: Extract<ContentBlock, { type: "e
         </Link>
       </p>
       <div className="excerpt-box__blocks flow">
-        <PageBlocks blocks={resolved.blocks} />
+        <PageBlocks blocks={resolved.blocks} showHeadingCopyLinks={false} />
       </div>
     </aside>
   );
@@ -127,7 +127,7 @@ function SourcedBlock({ block }: { block: Extract<ContentBlock, { type: "sourced
       </p>
       {block.headingText && <p className="source-box__heading">{block.headingText}</p>}
       <div className="source-box__blocks flow">
-        <PageBlocks blocks={block.blocks} />
+        <PageBlocks blocks={block.blocks} showHeadingCopyLinks={false} />
       </div>
     </aside>
   );
@@ -141,30 +141,43 @@ function sourceHostLabel(sourceUrl: string): string {
   }
 }
 
-async function CardBlock({ block }: { block: Extract<ContentBlock, { type: "card" }> }) {
+async function CardBlock({
+  block,
+  showHeadingCopyLinks,
+}: {
+  block: Extract<ContentBlock, { type: "card" }>;
+  showHeadingCopyLinks: boolean;
+}) {
   const backgroundClass = `card--bg-${block.background}`;
   return (
     <section className={`card ${backgroundClass}`}>
       {block.title && <strong className="card__title">{block.title}</strong>}
       <div className="card__blocks flow">
-        <PageBlocks blocks={block.blocks} />
+        <PageBlocks blocks={block.blocks} showHeadingCopyLinks={showHeadingCopyLinks} />
       </div>
     </section>
   );
 }
 
-function ProcedureSectionBlock({ block }: { block: Extract<ContentBlock, { type: "procedure_section" }> }) {
+function ProcedureSectionBlock({
+  block,
+  showHeadingCopyLinks,
+}: {
+  block: Extract<ContentBlock, { type: "procedure_section" }>;
+  showHeadingCopyLinks: boolean;
+}) {
   return (
     <section className="procedure-section" aria-labelledby={block.blockId}>
       <HeadingAnchor
         as={block.level === 3 ? "h3" : "h2"}
         className="anchor-heading procedure-section__title"
         id={block.blockId}
+        showCopyLink={showHeadingCopyLinks}
       >
         {block.title}
       </HeadingAnchor>
       <div className="procedure-section__blocks flow">
-        <PageBlocks blocks={block.blocks} />
+        <PageBlocks blocks={block.blocks} showHeadingCopyLinks={showHeadingCopyLinks} />
       </div>
     </section>
   );
@@ -246,15 +259,29 @@ async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "ima
   );
 }
 
-export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
+export function PageBlocks({
+  blocks,
+  showHeadingCopyLinks = true,
+}: {
+  blocks: ContentBlock[];
+  showHeadingCopyLinks?: boolean;
+}) {
   return (
     <>
       {blocks.map((block) => {
         switch (block.type) {
           case "card":
-            return <CardBlock block={block} key={block.blockId} />;
+            return (
+              <CardBlock block={block} key={block.blockId} showHeadingCopyLinks={showHeadingCopyLinks} />
+            );
           case "procedure_section":
-            return <ProcedureSectionBlock block={block} key={block.blockId} />;
+            return (
+              <ProcedureSectionBlock
+                block={block}
+                key={block.blockId}
+                showHeadingCopyLinks={showHeadingCopyLinks}
+              />
+            );
           case "video":
             return <VideoBlock block={block} key={block.blockId} />;
           case "paragraph":
@@ -269,6 +296,7 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
                 as="h2"
                 id={block.blockId}
                 key={block.blockId}
+                showCopyLink={showHeadingCopyLinks}
                 style={block.align ? { textAlign: block.align } : undefined}
               >
                 <RichText html={block.html} text={block.text} />
@@ -278,6 +306,7 @@ export function PageBlocks({ blocks }: { blocks: ContentBlock[] }) {
                 as="h3"
                 id={block.blockId}
                 key={block.blockId}
+                showCopyLink={showHeadingCopyLinks}
                 style={block.align ? { textAlign: block.align } : undefined}
               >
                 <RichText html={block.html} text={block.text} />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
+import { ArticlePageNav } from "@/components/ArticlePageNav";
 import { KbSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
@@ -147,6 +148,13 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
                 </div>
               </>
             )}
+
+            <ArticlePageNav
+              currentPageId={homepagePage.id}
+              homepagePageId={kb.homepagePageId}
+              kbSlug={kb.slug}
+              nodes={tree}
+            />
           </article>
           {showTocRail && (
             <aside className="toc-rail">

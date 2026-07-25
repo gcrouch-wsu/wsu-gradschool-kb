@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
+import { accessibleKbIds } from "@/lib/auth";
 import { scanSourcedContentForReview } from "@/lib/sourced-review";
 import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
@@ -13,11 +13,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const session = await getCurrentAdminSession();
-    if (!session || session.role === "viewer") {
-      return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
-    }
-    const allowed = await accessibleKbIds(session);
+    const allowed = await accessibleKbIds(guard.session);
     const result = await scanSourcedContentForReview(allowed);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
