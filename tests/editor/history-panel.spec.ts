@@ -1,5 +1,15 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { openEditor, resetDocument, saveAndPublish } from "./helpers";
+
+async function openRevisionHistory(page: Page) {
+  const summary = page.locator("summary.editor-details__summary", { hasText: "Revision history" });
+  await expect(summary).toBeVisible();
+  const details = summary.locator("xpath=ancestor::details[1]");
+  if (!(await details.getAttribute("open"))) {
+    await summary.click();
+  }
+  await expect(details).toHaveAttribute("open", "");
+}
 
 // Covers the FB-24 History panel on /admin/pages/[pageId]: a save records a
 // revision, and previewing a revision must not flip that row's restore button
@@ -11,6 +21,7 @@ test.describe("revision history panel", () => {
     // the editor is hydrated before we drive the panel.
     await resetDocument(page);
     await saveAndPublish(page);
+    await openRevisionHistory(page);
 
     // The panel lists at least the revision the save just created.
     const firstRow = page.locator(".page-history__item").first();
@@ -34,6 +45,7 @@ test.describe("revision history panel", () => {
     await openEditor(page);
     await resetDocument(page);
     await saveAndPublish(page);
+    await openRevisionHistory(page);
 
     const firstRow = page.locator(".page-history__item").first();
     await expect(firstRow).toBeVisible();
