@@ -1,4 +1,5 @@
 import { blocksToPlainText } from "@/lib/revision-diff";
+import { textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 import { SUMMARY_DRAFT_MAX_BODY_CHARS, extractOutline, formatBlocksForSummary } from "@/lib/summary-draft-core";
 
@@ -64,7 +65,7 @@ function walkBlocks(
 ): void {
   for (const block of blocks) {
     visit(block, path);
-    if (block.type === "card" || block.type === "procedure_section" || block.type === "sourced") {
+    if (block.type === "card" || block.type === "procedure_section") {
       walkBlocks(block.blocks, visit, `${path}${block.blockId}/`);
     }
   }
@@ -174,6 +175,7 @@ export function parsePageReviewResponse(raw: string): PageReviewResult {
     typeof record.overview === "string" ? record.overview.replace(/\s+/g, " ").trim().slice(0, 800) : "";
   const rawSuggestions = Array.isArray(record.suggestions) ? record.suggestions : [];
   const suggestions: PageReviewSuggestion[] = [];
+  const seenIds = new Map<string, number>();
   for (let i = 0; i < rawSuggestions.length && suggestions.length < 40; i += 1) {
     const item = rawSuggestions[i];
     if (!item || typeof item !== "object") continue;
@@ -181,8 +183,12 @@ export function parsePageReviewResponse(raw: string): PageReviewResult {
     const blockId = typeof row.blockId === "string" ? row.blockId.trim() : "";
     const message = typeof row.message === "string" ? row.message.replace(/\s+/g, " ").trim() : "";
     if (!blockId || !message) continue;
+    const baseId = typeof row.id === "string" && row.id.trim() ? row.id.trim().slice(0, 56) : `s${i + 1}`;
+    const duplicateCount = seenIds.get(baseId) ?? 0;
+    seenIds.set(baseId, duplicateCount + 1);
+    const id = duplicateCount === 0 ? baseId : `${baseId}-${duplicateCount + 1}`.slice(0, 64);
     const suggestion: PageReviewSuggestion = {
-      id: typeof row.id === "string" && row.id.trim() ? row.id.trim().slice(0, 64) : `s${i + 1}`,
+      id,
       severity: asSeverity(row.severity),
       kind: asKind(row.kind),
       blockId: blockId.slice(0, 120),
@@ -208,24 +214,33 @@ export function parsePageReviewResponse(raw: string): PageReviewResult {
 function mapBlocksDeep(
   blocks: ContentBlock[],
   blockId: string,
-  mapper: (block: ContentBlock) => ContentBlock,
-): { blocks: ContentBlock[]; found: boolean } {
+  mapper: (block: ContentBlock) => ContentBlock | null,
+): { blocks: ContentBlock[]; found: boolean; applied: boolean } {
   let found = false;
+  let applied = false;
   const next = blocks.map((block) => {
     if (block.blockId === blockId) {
       found = true;
-      return mapper(block);
+      const mapped = mapper(block);
+      if (mapped) {
+        applied = true;
+        return mapped;
+      }
+      return block;
     }
-    if (block.type === "card" || block.type === "procedure_section" || block.type === "sourced") {
+    if (block.type === "card" || block.type === "procedure_section") {
       const nested = mapBlocksDeep(block.blocks, blockId, mapper);
       if (nested.found) {
         found = true;
-        return { ...block, blocks: nested.blocks };
+        if (nested.applied) {
+          applied = true;
+          return { ...block, blocks: nested.blocks };
+        }
       }
     }
     return block;
   });
-  return { blocks: next, found };
+  return { blocks: next, found, applied };
 }
 
 /** Apply one suggestion to the block tree. Returns null if not applicable. */
@@ -235,14 +250,14 @@ export function applyPageReviewSuggestion(
 ): ContentBlock[] | null {
   if (suggestion.proposedAlt !== undefined) {
     const result = mapBlocksDeep(blocks, suggestion.blockId, (block) => {
-      if (block.type !== "image") return block;
+      if (block.type !== "image") return null;
       return {
         ...block,
         decorative: false,
         alt: suggestion.proposedAlt,
       };
     });
-    return result.found ? result.blocks : null;
+    return result.applied ? result.blocks : null;
   }
 
   if (suggestion.proposedText === undefined) {
@@ -255,18 +270,20 @@ export function applyPageReviewSuggestion(
     }
     if (block.type === "list" && suggestion.itemIndex !== undefined) {
       const index = suggestion.itemIndex;
-      if (index < 0 || index >= block.items.length) return block;
+      if (index < 0 || index >= block.items.length) return null;
+      const existingHtml = block.itemHtml?.[index] ?? "";
+      if (/<(?:ul|ol)\b/i.test(existingHtml)) return null;
       const items = [...block.items];
       items[index] = suggestion.proposedText!;
       const itemHtml = block.itemHtml ? [...block.itemHtml] : undefined;
       if (itemHtml && index < itemHtml.length) {
-        itemHtml[index] = suggestion.proposedText!;
+        itemHtml[index] = textToRichText(suggestion.proposedText!);
       }
       return { ...block, items, itemHtml };
     }
-    return block;
+    return null;
   });
-  return result.found ? result.blocks : null;
+  return result.applied ? result.blocks : null;
 }
 
 export function suggestionIsActionable(suggestion: PageReviewSuggestion): boolean {
@@ -318,17 +335,22 @@ export async function requestPageReviewFromGateway(input: {
   const payload = (await response.json().catch(() => null)) as {
     choices?: Array<{ message?: { content?: string } }>;
     error?: { message?: string };
+    message?: string;
+    output_text?: string;
+    text?: string;
   } | null;
 
   if (!response.ok) {
     const message =
       typeof payload?.error?.message === "string"
         ? payload.error.message
+        : typeof payload?.message === "string"
+          ? payload.message
         : `AI provider returned HTTP ${response.status}.`;
     throw new Error(message);
   }
 
-  const content = payload?.choices?.[0]?.message?.content;
+  const content = payload?.choices?.[0]?.message?.content || payload?.output_text || payload?.text;
   if (typeof content !== "string" || !content.trim()) {
     throw new Error("The AI provider returned an empty page review.");
   }

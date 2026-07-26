@@ -74,7 +74,7 @@ export async function POST(
   }
 
   try {
-    const expanded = await expandBlocksForSummary(blocks);
+    const expanded = await expandBlocksForSummary(blocks, guard.session);
     const bodyText = formatBlocksForSummary(expanded).trim() || readiness.bodyText;
     const [siteSettings, kb] = await Promise.all([loadSiteSettings(), getKbById(existing.kbId)]);
     const systemPrompt = resolveAiPrompt(

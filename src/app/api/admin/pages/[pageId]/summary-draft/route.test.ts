@@ -131,4 +131,39 @@ describe("POST /api/admin/pages/[pageId]/summary-draft", () => {
     expect(typeof call.systemPrompt).toBe("string");
     expect(call.systemPrompt?.length).toBeGreaterThan(20);
   });
+
+  it("expands excerpts through the current session read scope", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("AI_PROVIDER_ENDPOINT", "https://ai.example/v1");
+    vi.stubEnv("AI_API_KEY", "vck_test");
+    vi.stubEnv("AI_MODEL", "test-model");
+    await mockAuthedPage();
+    const excerpts = await import("@/lib/excerpts");
+    const resolveSpy = vi.spyOn(excerpts, "resolveExcerptForRead").mockResolvedValue({ state: "unavailable" });
+    const summaryDraft = await import("@/lib/summary-draft");
+    const requestSpy = vi
+      .spyOn(summaryDraft, "requestSummaryDraftFromGateway")
+      .mockResolvedValue("A short editable draft.");
+
+    const response = await post({
+      title: "Ready",
+      blocks: [
+        ...longBlocks,
+        {
+          blockId: "excerpt-1",
+          type: "excerpt",
+          sourcePageId: "private-source",
+          label: "Private source",
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolveSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sourcePageId: "private-source" }),
+      expect.objectContaining({ email: "owner@example.edu" }),
+    );
+    const call = requestSpy.mock.calls[0]?.[0] as { bodyText?: string };
+    expect(call.bodyText).toContain("[Excerpt unavailable: Private source]");
+  });
 });
