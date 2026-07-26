@@ -307,6 +307,26 @@ export default function AdminKbsPage() {
                       value={editData.searchWidgetLabel ?? kb.searchWidgetLabel ?? ""}
                       onChange={(e) => setEditData({ ...editData, searchWidgetLabel: e.target.value })}
                     />
+                    <label>
+                      <span className="meta">AI summary prompt override (blank = site default)</span>
+                      <textarea
+                        className="input"
+                        onChange={(e) => setEditData({ ...editData, aiSummaryPrompt: e.target.value })}
+                        placeholder="Leave blank to inherit the site AI summary prompt"
+                        rows={4}
+                        value={editData.aiSummaryPrompt ?? kb.aiSummaryPrompt ?? ""}
+                      />
+                    </label>
+                    <label>
+                      <span className="meta">AI page review prompt override (blank = site default)</span>
+                      <textarea
+                        className="input"
+                        onChange={(e) => setEditData({ ...editData, aiPagePrompt: e.target.value })}
+                        placeholder="Leave blank to inherit the site AI page review prompt"
+                        rows={4}
+                        value={editData.aiPagePrompt ?? kb.aiPagePrompt ?? ""}
+                      />
+                    </label>
                   </div>
                 );
               }

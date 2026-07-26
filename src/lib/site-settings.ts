@@ -44,8 +44,10 @@ export interface SiteSettings {
   footerLinks: NavLink[];
   contactInfo: string;
   globalTheme: KbTheme | null;
-  /** System prompt for Draft with AI page summaries. Empty = built-in default. */
+  /** Site default system prompt for Draft with AI summaries. Empty = built-in default. */
   aiSummaryPrompt: string;
+  /** Site default system prompt for AI page review. Empty = built-in default. */
+  aiPagePrompt: string;
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -80,6 +82,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   contactInfo: "Contact us: gradschool@wsu.edu",
   globalTheme: null,
   aiSummaryPrompt: "",
+  aiPagePrompt: "",
 };
 
 const MAX_LENGTHS: Record<string, number> = {
@@ -203,5 +206,9 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
       typeof input.aiSummaryPrompt === "string"
         ? input.aiSummaryPrompt.trim().slice(0, 8_000)
         : DEFAULT_SITE_SETTINGS.aiSummaryPrompt,
+    aiPagePrompt:
+      typeof input.aiPagePrompt === "string"
+        ? input.aiPagePrompt.trim().slice(0, 8_000)
+        : DEFAULT_SITE_SETTINGS.aiPagePrompt,
   };
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, getSql, ensureSchema, deleteKb } from "@/lib/db";
-import { setKbRequireSummary } from "@/lib/kb-store";
+import { setKbRequireSummary, setKbAiPrompts } from "@/lib/kb-store";
+import { normalizeAiPrompt } from "@/lib/ai-prompts";
 import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
 import { slugify } from "@/lib/slug";
@@ -38,6 +39,28 @@ export async function PATCH(
   try {
     if (body.requireSummary !== undefined) {
       await setKbRequireSummary(kbId, body.requireSummary !== false);
+    }
+
+    if (body.aiSummaryPrompt !== undefined || body.aiPagePrompt !== undefined) {
+      if (!isOwner) {
+        return NextResponse.json({ message: "Only owners can update AI prompts." }, { status: 403 });
+      }
+      // Load current KB so partial updates keep the other prompt.
+      const { getKbById } = await import("@/lib/kb-store");
+      const existing = await getKbById(kbId);
+      if (!existing) {
+        return NextResponse.json({ message: "Knowledge base not found." }, { status: 404 });
+      }
+      await setKbAiPrompts(kbId, {
+        aiSummaryPrompt:
+          body.aiSummaryPrompt !== undefined
+            ? normalizeAiPrompt(body.aiSummaryPrompt)
+            : existing.aiSummaryPrompt ?? "",
+        aiPagePrompt:
+          body.aiPagePrompt !== undefined
+            ? normalizeAiPrompt(body.aiPagePrompt)
+            : existing.aiPagePrompt ?? "",
+      });
     }
 
     if (!isOwner) {

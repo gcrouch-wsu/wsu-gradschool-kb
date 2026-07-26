@@ -7,11 +7,13 @@ import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { RelocatePageDialog } from "@/components/RelocatePageDialog";
+import { AiPageReviewPanel } from "@/components/AiPageReviewPanel";
 import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
+import type { PageReviewSuggestion } from "@/lib/page-review-core";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -322,6 +324,10 @@ export function AdminPageEditorForm({
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [summaryDraftBusy, setSummaryDraftBusy] = useState(false);
   const [summaryDraftHint, setSummaryDraftHint] = useState<string | null>(null);
+  const [pageReviewBusy, setPageReviewBusy] = useState(false);
+  const [pageReviewError, setPageReviewError] = useState<string | null>(null);
+  const [pageReviewOverview, setPageReviewOverview] = useState<string | null>(null);
+  const [pageReviewSuggestions, setPageReviewSuggestions] = useState<PageReviewSuggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
@@ -662,6 +668,37 @@ export function AdminPageEditorForm({
       setSummaryDraftHint(caught instanceof Error ? caught.message : "Could not draft a summary with AI.");
     } finally {
       setSummaryDraftBusy(false);
+    }
+  }
+
+  async function runPageReviewWithAi() {
+    if (lockError || pageReviewBusy) return;
+    if (!title.trim() || blocks.length === 0) {
+      setPageReviewError("Add a title and page content before running an AI page review.");
+      return;
+    }
+    setPageReviewBusy(true);
+    setPageReviewError(null);
+    try {
+      const response = await fetch(`/api/admin/pages/${page.id}/page-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, blocks }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        markSessionExpired();
+        throw new Error("Your session expired. Sign in again to run a page review.");
+      }
+      if (!response.ok) {
+        throw new Error(typeof data.message === "string" ? data.message : "Could not review the page with AI.");
+      }
+      setPageReviewOverview(typeof data.overview === "string" ? data.overview : "");
+      setPageReviewSuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
+    } catch (caught) {
+      setPageReviewError(caught instanceof Error ? caught.message : "Could not review the page with AI.");
+    } finally {
+      setPageReviewBusy(false);
     }
   }
 
@@ -1202,15 +1239,37 @@ export function AdminPageEditorForm({
               </ul>
             )}
           </div>
-          <PageDocumentEditor
-            blocks={blocks}
-            editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
-            kbId={kb.id}
-            kbSlug={kb.slug}
-            key={`${page.id}:${editorEpoch}`}
-            onChange={setBlocks}
-            pageUrl={previewUrl}
-          />
+          <div className="editor-content__ai-layout">
+            <PageDocumentEditor
+              blocks={blocks}
+              editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
+              kbId={kb.id}
+              kbSlug={kb.slug}
+              key={`${page.id}:${editorEpoch}`}
+              onChange={setBlocks}
+              pageUrl={previewUrl}
+            />
+            <AiPageReviewPanel
+              blocks={blocks}
+              busy={pageReviewBusy}
+              disabled={isLocked}
+              error={pageReviewError}
+              onApplyBlocks={(next) => {
+                setBlocks(next);
+                setEditorEpoch((epoch) => epoch + 1);
+              }}
+              onReject={(id) =>
+                setPageReviewSuggestions((current) => current.filter((item) => item.id !== id))
+              }
+              onRejectAll={() => {
+                setPageReviewSuggestions([]);
+                setPageReviewOverview(null);
+              }}
+              onRunReview={() => void runPageReviewWithAi()}
+              overview={pageReviewOverview}
+              suggestions={pageReviewSuggestions}
+            />
+          </div>
         </fieldset>
 
         <details className="editor-details">

@@ -78,9 +78,11 @@ AI_MODEL=inclusionai/ling-3.0-flash-free
 ```
 
 Without these, the API returns a clear “not configured” error. Drafts never auto-save — review and
-Save as usual. Customize the system prompt under **Admin → Settings → AI Summary Prompt** (blank
-uses the built-in default). Cleaned AI drafts are capped at 2,500 characters; typed summaries have
-no hard max.
+Save as usual. Customize prompts under **Admin → Settings → AI Prompt** (summary + page review;
+blank uses built-in defaults). Each knowledge base can override both prompts when editing the KB.
+Cleaned AI summary drafts are capped at 2,500 characters; typed summaries have no hard max. **Review
+with AI** in the page editor returns accept/dismiss suggestions for style, readability, grammar, and
+alt text.
 
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
 axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions; optionally
@@ -168,13 +170,13 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
 Schema changes are applied automatically on first request via versioned migrations in
-`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `037_ai_summary_prompt`**
-(editable AI summary system prompt on site settings). Recent migrations also cover asset usages
-(`036`), reader feedback (`035`), scheduled publish (`034`), per-KB summary requirement (`033`),
-page-tree group/link nodes (`032`), search widget (`031`), sourced-block FTS (`030`), and KB
-visibility (`029`). No manual Neon console migration is required. See `src/lib/migrations/index.ts`
-for the full sequence (assets, redirects, imports, users/assignments, homepage, TOC, edit locks,
-FTS, revisions, page views, etc.).
+`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `038_ai_page_prompts`**
+(site + per-KB AI summary and page-review prompts). Recent migrations also cover site AI summary
+prompt (`037`), asset usages (`036`), reader feedback (`035`), scheduled publish (`034`), per-KB
+summary requirement (`033`), page-tree group/link nodes (`032`), search widget (`031`), sourced-block
+FTS (`030`), and KB visibility (`029`). No manual Neon console migration is required. See
+`src/lib/migrations/index.ts` for the full sequence (assets, redirects, imports, users/assignments,
+homepage, TOC, edit locks, FTS, revisions, page views, etc.).
 
 ## Managed assets
 

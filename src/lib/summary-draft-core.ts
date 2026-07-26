@@ -94,7 +94,7 @@ export function formatBlocksForSummary(blocks: ContentBlock[]): string {
     .join("\n");
 }
 
-function extractOutline(bodyText: string): string {
+export function extractOutline(bodyText: string): string {
   const headings = bodyText
     .split("\n")
     .map((line) => line.trim())

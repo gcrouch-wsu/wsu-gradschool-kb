@@ -3,20 +3,14 @@ import { logError } from "@/lib/log";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import { resolveAiPrompt } from "@/lib/ai-prompts";
-import {
-  assessPageReadyForSummaryDraft,
-  DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
-  expandBlocksForSummary,
-  formatBlocksForSummary,
-  getAiGatewayConfig,
-  requestSummaryDraftFromGateway,
-} from "@/lib/summary-draft";
+import { DEFAULT_AI_PAGE_SYSTEM_PROMPT, requestPageReviewFromGateway } from "@/lib/page-review-core";
+import { getAiGatewayConfig } from "@/lib/summary-draft";
 import type { ContentBlock } from "@/lib/types";
 import { NextResponse } from "next/server";
 import { getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 type Body = {
   title?: unknown;
@@ -24,10 +18,8 @@ type Body = {
 };
 
 /**
- * Draft a page summary via Vercel AI Gateway.
- * Uses the editor's current title + blocks (must be complete enough to summarize).
- * Expands live excerpts so the model sees included section text.
- * Does not persist — the client writes into the summary field for human edit + Save.
+ * AI page review: style / readability / grammar / alt suggestions.
+ * Does not persist — client applies accepted suggestions into the editor draft.
  */
 export async function POST(
   request: Request,
@@ -48,9 +40,9 @@ export async function POST(
     return denied;
   }
 
-  const limit = await rateLimit(`summary-draft:${guard.session.email}`, 8, 60);
+  const limit = await rateLimit(`page-review:${guard.session.email}`, 6, 60);
   if (!limit.allowed) {
-    return NextResponse.json({ message: "Too many summary draft requests. Try again shortly." }, { status: 429 });
+    return NextResponse.json({ message: "Too many page review requests. Try again shortly." }, { status: 429 });
   }
 
   const config = getAiGatewayConfig();
@@ -58,7 +50,7 @@ export async function POST(
     return NextResponse.json(
       {
         message:
-          "AI summary drafting is not configured. Set AI_PROVIDER_ENDPOINT, AI_API_KEY, and AI_MODEL on this deployment.",
+          "AI page review is not configured. Set AI_PROVIDER_ENDPOINT, AI_API_KEY, and AI_MODEL on this deployment.",
       },
       { status: 501 },
     );
@@ -68,34 +60,34 @@ export async function POST(
   const title = typeof body?.title === "string" ? body.title : existing.title;
   const blocks = Array.isArray(body?.blocks) ? (body.blocks as ContentBlock[]) : existing.blocks;
 
-  const readiness = assessPageReadyForSummaryDraft({ title, blocks });
-  if (!readiness.ok) {
-    return NextResponse.json({ message: readiness.message }, { status: 422 });
+  if (!title.trim()) {
+    return NextResponse.json({ message: "Add a page title before running an AI page review." }, { status: 422 });
+  }
+  if (blocks.length === 0) {
+    return NextResponse.json({ message: "Add page content before running an AI page review." }, { status: 422 });
   }
 
   try {
-    const expanded = await expandBlocksForSummary(blocks);
-    const bodyText = formatBlocksForSummary(expanded).trim() || readiness.bodyText;
     const [siteSettings, kb] = await Promise.all([loadSiteSettings(), getKbById(existing.kbId)]);
     const systemPrompt = resolveAiPrompt(
-      kb?.aiSummaryPrompt,
-      siteSettings.aiSummaryPrompt,
-      DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
+      kb?.aiPagePrompt,
+      siteSettings.aiPagePrompt,
+      DEFAULT_AI_PAGE_SYSTEM_PROMPT,
     );
-    const summary = await requestSummaryDraftFromGateway({
+    const review = await requestPageReviewFromGateway({
       title: title.trim(),
-      bodyText,
+      blocks,
       systemPrompt,
       ...config,
     });
-    return NextResponse.json({ ok: true, summary });
+    return NextResponse.json({ ok: true, ...review });
   } catch (error) {
     logError(error, {
-      route: "/api/admin/pages/[pageId]/summary-draft",
-      action: "summary_draft",
+      route: "/api/admin/pages/[pageId]/page-review",
+      action: "page_review",
       pageId,
     });
-    const message = error instanceof Error ? error.message : "Could not draft a summary.";
+    const message = error instanceof Error ? error.message : "Could not review the page.";
     return NextResponse.json({ message }, { status: 502 });
   }
 }

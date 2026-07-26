@@ -125,8 +125,10 @@ describe("POST /api/admin/pages/[pageId]/summary-draft", () => {
     expect(requestSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Ready",
-        systemPrompt: "",
       }),
     );
+    const call = requestSpy.mock.calls[0]?.[0] as { systemPrompt?: string };
+    expect(typeof call.systemPrompt).toBe("string");
+    expect(call.systemPrompt?.length).toBeGreaterThan(20);
   });
 });

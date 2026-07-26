@@ -841,6 +841,14 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS ai_summary_prompt TEXT NOT NULL DEFAULT ''`;
     },
   },
+  {
+    id: "038_ai_page_prompts",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS ai_page_prompt TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS ai_summary_prompt TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS ai_page_prompt TEXT NOT NULL DEFAULT ''`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

@@ -9,6 +9,7 @@ import { PageLoader } from "@/components/PageLoader";
 import { ThemeEditor } from "@/components/ThemeEditor";
 import { DEFAULT_THEME, SAFE_FONTS } from "@/lib/kb-theme";
 import { DEFAULT_AI_SUMMARY_SYSTEM_PROMPT } from "@/lib/summary-draft-core";
+import { DEFAULT_AI_PAGE_SYSTEM_PROMPT } from "@/lib/page-review-core";
 import {
   ALIGNMENTS,
   BRAND_TEXT_WEIGHTS,
@@ -192,7 +193,7 @@ export default function AdminSettingsPage() {
           onClick={() => setActiveTab("ai")}
           type="button"
         >
-          AI Summary Prompt
+          AI Prompt
         </button>
       </div>
 
@@ -645,11 +646,19 @@ export default function AdminSettingsPage() {
       {settings && activeTab === "ai" && (
         <form className="form form--wide" onSubmit={handleSave}>
           <section className="card">
-            <h2>AI Summary Prompt</h2>
+            <h2>AI Prompt</h2>
             <p className="meta">
-              Used when an editor clicks <strong>Draft with AI</strong> on a page. This is the system
-              instruction sent to the model. The app still attaches the page title, section outline, and
-              full page body automatically. Leave blank to use the built-in default.
+              Site-wide defaults for AI features. Each knowledge base can override these under{" "}
+              <strong>Admin → Knowledge bases → Edit</strong>. Resolution order: KB override → this
+              site default → built-in default.
+            </p>
+          </section>
+
+          <section className="card">
+            <h2>Summary prompt</h2>
+            <p className="meta">
+              Used when an editor clicks <strong>Draft with AI</strong> on a page. The app still
+              attaches the page title, section outline, and full page body automatically.
             </p>
             <label>
               <span className="meta">System prompt</span>
@@ -657,14 +666,14 @@ export default function AdminSettingsPage() {
                 className="input"
                 onChange={(e) => update("aiSummaryPrompt", e.target.value)}
                 placeholder={DEFAULT_AI_SUMMARY_SYSTEM_PROMPT}
-                rows={12}
+                rows={10}
                 value={settings.aiSummaryPrompt}
               />
             </label>
             <p className="meta">
               {settings.aiSummaryPrompt.trim()
-                ? "Custom prompt is active."
-                : "Using the built-in default prompt (shown as placeholder)."}
+                ? "Custom summary prompt is active."
+                : "Using the built-in default summary prompt (shown as placeholder)."}
             </p>
             <div className="admin-actions" style={{ marginTop: "1rem", gap: "0.75rem" }}>
               <button
@@ -685,9 +694,52 @@ export default function AdminSettingsPage() {
               </button>
             </div>
           </section>
+
+          <section className="card">
+            <h2>Page review prompt</h2>
+            <p className="meta">
+              Used when an editor runs <strong>Review with AI</strong> on page content. Checks style,
+              readability, grammar, and image alt text, then returns accept/dismiss suggestions. The
+              app attaches title, outline, block inventory, and body automatically.
+            </p>
+            <label>
+              <span className="meta">System prompt</span>
+              <textarea
+                className="input"
+                onChange={(e) => update("aiPagePrompt", e.target.value)}
+                placeholder={DEFAULT_AI_PAGE_SYSTEM_PROMPT}
+                rows={12}
+                value={settings.aiPagePrompt}
+              />
+            </label>
+            <p className="meta">
+              {settings.aiPagePrompt.trim()
+                ? "Custom page review prompt is active."
+                : "Using the built-in default page review prompt (shown as placeholder)."}
+            </p>
+            <div className="admin-actions" style={{ marginTop: "1rem", gap: "0.75rem" }}>
+              <button
+                className="button button--small button--ghost"
+                disabled={saving}
+                onClick={() => update("aiPagePrompt", DEFAULT_AI_PAGE_SYSTEM_PROMPT)}
+                type="button"
+              >
+                Load default into editor
+              </button>
+              <button
+                className="button button--small button--ghost"
+                disabled={saving || !settings.aiPagePrompt}
+                onClick={() => update("aiPagePrompt", "")}
+                type="button"
+              >
+                Clear (use built-in default)
+              </button>
+            </div>
+          </section>
+
           <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
             <button className="button" disabled={saving || !dbEnabled} type="submit">
-              {saving ? "Saving…" : "Save AI summary prompt"}
+              {saving ? "Saving…" : "Save AI prompts"}
             </button>
           </div>
         </form>

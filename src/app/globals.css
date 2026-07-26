@@ -1884,6 +1884,128 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   margin: 0.25rem 0 0.75rem;
 }
 
+.editor-content__ai-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1200px) {
+  .editor-content__ai-layout {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+  }
+}
+
+.ai-review-panel {
+  background: var(--wash, #f6f5f4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 0.9rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.ai-review-panel__header {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.ai-review-panel__title {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.ai-review-panel__hint,
+.ai-review-panel__overview {
+  margin: 0.5rem 0;
+}
+
+.ai-review-panel__batch {
+  margin: 0.5rem 0;
+}
+
+.ai-review-panel__list {
+  display: grid;
+  gap: 0.55rem;
+  list-style: none;
+  margin: 0.5rem 0 0;
+  max-height: min(70vh, 40rem);
+  overflow: auto;
+  padding: 0;
+}
+
+.ai-review-panel__item {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  padding: 0.55rem;
+}
+
+.ai-review-panel__item.is-active {
+  border-color: var(--crimson, #981e32);
+  box-shadow: 0 0 0 1px var(--crimson, #981e32);
+}
+
+.ai-review-panel__select {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.ai-review-panel__severity {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ai-review-panel__severity--must {
+  color: #9b1c1c;
+}
+
+.ai-review-panel__severity--should {
+  color: #92400e;
+}
+
+.ai-review-panel__severity--optional {
+  color: #374151;
+}
+
+.ai-review-panel__kind {
+  color: var(--muted, #5f5a57);
+  font-size: 0.8rem;
+}
+
+.ai-review-panel__message {
+  font-size: 0.9rem;
+}
+
+.ai-review-panel__snippet,
+.ai-review-panel__proposal {
+  color: var(--muted, #5f5a57);
+  font-size: 0.8rem;
+}
+
+.ai-review-panel__actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+[data-block-id].ai-review-target {
+  outline: 2px solid var(--crimson, #981e32);
+  outline-offset: 3px;
+  transition: outline-color 0.2s ease;
+}
+
 .editor-notes-rail__list {
   display: grid;
   gap: 0.45rem;

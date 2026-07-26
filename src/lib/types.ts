@@ -48,6 +48,10 @@ export interface KnowledgeBase {
   searchWidgetLabel?: string;
   /** When false, publish does not require a page summary. Default true. */
   requireSummary?: boolean;
+  /** KB override for Draft with AI summary system prompt. Empty inherits site → built-in. */
+  aiSummaryPrompt?: string;
+  /** KB override for AI page review system prompt. Empty inherits site → built-in. */
+  aiPagePrompt?: string;
 
   theme?: import("@/lib/kb-theme").KbTheme;
 }
