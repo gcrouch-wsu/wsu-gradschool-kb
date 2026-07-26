@@ -45,7 +45,7 @@ export async function PATCH(
     );
   }
 
-  if (status === "published" && guard.session.role === "editor") {
+  if (status === "published" && guard.session.role !== "owner" && guard.session.role !== "admin") {
     return NextResponse.json(
       { message: "Only an owner or admin can publish pages. Submit the page for review instead." },
       { status: 403 },

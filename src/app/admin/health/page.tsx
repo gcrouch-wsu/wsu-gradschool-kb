@@ -20,58 +20,69 @@ function PageTable({
   dateField = "review",
   pages,
   issueColumn = "Review due",
+  totalCount,
 }: {
   empty: string;
   heading: string;
   dateField?: "review" | "updated";
   pages: ContentHealthPageItem[];
   issueColumn?: string;
+  /** Full queue size when `pages` is a truncated preview. */
+  totalCount?: number;
 }) {
+  const count = totalCount ?? pages.length;
   return (
     <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
       <h2 className="admin-panel__title">
-        {heading} ({formatNumber(pages.length)})
+        {heading} ({formatNumber(count)})
       </h2>
       {pages.length === 0 ? (
         <p className="admin-panel__empty">{empty}</p>
       ) : (
-        <div className="table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Page</th>
-                <th>Knowledge base</th>
-                <th>Status</th>
-                <th>{issueColumn}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pages.map((page) => (
-                <tr key={`${heading}-${page.pageId}`}>
-                  <td>
-                    <Link href={`/admin/pages/${page.pageId}`}>{page.title}</Link>
-                    <div className="meta">/{page.path}</div>
-                  </td>
-                  <td>{page.kbTitle}</td>
-                  <td>{page.status}</td>
-                  <td>
-                    {page.issues?.length ? (
-                      <span>{page.issues.join(", ")}</span>
-                    ) : (
-                      <span>
-                        {formatDate(
-                          dateField === "updated"
-                            ? page.updatedDisplayDate
-                            : page.nextReviewDate ?? page.lastReviewedDate,
-                        )}
-                      </span>
-                    )}
-                  </td>
+        <>
+          {totalCount !== undefined && totalCount > pages.length ? (
+            <p className="meta">
+              Showing the first {formatNumber(pages.length)} of {formatNumber(totalCount)}.
+            </p>
+          ) : null}
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th>Knowledge base</th>
+                  <th>Status</th>
+                  <th>{issueColumn}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {pages.map((page) => (
+                  <tr key={`${heading}-${page.pageId}`}>
+                    <td>
+                      <Link href={`/admin/pages/${page.pageId}`}>{page.title}</Link>
+                      <div className="meta">/{page.path}</div>
+                    </td>
+                    <td>{page.kbTitle}</td>
+                    <td>{page.status}</td>
+                    <td>
+                      {page.issues?.length ? (
+                        <span>{page.issues.join(", ")}</span>
+                      ) : (
+                        <span>
+                          {formatDate(
+                            dateField === "updated"
+                              ? page.updatedDisplayDate
+                              : page.nextReviewDate ?? page.lastReviewedDate,
+                          )}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );
@@ -133,6 +144,7 @@ export default async function AdminHealthPage() {
         empty="No active pages are past their review date."
         heading="Stale or overdue reviews"
         pages={report.stalePages}
+        totalCount={report.counts.stalePages}
       />
       <PageTable
         empty="All active pages have at least one tag."
@@ -140,12 +152,14 @@ export default async function AdminHealthPage() {
         heading="Pages missing tags"
         pages={report.missingTags}
         issueColumn="Last updated"
+        totalCount={report.counts.missingTags}
       />
       <PageTable
         empty="All active pages have the required governance metadata."
         heading="Pages missing metadata"
         issueColumn="Issues"
         pages={report.missingMetadata}
+        totalCount={report.counts.missingMetadata}
       />
       <PageTable
         empty="No proposed pages are waiting for review."
@@ -153,6 +167,7 @@ export default async function AdminHealthPage() {
         heading="Proposed pages waiting"
         issueColumn="Updated"
         pages={report.proposedPages}
+        totalCount={report.counts.proposedPages}
       />
 
       <section className="admin-panel" style={{ marginTop: "1.5rem" }}>

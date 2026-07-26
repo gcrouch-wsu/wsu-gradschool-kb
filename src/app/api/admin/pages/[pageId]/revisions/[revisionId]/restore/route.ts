@@ -37,7 +37,7 @@ export async function POST(
     return NextResponse.json({ message: "Revision not found." }, { status: 404 });
   }
 
-  if (revision.status === "published" && guard.session.role === "editor") {
+  if (revision.status === "published" && guard.session.role !== "owner" && guard.session.role !== "admin") {
     return NextResponse.json(
       { message: "Only an owner or admin can restore a published revision." },
       { status: 403 },

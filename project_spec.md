@@ -826,7 +826,7 @@ curl -sS https://YOUR_HOST/api/health
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `039_page_tags` (and earlier ids such as `029_kb_visibility`). Existing public
+  should include `040_asset_tags` (and earlier ids such as `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.
 - Public KB list renders without loading draft-only content.

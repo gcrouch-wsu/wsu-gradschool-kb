@@ -138,10 +138,23 @@ export function PageDocumentEditor({
     if (payload.type === "link") {
       const linked = insertEditorLink({ url: payload.url, label: payload.label });
       if (!linked && payload.assetId) {
-        emitChange([
-          ...sections,
-          { type: "asset_link", block: { blockId: newBlockId(), type: "asset_link", assetId: payload.assetId, label: payload.label } },
-        ]);
+        // Only fall back to an asset_link block when there was no text selection.
+        // Cross-block selections fail in insertEditorLink and must not silently append.
+        const context = getEditorInsertionContext();
+        if (!context.hasTextSelection) {
+          emitChange([
+            ...sections,
+            {
+              type: "asset_link",
+              block: {
+                blockId: newBlockId(),
+                type: "asset_link",
+                assetId: payload.assetId,
+                label: payload.label,
+              },
+            },
+          ]);
+        }
       }
       setMediaPickerOpen(false);
       return;
