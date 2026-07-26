@@ -79,9 +79,8 @@ export default async function AdminEditPage({
       <p className="eyebrow">Admin</p>
       <h1>Edit Page</h1>
       <p className="lead">
-        Save changes as a draft while you work, publish when the page is ready, or move the page under a
-        different parent to control the KB tree. Use the overflow menu to copy or move this page to
-        another knowledge base.
+        Save changes as a draft while you work, submit pages for review, or publish approved changes
+        if your role allows it. Use the overflow menu to copy or move this page to another knowledge base.
       </p>
       <p className="meta">
         <Link href="/admin/pages">Back to pages</Link>

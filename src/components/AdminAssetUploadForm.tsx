@@ -33,6 +33,7 @@ export function AdminAssetUploadForm({
   const formId = useId();
   const titleFieldId = `${formId}-title`;
   const descriptionFieldId = `${formId}-description`;
+  const tagsFieldId = `${formId}-tags`;
   const fileFieldId = `${formId}-file`;
   const videoUrlFieldId = `${formId}-video-url`;
 
@@ -43,6 +44,7 @@ export function AdminAssetUploadForm({
   const [videoProvider, setVideoProvider] = useState<"youtube" | "vimeo" | "direct">("youtube");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export function AdminAssetUploadForm({
                 kbId,
                 title: title.trim() || undefined,
                 description: description.trim() || undefined,
+                tags: tags.trim() || undefined,
                 blobUrl: blob.url,
                 mimeType: file!.type,
                 originalFilename: file!.name,
@@ -113,6 +116,7 @@ export function AdminAssetUploadForm({
           formData.append("kbId", kbId);
           if (title.trim()) formData.append("title", title.trim());
           if (description.trim()) formData.append("description", description.trim());
+          if (tags.trim()) formData.append("tags", tags.trim());
 
           const response = await fetch("/api/admin/assets/documents", {
             method: "POST",
@@ -131,6 +135,7 @@ export function AdminAssetUploadForm({
             kbId,
             title: title.trim() || "Untitled Video",
             description: description.trim(),
+            tags: tags.trim() || undefined,
             url: videoUrl,
             provider: videoProvider,
           }),
@@ -144,6 +149,7 @@ export function AdminAssetUploadForm({
       setVideoUrl("");
       setTitle("");
       setDescription("");
+      setTags("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Action failed.");
     } finally {
@@ -205,6 +211,17 @@ export function AdminAssetUploadForm({
           id={descriptionFieldId}
           onChange={(e) => setDescription(e.target.value)}
           value={description}
+        />
+      </label>
+
+      <label htmlFor={tagsFieldId}>
+        <span className="meta">Tags (optional)</span>
+        <input
+          className="input"
+          id={tagsFieldId}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="forms, admissions, handbook"
+          value={tags}
         />
       </label>
 

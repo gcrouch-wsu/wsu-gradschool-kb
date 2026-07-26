@@ -11,6 +11,7 @@ import {
 } from "@/lib/kb-store";
 import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { logError } from "@/lib/log";
+import { normalizePageTags } from "@/lib/page-tags";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import type { ContentBlock, PageStatus, PageVisibility } from "@/lib/types";
@@ -20,6 +21,7 @@ interface UpdateBody {
   slug?: unknown;
   parentPath?: unknown;
   summary?: unknown;
+  tags?: unknown;
   visibility?: unknown;
   status?: unknown;
   sortOrder?: unknown;
@@ -66,6 +68,7 @@ export async function PATCH(
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const slug = typeof body.slug === "string" ? body.slug : undefined;
   const summary = typeof body.summary === "string" ? body.summary : undefined;
+  const tags = body.tags === undefined ? undefined : normalizePageTags(body.tags);
   const ownerLabel = typeof body.ownerLabel === "string" ? body.ownerLabel : undefined;
   const contactEmail = typeof body.contactEmail === "string" ? body.contactEmail : undefined;
   const lastReviewedDate = typeof body.lastReviewedDate === "string" ? body.lastReviewedDate : undefined;
@@ -94,6 +97,7 @@ export async function PATCH(
     typeof body.linkUrl === "string" ? body.linkUrl.trim().slice(0, 500) : undefined;
   const linkNewTab = typeof body.linkNewTab === "boolean" ? body.linkNewTab : undefined;
   const nextLinkUrl = linkUrl ?? existingPage?.linkUrl ?? "";
+  const canPublish = guard.session.role === "owner" || guard.session.role === "admin";
 
   if (!title) {
     return NextResponse.json({ message: "Title is required." }, { status: 400 });
@@ -105,6 +109,20 @@ export async function PATCH(
     return NextResponse.json(
       { message: "A link item needs a destination: an https:// URL or an internal path starting with /." },
       { status: 400 },
+    );
+  }
+
+  if (body.publishAt !== undefined && !canPublish) {
+    return NextResponse.json(
+      { message: "Only an owner or admin can schedule publishing." },
+      { status: 403 },
+    );
+  }
+
+  if (status === "published" && !canPublish) {
+    return NextResponse.json(
+      { message: "Only an owner or admin can publish pages. Submit the page for review instead." },
+      { status: 403 },
     );
   }
 
@@ -140,6 +158,7 @@ export async function PATCH(
       title,
       slug,
       summary,
+      tags,
       visibility,
       parentPath,
       status,

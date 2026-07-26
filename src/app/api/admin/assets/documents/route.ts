@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       mimeType?: unknown;
       originalFilename?: unknown;
       fileSizeBytes?: unknown;
+      tags?: unknown;
     } | null;
     const kbId = typeof body?.kbId === "string" ? body.kbId : "";
     const blobUrl = typeof body?.blobUrl === "string" ? body.blobUrl : "";
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
             ? body.title.trim()
             : originalFilename.replace(/\.[^.]+$/, ""),
         description: typeof body?.description === "string" ? body.description : undefined,
+        tags: body?.tags,
       });
       await recordAuditEvent({
         session: guard.session,
@@ -93,6 +95,7 @@ export async function POST(request: Request) {
   const kbId = formData?.get("kbId");
   const title = formData?.get("title");
   const description = formData?.get("description");
+  const tags = formData?.get("tags");
   if (!(file instanceof File) || typeof kbId !== "string") {
     return NextResponse.json({ message: "File and knowledge base are required." }, { status: 400 });
   }
@@ -132,6 +135,7 @@ export async function POST(request: Request) {
       assetType: "document",
       title: typeof title === "string" ? title : file.name.replace(/\.[^.]+$/, ""),
       description: typeof description === "string" ? description : undefined,
+      tags: typeof tags === "string" ? tags : undefined,
     });
     await recordAuditEvent({
       session: guard.session,

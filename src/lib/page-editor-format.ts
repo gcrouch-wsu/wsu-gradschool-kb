@@ -371,6 +371,66 @@ export function normalizeLinkUrl(raw: string): string {
   return url;
 }
 
+export function getEditorInsertionContext(): { hasInsertionPoint: boolean; hasTextSelection: boolean } {
+  if (typeof window === "undefined") {
+    return { hasInsertionPoint: false, hasTextSelection: false };
+  }
+  if (!restoreRichTextSelection()) {
+    return { hasInsertionPoint: false, hasTextSelection: false };
+  }
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  const surface = getBoundEditorSurface();
+  const hasInsertionPoint = Boolean(range && surface?.contains(range.commonAncestorContainer));
+  const hasTextSelection = Boolean(hasInsertionPoint && range && !range.collapsed && range.toString().trim());
+  saveRichTextSelection();
+  return { hasInsertionPoint, hasTextSelection };
+}
+
+export function insertEditorLink(request: { url: string; label: string; newTab?: boolean }): boolean {
+  const url = normalizeLinkUrl(request.url);
+  if (!url) {
+    return false;
+  }
+  if (!restoreRichTextSelection()) {
+    recordFormat("createLink", false, "no-selection", "Click in the page body, then add a link.");
+    return false;
+  }
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  const surface = getBoundEditorSurface();
+  if (!range || !surface || !surface.contains(range.commonAncestorContainer)) {
+    recordFormat("createLink", false, "outside-editor", "Click in the page body, then add a link.");
+    return false;
+  }
+  if (!range.collapsed) {
+    const startBlock = nearestBlock(range.startContainer, surface);
+    const endBlock = nearestBlock(range.endContainer, surface);
+    if (startBlock && endBlock && startBlock !== endBlock) {
+      recordFormat(
+        "createLink",
+        false,
+        "cross-block",
+        "Select text within a single paragraph, heading, or list item, then add a link.",
+      );
+      return false;
+    }
+  }
+  const text = range.toString().trim() || request.label.trim() || url;
+  const targetAttr = request.newTab ? ' target="_blank"' : "";
+  const relAttr = request.newTab ? ' rel="noopener noreferrer"' : "";
+  const html = `<a href="${escapeHtml(url)}"${targetAttr}${relAttr}>${escapeHtml(text)}</a>`;
+  snapshotStructuralChange();
+  const ok = runEditorCommand("insertHTML", html);
+  if (!ok) {
+    recordFormat("createLink", false, "insert-failed", "Click in the page body, then add a link.");
+    return false;
+  }
+  notifyMutation();
+  recordFormat("createLink", true, request.newTab ? `${url} (new tab)` : url);
+  return true;
+}
+
 export function commitLink(request: {
   url: string;
   text: string;

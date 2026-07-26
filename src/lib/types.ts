@@ -67,6 +67,7 @@ export interface KbPage {
   path: string[];
   sortOrder: number;
   summary: string;
+  tags?: string[];
   status: PageStatus;
   visibility: PageVisibility;
   ownerLabel: string;
@@ -106,6 +107,7 @@ export interface PageRevisionSnapshot {
   slug: string;
   path: string[];
   summary: string;
+  tags?: string[];
   status: PageStatus;
   visibility: PageVisibility;
   ownerLabel: string;
@@ -287,6 +289,7 @@ export interface Asset {
   title: string;
   slug: string;
   description: string;
+  tags?: string[];
   assetType: AssetType;
   mimeType: string;
   fileSizeBytes: number;

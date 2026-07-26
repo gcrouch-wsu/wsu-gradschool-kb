@@ -62,6 +62,7 @@ export const assets: Asset[] = [
     slug: "fact-sheet-update-checklist",
     description:
       "A short checklist for reviewing program fact sheet updates before publication.",
+    tags: ["fact sheets", "review", "publishing"],
     assetType: "document",
     mimeType: "text/plain; charset=utf-8",
     fileSizeBytes: 1052,
@@ -80,6 +81,7 @@ export const assets: Asset[] = [
     slug: "graduate-program-handbook-template",
     description:
       "A managed placeholder for the graduate program handbook template asset.",
+    tags: ["handbooks", "templates"],
     assetType: "document",
     mimeType: "text/plain; charset=utf-8",
     fileSizeBytes: 742,
@@ -97,6 +99,7 @@ export const assets: Asset[] = [
     title: "Private Staff Orientation Checklist",
     slug: "private-staff-orientation-checklist",
     description: "A private staff-only onboarding checklist for access-matrix testing.",
+    tags: ["staff", "onboarding"],
     assetType: "document",
     mimeType: "text/plain; charset=utf-8",
     fileSizeBytes: 238,

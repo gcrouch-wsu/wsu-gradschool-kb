@@ -4,6 +4,7 @@ import { mergeTheme, type KbTheme } from "@/lib/kb-theme";
 import { runMigrations } from "@/lib/migrations";
 import { parseVideoUrl } from "@/lib/video";
 import { DEFAULT_SITE_SETTINGS, normalizeSiteSettings, type SiteSettings } from "@/lib/site-settings";
+import { normalizeAssetTags, normalizePageTags } from "@/lib/page-tags";
 import type {
   Asset,
   AssetVersion,
@@ -146,10 +147,11 @@ async function seedIfEmpty() {
     await sql`
       INSERT INTO kb_assets (
         id, home_kb_id, slug, title, description, asset_type, mime_type, file_size_bytes,
-        status, owner_label, last_reviewed_date, updated_display_date, version_id, body
+        tags, status, owner_label, last_reviewed_date, updated_display_date, version_id, body
       ) VALUES (
         ${asset.id}, ${asset.homeKbId}, ${asset.slug}, ${asset.title}, ${asset.description},
-        ${asset.assetType}, ${asset.mimeType}, ${asset.fileSizeBytes}, ${asset.status},
+        ${asset.assetType}, ${asset.mimeType}, ${asset.fileSizeBytes},
+        ${JSON.stringify(normalizeAssetTags(asset.tags))}, ${asset.status},
         ${asset.ownerLabel}, ${asset.lastReviewedDate}, ${asset.updatedDisplayDate},
         ${asset.versionId}, ${asset.body}
       )
@@ -202,6 +204,7 @@ interface PageRow {
   sort_order: number;
   title: string;
   summary: string;
+  tags?: unknown;
   status: string;
   visibility: string;
   owner_label: string;
@@ -232,6 +235,7 @@ interface AssetRow {
   slug: string;
   title: string;
   description: string;
+  tags?: unknown;
   asset_type: string;
   mime_type: string;
   file_size_bytes: number;
@@ -451,6 +455,7 @@ function mapPage(row: PageRow): KbPage {
     sortOrder: row.sort_order ?? 0,
     title: row.title,
     summary: row.summary,
+    tags: normalizePageTags(row.tags),
     status: row.status as KbPage["status"],
     visibility: row.visibility as KbPage["visibility"],
     ownerLabel: row.owner_label,
@@ -483,6 +488,7 @@ function mapAsset(row: AssetRow): Asset {
     slug: row.slug,
     title: row.title,
     description: row.description,
+    tags: normalizeAssetTags(row.tags),
     assetType: row.asset_type as Asset["assetType"],
     mimeType: row.mime_type,
     fileSizeBytes: row.file_size_bytes,
@@ -521,12 +527,14 @@ export async function insertPage(page: KbPage, revision?: PageRevisionWrite): Pr
   const pageInsert = sql`
     INSERT INTO kb_pages (
       id, kb_id, slug, path, sort_order, title, summary, status, visibility, owner_label, contact_email,
+      tags,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
       show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
       next_review_date, verified_at, verified_by, publish_at, node_kind, link_url, link_new_tab
     ) VALUES (
       ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
       ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
+      ${JSON.stringify(normalizePageTags(page.tags))},
       ${page.lastReviewedDate}, ${page.updatedDisplayDate}, ${JSON.stringify(page.blocks)},
       ${JSON.stringify(page.relatedPageIds)}, ${JSON.stringify(page.relatedAssetIds)},
       ${page.showToc}, ${page.tocDepth}, ${page.showSummary ?? true}, ${page.showPrintButton ?? true},
@@ -551,11 +559,12 @@ export async function insertAsset(asset: Asset): Promise<void> {
   await sql`
     INSERT INTO kb_assets (
       id, home_kb_id, slug, title, description, asset_type, mime_type, file_size_bytes,
-      status, owner_label, last_reviewed_date, updated_display_date, version_id, body,
+      tags, status, owner_label, last_reviewed_date, updated_display_date, version_id, body,
       alt_text, video_provider, video_external_id, video_url
     ) VALUES (
       ${asset.id}, ${asset.homeKbId}, ${asset.slug}, ${asset.title}, ${asset.description},
-      ${asset.assetType}, ${asset.mimeType}, ${asset.fileSizeBytes}, ${asset.status},
+      ${asset.assetType}, ${asset.mimeType}, ${asset.fileSizeBytes},
+      ${JSON.stringify(normalizeAssetTags(asset.tags))}, ${asset.status},
       ${asset.ownerLabel}, ${asset.lastReviewedDate}, ${asset.updatedDisplayDate},
       ${asset.versionId}, ${asset.body},
       ${asset.altText ?? ""}, ${asset.videoProvider ?? null}, ${asset.videoExternalId ?? null}, ${asset.videoUrl ?? null}
@@ -581,6 +590,7 @@ export async function updatePages(
     const blocks = JSON.stringify(page.blocks);
     const relatedPageIds = JSON.stringify(page.relatedPageIds);
     const relatedAssetIds = JSON.stringify(page.relatedAssetIds);
+    const tags = JSON.stringify(normalizePageTags(page.tags));
 
     if (editorEmail) {
       return sql`
@@ -593,6 +603,7 @@ export async function updatePages(
             sort_order = ${page.sortOrder},
             title = ${page.title},
             summary = ${page.summary},
+            tags = ${tags},
             status = ${page.status},
             visibility = ${page.visibility},
             owner_label = ${page.ownerLabel},
@@ -632,6 +643,7 @@ export async function updatePages(
         sort_order = ${page.sortOrder},
         title = ${page.title},
         summary = ${page.summary},
+        tags = ${tags},
         status = ${page.status},
         visibility = ${page.visibility},
         owner_label = ${page.ownerLabel},
@@ -896,7 +908,7 @@ export async function loadDatasetFromDb(): Promise<KbDataset> {
       SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
         file_size_bytes, status, owner_label, last_reviewed_date,
         updated_display_date, version_id, '' AS body,
-        alt_text, video_provider, video_external_id, video_url
+        tags, alt_text, video_provider, video_external_id, video_url
       FROM kb_assets
     `,
   ]);
@@ -966,7 +978,7 @@ export async function loadPagesForKbWithoutBlocksFromDb(kbId: string): Promise<K
   const rows = (await sql`
     SELECT
       id, kb_id, slug, path, sort_order, title, summary, status, visibility,
-      owner_label, contact_email, last_reviewed_date, updated_display_date,
+      tags, owner_label, contact_email, last_reviewed_date, updated_display_date,
       '[]'::jsonb AS blocks, related_page_ids, related_asset_ids,
       show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
       next_review_date, verified_at, verified_by, publish_at, node_kind, link_url, link_new_tab
@@ -983,7 +995,7 @@ export async function loadAssetByIdFromDb(assetId: string): Promise<Asset | null
     SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
       file_size_bytes, status, owner_label, last_reviewed_date,
       updated_display_date, version_id, '' AS body,
-      alt_text, video_provider, video_external_id, video_url
+      tags, alt_text, video_provider, video_external_id, video_url
     FROM kb_assets
     WHERE id = ${assetId}
     LIMIT 1
@@ -999,7 +1011,7 @@ export async function loadAssetBySlugFromDb(homeKbId: string, slug: string): Pro
     SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
       file_size_bytes, status, owner_label, last_reviewed_date,
       updated_display_date, version_id, '' AS body,
-      alt_text, video_provider, video_external_id, video_url
+      tags, alt_text, video_provider, video_external_id, video_url
     FROM kb_assets
     WHERE home_kb_id = ${homeKbId} AND slug = ${slug}
     LIMIT 1
@@ -1015,7 +1027,7 @@ export async function loadAssetsForKbFromDb(kbId?: string): Promise<Asset[]> {
     SELECT id, home_kb_id, slug, title, description, asset_type, mime_type,
       file_size_bytes, status, owner_label, last_reviewed_date,
       updated_display_date, version_id, '' AS body,
-      alt_text, video_provider, video_external_id, video_url
+      tags, alt_text, video_provider, video_external_id, video_url
     FROM kb_assets
     WHERE (${kbId ?? null}::text IS NULL OR home_kb_id = ${kbId ?? null})
   `) as unknown as AssetRow[];
@@ -1108,6 +1120,7 @@ export async function updateAssetRecord(asset: Asset): Promise<void> {
       slug = ${asset.slug},
       title = ${asset.title},
       description = ${asset.description},
+      tags = ${JSON.stringify(normalizeAssetTags(asset.tags))},
       asset_type = ${asset.assetType},
       mime_type = ${asset.mimeType},
       file_size_bytes = ${asset.fileSizeBytes},

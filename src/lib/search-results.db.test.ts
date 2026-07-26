@@ -17,23 +17,30 @@ describe.skipIf(!isDatabaseEnabled())("reader search result types live DB", () =
       await sql`
         INSERT INTO kb_assets (
           id, home_kb_id, slug, title, description, asset_type, mime_type, file_size_bytes,
-          status, owner_label, last_reviewed_date, updated_display_date, version_id, body
+          tags, status, owner_label, last_reviewed_date, updated_display_date, version_id, body
         ) VALUES
           (
             ${`asset-img-${id}`}, ${kbId}, ${`img-${token}`}, ${`Image ${token}`}, 'A screenshot',
-            'image', 'image/png', 10, 'active', 'Graduate School', '2026-01-01', '2026-01-01',
+            'image', 'image/png', 10, '[]'::jsonb, 'active', 'Graduate School', '2026-01-01', '2026-01-01',
             ${`v-img-${id}`}, ''
           ),
           (
             ${`asset-doc-${id}`}, ${kbId}, ${`doc-${token}`}, ${`Document ${token}`}, 'A form',
-            'document', 'application/pdf', 10, 'active', 'Graduate School', '2026-01-01', '2026-01-01',
+            'document', 'application/pdf', 10, '[]'::jsonb, 'active', 'Graduate School', '2026-01-01', '2026-01-01',
             ${`v-doc-${id}`}, ''
+          ),
+          (
+            ${`asset-doc-tag-${id}`}, ${kbId}, ${`doc-tag-${id}`}, 'Tagged Document', 'A plain form',
+            'document', 'application/pdf', 10, ${JSON.stringify([`tagtoken${token}`])}::jsonb, 'active',
+            'Graduate School', '2026-01-01', '2026-01-01', ${`v-doc-tag-${id}`}, ''
           )
       `;
       const results = await searchKb(kbId, token, true, { staffKbIds: null });
       const assetTitles = results.filter((result) => result.type === "asset").map((result) => result.title);
       expect(assetTitles).toContain(`Document ${token}`);
       expect(assetTitles).not.toContain(`Image ${token}`);
+      const tagResults = await searchKb(kbId, `tagtoken${token}`, true, { staffKbIds: null });
+      expect(tagResults.map((result) => result.id)).toContain(`asset-doc-tag-${id}`);
     } finally {
       await sql`DELETE FROM kb_assets WHERE home_kb_id = ${kbId}`;
       await sql`DELETE FROM knowledge_bases WHERE id = ${kbId}`;

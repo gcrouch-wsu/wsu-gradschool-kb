@@ -9,6 +9,7 @@ import { LinkDialog } from "@/components/LinkDialog";
 import { NoteDialog } from "@/components/NoteDialog";
 import { EditorNotesRail } from "@/components/EditorNotesRail";
 import { MediaPicker } from "@/components/MediaPicker";
+import type { MediaPickerInsert } from "@/components/MediaPicker";
 import { PageEditorDebugPanel } from "@/components/PageEditorDebugPanel";
 import { TableBlockEditor } from "@/components/TableBlockEditor";
 import { blocksToSections, sectionsToBlocks, type EditorSection } from "@/lib/page-editor-list";
@@ -27,8 +28,9 @@ import {
   handleEditorKeyDown,
   handleEditorPaste,
   handleImageControlClick,
+  getEditorInsertionContext,
   insertEditorBlockHtml,
-  insertEditorHtml,
+  insertEditorLink,
   openNoteEditor,
   registerAltEditor,
   registerFormatIssueReporter,
@@ -75,6 +77,10 @@ export function PageDocumentEditor({
     initialSections.length > 0 ? initialSections : [{ type: "flow", blocks: [] }],
   );
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerSelection, setMediaPickerSelection] = useState({
+    hasInsertionPoint: false,
+    hasTextSelection: false,
+  });
   const [linkRequest, setLinkRequest] = useState<LinkEditRequest | null>(null);
   const [noteRequest, setNoteRequest] = useState<NoteEditRequest | null>(null);
   const [altRequest, setAltRequest] = useState<AltEditRequest | null>(null);
@@ -123,11 +129,28 @@ export function PageDocumentEditor({
     };
   }, []);
 
-  function insertBlockFromPicker(block: ContentBlock) {
-    if (block.type === "image") {
+  function openMediaPicker() {
+    setMediaPickerSelection(getEditorInsertionContext());
+    setMediaPickerOpen(true);
+  }
 
+  function insertBlockFromPicker(payload: MediaPickerInsert) {
+    if (payload.type === "link") {
+      const linked = insertEditorLink({ url: payload.url, label: payload.label });
+      if (!linked && payload.assetId) {
+        emitChange([
+          ...sections,
+          { type: "asset_link", block: { blockId: newBlockId(), type: "asset_link", assetId: payload.assetId, label: payload.label } },
+        ]);
+      }
+      setMediaPickerOpen(false);
+      return;
+    }
+
+    const block = payload.block;
+    if (block.type === "image") {
       const html = blocksToDocumentHtml([block], kbSlug);
-      if (!insertEditorHtml(html)) {
+      if (!insertEditorBlockHtml(html)) {
         addBlockToFirstFlow(block);
       }
     } else if (block.type === "video") {
@@ -338,7 +361,7 @@ export function PageDocumentEditor({
           <DocumentToolbar
             editorPalette={editorPalette}
             onInsertInfoBox={handleInsertInfoBox}
-            onInsertMedia={() => setMediaPickerOpen(true)}
+            onInsertMedia={openMediaPicker}
             onAddNote={() => openNoteEditor()}
             onAddTable={addTable}
             onAddCard={addCard}
@@ -370,7 +393,13 @@ export function PageDocumentEditor({
       ) : (
         <>
       {mediaPickerOpen && (
-        <MediaPicker kbId={kbId} onClose={() => setMediaPickerOpen(false)} onInsert={insertBlockFromPicker} />
+        <MediaPicker
+          hasTextSelection={mediaPickerSelection.hasTextSelection}
+          kbId={kbId}
+          kbSlug={kbSlug}
+          onClose={() => setMediaPickerOpen(false)}
+          onInsert={insertBlockFromPicker}
+        />
       )}
 
       {linkRequest && (

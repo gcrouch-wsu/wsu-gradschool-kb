@@ -49,14 +49,15 @@ Concretely, the platform must:
 ## 2. Scope
 
 **In scope (built today):** public and private multi-KB reading; custom block/rich-text editor;
-managed assets with versioning, usage index, and stable URLs (including responsive image variants);
+managed assets with versioning, tag organization, usage index, and stable URLs (including responsive image variants);
 Postgres full-text search with an optional search widget; Owner/Admin/Editor/Viewer auth with
 per-KB scoping; configurable KB homepage pages; per-KB theming, global default theme, and owner
-site settings; DOCX staged import; automatic redirects; edit locks; publish-time accessibility /
-governance gate; audit log; revision history with compare/restore; proposed-edits workflow; review
-dashboard (including reader feedback); trash for archived pages; KB starter templates; home KB
-filter; optional AI draft summaries in the page editor; print-to-PDF (browser print over semantic
-HTML); KaaS read API; sitemap/robots/OG for public pages. Private KBs use KB-level
+site settings; DOCX staged import; automatic redirects; edit locks; page tags/keywords;
+publish-time accessibility / governance gate; owner/admin publish approval; audit log; revision
+history with compare/restore; proposed-edits workflow; review dashboard (including reader feedback);
+content health dashboard; trash for archived pages; KB starter templates; home KB filter; optional
+AI draft summaries in the page editor; print-to-PDF (browser print over semantic HTML); KaaS read
+API; sitemap/robots/OG for public pages. Private KBs use KB-level
 `public`/`private` visibility, owner-provisioned local-password `viewer` accounts,
 `kb_user_assignments` for viewer/editor access, read gating on every public surface, and
 visibility-aware asset delivery/search.
@@ -105,7 +106,8 @@ Viewer is read-only):
 | Area | Owner | Admin | Editor | Viewer | Scope mechanism |
 |------|-------|-------|--------|--------|-----------------|
 | Public/private KB read | all | all | published public + assigned (incl. assigned drafts) | published public + assigned published private | `getKbReadAccess` / `filterKbsForReadAccess` (KB status enforced) |
-| Pages list/edit/publish | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
+| Pages list/edit/submit | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
+| Publish/approve pages | all | all | no | no | Owner/Admin role checks on publish/status/restore paths |
 | KB homepage assignment | all | all | assigned | no | `requireKbAccess` |
 | Assets list/edit | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
 | Imports (list/detail/edit/delete) | all | all | assigned | no | `requireKbAccess` |
@@ -123,7 +125,7 @@ surfaces are added):
 | `/admin` | Owner/Admin/Editor | Signed-in non-viewer session only; navigation hides owner/admin-only links but is not the authorization boundary. Viewers redirect to `/` before the admin shell renders. | `src/app/admin/layout.tsx`, `src/app/admin/page.tsx` |
 | `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Editors | The pages list is scoped to one KB via `?kb=` (slug; id also accepted and normalized) using `KbScopePicker` + `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/components/AdminPagesWorkspace.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
 | `/admin/pages/[pageId]` | Owner/Admin/assigned Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
-| Page mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | `PATCH`, status, layout, lock, create, and relocate routes use `requireAdminMutation` plus `requireKbAccess` (relocate requires access to **both** source and destination KBs); permanent delete also checks owner/admin. | `src/app/api/admin/pages/**/route.ts`, `src/lib/kb-store.ts` (`relocatePage`) |
+| Page mutation APIs | Owner/Admin/assigned Editor, except publish/schedule/restore-published/permanent-delete Owner/Admin only | `PATCH`, status, layout, lock, create, and relocate routes use `requireAdminMutation` plus `requireKbAccess` (relocate requires access to **both** source and destination KBs); publish, schedule-publish writes, restoring published revisions, and permanent delete also check owner/admin. | `src/app/api/admin/pages/**/route.ts`, `src/lib/kb-store.ts` (`relocatePage`) |
 | KB homepage API | Owner/Admin/assigned Editor | Sets or clears `knowledge_bases.home_page_id`; route uses `requireAdminMutation` plus `requireKbAccess(kbId)`. | `src/app/api/admin/kbs/[kbId]/homepage/route.ts` |
 | `/admin/assets` and asset picker API | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; picker `GET /api/admin/assets` requires a session and `requireKbAccess(kbId)`. | `src/app/admin/assets/page.tsx`, `src/app/api/admin/assets/route.ts` |
 | `/admin/assets/[assetId]` | Owner/Admin/assigned Editor | Detail page resolves the asset's home KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/assets/[assetId]/page.tsx` |
@@ -131,6 +133,7 @@ surfaces are added):
 | `/admin/import` and staged import APIs | Owner/Admin/assigned Editor | Import list page uses `accessibleKbIds`; collection/item/stage/commit APIs use `requireKbAccess` after resolving or receiving `kbId`. | `src/app/admin/import/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`, `src/app/api/admin/import/**/route.ts` |
 | `/admin/redirects` and redirect APIs | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; API routes use `requireKbAccess` on the target/resolved KB. | `src/app/admin/redirects/page.tsx`, `src/app/api/admin/redirects/**/route.ts` |
 | `/admin/review` | Owner/Admin/assigned Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
+| `/admin/health` | Owner/Admin/assigned Editor | Content-health data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. Viewers redirect to `/`. | `src/app/admin/health/page.tsx`, `src/lib/content-health.ts` |
 | `/admin/usage` | Owner/Admin/assigned Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`; Viewers redirect to `/`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
 | `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
 | `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only except `PATCH /api/admin/kbs/[kbId]` which also lets **Admin** toggle `requireSummary`. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation, and Owner-only user management can assign Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
@@ -203,6 +206,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   link uses `/kb/{kbSlug}` as its canonical URL.
 - Pages have a default-on `showPrintButton` / `show_print_button` flag. Public article and
   KB-homepage pages render the browser print-to-PDF affordance only when this flag is not false.
+- Pages have optional normalized `tags` / `kb_pages.tags` keywords. The editor stores them as
+  page metadata, public article pages render them as search links, and both in-memory and Postgres
+  search score them.
 - **Serialization** (`src/lib/page-document.ts`): `blocksToDocumentHtml` (blocks → editor HTML) and
   `documentHtmlToBlocks` (editor HTML → blocks). Inline rich text is sanitized by
   `src/lib/rich-text.ts` (allowlist *rebuild* — the input is parsed and re-emitted from an allowlist
@@ -236,6 +242,10 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   (`doc-link-draft`) while open, so the target stays visible and survives re-renders; commit swaps
   the marker for a real `<a>` via DOM surgery (no `insertHTML`). Bare domains get `https://`, plain
   emails get `mailto:`. No-selection and cross-block selections fail early with a hint.
+- **Media picker**: preserves the saved toolbar selection. Images insert as block-level figures at
+  the saved cursor/location; document assets or document uploads link selected text when the
+  selection is inside one rich-text block, otherwise they insert as file-link blocks. The library tab
+  searches title/slug/description/tags and can filter image/file plus used/unused assets.
 - **Paste & drop** (`handleEditorPaste`/`handleEditorDrop`): clipboard HTML (Word/Outlook/web) is run
   through `sanitizePageDocument` *at paste time* so the surface always shows what will save; pasted
   H1→H2 and H4–H6→H3. Pasted or dropped **image files upload to the asset library**
@@ -280,12 +290,15 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   required metadata (title, responsible office, valid contact email, last-reviewed date; **summary
   when the KB's `requireSummary` is true**, the default), heading-hierarchy skips, tables without a
   header row/column, images missing alt text (unless decorative), references to non-active assets,
-  and vague/empty link text. Because editors publish directly, this gate is the primary quality
-  control. New pages default `contactEmail` to the creating editor's signed-in email.
+  and vague/empty link text. Owner/Admin publish entrypoints must call this gate; Editors submit
+  pages for review and cannot publish, schedule publish, approve proposed pages, or restore a
+  published revision. New pages default `contactEmail` to the creating editor's signed-in email.
 
 ### Assets (`src/lib/kb-store.ts`, `src/lib/asset-lifecycle.ts`)
 - Stable public route `/kb/{kbSlug}/files/{assetSlug}` serves the **active version**, so replacing a
   file doesn't break links. Version history + usage tracking included.
+- Assets carry optional normalized `tags` / `kb_assets.tags`. The library searches and displays tags,
+  plus usage counts/page names from `kb_asset_usages`, so unused assets are visible before cleanup.
 - Archive = hidden, not deleted. Owners/Admins can permanently delete archived assets only when no
   page references them. Editors can archive but not permanently delete.
 - **Video** assets are external links with dedicated columns (`video_provider`, `video_external_id`,
@@ -299,9 +312,10 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 ### Search (Postgres FTS, in `kb-store.ts` + migrations)
 - `tsvector` columns + GIN indices on `kb_pages` and `kb_assets`, kept fresh by **`BEFORE INSERT OR
   UPDATE` triggers** (`tsvectorupdate` / `tsvectorupdate_assets`, migration `006`, function updated
-  through `009`/`015`). Pages index title/summary/block-text (via the `kb_extract_blocks_text`
-  PL/pgSQL extractor — paragraph/heading/list/table/caption/procedure-section text, not raw JSON or
-  notes); assets index title/description/slug. Weights: A (title), B (summary/description), C (body).
+  through `009`/`015`/`039`/`040`). Pages index title/summary/tags/block-text (via the
+  `kb_extract_blocks_text` PL/pgSQL extractor — paragraph/heading/list/table/caption/procedure-section
+  text, not raw JSON or notes); assets index title/description/tags/slug. Weights: A (title), B
+  (summary/tags/description), C (body/slug).
 - `searchKb` ORs a `:*` prefix `to_tsquery` with `websearch_to_tsquery` and takes the greater rank;
   query tokens are reduced to alphanumerics so punctuation can never raise a syntax error.
 - A correlated `NOT EXISTS` prune hides any public page under a `staff` ancestor from public search.
@@ -388,9 +402,10 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) →
   app-side backfills.
-- **Current head: `038_ai_page_prompts`.** Notable recent migrations: page-tree node kinds (`032`),
+- **Current head: `040_asset_tags`.** Notable recent migrations: page-tree node kinds (`032`),
   per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback (`035`),
-  persisted asset-usage index (`036`), site AI summary prompt (`037`). Earlier migrations cover FTS,
+  persisted asset-usage index (`036`), site AI summary prompt (`037`), site + per-KB AI summary/page
+  prompts (`038`), page tags/tag-aware FTS (`039`), and asset tags/tag-aware FTS (`040`). Earlier migrations cover FTS,
   edit locks, revisions, page views, KB visibility, search widget, branding, and rate limits — see
   `src/lib/migrations/index.ts` for the full sequence.
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_asset_usages`,
@@ -560,7 +575,7 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 9. Current feature status
 
-**As of 2026-07-25:** the public/private multi-KB platform is on `main` and in active Grad School
+**As of 2026-07-26:** the public/private multi-KB platform is on `main` and in active Grad School
 content use. CI covers type-check, lint, unit tests, production build, public/private-viewer axe
 smoke, authenticated Chromium editor regressions, and live-DB suites when `DATABASE_URL` is set.
 
@@ -575,12 +590,14 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   alt suggestions (Gateway env vars; never auto-saves). System prompts are editable under
   **Admin → Settings → AI Prompt**, with per-KB overrides on the knowledge base edit form
   (resolution: KB → site → built-in). Cleaned summary drafts are capped at 2,500 characters.
-- Managed assets: stable URLs, versions, usage index, direct-to-Blob large uploads when configured,
-  responsive `?w=` / `srcset` image variants, private/staff-aware delivery, archive-first delete.
-- Search: Postgres FTS (global + per-KB), visibility prune, search widget with live suggestions.
-- Governance: publish gate, proposed-edits workflow, review dashboard (feedback + propose actions),
-  revision history with side-by-side compare/restore, trash, audit log, weekly review digest cron,
-  reader "Was this helpful?" feedback.
+- Managed assets: stable URLs, versions, tags, usage index with used/unused library visibility,
+  direct-to-Blob large uploads when configured, responsive `?w=` / `srcset` image variants,
+  private/staff-aware delivery, archive-first delete.
+- Search: Postgres FTS (global + per-KB), tag/keyword scoring, visibility prune, search widget with
+  live suggestions.
+- Governance: publish gate, owner/admin publish approval, proposed-edits workflow, review dashboard
+  (feedback + propose actions), content health dashboard, revision history with side-by-side
+  compare/restore, trash, audit log, weekly review digest cron, reader "Was this helpful?" feedback.
 - Auth & admin: Owner/Admin/Editor/Viewer, per-KB scoping, edit locks, site settings/branding,
   KB starter templates, cross-KB copy/move, DOCX import, redirects, KaaS read API, owner KB ZIP
   export, usage analytics.
@@ -646,6 +663,9 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   managed DB users; a bootstrap env owner alone does not receive digest email.
 - Usage analytics are aggregate counts only; they intentionally store no cookies, IP addresses, or user
   agents, can include bot/crawler traffic, and are skipped entirely in in-memory mode.
+- Content health is an admin maintenance dashboard over existing page metadata and audit logs. It is
+  not a crawler or automated content-quality scorer; it reports stale review dates, missing tags,
+  missing governance fields, proposed pages, and logged zero-result search queries.
 
 ---
 
@@ -806,7 +826,7 @@ curl -sS https://YOUR_HOST/api/health
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `038_ai_page_prompts` (and earlier ids such as `029_kb_visibility`). Existing public
+  should include `039_page_tags` (and earlier ids such as `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.
 - Public KB list renders without loading draft-only content.

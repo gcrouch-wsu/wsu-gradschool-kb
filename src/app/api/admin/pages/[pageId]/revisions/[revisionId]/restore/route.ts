@@ -37,6 +37,13 @@ export async function POST(
     return NextResponse.json({ message: "Revision not found." }, { status: 404 });
   }
 
+  if (revision.status === "published" && guard.session.role === "editor") {
+    return NextResponse.json(
+      { message: "Only an owner or admin can restore a published revision." },
+      { status: 403 },
+    );
+  }
+
   // Restoring a published revision re-publishes it, so it must clear the publish
   // gate — mirror the normal save route's 422-with-issues response.
   const kb = await getKbById(page.kbId);

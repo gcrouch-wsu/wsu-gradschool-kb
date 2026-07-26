@@ -45,16 +45,11 @@ export async function PATCH(
     );
   }
 
-  // Editors submit for review; only owners/admins publish proposed pages
-  // (editors may still publish drafts directly when policy allows).
   if (status === "published" && guard.session.role === "editor") {
-    const current = await getPageByIdForAdmin(pageId);
-    if (current?.status === "proposed") {
-      return NextResponse.json(
-        { message: "Only an owner or admin can approve a proposed page." },
-        { status: 403 },
-      );
-    }
+    return NextResponse.json(
+      { message: "Only an owner or admin can publish pages. Submit the page for review instead." },
+      { status: 403 },
+    );
   }
 
   if (status === "published") {

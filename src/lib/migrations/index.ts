@@ -849,6 +849,124 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS ai_page_prompt TEXT NOT NULL DEFAULT ''`;
     },
   },
+  {
+    id: "039_page_tags",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`
+        UPDATE kb_pages
+        SET tags = '[]'::jsonb
+        WHERE tags IS NULL OR jsonb_typeof(tags) <> 'array'
+      `;
+
+      await sql`
+        CREATE OR REPLACE FUNCTION kb_pages_search_trigger() RETURNS trigger AS $$
+        begin
+          new.search_vector :=
+            setweight(to_tsvector('english', coalesce(new.title, '')), 'A') ||
+            setweight(to_tsvector('english', coalesce(new.summary, '')), 'B') ||
+            setweight(to_tsvector('english', coalesce(
+              array_to_string(
+                ARRAY(
+                  SELECT jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(coalesce(new.tags, '[]'::jsonb)) = 'array' THEN coalesce(new.tags, '[]'::jsonb)
+                      ELSE '[]'::jsonb
+                    END
+                  )
+                ),
+                ' '
+              ),
+              ''
+            )), 'B') ||
+            setweight(to_tsvector('english', coalesce(kb_extract_blocks_text(new.blocks), '')), 'C');
+          return new;
+        end
+        $$ LANGUAGE plpgsql;
+      `;
+
+      await sql`
+        UPDATE kb_pages
+        SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+                            setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
+                            setweight(to_tsvector('english', coalesce(
+                              array_to_string(
+                                ARRAY(
+                                  SELECT jsonb_array_elements_text(
+                                    CASE
+                                      WHEN jsonb_typeof(coalesce(tags, '[]'::jsonb)) = 'array' THEN coalesce(tags, '[]'::jsonb)
+                                      ELSE '[]'::jsonb
+                                    END
+                                  )
+                                ),
+                                ' '
+                              ),
+                              ''
+                            )), 'B') ||
+                            setweight(to_tsvector('english', coalesce(kb_extract_blocks_text(blocks), '')), 'C')
+      `;
+    },
+  },
+  {
+    id: "040_asset_tags",
+    async up(sql) {
+      await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`
+        UPDATE kb_assets
+        SET tags = '[]'::jsonb
+        WHERE tags IS NULL OR jsonb_typeof(tags) <> 'array'
+      `;
+
+      await sql`
+        CREATE OR REPLACE FUNCTION kb_assets_search_trigger() RETURNS trigger AS $$
+        begin
+          new.search_vector :=
+            setweight(to_tsvector('english', coalesce(new.title, '')), 'A') ||
+            setweight(to_tsvector('english', coalesce(new.description, '')), 'B') ||
+            setweight(to_tsvector('english', coalesce(
+              array_to_string(
+                ARRAY(
+                  SELECT jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(coalesce(new.tags, '[]'::jsonb)) = 'array' THEN coalesce(new.tags, '[]'::jsonb)
+                      ELSE '[]'::jsonb
+                    END
+                  )
+                ),
+                ' '
+              ),
+              ''
+            )), 'B') ||
+            setweight(to_tsvector('english', coalesce(new.slug, '')), 'C');
+          return new;
+        end
+        $$ LANGUAGE plpgsql;
+      `;
+
+      await sql`
+        UPDATE kb_assets
+        SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+                            setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
+                            setweight(to_tsvector('english', coalesce(
+                              array_to_string(
+                                ARRAY(
+                                  SELECT jsonb_array_elements_text(
+                                    CASE
+                                      WHEN jsonb_typeof(coalesce(tags, '[]'::jsonb)) = 'array' THEN coalesce(tags, '[]'::jsonb)
+                                      ELSE '[]'::jsonb
+                                    END
+                                  )
+                                ),
+                                ' '
+                              ),
+                              ''
+                            )), 'B') ||
+                            setweight(to_tsvector('english', coalesce(slug, '')), 'C')
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_assets_tags ON kb_assets USING GIN(tags)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

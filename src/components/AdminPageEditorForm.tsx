@@ -12,6 +12,7 @@ import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
+import { normalizePageTags } from "@/lib/page-tags";
 import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
 import type { PageReviewSuggestion } from "@/lib/page-review-core";
 import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
@@ -305,6 +306,7 @@ export function AdminPageEditorForm({
   const [title, setTitle] = useState(page.title);
   const [slug, setSlug] = useState(page.slug);
   const [summary, setSummary] = useState(page.summary);
+  const [tagsText, setTagsText] = useState(normalizePageTags(page.tags).join(", "));
   const [visibility, setVisibility] = useState<PageVisibility>(page.visibility);
   const [parentPath, setParentPath] = useState(page.path.slice(0, -1).join("/"));
   const [ownerLabel, setOwnerLabel] = useState(page.ownerLabel);
@@ -343,6 +345,7 @@ export function AdminPageEditorForm({
   const wasExpired = useRef(false);
   const missedHeartbeats = useRef(0);
   const signInHref = `/admin/sign-in?next=${encodeURIComponent(`/admin/pages/${page.id}`)}`;
+  const canPublish = canApproveProposed;
 
   function markSessionExpired() {
     setSessionExpired(true);
@@ -429,6 +432,7 @@ export function AdminPageEditorForm({
       title,
       slug,
       summary,
+      tags: normalizePageTags(tagsText),
       visibility,
       parentPath,
       ownerLabel,
@@ -529,6 +533,9 @@ export function AdminPageEditorForm({
       if (typeof data.title === "string") setTitle(data.title);
       if (typeof data.slug === "string") setSlug(data.slug);
       if (typeof data.summary === "string") setSummary(data.summary);
+      if (Array.isArray(data.tags) || typeof data.tags === "string") {
+        setTagsText(normalizePageTags(data.tags).join(", "));
+      }
       if (data.visibility === "public" || data.visibility === "staff") setVisibility(data.visibility);
       if (typeof data.parentPath === "string") setParentPath(data.parentPath);
       if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
@@ -742,6 +749,7 @@ export function AdminPageEditorForm({
           title,
           slug,
           summary,
+          tags: normalizePageTags(tagsText),
           visibility,
           status,
           parentPath: parentPath ? parentPath.split("/") : [],
@@ -755,7 +763,7 @@ export function AdminPageEditorForm({
           showSummary,
           showPrintButton,
           nextReviewDate,
-          publishAt: publishAt.trim() || null,
+          ...(canPublish ? { publishAt: publishAt.trim() || null } : {}),
         }),
       });
       if (response.status === 401) {
@@ -894,7 +902,7 @@ export function AdminPageEditorForm({
               >
                 {busy === "proposed" ? "Saving…" : "Save proposal"}
               </button>
-              {canApproveProposed ? (
+              {canPublish ? (
                 <button
                   className="button"
                   disabled={lifecycleBusy || isLocked}
@@ -915,24 +923,39 @@ export function AdminPageEditorForm({
               >
                 {busy === "proposed" ? "Submitting…" : "Submit for review"}
               </button>
-              <button
-                className="button"
-                disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
-                onClick={() => submit("published")}
-                type="button"
-              >
-                {busy === "published" ? "Publishing..." : "Save & publish"}
-              </button>
+              {canPublish ? (
+                <button
+                  className="button"
+                  disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                  onClick={() => submit("published")}
+                  type="button"
+                >
+                  {busy === "published" ? "Publishing..." : "Save & publish"}
+                </button>
+              ) : null}
             </>
           ) : (
-            <button
-              className="button"
-              disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
-              onClick={() => submit("published")}
-              type="button"
-            >
-              {busy === "published" ? "Saving..." : "Save changes"}
-            </button>
+            <>
+              {canPublish ? (
+                <button
+                  className="button"
+                  disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                  onClick={() => submit("published")}
+                  type="button"
+                >
+                  {busy === "published" ? "Saving..." : "Save changes"}
+                </button>
+              ) : (
+                <button
+                  className="button"
+                  disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                  onClick={() => submit("proposed")}
+                  type="button"
+                >
+                  {busy === "proposed" ? "Submitting…" : "Submit changes for review"}
+                </button>
+              )}
+            </>
           )}
           <ActionOverflowMenu
             disabled={lifecycleBusy || isLocked}
@@ -1054,6 +1077,15 @@ export function AdminPageEditorForm({
           <label>
             <span className="meta">Slug</span>
             <input className="input" onChange={(event) => setSlug(event.target.value)} value={slug} />
+          </label>
+          <label>
+            <span className="meta">Tags / keywords</span>
+            <input
+              className="input"
+              onChange={(event) => setTagsText(event.target.value)}
+              placeholder="visa, deadlines, assistantship"
+              value={tagsText}
+            />
           </label>
           <div className="summary-field">
             <label>
@@ -1197,15 +1229,17 @@ export function AdminPageEditorForm({
               value={nextReviewDate || ""}
             />
           </label>
-          <label>
-            <span className="meta">Schedule publish (optional)</span>
-            <input
-              className="input"
-              onChange={(event) => setPublishAt(event.target.value)}
-              type="datetime-local"
-              value={publishAt ? publishAt.slice(0, 16) : ""}
-            />
-          </label>
+          {canPublish ? (
+            <label>
+              <span className="meta">Schedule publish (optional)</span>
+              <input
+                className="input"
+                onChange={(event) => setPublishAt(event.target.value)}
+                type="datetime-local"
+                value={publishAt ? publishAt.slice(0, 16) : ""}
+              />
+            </label>
+          ) : null}
           {verifiedAt && (
             <p className="meta" style={{ color: "var(--success)" }}>
               ✓ Verified on {formatTimestamp(verifiedAt)}{verifiedBy ? ` by ${verifiedBy}` : ""}
@@ -1276,6 +1310,7 @@ export function AdminPageEditorForm({
           <summary className="editor-details__summary">Revision history</summary>
           <div className="editor-details__body">
             <PageHistoryPanel
+              canPublish={canPublish}
               isLocked={isLocked}
               kbSlug={kb.slug}
               onRestored={() => window.location.reload()}

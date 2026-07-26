@@ -2,18 +2,26 @@
 
 import { useState } from "react";
 import { FileUploadPicker } from "@/components/FileUploadPicker";
-import type { AssetUsage, AssetVersion } from "@/lib/types";
+import type { Asset, AssetUsage, AssetVersion } from "@/lib/types";
 
 export function AdminAssetDetailPanel({
   assetId,
+  assetAltText,
+  assetDescription,
   assetStatus: initialStatus,
+  assetTags,
+  assetType,
   canDelete,
   versions: initialVersions,
   usages: initialUsages,
   publicUrl: initialPublicUrl,
 }: {
   assetId: string;
+  assetAltText: string;
+  assetDescription: string;
   assetStatus: string;
+  assetTags: string[];
+  assetType: Asset["assetType"];
   canDelete: boolean;
   versions: AssetVersion[];
   usages: AssetUsage[];
@@ -23,8 +31,12 @@ export function AdminAssetDetailPanel({
   const [usages, setUsages] = useState(initialUsages);
   const [assetStatus, setAssetStatus] = useState(initialStatus);
   const [publicUrl, setPublicUrl] = useState(initialPublicUrl);
+  const [description, setDescription] = useState(assetDescription);
+  const [altText, setAltText] = useState(assetAltText);
+  const [tagsText, setTagsText] = useState(assetTags.join(", "));
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [metadataBusy, setMetadataBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -176,6 +188,36 @@ export function AdminAssetDetailPanel({
     }
   }
 
+  async function handleSaveMetadata(event: React.FormEvent) {
+    event.preventDefault();
+    setMetadataBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/assets/${assetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description,
+          altText: assetType === "image" ? altText : undefined,
+          tags: tagsText,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "Could not update metadata.");
+      }
+      setDescription(data.asset?.description ?? description);
+      setAltText(data.asset?.altText ?? altText);
+      setTagsText(Array.isArray(data.asset?.tags) ? data.asset.tags.join(", ") : tagsText);
+      setMessage("Asset metadata updated.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update metadata.");
+    } finally {
+      setMetadataBusy(false);
+    }
+  }
+
   return (
     <div className="import-grid">
       <section className="card">
@@ -261,19 +303,75 @@ export function AdminAssetDetailPanel({
         )}
       </section>
 
+      <section className="card">
+        <h2>Metadata</h2>
+        <p className="meta">Use tags to group assets by program, workflow, audience, or content type.</p>
+        <form className="form" onSubmit={handleSaveMetadata}>
+          <label>
+            <span className="meta">Description</span>
+            <textarea
+              className="input"
+              onChange={(event) => setDescription(event.target.value)}
+              rows={3}
+              value={description}
+            />
+          </label>
+          {assetType === "image" && (
+            <label>
+              <span className="meta">Default image alt text</span>
+              <input
+                className="input"
+                onChange={(event) => setAltText(event.target.value)}
+                value={altText}
+              />
+            </label>
+          )}
+          <label>
+            <span className="meta">Tags</span>
+            <input
+              className="input"
+              onChange={(event) => setTagsText(event.target.value)}
+              placeholder="forms, admissions, handbook"
+              value={tagsText}
+            />
+          </label>
+          <button className="button" disabled={metadataBusy} type="submit">
+            {metadataBusy ? "Saving..." : "Save metadata"}
+          </button>
+        </form>
+      </section>
+
       <aside className="card import-preview">
         <h2>Usage ({usages.length})</h2>
         {usages.length === 0 ? (
           <p className="meta">This asset is not referenced on any page yet.</p>
         ) : (
-          <ul className="import-outline">
-            {usages.map((usage, index) => (
-              <li key={`${usage.pageId}-${usage.usageType}-${index}`}>
-                <a href={`/admin/pages/${usage.pageId}`}>{usage.pageTitle}</a> ({usage.pageStatus}
-                ) — {usage.usageType.replace("_", " ")}
-              </li>
-            ))}
-          </ul>
+          <div className="table-wrap">
+            <table className="admin-table asset-usage-table">
+              <thead>
+                <tr>
+                  <th scope="col">Page</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Use</th>
+                  <th scope="col">Block</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usages.map((usage, index) => (
+                  <tr key={`${usage.pageId}-${usage.usageType}-${usage.blockId ?? index}`}>
+                    <td>
+                      <a href={`/admin/pages/${usage.pageId}`}>{usage.pageTitle}</a>
+                    </td>
+                    <td>{usage.pageStatus}</td>
+                    <td>{usage.usageType.replace(/_/g, " ")}</td>
+                    <td>
+                      {usage.blockId ? <code>{usage.blockId}</code> : <span className="meta">Related file</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         <h3>Version history</h3>

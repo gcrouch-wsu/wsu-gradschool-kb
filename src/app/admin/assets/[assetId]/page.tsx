@@ -39,10 +39,23 @@ export default async function AdminAssetDetailPage({
         {formatBytes(detail.asset.fileSizeBytes)} · Updated {formatDate(detail.asset.updatedDisplayDate)}
       </p>
       <p>{detail.asset.description}</p>
+      {detail.asset.tags && detail.asset.tags.length > 0 && (
+        <ul aria-label="Asset tags" className="tag-list">
+          {detail.asset.tags.map((tag) => (
+            <li key={tag}>
+              <span>{tag}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <AdminAssetDetailPanel
         assetId={assetId}
+        assetAltText={detail.asset.altText ?? ""}
+        assetDescription={detail.asset.description}
         assetStatus={detail.asset.status}
+        assetTags={detail.asset.tags ?? []}
+        assetType={detail.asset.assetType}
         canDelete={session.role === "owner" || session.role === "admin"}
         publicUrl={detail.publicUrl}
         usages={detail.usages}

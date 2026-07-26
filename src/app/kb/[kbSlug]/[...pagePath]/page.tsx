@@ -22,6 +22,7 @@ import {
 import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, mergeTheme, resolvePublicTheme, themeToCssVars } from "@/lib/kb-theme";
 import { loadSiteSettings } from "@/lib/db";
+import { normalizePageTags } from "@/lib/page-tags";
 import type { CSSProperties } from "react";
 import { isPageViewPrefetch, recordPageViewLater } from "@/lib/page-views";
 
@@ -131,6 +132,7 @@ export default async function KbArticlePage({
   );
 
   const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
+  const pageTags = normalizePageTags(page.tags);
   
   const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const effectiveTheme = resolvePublicTheme(kb.theme, baseTheme);
@@ -180,6 +182,15 @@ export default async function KbArticlePage({
           )}
           <h1>{page.title}</h1>
           {page.showSummary !== false && page.summary && <p className="lead">{page.summary}</p>}
+          {pageTags.length > 0 && (
+            <ul aria-label="Page tags" className="tag-list">
+              {pageTags.map((tag) => (
+                <li key={tag}>
+                  <Link href={`/search?q=${encodeURIComponent(tag)}`}>{tag}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="article-meta-row">
             <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
             {page.showPrintButton !== false && <PrintPdfButton />}

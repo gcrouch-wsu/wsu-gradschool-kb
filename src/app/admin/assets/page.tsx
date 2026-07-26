@@ -8,7 +8,7 @@ import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import { filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
 import { buildAdminAssetsQuery, parseAdminAssetsTab } from "@/lib/admin-assets-query";
 import { formatBytes, formatDate } from "@/lib/format";
-import { getAllAssetsForAdmin, getAllKbsForAdmin } from "@/lib/kb-store";
+import { getAllAssetsForAdmin, getAllKbsForAdmin, getAssetUsages } from "@/lib/kb-store";
 
 export default async function AdminAssetsPage({
   searchParams,
@@ -79,16 +79,23 @@ export default async function AdminAssetsPage({
   }
 
   const assets = await getAllAssetsForAdmin(selectedKb.id);
+  const assetsWithUsages = await Promise.all(
+    assets.map(async (asset) => ({ asset, usages: await getAssetUsages(asset.id) })),
+  );
 
-  const rows: AdminAssetLibraryRow[] = assets.map((asset) => ({
+  const rows: AdminAssetLibraryRow[] = assetsWithUsages.map(({ asset, usages }) => ({
     id: asset.id,
     title: asset.title,
     slug: asset.slug,
+    description: asset.description,
+    tags: asset.tags ?? [],
     assetType: asset.assetType,
     status: asset.status,
     fileSizeBytes: asset.fileSizeBytes,
     formattedSize: formatBytes(asset.fileSizeBytes),
     formattedDate: formatDate(asset.updatedDisplayDate),
+    usageCount: usages.length,
+    usagePages: [...new Set(usages.map((usage) => usage.pageTitle).filter(Boolean))].slice(0, 3),
     publicUrl:
       asset.status === "active" ? `/kb/${selectedKb.slug}/files/${asset.slug}` : undefined,
   }));

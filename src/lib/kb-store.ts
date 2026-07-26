@@ -50,6 +50,12 @@ import {
 import { assertPageSlugAllowed, slugify } from "@/lib/slug";
 import { isStaffVisiblePageStatus } from "@/lib/page-status";
 import { rewriteKbLinksInBlocks } from "@/lib/kb-link-rewrite";
+import {
+  formatAssetTagsForSearch,
+  formatPageTagsForSearch,
+  normalizeAssetTags,
+  normalizePageTags,
+} from "@/lib/page-tags";
 import type {
   Asset,
   AssetUsage,
@@ -765,6 +771,7 @@ export interface CreateManagedAssetInput {
   assetType: Asset["assetType"];
   title?: string;
   description?: string;
+  tags?: unknown;
 
   videoProvider?: Asset["videoProvider"];
   videoExternalId?: string | null;
@@ -778,6 +785,7 @@ export interface CreateImageAssetInput {
   mimeType: string;
   originalFilename: string;
   title?: string;
+  tags?: unknown;
 }
 
 async function persistNewAssetWithVersion(asset: Asset, version: AssetVersion): Promise<Asset> {
@@ -833,6 +841,7 @@ export async function createManagedAsset(input: CreateManagedAssetInput): Promis
     description:
       input.description?.trim() ||
       `Managed ${input.assetType} uploaded from ${input.originalFilename}.`,
+    tags: normalizeAssetTags(input.tags),
     assetType: input.assetType,
     mimeType: input.mimeType,
     fileSizeBytes: input.fileSizeBytes,
@@ -1358,8 +1367,9 @@ export async function searchKb(
   for (const page of pagesToSearch) {
     const titleScore = fieldScore(page.title, normalized, { exact: 100, prefix: 60, includes: 40 });
     const summaryScore = fieldScore(page.summary, normalized, { exact: 25, prefix: 25, includes: 25 });
+    const tagScore = fieldScore(formatPageTagsForSearch(page.tags), normalized, { exact: 45, prefix: 35, includes: 25 });
     const bodyScore = fieldScore(pageBodyText(page), normalized, { exact: 10, prefix: 10, includes: 10 });
-    const score = titleScore + summaryScore + bodyScore;
+    const score = titleScore + summaryScore + tagScore + bodyScore;
     if (score > 0) {
       scored.push({
         score,
@@ -1383,8 +1393,9 @@ export async function searchKb(
     }
     const titleScore = fieldScore(asset.title, normalized, { exact: 90, prefix: 50, includes: 30 });
     const descriptionScore = fieldScore(asset.description, normalized, { exact: 15, prefix: 15, includes: 15 });
+    const tagScore = fieldScore(formatAssetTagsForSearch(asset.tags), normalized, { exact: 35, prefix: 25, includes: 18 });
     const slugScore = fieldScore(asset.slug, normalized, { exact: 15, prefix: 15, includes: 15 });
-    const score = titleScore + descriptionScore + slugScore;
+    const score = titleScore + descriptionScore + tagScore + slugScore;
     if (score > 0) {
       scored.push({
         score,
@@ -1493,6 +1504,33 @@ export async function updateAssetAltText(assetId: string, altText: string): Prom
   return updated;
 }
 
+export async function updateAssetTags(assetId: string, tags: unknown): Promise<Asset> {
+  const normalizedId = normalizeRecordId(assetId);
+  const dataset = await getDataset();
+  const existing = dataset.assets.find((asset) => asset.id === normalizedId);
+  if (!existing) {
+    throw new Error("Asset not found.");
+  }
+
+  const updated: Asset = {
+    ...existing,
+    tags: normalizeAssetTags(tags),
+    updatedDisplayDate: new Date().toISOString().slice(0, 10),
+  };
+
+  if (isDatabaseEnabled()) {
+    await updateAssetRecord(updated);
+  } else {
+    const list = runtimeAssets();
+    const index = list.findIndex((asset) => asset.id === normalizedId);
+    if (index >= 0) {
+      list[index] = updated;
+    }
+  }
+
+  return updated;
+}
+
 export async function permanentlyDeletePage(pageId: string): Promise<void> {
   const normalizedId = normalizeRecordId(pageId);
   if (isDatabaseEnabled()) {
@@ -1575,6 +1613,7 @@ export interface CreatePageInput {
   slug?: string;
   parentPath?: string[];
   summary?: string;
+  tags?: unknown;
   visibility?: PageVisibility;
   status?: PageStatus;
   blocks: ContentBlock[];
@@ -1650,6 +1689,7 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     path: [...parentPath, slug],
     sortOrder: input.sortOrder ?? maxSiblingOrder + 10,
     summary: input.summary?.trim() ?? "",
+    tags: normalizePageTags(input.tags),
     status: input.status ?? "draft",
     visibility: input.visibility ?? "public",
     ownerLabel: input.ownerLabel?.trim() || kb.title,
@@ -1693,6 +1733,7 @@ export interface UpdatePageInput {
   slug?: string;
   parentPath?: string[];
   summary?: string;
+  tags?: unknown;
   visibility?: PageVisibility;
   status?: PageStatus;
   blocks: ContentBlock[];
@@ -1734,6 +1775,7 @@ function snapshotFromPage(page: KbPage): PageRevisionSnapshot {
     slug: page.slug,
     path: [...page.path],
     summary: page.summary,
+    tags: normalizePageTags(page.tags),
     status: page.status,
     visibility: page.visibility,
     ownerLabel: page.ownerLabel,
@@ -1857,6 +1899,7 @@ export async function updatePage(
           path: newPath,
           sortOrder: input.sortOrder ?? page.sortOrder,
           summary: input.summary?.trim() ?? "",
+          tags: input.tags === undefined ? page.tags : normalizePageTags(input.tags),
           status: input.status ?? page.status,
           visibility: input.visibility ?? page.visibility,
           ownerLabel: input.ownerLabel?.trim() ?? page.ownerLabel,
@@ -1955,6 +1998,7 @@ export async function restorePageRevision(revisionId: string, editorEmail: strin
       slug: revision.slug,
       parentPath: revision.path.slice(0, -1),
       summary: revision.summary,
+      tags: revision.tags ?? page.tags ?? [],
       visibility: revision.visibility,
       status: revision.status,
       blocks: revision.blocks,
