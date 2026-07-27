@@ -303,7 +303,7 @@ export function AdminPageEditorForm({
   kb: KnowledgeBase;
   page: KbPage;
   parentOptions: ParentOption[];
-  relatedPageOptions: Array<{ id: string; title: string; path: string }>;
+  relatedPageOptions: Array<{ id: string; title: string; path: string; status?: string }>;
   destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
   canApproveProposed?: boolean;
 }) {

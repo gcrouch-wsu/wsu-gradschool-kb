@@ -5733,6 +5733,73 @@ article ol ol ol {
   min-width: 16rem;
 }
 
+.related-pages-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.related-pages-editor__selected,
+.related-pages-editor__add {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.related-pages-editor__list {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.related-pages-editor__item {
+  align-items: center;
+  background: var(--wash);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.related-pages-editor__index {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.4rem;
+}
+
+.related-pages-editor__item-main {
+  display: grid;
+  flex: 1;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.related-pages-editor__item-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.related-pages-editor__item-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.2rem;
+}
+
+@media (max-width: 640px) {
+  .related-pages-editor__item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .related-pages-editor__item-actions {
+    margin-left: auto;
+  }
+}
+
 .kb-picker__chips {
   display: flex;
   flex-wrap: wrap;

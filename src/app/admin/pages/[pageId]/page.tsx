@@ -79,6 +79,7 @@ export default async function AdminEditPage({
       id: candidate.id,
       title: candidate.title,
       path: candidate.path.join("/"),
+      status: candidate.status,
     }));
 
   const destinationKbs = (await filterKbsForSession(session, await getAllKbsForAdmin())).map((candidate) => ({
