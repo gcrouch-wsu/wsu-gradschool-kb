@@ -56,6 +56,7 @@ import {
   normalizeAssetTags,
   normalizePageTags,
 } from "@/lib/page-tags";
+import { expandSearchQueryWithSynonyms } from "@/lib/search-synonyms";
 import type {
   Asset,
   AssetUsage,
@@ -1088,6 +1089,8 @@ export interface SearchKbOptions {
   includeAllKbs?: boolean;
   readableKbIds?: string[];
   staffKbIds?: string[] | null;
+  /** Exact case-insensitive tag facet (page/asset tags). */
+  tag?: string;
 }
 
 function blocksBodyText(blocks: ContentBlock[]): string {
@@ -1137,14 +1140,27 @@ interface ScoredResult {
   score: number;
 }
 
+function matchesTagFacet(tags: unknown, tag: string | undefined): boolean {
+  if (!tag) {
+    return true;
+  }
+  const needle = tag.trim().toLowerCase();
+  if (!needle) {
+    return true;
+  }
+  return normalizePageTags(tags).some((value) => value.toLowerCase() === needle);
+}
+
 export async function searchKb(
   kbId: string | undefined,
   query: string,
   includeStaff: boolean,
   options: SearchKbOptions = {},
 ): Promise<SearchResult[]> {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
+  const tagFacet = options.tag?.trim() ?? "";
+  const expandedQuery = expandSearchQueryWithSynonyms(query);
+  const normalized = expandedQuery.trim().toLowerCase();
+  if (!normalized && !tagFacet) {
     return [];
   }
 
@@ -1160,12 +1176,44 @@ export async function searchKb(
       ? safeTokens.map((t, i) => (i === safeTokens.length - 1 ? `${t}:*` : t)).join(" & ")
       : null;
 
-    if (!searchTokens) return [];
+    if (!searchTokens && !tagFacet) return [];
 
     const readableKbIds = [...new Set(options.readableKbIds ?? [])];
     const hasReadableScope = options.readableKbIds !== undefined;
     const staffKbIds = options.staffKbIds === null ? null : [...new Set(options.staffKbIds ?? [])];
     const includeAllKbs = Boolean(options.includeAllKbs);
+    const tagFilterPages = tagFacet
+      ? sql`AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_pages.tags, '[]'::jsonb)) AS tag
+          WHERE lower(tag) = ${tagFacet.toLowerCase()}
+        )`
+      : sql``;
+    const tagFilterAssets = tagFacet
+      ? sql`AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_assets.tags, '[]'::jsonb)) AS tag
+          WHERE lower(tag) = ${tagFacet.toLowerCase()}
+        )`
+      : sql``;
+    const pageTextMatch = searchTokens
+      ? sql`(search_vector @@ to_tsquery('english', ${searchTokens})
+             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))`
+      : sql`TRUE`;
+    const assetTextMatch = searchTokens
+      ? sql`(search_vector @@ to_tsquery('english', ${searchTokens})
+             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))`
+      : sql`TRUE`;
+    const pageRank = searchTokens
+      ? sql`(GREATEST(
+                ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
+                ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
+              ) * 1.2)`
+      : sql`1.0`;
+    const assetRank = searchTokens
+      ? sql`GREATEST(
+               ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
+               ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
+             )`
+      : sql`1.0`;
 
     const kbFilterPages = kbId
       ? includeAllKbs
@@ -1259,32 +1307,26 @@ export async function searchKb(
 
     const pageRows = await sql`
       SELECT id, title, summary, path, kb_id,
-             (GREATEST(
-                ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
-                ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
-              ) * 1.2) AS rank
+             ${pageRank} AS rank
       FROM kb_pages
-      WHERE (search_vector @@ to_tsquery('english', ${searchTokens})
-             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))
+      WHERE ${pageTextMatch}
       AND kb_pages.node_kind = 'page'
       ${kbFilterPages}
       ${pageVisibilityFilter}
+      ${tagFilterPages}
       ORDER BY rank DESC
       LIMIT 20
     `;
 
     const assetRows = await sql`
       SELECT id, title, description as summary, slug, home_kb_id as kb_id,
-             GREATEST(
-               ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
-               ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
-             ) AS rank
+             ${assetRank} AS rank
       FROM kb_assets
-      WHERE (search_vector @@ to_tsquery('english', ${searchTokens})
-             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))
+      WHERE ${assetTextMatch}
       AND status = 'active'
       AND asset_type = 'document'
       ${kbFilterAssets}
+      ${tagFilterAssets}
       ORDER BY rank DESC
       LIMIT 20
     `;
@@ -1371,11 +1413,18 @@ export async function searchKb(
   ).filter((page) => (page.nodeKind ?? "page") === "page");
 
   for (const page of pagesToSearch) {
+    if (!matchesTagFacet(page.tags, tagFacet)) {
+      continue;
+    }
     const titleScore = fieldScore(page.title, normalized, { exact: 100, prefix: 60, includes: 40 });
     const summaryScore = fieldScore(page.summary, normalized, { exact: 25, prefix: 25, includes: 25 });
     const tagScore = fieldScore(formatPageTagsForSearch(page.tags), normalized, { exact: 45, prefix: 35, includes: 25 });
     const bodyScore = fieldScore(pageBodyText(page), normalized, { exact: 10, prefix: 10, includes: 10 });
-    const score = titleScore + summaryScore + tagScore + bodyScore;
+    const score = normalized
+      ? titleScore + summaryScore + tagScore + bodyScore
+      : matchesTagFacet(page.tags, tagFacet)
+        ? 50
+        : 0;
     if (score > 0) {
       scored.push({
         score,
@@ -1394,6 +1443,9 @@ export async function searchKb(
     if (asset.status !== "active" || asset.assetType !== "document") {
       continue;
     }
+    if (!matchesTagFacet(asset.tags, tagFacet)) {
+      continue;
+    }
     if (!canReadStaffPages(asset.homeKbId) && !(await assetHasPublicPublishedUsage(asset))) {
       continue;
     }
@@ -1401,7 +1453,11 @@ export async function searchKb(
     const descriptionScore = fieldScore(asset.description, normalized, { exact: 15, prefix: 15, includes: 15 });
     const tagScore = fieldScore(formatAssetTagsForSearch(asset.tags), normalized, { exact: 35, prefix: 25, includes: 18 });
     const slugScore = fieldScore(asset.slug, normalized, { exact: 15, prefix: 15, includes: 15 });
-    const score = titleScore + descriptionScore + tagScore + slugScore;
+    const score = normalized
+      ? titleScore + descriptionScore + tagScore + slugScore
+      : matchesTagFacet(asset.tags, tagFacet)
+        ? 40
+        : 0;
     if (score > 0) {
       scored.push({
         score,

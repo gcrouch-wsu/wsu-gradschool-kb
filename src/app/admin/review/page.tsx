@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArchiveUnusedAssetsButton } from "@/components/ArchiveUnusedAssetsButton";
 import { ReviewProposedActions } from "@/components/ReviewProposedActions";
 import { ReviewSourcedScan } from "@/components/ReviewSourcedScan";
 import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
@@ -167,18 +168,21 @@ export default async function AdminReviewPage() {
         {review.unusedAssets.length === 0 ? (
           <p className="meta">Every active asset is referenced on at least one page.</p>
         ) : (
-          <ul className="import-outline">
-            {review.unusedAssets.map((asset) => (
-              <li key={asset.assetId}>
-                <Link href={`/admin/assets/${asset.assetId}`}>{asset.title}</Link>
-                <span className="meta">
-                  {" "}
-                  · {asset.slug}
-                  {asset.kbSlug ? ` · /kb/${asset.kbSlug}/files/${asset.slug}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ArchiveUnusedAssetsButton assets={review.unusedAssets} />
+            <ul className="import-outline">
+              {review.unusedAssets.map((asset) => (
+                <li key={asset.assetId}>
+                  <Link href={`/admin/assets/${asset.assetId}`}>{asset.title}</Link>
+                  <span className="meta">
+                    {" "}
+                    · {asset.slug}
+                    {asset.kbSlug ? ` · /kb/${asset.kbSlug}/files/${asset.slug}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
     </div>

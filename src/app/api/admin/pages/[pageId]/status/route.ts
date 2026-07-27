@@ -75,6 +75,7 @@ export async function PATCH(
   }
 
   try {
+    const previousStatus = existingPage?.status ?? "draft";
     const page = await updatePageStatus(pageId, status);
     await recordAuditEvent({
       session: guard.session,
@@ -94,6 +95,18 @@ export async function PATCH(
     });
     const kb = await getKbById(page.kbId);
     const url = kb ? `/kb/${kb.slug}/${page.path.join("/")}` : null;
+    if (kb && existingPage) {
+      const { notifyPageStatusChange } = await import("@/lib/page-notifications");
+      const host = new URL(request.url).origin;
+      await notifyPageStatusChange({
+        page,
+        previousStatus,
+        nextStatus: status,
+        actorEmail: guard.session.email,
+        kbTitle: kb.title,
+        pageUrl: `${host}/admin/pages/${page.id}`,
+      }).catch(() => {});
+    }
     return NextResponse.json({ ok: true, pageId: page.id, status: page.status, url });
   } catch (error) {
     logError(error, { route: "/api/admin/pages/[pageId]/status", action: "update_page_status", pageId, status });

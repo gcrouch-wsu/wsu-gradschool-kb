@@ -37,6 +37,7 @@ interface UpdateBody {
   publishAt?: unknown;
   linkUrl?: unknown;
   linkNewTab?: unknown;
+  relatedPageIds?: unknown;
 }
 
 function isValidTreeLinkDestination(value: string) {
@@ -96,6 +97,9 @@ export async function PATCH(
   const linkUrl =
     typeof body.linkUrl === "string" ? body.linkUrl.trim().slice(0, 500) : undefined;
   const linkNewTab = typeof body.linkNewTab === "boolean" ? body.linkNewTab : undefined;
+  const relatedPageIds = Array.isArray(body.relatedPageIds)
+    ? body.relatedPageIds.filter((id): id is string => typeof id === "string")
+    : undefined;
   const nextLinkUrl = linkUrl ?? existingPage?.linkUrl ?? "";
   const canPublish = guard.session.role === "owner" || guard.session.role === "admin";
 
@@ -175,6 +179,7 @@ export async function PATCH(
       publishAt,
       linkUrl,
       linkNewTab,
+      relatedPageIds,
     }, guard.session.email);
     await recordAuditEvent({
       session: guard.session,

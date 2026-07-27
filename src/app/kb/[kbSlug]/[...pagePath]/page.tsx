@@ -18,6 +18,7 @@ import {
   getKbById,
   getKbBySlug,
   getPageByPath,
+  getVisiblePagesForKb,
 } from "@/lib/kb-store";
 import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, mergeTheme, resolvePublicTheme, themeToCssVars } from "@/lib/kb-theme";
@@ -131,6 +132,18 @@ export default async function KbArticlePage({
     }),
   );
 
+  const visibleRelated = await getVisiblePagesForKb(kb.id, includeStaff);
+  const relatedById = new Map(visibleRelated.map((candidate) => [candidate.id, candidate]));
+  const relatedPageLinks = page.relatedPageIds
+    .map((relatedId) => relatedById.get(relatedId))
+    .filter((related): related is NonNullable<typeof related> => Boolean(related))
+    .filter((related) => (related.nodeKind ?? "page") === "page")
+    .map((related) => ({
+      id: related.id,
+      title: related.title,
+      href: `/kb/${kb.slug}/${related.path.join("/")}`,
+    }));
+
   const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
   const pageTags = normalizePageTags(page.tags);
   
@@ -209,6 +222,19 @@ export default async function KbArticlePage({
           </div>
 
           <PageBlocks blocks={page.blocks} />
+
+          {relatedPageLinks.length > 0 && (
+            <>
+              <h2>Next steps</h2>
+              <ul className="related-pages">
+                {relatedPageLinks.map((related) => (
+                  <li key={related.id}>
+                    <Link href={related.href}>{related.title}</Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {relatedFiles.length > 0 && (
             <>

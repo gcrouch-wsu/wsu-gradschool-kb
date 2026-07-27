@@ -613,6 +613,7 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 - Accessibility is publish-gate + axe smoke, not a completed WCAG certification.
 - Notes rail has no threaded resolve UI yet.
 - Editor framework migration (custom `contentEditable` → Lexical/ProseMirror) is planned, not started.
+  Phase 0 Lexical spike is available at `/admin/lexical-spike`; Phase 1 flow-surface swap is next.
 
 ## 10. Known limitations
 

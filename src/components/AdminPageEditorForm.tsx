@@ -294,12 +294,14 @@ export function AdminPageEditorForm({
   kb,
   page,
   parentOptions,
+  relatedPageOptions,
   destinationKbs,
   canApproveProposed = false,
 }: {
   kb: KnowledgeBase;
   page: KbPage;
   parentOptions: ParentOption[];
+  relatedPageOptions: Array<{ id: string; title: string; path: string }>;
   destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
   canApproveProposed?: boolean;
 }) {
@@ -312,6 +314,7 @@ export function AdminPageEditorForm({
   const [ownerLabel, setOwnerLabel] = useState(page.ownerLabel);
   const [contactEmail, setContactEmail] = useState(page.contactEmail);
   const [lastReviewedDate, setLastReviewedDate] = useState(page.lastReviewedDate);
+  const [relatedPageIds, setRelatedPageIds] = useState<string[]>(page.relatedPageIds ?? []);
   const [showToc, setShowToc] = useState(page.showToc);
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
@@ -439,6 +442,7 @@ export function AdminPageEditorForm({
       contactEmail,
       lastReviewedDate,
       nextReviewDate: overrides.nextReviewDate ?? nextReviewDate,
+      relatedPageIds,
       showToc,
       tocDepth,
       showSummary,
@@ -763,6 +767,7 @@ export function AdminPageEditorForm({
           showSummary,
           showPrintButton,
           nextReviewDate,
+          relatedPageIds,
           ...(canPublish ? { publishAt: publishAt.trim() || null } : {}),
         }),
       });
@@ -1087,6 +1092,36 @@ export function AdminPageEditorForm({
               value={tagsText}
             />
           </label>
+          <fieldset className="fieldset" style={{ border: "none", padding: 0, margin: 0 }}>
+            <legend className="meta">Related pages / next steps</legend>
+            <p className="meta">Shown to readers as next steps after this page.</p>
+            <div style={{ display: "grid", gap: "0.35rem", maxHeight: "12rem", overflow: "auto" }}>
+              {relatedPageOptions.length === 0 ? (
+                <p className="meta">No other pages in this knowledge base yet.</p>
+              ) : (
+                relatedPageOptions.map((option) => {
+                  const checked = relatedPageIds.includes(option.id);
+                  return (
+                    <label key={option.id} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+                      <input
+                        checked={checked}
+                        onChange={() => {
+                          setRelatedPageIds((current) =>
+                            checked ? current.filter((id) => id !== option.id) : [...current, option.id],
+                          );
+                        }}
+                        type="checkbox"
+                      />
+                      <span>
+                        {option.title}
+                        <span className="meta"> /{option.path}</span>
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </fieldset>
           <div className="summary-field">
             <label>
               <span className="meta">

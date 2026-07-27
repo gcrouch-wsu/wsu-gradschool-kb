@@ -1,7 +1,18 @@
 # Editor framework migration plan (FB-09 / FB-29)
 
-Status: **planned, not started.** This is a dedicated post-launch effort.
-Do not mix Lexical/ProseMirror work into unrelated feature PRs.
+Status: **Phase 0 spike landed** (2026-07-26). Proceed to Phase 1.
+
+## Phase 0 findings
+
+- Stack: Lexical + `@lexical/react` / rich-text / list / link / html.
+- Spike route: `/admin/lexical-spike` (`LexicalSpikeEditor`).
+- Round-trip path: `ContentBlock[]` → `blocksToDocumentHtml` → Lexical `$generateNodesFromDOM`
+  → `$generateHtmlFromNodes` → `documentHtmlToBlocks`. Unit coverage in
+  `src/lib/lexical-spike.test.ts`.
+- Decision: **proceed with Lexical** for Phase 1 (flow surface). Nested surfaces
+  (table cells, Info boxes) stay on the current editors until Phase 2.
+- Remaining Phase 0 manual checks before calling Phase 1 done: paste-from-Word and Tab
+  list nesting on the spike route against fixtures in `tests/editor`.
 
 ## Goal
 

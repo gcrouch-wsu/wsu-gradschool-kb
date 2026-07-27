@@ -129,6 +129,18 @@ export function AdminAssetDetailPanel({
   }
 
   async function handleActivate(versionId: string) {
+    const impact =
+      usages.length === 0
+        ? "This asset is not referenced on any pages."
+        : `This will update ${usages.length} page reference${usages.length === 1 ? "" : "s"}:\n` +
+          usages
+            .slice(0, 8)
+            .map((usage) => `- ${usage.pageTitle} (${usage.usageType})`)
+            .join("\n") +
+          (usages.length > 8 ? `\n…and ${usages.length - 8} more` : "");
+    if (!window.confirm(`Activate this version at the same public URL?\n\n${impact}`)) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);

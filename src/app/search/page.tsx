@@ -4,9 +4,11 @@ import { headers } from "next/headers";
 import {
   getAssetById,
   getKbById,
+  getVisiblePagesForKb,
   searchKb,
   type SearchResult,
 } from "@/lib/kb-store";
+import { suggestDidYouMean } from "@/lib/search-suggest";
 import { globalSearchScope } from "@/lib/search-scope";
 import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 
@@ -65,22 +67,47 @@ async function assetHref(result: Extract<SearchResult, { type: "asset" }>) {
 export default async function GlobalSearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; tag?: string }>;
 }) {
-  const { q = "" } = await searchParams;
+  const { q = "", tag = "" } = await searchParams;
   const trimmedQuery = q.trim();
+  const trimmedTag = tag.trim();
+  const hasSearch = Boolean(trimmedQuery || trimmedTag);
 
   let rateLimited = false;
-  if (trimmedQuery) {
+  if (hasSearch) {
     const clientKey = clientKeyFromHeaders(await headers());
     rateLimited = !(await rateLimit(`search:${clientKey}`, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS)).allowed;
   }
 
   const scope = await searchScope();
-  const results = rateLimited || !trimmedQuery
+  const results = rateLimited || !hasSearch
     ? []
-    : await searchKb(undefined, q, scope.includeStaff, scope.options);
+    : await searchKb(undefined, trimmedQuery, scope.includeStaff, {
+        ...scope.options,
+        tag: trimmedTag || undefined,
+      });
   const groups = await resolveResults(results);
+
+  let didYouMean: string | null = null;
+  if (!rateLimited && trimmedQuery && results.length === 0) {
+    const titles: string[] = [];
+    if (scope.options.includeAllKbs) {
+      const { getAllKbsForAdmin } = await import("@/lib/kb-store");
+      for (const kb of await getAllKbsForAdmin()) {
+        for (const page of await getVisiblePagesForKb(kb.id, true)) {
+          titles.push(page.title);
+        }
+      }
+    } else {
+      for (const kbId of scope.options.readableKbIds ?? []) {
+        for (const page of await getVisiblePagesForKb(kbId, scope.includeStaff)) {
+          titles.push(page.title);
+        }
+      }
+    }
+    didYouMean = suggestDidYouMean(trimmedQuery, titles);
+  }
 
   return (
     <div className="page-shell">
@@ -97,24 +124,55 @@ export default async function GlobalSearchPage({
             type="search"
           />
         </label>
+        <label>
+          <span className="meta">Tag facet</span>
+          <input
+            className="input"
+            defaultValue={tag}
+            name="tag"
+            placeholder="e.g. visa"
+            type="search"
+          />
+        </label>
         <button className="button" type="submit" style={{ alignSelf: "end" }}>
           Search
         </button>
       </form>
+
+      {trimmedTag ? (
+        <p className="meta">
+          Filtering by tag <strong>{trimmedTag}</strong>
+          {" · "}
+          <Link href={trimmedQuery ? `/search?q=${encodeURIComponent(trimmedQuery)}` : "/search"}>Clear tag</Link>
+        </p>
+      ) : null}
 
       <h2>Results</h2>
       {rateLimited ? (
         <p className="empty">Too many searches in a short time. Please wait a moment and try again.</p>
       ) : (
         <>
-          {trimmedQuery && results.length > 0 && (
+          {hasSearch && results.length > 0 && (
             <p className="meta">
-              {results.length} result{results.length === 1 ? "" : "s"} for &ldquo;{trimmedQuery}&rdquo;
+              {results.length} result{results.length === 1 ? "" : "s"}
+              {trimmedQuery ? <> for &ldquo;{trimmedQuery}&rdquo;</> : null}
+              {trimmedTag ? <> tagged &ldquo;{trimmedTag}&rdquo;</> : null}
             </p>
           )}
-          {!trimmedQuery && <p className="empty">Enter a search term to find pages and files.</p>}
-          {trimmedQuery && results.length === 0 && (
-            <p className="empty">No results found for &ldquo;{trimmedQuery}&rdquo;.</p>
+          {!hasSearch && <p className="empty">Enter a search term or tag to find pages and files.</p>}
+          {hasSearch && results.length === 0 && (
+            <p className="empty">
+              No results found
+              {trimmedQuery ? <> for &ldquo;{trimmedQuery}&rdquo;</> : null}
+              {trimmedTag ? <> with tag &ldquo;{trimmedTag}&rdquo;</> : null}.
+              {didYouMean ? (
+                <>
+                  {" "}
+                  Did you mean{" "}
+                  <Link href={`/search?q=${encodeURIComponent(didYouMean)}`}>{didYouMean}</Link>?
+                </>
+              ) : null}
+            </p>
           )}
         </>
       )}
