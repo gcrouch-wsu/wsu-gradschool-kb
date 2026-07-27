@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { ArticlePageNav } from "@/components/ArticlePageNav";
+import { GuidedTour } from "@/components/GuidedTour";
 import { KbSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
@@ -194,6 +195,23 @@ export default async function KbArticlePage({
             </p>
           )}
           <h1>{page.title}</h1>
+          <GuidedTour
+            steps={[
+              {
+                title: "Browse the section tree",
+                body: "Use the left navigation to move between pages in this knowledge base without losing context.",
+              },
+              {
+                title: "Search this KB",
+                body: "The search box above the tree finds pages and files in this knowledge base, including tag filters.",
+              },
+              {
+                title: "Was this helpful?",
+                body: "Scroll to the bottom on public pages to leave quick feedback that helps editors prioritize updates.",
+              },
+            ]}
+            tourId={`kb-reader:${kb.slug}`}
+          />
           {page.showSummary !== false && page.summary && <p className="lead">{page.summary}</p>}
           {pageTags.length > 0 && (
             <ul aria-label="Page tags" className="tag-list">
@@ -224,16 +242,18 @@ export default async function KbArticlePage({
           <PageBlocks blocks={page.blocks} />
 
           {relatedPageLinks.length > 0 && (
-            <>
-              <h2>Next steps</h2>
-              <ul className="related-pages">
+            <section className="next-steps-panel" aria-labelledby="next-steps-heading">
+              <h2 id="next-steps-heading">{page.nextStepsHeading?.trim() || "Next steps"}</h2>
+              <p className="meta">{page.nextStepsIntro?.trim() || "Continue with these related pages."}</p>
+              <div className="next-steps-grid">
                 {relatedPageLinks.map((related) => (
-                  <li key={related.id}>
-                    <Link href={related.href}>{related.title}</Link>
-                  </li>
+                  <Link className="next-steps-card" href={related.href} key={related.id}>
+                    <strong>{related.title}</strong>
+                    <span className="meta">Open article →</span>
+                  </Link>
                 ))}
-              </ul>
-            </>
+              </div>
+            </section>
           )}
 
           {relatedFiles.length > 0 && (

@@ -83,7 +83,7 @@ describe("PATCH /api/admin/pages/[pageId]/status", () => {
     const response = await patch("published", "editor");
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({
-      message: "Only an owner or admin can publish pages. Submit the page for review instead.",
+      message: "Only an owner, admin, or KB manager can publish pages. Submit the page for review instead.",
     });
     expect(updateSpy).not.toHaveBeenCalled();
   });

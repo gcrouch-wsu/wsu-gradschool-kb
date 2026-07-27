@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AltTextDialog } from "@/components/AltTextDialog";
+import { ExcerptPickerDialog } from "@/components/ExcerptPickerDialog";
 import { DocumentToolbar } from "@/components/DocumentToolbar";
 import { ExcerptSectionEditor } from "@/components/ExcerptSectionEditor";
 import { SourcedSectionEditor } from "@/components/SourcedSectionEditor";
@@ -89,6 +90,7 @@ export function PageDocumentEditor({
   const [viewMode, setViewMode] = useState<"visual" | "html">("visual");
   const [htmlDraft, setHtmlDraft] = useState("");
   const [visualEpoch, setVisualEpoch] = useState(0);
+  const [excerptPickerOpen, setExcerptPickerOpen] = useState(false);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -311,6 +313,10 @@ export function PageDocumentEditor({
   }
 
   function addExcerpt() {
+    setExcerptPickerOpen(true);
+  }
+
+  function insertExcerptFromPicker(sourcePageId: string) {
     const next = [
       ...sections,
       {
@@ -318,11 +324,12 @@ export function PageDocumentEditor({
         block: {
           blockId: newBlockId(),
           type: "excerpt" as const,
-          sourcePageId: "",
+          sourcePageId,
         },
       },
     ];
     emitChange(next);
+    setExcerptPickerOpen(false);
   }
 
   function updateExcerptSection(index: number, block: ContentBlock) {
@@ -419,6 +426,14 @@ export function PageDocumentEditor({
           kbSlug={kbSlug}
           onClose={() => setMediaPickerOpen(false)}
           onInsert={insertBlockFromPicker}
+        />
+      )}
+
+      {excerptPickerOpen && (
+        <ExcerptPickerDialog
+          kbId={kbId}
+          onClose={() => setExcerptPickerOpen(false)}
+          onSelect={(sourcePageId) => insertExcerptFromPicker(sourcePageId)}
         />
       )}
 

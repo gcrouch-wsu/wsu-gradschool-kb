@@ -43,7 +43,7 @@ export default function AdminSettingsPage() {
   const [dbEnabled, setDbEnabled] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [activeTab, setActiveTab] = useState<"general" | "branding" | "home" | "styling" | "ai">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "branding" | "home" | "styling" | "ai" | "search">("general");
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -125,6 +125,38 @@ export default function AdminSettingsPage() {
     setSaved(false);
   }
 
+  function updateSynonymGroup(index: number, value: string) {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const nextGroups = [...prev.searchSynonymGroups];
+      nextGroups[index] = value
+        .split(",")
+        .map((term) => term.trim())
+        .filter(Boolean);
+      return { ...prev, searchSynonymGroups: nextGroups };
+    });
+    setSaved(false);
+  }
+
+  function addSynonymGroup() {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      return { ...prev, searchSynonymGroups: [...prev.searchSynonymGroups, []] };
+    });
+    setSaved(false);
+  }
+
+  function removeSynonymGroup(index: number) {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        searchSynonymGroups: prev.searchSynonymGroups.filter((_, groupIndex) => groupIndex !== index),
+      };
+    });
+    setSaved(false);
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!settings) return;
@@ -194,6 +226,13 @@ export default function AdminSettingsPage() {
           type="button"
         >
           AI Prompt
+        </button>
+        <button
+          className={`tab-button ${activeTab === "search" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("search")}
+          type="button"
+        >
+          Search
         </button>
       </div>
 
@@ -740,6 +779,55 @@ export default function AdminSettingsPage() {
           <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
             <button className="button" disabled={saving || !dbEnabled} type="submit">
               {saving ? "Saving…" : "Save AI prompts"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {settings && activeTab === "search" && (
+        <form className="form form--wide" onSubmit={handleSave}>
+          <section className="card">
+            <h2>Search synonym groups</h2>
+            <p className="meta">
+              Terms in the same group are treated as equivalent during search (for example{" "}
+              <code>visa, i-20, immigration</code>). Built-in synonyms still apply; these groups extend them
+              site-wide.
+            </p>
+            {settings.searchSynonymGroups.length === 0 ? (
+              <p className="meta">No custom synonym groups yet.</p>
+            ) : (
+              settings.searchSynonymGroups.map((group, index) => (
+                <div className="field-group" key={index}>
+                  <label>
+                    <span className="meta">Group {index + 1}</span>
+                    <div className="link-row">
+                      <input
+                        className="input"
+                        onChange={(event) => updateSynonymGroup(index, event.target.value)}
+                        placeholder="term one, term two, term three"
+                        value={group.join(", ")}
+                      />
+                      <button
+                        aria-label={`Remove synonym group ${index + 1}`}
+                        className="icon-button icon-button--danger"
+                        onClick={() => removeSynonymGroup(index)}
+                        type="button"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </label>
+                </div>
+              ))
+            )}
+            <button className="button button--small button--ghost" onClick={addSynonymGroup} type="button">
+              + Add synonym group
+            </button>
+          </section>
+
+          <div className="admin-actions settings-form__actions" style={{ marginTop: "2rem" }}>
+            <button className="button" disabled={saving || !dbEnabled} type="submit">
+              {saving ? "Saving…" : "Save search settings"}
             </button>
           </div>
         </form>

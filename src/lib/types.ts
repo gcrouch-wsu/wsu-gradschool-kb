@@ -82,6 +82,9 @@ export interface KbPage {
 
   showSummary?: boolean;
   showPrintButton?: boolean;
+  reviewAssigneeEmail?: string;
+  /** Days before next review date to flag SLA risk (optional override). */
+  reviewSlaDays?: number | null;
   lockedBy?: string | null;
   lockedAt?: string | null;
   aliasTargetId?: string | null;
@@ -92,6 +95,9 @@ export interface KbPage {
 
   /** ISO datetime; cron publishes the draft when due (gate must still pass). */
   publishAt?: string | null;
+
+  nextStepsHeading?: string;
+  nextStepsIntro?: string;
 
   nodeKind?: PageNodeKind;
   linkUrl?: string;
@@ -121,6 +127,10 @@ export interface PageRevisionSnapshot {
   showSummary?: boolean;
   showPrintButton?: boolean;
   nextReviewDate?: string | null;
+  reviewAssigneeEmail?: string;
+  reviewSlaDays?: number | null;
+  nextStepsHeading?: string;
+  nextStepsIntro?: string;
   nodeKind?: PageNodeKind;
   linkUrl?: string;
   linkNewTab?: boolean;
@@ -317,7 +327,7 @@ export interface KbRedirect {
   reason: string;
 }
 
-export type UserRole = "owner" | "admin" | "editor" | "viewer";
+export type UserRole = "owner" | "admin" | "manager" | "editor" | "viewer";
 
 export interface User {
   id: string;
@@ -334,7 +344,30 @@ export interface KbUserAssignment {
   userId: string;
 }
 
-export type AuditEntityType = "page" | "asset" | "kb" | "import" | "redirect" | "user" | "settings" | "search";
+export type WebhookEvent =
+  | "page.published"
+  | "page.proposed"
+  | "page.draft"
+  | "review.overdue"
+  | "asset.replaced";
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  secret: string;
+  events: WebhookEvent[];
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface PageServerDraft {
+  pageId: string;
+  authorUserId: string;
+  snapshot: PageRevisionSnapshot;
+  updatedAt: string;
+}
+
+export type AuditEntityType = "page" | "asset" | "kb" | "import" | "redirect" | "user" | "settings" | "search" | "webhook";
 
 export interface AuditLogEntry {
   id: string;

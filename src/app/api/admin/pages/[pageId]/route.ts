@@ -14,6 +14,7 @@ import { logError } from "@/lib/log";
 import { normalizePageTags } from "@/lib/page-tags";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
+import { canPublishInKb } from "@/lib/auth-roles";
 import type { ContentBlock, PageStatus, PageVisibility } from "@/lib/types";
 
 interface UpdateBody {
@@ -34,10 +35,14 @@ interface UpdateBody {
   showSummary?: unknown;
   showPrintButton?: unknown;
   nextReviewDate?: unknown;
+  reviewAssigneeEmail?: unknown;
+  reviewSlaDays?: unknown;
   publishAt?: unknown;
   linkUrl?: unknown;
   linkNewTab?: unknown;
   relatedPageIds?: unknown;
+  nextStepsHeading?: unknown;
+  nextStepsIntro?: unknown;
 }
 
 function isValidTreeLinkDestination(value: string) {
@@ -78,6 +83,14 @@ export async function PATCH(
   const showSummary = typeof body.showSummary === "boolean" ? body.showSummary : undefined;
   const showPrintButton = typeof body.showPrintButton === "boolean" ? body.showPrintButton : undefined;
   const nextReviewDate = typeof body.nextReviewDate === "string" ? body.nextReviewDate : undefined;
+  const reviewAssigneeEmail =
+    typeof body.reviewAssigneeEmail === "string" ? body.reviewAssigneeEmail.trim().slice(0, 200) : undefined;
+  const reviewSlaDays =
+    typeof body.reviewSlaDays === "number" && Number.isFinite(body.reviewSlaDays)
+      ? Math.min(365, Math.max(1, Math.round(body.reviewSlaDays)))
+      : body.reviewSlaDays === null
+        ? null
+        : undefined;
   const publishAt =
     body.publishAt === null
       ? null
@@ -100,8 +113,12 @@ export async function PATCH(
   const relatedPageIds = Array.isArray(body.relatedPageIds)
     ? body.relatedPageIds.filter((id): id is string => typeof id === "string")
     : undefined;
+  const nextStepsHeading =
+    typeof body.nextStepsHeading === "string" ? body.nextStepsHeading.trim().slice(0, 120) : undefined;
+  const nextStepsIntro =
+    typeof body.nextStepsIntro === "string" ? body.nextStepsIntro.trim().slice(0, 240) : undefined;
   const nextLinkUrl = linkUrl ?? existingPage?.linkUrl ?? "";
-  const canPublish = guard.session.role === "owner" || guard.session.role === "admin";
+  const canPublish = await canPublishInKb(guard.session, existingPage!.kbId);
 
   if (!title) {
     return NextResponse.json({ message: "Title is required." }, { status: 400 });
@@ -176,10 +193,14 @@ export async function PATCH(
       showSummary,
       showPrintButton,
       nextReviewDate,
+      reviewAssigneeEmail,
+      reviewSlaDays,
       publishAt,
       linkUrl,
       linkNewTab,
       relatedPageIds,
+      nextStepsHeading,
+      nextStepsIntro,
     }, guard.session.email);
     await recordAuditEvent({
       session: guard.session,

@@ -5,6 +5,7 @@ import { getAssetStatusById, getKbById, getPageByIdForAdmin, updatePageStatus } 
 import { logError } from "@/lib/log";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
+import { canPublishInKb } from "@/lib/auth-roles";
 import type { PageStatus } from "@/lib/types";
 
 interface StatusBody {
@@ -45,9 +46,9 @@ export async function PATCH(
     );
   }
 
-  if (status === "published" && guard.session.role !== "owner" && guard.session.role !== "admin") {
+  if (status === "published" && !(await canPublishInKb(guard.session, existingPage!.kbId))) {
     return NextResponse.json(
-      { message: "Only an owner or admin can publish pages. Submit the page for review instead." },
+      { message: "Only an owner, admin, or KB manager can publish pages. Submit the page for review instead." },
       { status: 403 },
     );
   }

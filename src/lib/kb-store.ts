@@ -57,6 +57,8 @@ import {
   normalizePageTags,
 } from "@/lib/page-tags";
 import { expandSearchQueryWithSynonyms } from "@/lib/search-synonyms";
+import { rankFuzzyCandidates } from "@/lib/search-fuzzy";
+import { loadSiteSettings } from "@/lib/db";
 import type {
   Asset,
   AssetUsage,
@@ -1089,7 +1091,9 @@ export interface SearchKbOptions {
   includeAllKbs?: boolean;
   readableKbIds?: string[];
   staffKbIds?: string[] | null;
-  /** Exact case-insensitive tag facet (page/asset tags). */
+  /** Exact case-insensitive tag facets (all must match). */
+  tags?: string[];
+  /** @deprecated Use tags — single tag facet kept for compatibility. */
   tag?: string;
 }
 
@@ -1140,15 +1144,20 @@ interface ScoredResult {
   score: number;
 }
 
-function matchesTagFacet(tags: unknown, tag: string | undefined): boolean {
-  if (!tag) {
+function normalizeSearchTags(options: SearchKbOptions): string[] {
+  const tags = [...(options.tags ?? [])];
+  if (options.tag?.trim()) {
+    tags.push(options.tag.trim());
+  }
+  return [...new Set(tags.map((tag) => tag.toLowerCase()).filter(Boolean))];
+}
+
+function matchesTagFacets(tags: unknown, requiredTags: string[]): boolean {
+  if (requiredTags.length === 0) {
     return true;
   }
-  const needle = tag.trim().toLowerCase();
-  if (!needle) {
-    return true;
-  }
-  return normalizePageTags(tags).some((value) => value.toLowerCase() === needle);
+  const pageTags = normalizePageTags(tags).map((tag) => tag.toLowerCase());
+  return requiredTags.every((required) => pageTags.includes(required));
 }
 
 export async function searchKb(
@@ -1157,10 +1166,11 @@ export async function searchKb(
   includeStaff: boolean,
   options: SearchKbOptions = {},
 ): Promise<SearchResult[]> {
-  const tagFacet = options.tag?.trim() ?? "";
-  const expandedQuery = expandSearchQueryWithSynonyms(query);
+  const tagFacets = normalizeSearchTags(options);
+  const settings = await loadSiteSettings();
+  const expandedQuery = expandSearchQueryWithSynonyms(query, settings.searchSynonymGroups);
   const normalized = expandedQuery.trim().toLowerCase();
-  if (!normalized && !tagFacet) {
+  if (!normalized && tagFacets.length === 0) {
     return [];
   }
 
@@ -1176,24 +1186,34 @@ export async function searchKb(
       ? safeTokens.map((t, i) => (i === safeTokens.length - 1 ? `${t}:*` : t)).join(" & ")
       : null;
 
-    if (!searchTokens && !tagFacet) return [];
+    if (!searchTokens && tagFacets.length === 0) return [];
 
     const readableKbIds = [...new Set(options.readableKbIds ?? [])];
     const hasReadableScope = options.readableKbIds !== undefined;
     const staffKbIds = options.staffKbIds === null ? null : [...new Set(options.staffKbIds ?? [])];
     const includeAllKbs = Boolean(options.includeAllKbs);
-    const tagFilterPages = tagFacet
-      ? sql`AND EXISTS (
-          SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_pages.tags, '[]'::jsonb)) AS tag
-          WHERE lower(tag) = ${tagFacet.toLowerCase()}
-        )`
-      : sql``;
-    const tagFilterAssets = tagFacet
-      ? sql`AND EXISTS (
-          SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_assets.tags, '[]'::jsonb)) AS tag
-          WHERE lower(tag) = ${tagFacet.toLowerCase()}
-        )`
-      : sql``;
+    const tagFilterPages =
+      tagFacets.length > 0
+        ? sql`AND (
+            SELECT COUNT(DISTINCT lower(required.tag))
+            FROM unnest(${tagFacets}::text[]) AS required(tag)
+            WHERE EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_pages.tags, '[]'::jsonb)) AS page_tag
+              WHERE lower(page_tag) = lower(required.tag)
+            )
+          ) = ${tagFacets.length}`
+        : sql``;
+    const tagFilterAssets =
+      tagFacets.length > 0
+        ? sql`AND (
+            SELECT COUNT(DISTINCT lower(required.tag))
+            FROM unnest(${tagFacets}::text[]) AS required(tag)
+            WHERE EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_assets.tags, '[]'::jsonb)) AS asset_tag
+              WHERE lower(asset_tag) = lower(required.tag)
+            )
+          ) = ${tagFacets.length}`
+        : sql``;
     const pageTextMatch = searchTokens
       ? sql`(search_vector @@ to_tsquery('english', ${searchTokens})
              OR search_vector @@ websearch_to_tsquery('english', ${normalized}))`
@@ -1356,7 +1376,36 @@ export async function searchKb(
     }
 
     scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
-    const results = scored.map((entry) => entry.result);
+    let results = scored.map((entry) => entry.result);
+    if (results.length === 0 && normalized.length >= 3) {
+      const dataset = await getDataset();
+      const fallbackCandidates = (
+        kbId
+          ? visiblePages(dataset, kbId, includeStaff)
+          : dataset.pages.filter((page) => page.status === "published" || (includeStaff && isStaffVisiblePageStatus(page.status)))
+      )
+        .filter((page) => (page.nodeKind ?? "page") === "page" && matchesTagFacets(page.tags, tagFacets))
+        .map((page) => ({
+          id: page.id,
+          title: page.title,
+          summary: page.summary,
+          tags: normalizePageTags(page.tags),
+          path: page.path,
+          kbId: page.kbId,
+        }));
+      const fallbackScored = rankFuzzyCandidates(normalized, fallbackCandidates).map((entry) => ({
+        score: entry.score,
+        result: {
+          type: "page" as const,
+          id: entry.candidate.id,
+          title: entry.candidate.title,
+          summary: entry.candidate.summary,
+          path: entry.candidate.path,
+          kbId: entry.candidate.kbId,
+        },
+      }));
+      results = fallbackScored.map((entry) => entry.result);
+    }
     recordSearchEvent({ query, kbId, resultCount: results.length }).catch(() => {});
     return results;
   }
@@ -1413,7 +1462,7 @@ export async function searchKb(
   ).filter((page) => (page.nodeKind ?? "page") === "page");
 
   for (const page of pagesToSearch) {
-    if (!matchesTagFacet(page.tags, tagFacet)) {
+    if (!matchesTagFacets(page.tags, tagFacets)) {
       continue;
     }
     const titleScore = fieldScore(page.title, normalized, { exact: 100, prefix: 60, includes: 40 });
@@ -1422,13 +1471,39 @@ export async function searchKb(
     const bodyScore = fieldScore(pageBodyText(page), normalized, { exact: 10, prefix: 10, includes: 10 });
     const score = normalized
       ? titleScore + summaryScore + tagScore + bodyScore
-      : matchesTagFacet(page.tags, tagFacet)
+      : matchesTagFacets(page.tags, tagFacets)
         ? 50
         : 0;
     if (score > 0) {
       scored.push({
         score,
         result: { type: "page", id: page.id, title: page.title, summary: page.summary, path: page.path, kbId: page.kbId },
+      });
+    }
+  }
+
+  if (scored.length === 0 && normalized.length >= 3) {
+    const fuzzyCandidates = pagesToSearch
+      .filter((page) => matchesTagFacets(page.tags, tagFacets))
+      .map((page) => ({
+        id: page.id,
+        title: page.title,
+        summary: page.summary,
+        tags: normalizePageTags(page.tags),
+        path: page.path,
+        kbId: page.kbId,
+      }));
+    for (const entry of rankFuzzyCandidates(normalized, fuzzyCandidates)) {
+      scored.push({
+        score: entry.score,
+        result: {
+          type: "page",
+          id: entry.candidate.id,
+          title: entry.candidate.title,
+          summary: entry.candidate.summary,
+          path: entry.candidate.path,
+          kbId: entry.candidate.kbId,
+        },
       });
     }
   }
@@ -1443,7 +1518,7 @@ export async function searchKb(
     if (asset.status !== "active" || asset.assetType !== "document") {
       continue;
     }
-    if (!matchesTagFacet(asset.tags, tagFacet)) {
+    if (!matchesTagFacets(asset.tags, tagFacets)) {
       continue;
     }
     if (!canReadStaffPages(asset.homeKbId) && !(await assetHasPublicPublishedUsage(asset))) {
@@ -1455,7 +1530,7 @@ export async function searchKb(
     const slugScore = fieldScore(asset.slug, normalized, { exact: 15, prefix: 15, includes: 15 });
     const score = normalized
       ? titleScore + descriptionScore + tagScore + slugScore
-      : matchesTagFacet(asset.tags, tagFacet)
+      : matchesTagFacets(asset.tags, tagFacets)
         ? 40
         : 0;
     if (score > 0) {
@@ -1789,6 +1864,8 @@ export interface UpdatePageInput {
   showSummary?: boolean;
   showPrintButton?: boolean;
   nextReviewDate?: string | null;
+  reviewAssigneeEmail?: string;
+  reviewSlaDays?: number | null;
   publishAt?: string | null;
   linkUrl?: string;
   linkNewTab?: boolean;
@@ -1796,6 +1873,8 @@ export interface UpdatePageInput {
   // them untouched; revision restore passes them to restore the full snapshot.
   relatedPageIds?: string[];
   relatedAssetIds?: string[];
+  nextStepsHeading?: string;
+  nextStepsIntro?: string;
 }
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -1832,6 +1911,10 @@ function snapshotFromPage(page: KbPage): PageRevisionSnapshot {
     showSummary: page.showSummary,
     showPrintButton: page.showPrintButton,
     nextReviewDate: page.nextReviewDate ?? null,
+    reviewAssigneeEmail: page.reviewAssigneeEmail ?? "",
+    reviewSlaDays: page.reviewSlaDays ?? null,
+    nextStepsHeading: page.nextStepsHeading ?? "",
+    nextStepsIntro: page.nextStepsIntro ?? "",
     nodeKind: page.nodeKind ?? "page",
     linkUrl: page.linkUrl ?? "",
     linkNewTab: page.linkNewTab ?? false,
@@ -1957,6 +2040,10 @@ export async function updatePage(
           showSummary: input.showSummary ?? page.showSummary,
           showPrintButton: input.showPrintButton ?? page.showPrintButton,
           nextReviewDate: input.nextReviewDate ?? page.nextReviewDate,
+          reviewAssigneeEmail: input.reviewAssigneeEmail ?? page.reviewAssigneeEmail,
+          reviewSlaDays: input.reviewSlaDays !== undefined ? input.reviewSlaDays : page.reviewSlaDays,
+          nextStepsHeading: input.nextStepsHeading ?? page.nextStepsHeading ?? "",
+          nextStepsIntro: input.nextStepsIntro ?? page.nextStepsIntro ?? "",
           publishAt: input.publishAt !== undefined ? input.publishAt : page.publishAt,
           linkUrl: input.linkUrl ?? page.linkUrl,
           linkNewTab: input.linkNewTab ?? page.linkNewTab,

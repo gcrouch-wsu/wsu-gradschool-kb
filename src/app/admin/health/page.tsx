@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
 import { getContentHealthReport, type ContentHealthPageItem } from "@/lib/content-health";
+import { listStaleExcerpts } from "@/lib/stale-excerpts";
+import { listStaleAssetRefs } from "@/lib/stale-asset-refs";
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -98,6 +100,8 @@ export default async function AdminHealthPage() {
   }
 
   const report = await getContentHealthReport(await accessibleKbIds(session));
+  const staleExcerpts = await listStaleExcerpts();
+  const staleAssetRefs = await listStaleAssetRefs(await accessibleKbIds(session));
 
   return (
     <div className="page-shell">
@@ -194,6 +198,77 @@ export default async function AdminHealthPage() {
                     <td>{gap.kbTitle}</td>
                     <td>{formatNumber(gap.count)}</td>
                     <td>{formatDate(gap.lastSearchedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
+        <h2 className="admin-panel__title">Stale asset references ({formatNumber(staleAssetRefs.length)})</h2>
+        <p className="meta">
+          Pages referencing archived, missing, or staff-only assets on public pages. Open the page or asset to remediate.
+        </p>
+        {staleAssetRefs.length === 0 ? (
+          <p className="admin-panel__empty">No stale asset references detected.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th>Asset</th>
+                  <th>Issue</th>
+                  <th>Use</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staleAssetRefs.map((item) => (
+                  <tr key={`${item.pageId}-${item.assetId}-${item.blockId ?? item.usageType}`}>
+                    <td>
+                      <Link href={`/admin/pages/${item.pageId}`}>{item.pageTitle}</Link>
+                      <div className="meta">{item.kbTitle}</div>
+                    </td>
+                    <td>
+                      <Link href={`/admin/assets/${item.assetId}`}>{item.assetTitle}</Link>
+                      <div className="meta">{item.assetStatus}</div>
+                    </td>
+                    <td>{item.issue.replace(/_/g, " ")}</td>
+                    <td>{item.usageType.replace(/_/g, " ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
+        <h2 className="admin-panel__title">Stale excerpts ({formatNumber(staleExcerpts.length)})</h2>
+        {staleExcerpts.length === 0 ? (
+          <p className="admin-panel__empty">No excerpt blocks are behind their source pages.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Page with excerpt</th>
+                  <th>Source page</th>
+                  <th>Source updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staleExcerpts.map((item) => (
+                  <tr key={`${item.pageId}-${item.excerptBlockId}`}>
+                    <td>
+                      <Link href={`/admin/pages/${item.pageId}`}>{item.pageTitle}</Link>
+                    </td>
+                    <td>
+                      <Link href={`/admin/pages/${item.sourcePageId}`}>{item.sourceTitle}</Link>
+                    </td>
+                    <td>{item.sourceUpdatedDisplayDate || "—"}</td>
                   </tr>
                 ))}
               </tbody>

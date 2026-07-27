@@ -35,6 +35,7 @@ export function AdminAssetDetailPanel({
   const [altText, setAltText] = useState(assetAltText);
   const [tagsText, setTagsText] = useState(assetTags.join(", "));
   const [file, setFile] = useState<File | null>(null);
+  const [replaceImpactAck, setReplaceImpactAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [metadataBusy, setMetadataBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +76,10 @@ export function AdminAssetDetailPanel({
     if (!file) {
       return;
     }
+    if (usages.length > 0 && !replaceImpactAck) {
+      setError("Confirm that you understand which pages reference this asset before uploading.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -93,6 +98,7 @@ export function AdminAssetDetailPanel({
       setUsages(data.usages ?? usages);
       setMessage(data.message ?? "Draft replacement ready.");
       setFile(null);
+      setReplaceImpactAck(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Replace failed.");
     } finally {
@@ -282,6 +288,31 @@ export function AdminAssetDetailPanel({
         </div>
         {error && <p className="alert">{error}</p>}
         {message && <p className="alert">{message}</p>}
+        {file && usages.length > 0 && (
+          <div className="alert asset-replace-impact" role="status">
+            <strong>Replace impact preview.</strong> This asset is referenced on {usages.length} page
+            {usages.length === 1 ? "" : "s"}. Uploading creates a draft; activating it updates the public URL used by
+            those pages.
+            <ul className="asset-replace-impact__list">
+              {usages.slice(0, 6).map((usage, index) => (
+                <li key={`${usage.pageId}-${usage.usageType}-${usage.blockId ?? index}`}>
+                  <a href={`/admin/pages/${usage.pageId}`}>{usage.pageTitle}</a> — {usage.usageType.replace(/_/g, " ")}
+                </li>
+              ))}
+            </ul>
+            {usages.length > 6 ? (
+              <p className="meta">…and {usages.length - 6} more (see Usage panel).</p>
+            ) : null}
+            <label className="checkbox-inline" style={{ marginTop: "0.75rem" }}>
+              <input
+                checked={replaceImpactAck}
+                onChange={(event) => setReplaceImpactAck(event.target.checked)}
+                type="checkbox"
+              />
+              <span>I reviewed the affected pages and want to upload a replacement</span>
+            </label>
+          </div>
+        )}
         <form className="form" onSubmit={handleReplace}>
           <FileUploadPicker
             accept={acceptedReplacementTypes}
@@ -294,10 +325,13 @@ export function AdminAssetDetailPanel({
             id={`replacement-file-${assetId}`}
             label="Replacement file"
             onError={setError}
-            onFileChange={setFile}
+            onFileChange={(nextFile) => {
+              setFile(nextFile);
+              setReplaceImpactAck(false);
+            }}
             validateFile={validateReplacementFile}
           />
-          <button className="button" disabled={busy || !file} type="submit">
+          <button className="button" disabled={busy || !file || (usages.length > 0 && !replaceImpactAck)} type="submit">
             {busy ? "Uploading…" : "Upload draft replacement"}
           </button>
         </form>

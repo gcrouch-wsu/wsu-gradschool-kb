@@ -221,6 +221,10 @@ interface PageRow {
   locked_by?: string | null;
   locked_at?: string | null;
   next_review_date?: string | null;
+  review_assignee_email?: string;
+  review_sla_days?: number | null;
+  next_steps_heading?: string;
+  next_steps_intro?: string;
   verified_at?: string | null;
   verified_by?: string | null;
   publish_at?: string | null;
@@ -308,6 +312,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     content_width?: number;
     ai_summary_prompt?: string;
     ai_page_prompt?: string;
+    search_synonym_groups?: unknown;
   }>;
   const row = rows[0];
   if (!row) {
@@ -342,6 +347,7 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
     contentWidth: row.content_width,
     aiSummaryPrompt: row.ai_summary_prompt,
     aiPagePrompt: row.ai_page_prompt,
+    searchSynonymGroups: row.search_synonym_groups,
   });
 }
 
@@ -356,7 +362,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       kb_list_title_color, kb_list_title_size, kb_list_title_weight, kb_list_title_font,
       brand_text, brand_text_color, brand_text_size, brand_text_weight, brand_text_font,
       logo_url, logo_width, header_alignment, hero_alignment, content_width,
-      ai_summary_prompt, ai_page_prompt,
+      ai_summary_prompt, ai_page_prompt, search_synonym_groups,
       updated_at
     )
     VALUES (
@@ -368,7 +374,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       ${settings.brandText}, ${settings.brandTextColor}, ${settings.brandTextSize}, ${settings.brandTextWeight}, ${settings.brandTextFont},
       ${settings.logoUrl}, ${settings.logoWidth},
       ${settings.headerAlignment}, ${settings.heroAlignment}, ${settings.contentWidth},
-      ${settings.aiSummaryPrompt}, ${settings.aiPagePrompt},
+      ${settings.aiSummaryPrompt}, ${settings.aiPagePrompt}, ${JSON.stringify(settings.searchSynonymGroups)},
       now()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -400,6 +406,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       content_width = EXCLUDED.content_width,
       ai_summary_prompt = EXCLUDED.ai_summary_prompt,
       ai_page_prompt = EXCLUDED.ai_page_prompt,
+      search_synonym_groups = EXCLUDED.search_synonym_groups,
       updated_at = now()
   `;
 }
@@ -472,6 +479,10 @@ function mapPage(row: PageRow): KbPage {
     lockedBy: row.locked_by,
     lockedAt: row.locked_at,
     nextReviewDate: row.next_review_date,
+    reviewAssigneeEmail: row.review_assignee_email ?? "",
+    reviewSlaDays: row.review_sla_days ?? null,
+    nextStepsHeading: row.next_steps_heading ?? "",
+    nextStepsIntro: row.next_steps_intro ?? "",
     verifiedAt: row.verified_at,
     verifiedBy: row.verified_by,
     publishAt: row.publish_at ?? null,
@@ -530,7 +541,8 @@ export async function insertPage(page: KbPage, revision?: PageRevisionWrite): Pr
       tags,
       last_reviewed_date, updated_display_date, blocks, related_page_ids, related_asset_ids,
       show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
-      next_review_date, verified_at, verified_by, publish_at, node_kind, link_url, link_new_tab
+      next_review_date, verified_at, verified_by, publish_at, node_kind, link_url, link_new_tab,
+      review_assignee_email, review_sla_days, next_steps_heading, next_steps_intro
     ) VALUES (
       ${page.id}, ${page.kbId}, ${page.slug}, ${page.path.join("/")}, ${page.sortOrder}, ${page.title},
       ${page.summary}, ${page.status}, ${page.visibility}, ${page.ownerLabel}, ${page.contactEmail},
@@ -541,7 +553,9 @@ export async function insertPage(page: KbPage, revision?: PageRevisionWrite): Pr
       ${page.lockedBy ?? null}, ${page.lockedAt ?? null},
       ${page.nextReviewDate ?? null}, ${page.verifiedAt ?? null}, ${page.verifiedBy ?? null},
       ${page.publishAt ?? null},
-      ${page.nodeKind ?? "page"}, ${page.linkUrl ?? ""}, ${page.linkNewTab ?? false}
+      ${page.nodeKind ?? "page"}, ${page.linkUrl ?? ""}, ${page.linkNewTab ?? false},
+      ${page.reviewAssigneeEmail ?? ""}, ${page.reviewSlaDays ?? null},
+      ${page.nextStepsHeading ?? ""}, ${page.nextStepsIntro ?? ""}
     )
   `;
   // Create the page and its initial revision together so the page is never
@@ -624,6 +638,10 @@ export async function updatePages(
             node_kind = ${page.nodeKind ?? "page"},
             link_url = ${page.linkUrl ?? ""},
             link_new_tab = ${page.linkNewTab ?? false},
+            review_assignee_email = ${page.reviewAssigneeEmail ?? ""},
+            review_sla_days = ${page.reviewSlaDays ?? null},
+            next_steps_heading = ${page.nextStepsHeading ?? ""},
+            next_steps_intro = ${page.nextStepsIntro ?? ""},
             locked_by = ${page.lockedBy ?? null},
             locked_at = ${page.lockedAt ?? null}
           WHERE id = ${page.id}
@@ -664,6 +682,10 @@ export async function updatePages(
         node_kind = ${page.nodeKind ?? "page"},
         link_url = ${page.linkUrl ?? ""},
         link_new_tab = ${page.linkNewTab ?? false},
+        review_assignee_email = ${page.reviewAssigneeEmail ?? ""},
+        review_sla_days = ${page.reviewSlaDays ?? null},
+        next_steps_heading = ${page.nextStepsHeading ?? ""},
+        next_steps_intro = ${page.nextStepsIntro ?? ""},
         locked_by = ${page.lockedBy ?? null},
         locked_at = ${page.lockedAt ?? null}
       WHERE id = ${page.id}

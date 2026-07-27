@@ -48,6 +48,8 @@ export interface SiteSettings {
   aiSummaryPrompt: string;
   /** Site default system prompt for AI page review. Empty = built-in default. */
   aiPagePrompt: string;
+  /** Search synonym groups (each inner array is one equivalence set). */
+  searchSynonymGroups: string[][];
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -83,6 +85,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   globalTheme: null,
   aiSummaryPrompt: "",
   aiPagePrompt: "",
+  searchSynonymGroups: [],
 };
 
 const MAX_LENGTHS: Record<string, number> = {
@@ -150,6 +153,22 @@ function safeBrandFont(value: unknown): string {
   return typeof value === "string" && value in SAFE_FONTS ? value : "";
 }
 
+function normalizeSynonymGroups(raw: unknown): string[][] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter((group): group is unknown[] => Array.isArray(group))
+    .map((group) =>
+      group
+        .filter((term): term is string => typeof term === "string")
+        .map((term) => term.trim().slice(0, 80))
+        .filter(Boolean),
+    )
+    .filter((group) => group.length >= 2)
+    .slice(0, 50);
+}
+
 export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, unknown>>): SiteSettings {
   const pickText = (key: keyof SiteSettings, fallback: string) => {
     const value = input[key];
@@ -210,5 +229,6 @@ export function normalizeSiteSettings(input: Partial<Record<keyof SiteSettings, 
       typeof input.aiPagePrompt === "string"
         ? input.aiPagePrompt.trim().slice(0, 8_000)
         : DEFAULT_SITE_SETTINGS.aiPagePrompt,
+    searchSynonymGroups: normalizeSynonymGroups(input.searchSynonymGroups),
   };
 }

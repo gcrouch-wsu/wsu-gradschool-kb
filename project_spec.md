@@ -75,15 +75,15 @@ sourced-content snapshots (allowlisted external import with check-for-changes / 
 2. **WSU SSO** (FB-30) — Entra ID / Azure AD OIDC or SAML, gated on WSU ITS engagement.
 3. **Confluence import/export bridge** (FB-37) — concept only; not scoped.
 
-**Out of scope (intentionally, for now):** a per-KB "manager" role tier; self-service public signup
-(accounts are Owner-provisioned); WYSIWYG parity with Word; real-time multi-cursor co-editing
-(concurrency uses locks, not CRDTs).
+**Out of scope (intentionally, for now):** self-service public signup (accounts are Owner-provisioned);
+WYSIWYG parity with Word; real-time multi-cursor co-editing (concurrency uses locks, not CRDTs).
 
 ## 3. Users & roles
 
 - **Anonymous public** — no login; reads published pages in public KBs only.
 - **Owner** — full access (KB-wide), plus user management, KB creation, theming, site settings.
 - **Admin** — KB-wide content/asset management.
+- **Manager** — KB-scoped like Editor, but may publish and approve proposed pages in assigned KBs.
 - **Editor** — scoped to assigned KBs for content management (`kb_user_assignments`); reads all
   published public KBs plus assigned KBs (including assigned drafts).
 - **Viewer** — local-password account provisioned by an Owner; reads **published** KBs only —
@@ -646,7 +646,7 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   hashes and signed HMAC cookies. There is no SSO/OIDC/SAML integration until WSU ITS engagement, and
   no server-side idle-session table or sliding idle timeout beyond the current cookie/token expiry
   behavior.
-- No per-KB "manager/admin" tier — Admin is all-or-nothing (KB-wide).
+- **Manager role** — KB-scoped publish/approve in assigned KBs; Owner/Admin remain KB-wide.
 - **The contenteditable editor still needs release-grade QA.** It is custom, and complex selection
   edge cases keep surfacing in real use (heading demotion on delete, list splits with duplicate ids,
   lost pasted images, touchy link insertion, stale HTML-source saves, table-cell toolbar binding, and
@@ -676,13 +676,13 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 
 The only **product** items that remain future (not yet built) are:
 
-1. **Editor framework migration (§12 FB-09 / FB-29)** — replace custom `contentEditable` flow
-   surfaces with Lexical (preferred) or ProseMirror behind the existing `ContentBlock`
-   serialization boundary. Plan: `docs/editor-framework-migration.md`. Dedicated effort — do not
-   mix into unrelated feature work.
-2. **WSU SSO (§12 FB-30)** — Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers,
+1. **WSU SSO (§12 FB-30)** — Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers,
    gated on WSU ITS engagement. Local owner-provisioned accounts remain interim + break-glass.
-3. **Confluence import/export bridge (§12 FB-37)** — concept only; not scoped.
+2. **Confluence import/export bridge (§12 FB-37)** — concept only; not scoped.
+
+**Editor framework (§12 FB-09 / FB-29):** Lexical Phases 1–4 landed for flow, cards, and procedure
+surfaces; table cells remain `RichTextEditable` (FB-26 parity). Close-out requires the manual
+release gate (FB-25): Chrome + Firefox + mobile-width editor pass.
 
 **Release readiness** (FB-25) is ops/QA, not a new product surface: finish the manual checklist in
 `docs/release-gate.md` and §13 sign-off.

@@ -967,6 +967,40 @@ const migrations: Migration[] = [
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_assets_tags ON kb_assets USING GIN(tags)`;
     },
   },
+  {
+    id: "041_platform_features",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS search_synonym_groups JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS review_assignee_email TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS review_sla_days INTEGER`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS webhooks (
+          id TEXT PRIMARY KEY,
+          url TEXT NOT NULL,
+          secret TEXT NOT NULL DEFAULT '',
+          events JSONB NOT NULL DEFAULT '[]'::jsonb,
+          enabled BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS page_server_drafts (
+          page_id TEXT PRIMARY KEY,
+          author_user_id TEXT NOT NULL,
+          snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_page_server_drafts_updated ON page_server_drafts(updated_at DESC)`;
+    },
+  },
+  {
+    id: "042_next_steps_fields",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS next_steps_heading TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS next_steps_intro TEXT NOT NULL DEFAULT ''`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { StatCard } from "@/components/admin/StatCard";
 import { redirect } from "next/navigation";
-import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
-import { getContentHealthReport } from "@/lib/content-health";
-import { listPageFeedbackAggregates } from "@/lib/page-feedback";
+import { getCurrentAdminSession } from "@/lib/auth";
+import { getEditorialAnalytics } from "@/lib/editorial-analytics";
 import { getUsageAnalyticsForSession, type UsagePeriod } from "@/lib/page-views";
 
 function formatNumber(value: number) {
@@ -89,52 +89,75 @@ export default async function AdminUsagePage() {
     redirect("/");
   }
 
-  const analytics = await getUsageAnalyticsForSession(session);
-  const allowedKbIds = await accessibleKbIds(session);
-  const health = await getContentHealthReport(allowedKbIds);
-  const feedback = await listPageFeedbackAggregates(allowedKbIds);
+  const [analytics, editorial] = await Promise.all([
+    getUsageAnalyticsForSession(session),
+    getEditorialAnalytics(session),
+  ]);
 
   return (
     <div className="page-shell">
       <p className="eyebrow">Admin</p>
       <h1>Usage</h1>
       <p className="lead">
-        Privacy-light page-view counts plus reader feedback and search gaps for editorial decisions.
+        Privacy-light page-view counts plus editorial signals, reader feedback, and search gaps.
       </p>
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
       </p>
 
       <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
-        <h2 className="admin-panel__title">Reader feedback</h2>
-        {feedback.length === 0 ? (
-          <p className="admin-panel__empty">No feedback recorded yet.</p>
+        <h2 className="admin-panel__title">Editorial overview</h2>
+        <div className="admin-dashboard__stats">
+          <StatCard href="/admin/health" icon="file-pen" label="Stale pages" tone="amber" value={editorial.health.stalePages} />
+          <StatCard href="/admin/review" icon="file-check" label="Proposed pages" tone="blue" value={editorial.health.proposedPages} />
+          <StatCard href="/admin/excerpts" icon="book-open" label="Stale excerpts" tone="gray" value={editorial.staleExcerptCount} />
+          <StatCard href="/admin/health" icon="folder-open" label="Stale asset refs" tone="green" value={editorial.staleAssetRefCount} />
+        </div>
+        <div className="grid grid--three" style={{ marginTop: "1rem" }}>
+          <div className="card">
+            <p className="meta">Views (7 days)</p>
+            <strong>{formatNumber(editorial.usageSummary.views7d)}</strong>
+          </div>
+          <div className="card">
+            <p className="meta">Views (30 days)</p>
+            <strong>{formatNumber(editorial.usageSummary.views30d)}</strong>
+          </div>
+          <div className="card">
+            <p className="meta">Top KB (30 days)</p>
+            <strong>{editorial.usageSummary.topKbTitle ?? "—"}</strong>
+            {editorial.usageSummary.topKbViews > 0 ? (
+              <p className="meta">{formatNumber(editorial.usageSummary.topKbViews)} views</p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
+        <h2 className="admin-panel__title">Low helpfulness (3+ responses)</h2>
+        {editorial.feedback.helpfulRatioLow.length === 0 ? (
+          <p className="admin-panel__empty">No pages with enough feedback to rank yet.</p>
         ) : (
           <div className="table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
                   <th>Page</th>
-                  <th>Helpful</th>
-                  <th>Not helpful</th>
                   <th>Helpful %</th>
+                  <th>Votes</th>
                 </tr>
               </thead>
               <tbody>
-                {feedback.slice(0, 20).map((row) => {
-                  const total = row.helpful + row.notHelpful;
-                  const ratio = total === 0 ? 0 : Math.round((row.helpful / total) * 100);
-                  return (
-                    <tr key={row.pageId}>
-                      <td>
-                        <Link href={`/admin/pages/${row.pageId}`}>{row.pageTitle}</Link>
-                      </td>
-                      <td>{row.helpful}</td>
-                      <td>{row.notHelpful}</td>
-                      <td>{ratio}%</td>
-                    </tr>
-                  );
-                })}
+                {editorial.feedback.helpfulRatioLow.map((row) => (
+                  <tr key={row.pageId}>
+                    <td>
+                      <Link href={`/admin/pages/${row.pageId}`}>{row.pageTitle}</Link>
+                    </td>
+                    <td>{row.ratio}%</td>
+                    <td>
+                      {row.helpful} / {row.helpful + row.notHelpful}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -143,7 +166,7 @@ export default async function AdminUsagePage() {
 
       <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
         <h2 className="admin-panel__title">Zero-result searches</h2>
-        {health.zeroResultSearches.length === 0 ? (
+        {editorial.searchGaps.length === 0 ? (
           <p className="admin-panel__empty">No logged zero-result searches in the recent window.</p>
         ) : (
           <div className="table-wrap">
@@ -156,7 +179,7 @@ export default async function AdminUsagePage() {
                 </tr>
               </thead>
               <tbody>
-                {health.zeroResultSearches.slice(0, 20).map((row) => (
+                {editorial.searchGaps.map((row) => (
                   <tr key={`${row.query}-${row.kbId ?? "all"}`}>
                     <td>{row.query}</td>
                     <td>{row.kbTitle}</td>

@@ -8,8 +8,10 @@ import {
   searchKb,
   type SearchResult,
 } from "@/lib/kb-store";
-import { suggestDidYouMean } from "@/lib/search-suggest";
+import { getPopularSearchTags } from "@/lib/popular-search-tags";
 import { globalSearchScope } from "@/lib/search-scope";
+import { suggestDidYouMean } from "@/lib/search-suggest";
+import { parseSearchTagFacets } from "@/lib/search-tags";
 import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 
 const SEARCH_LIMIT = 30;
@@ -67,12 +69,13 @@ async function assetHref(result: Extract<SearchResult, { type: "asset" }>) {
 export default async function GlobalSearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tag?: string }>;
+  searchParams: Promise<{ q?: string; tag?: string | string[] }>;
 }) {
-  const { q = "", tag = "" } = await searchParams;
+  const params = await searchParams;
+  const q = params.q ?? "";
+  const tagFacets = parseSearchTagFacets(params.tag);
   const trimmedQuery = q.trim();
-  const trimmedTag = tag.trim();
-  const hasSearch = Boolean(trimmedQuery || trimmedTag);
+  const hasSearch = Boolean(trimmedQuery || tagFacets.length > 0);
 
   let rateLimited = false;
   if (hasSearch) {
@@ -81,11 +84,20 @@ export default async function GlobalSearchPage({
   }
 
   const scope = await searchScope();
+  const popularTags =
+    !hasSearch && !rateLimited
+      ? await getPopularSearchTags(
+          scope.options.includeAllKbs
+            ? (await (await import("@/lib/kb-store")).getAllKbsForAdmin()).map((kb) => kb.id)
+            : (scope.options.readableKbIds ?? []),
+          scope.includeStaff,
+        )
+      : [];
   const results = rateLimited || !hasSearch
     ? []
     : await searchKb(undefined, trimmedQuery, scope.includeStaff, {
         ...scope.options,
-        tag: trimmedTag || undefined,
+        tags: tagFacets,
       });
   const groups = await resolveResults(results);
 
@@ -125,12 +137,12 @@ export default async function GlobalSearchPage({
           />
         </label>
         <label>
-          <span className="meta">Tag facet</span>
+          <span className="meta">Tag facets (comma-separated, all must match)</span>
           <input
             className="input"
-            defaultValue={tag}
+            defaultValue={tagFacets.join(", ")}
             name="tag"
-            placeholder="e.g. visa"
+            placeholder="e.g. visa, deadlines"
             type="search"
           />
         </label>
@@ -139,12 +151,48 @@ export default async function GlobalSearchPage({
         </button>
       </form>
 
-      {trimmedTag ? (
-        <p className="meta">
-          Filtering by tag <strong>{trimmedTag}</strong>
-          {" · "}
-          <Link href={trimmedQuery ? `/search?q=${encodeURIComponent(trimmedQuery)}` : "/search"}>Clear tag</Link>
-        </p>
+      {popularTags.length > 0 && (
+        <div style={{ marginTop: "1rem" }}>
+          <p className="meta">Popular tags</p>
+          <div className="tag-list">
+            {popularTags.map(({ tag, count }) => {
+              const nextParams = new URLSearchParams();
+              if (trimmedQuery) {
+                nextParams.set("q", trimmedQuery);
+              }
+              for (const activeTag of tagFacets) {
+                nextParams.append("tag", activeTag);
+              }
+              if (!tagFacets.includes(tag)) {
+                nextParams.append("tag", tag);
+              }
+              return (
+                <Link href={`/search?${nextParams.toString()}`} key={tag}>
+                  {tag} ({count})
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {tagFacets.length > 0 ? (
+        <div className="tag-list" style={{ marginTop: "1rem" }}>
+          {tagFacets.map((tag) => {
+            const nextParams = new URLSearchParams();
+            if (trimmedQuery) {
+              nextParams.set("q", trimmedQuery);
+            }
+            for (const activeTag of tagFacets.filter((value) => value !== tag)) {
+              nextParams.append("tag", activeTag);
+            }
+            return (
+              <Link href={`/search?${nextParams.toString()}`} key={tag}>
+                {tag} ×
+              </Link>
+            );
+          })}
+        </div>
       ) : null}
 
       <h2>Results</h2>
@@ -156,7 +204,7 @@ export default async function GlobalSearchPage({
             <p className="meta">
               {results.length} result{results.length === 1 ? "" : "s"}
               {trimmedQuery ? <> for &ldquo;{trimmedQuery}&rdquo;</> : null}
-              {trimmedTag ? <> tagged &ldquo;{trimmedTag}&rdquo;</> : null}
+              {tagFacets.length > 0 ? <> tagged {tagFacets.map((tag) => `"${tag}"`).join(" + ")}</> : null}
             </p>
           )}
           {!hasSearch && <p className="empty">Enter a search term or tag to find pages and files.</p>}
@@ -164,7 +212,7 @@ export default async function GlobalSearchPage({
             <p className="empty">
               No results found
               {trimmedQuery ? <> for &ldquo;{trimmedQuery}&rdquo;</> : null}
-              {trimmedTag ? <> with tag &ldquo;{trimmedTag}&rdquo;</> : null}.
+              {tagFacets.length > 0 ? <> with tags {tagFacets.join(", ")}</> : null}.
               {didYouMean ? (
                 <>
                   {" "}

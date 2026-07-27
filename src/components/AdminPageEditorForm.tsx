@@ -4,9 +4,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DraftPreviewModal } from "@/components/DraftPreviewModal";
 import { DropdownSelect } from "@/components/DropdownSelect";
+import { GuidedTour } from "@/components/GuidedTour";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { RelocatePageDialog } from "@/components/RelocatePageDialog";
+import { RelatedPagesEditor } from "@/components/RelatedPagesEditor";
 import { AiPageReviewPanel } from "@/components/AiPageReviewPanel";
 import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
@@ -15,7 +17,7 @@ import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import { normalizePageTags } from "@/lib/page-tags";
 import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
 import type { PageReviewSuggestion } from "@/lib/page-review-core";
-import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
+import type { ContentBlock, KbPage, KnowledgeBase, PageRevisionSnapshot, PageStatus, PageVisibility } from "@/lib/types";
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
@@ -315,6 +317,8 @@ export function AdminPageEditorForm({
   const [contactEmail, setContactEmail] = useState(page.contactEmail);
   const [lastReviewedDate, setLastReviewedDate] = useState(page.lastReviewedDate);
   const [relatedPageIds, setRelatedPageIds] = useState<string[]>(page.relatedPageIds ?? []);
+  const [nextStepsHeading, setNextStepsHeading] = useState(page.nextStepsHeading ?? "");
+  const [nextStepsIntro, setNextStepsIntro] = useState(page.nextStepsIntro ?? "");
   const [showToc, setShowToc] = useState(page.showToc);
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
@@ -322,6 +326,10 @@ export function AdminPageEditorForm({
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
   const [relocateOpen, setRelocateOpen] = useState(false);
   const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
+  const [reviewAssigneeEmail, setReviewAssigneeEmail] = useState(page.reviewAssigneeEmail ?? "");
+  const [reviewSlaDays, setReviewSlaDays] = useState(
+    page.reviewSlaDays != null ? String(page.reviewSlaDays) : "",
+  );
   const [publishAt, setPublishAt] = useState(page.publishAt ?? "");
   const [verifiedAt, setVerifiedAt] = useState(page.verifiedAt);
   const [verifiedBy, setVerifiedBy] = useState(page.verifiedBy);
@@ -442,13 +450,78 @@ export function AdminPageEditorForm({
       contactEmail,
       lastReviewedDate,
       nextReviewDate: overrides.nextReviewDate ?? nextReviewDate,
+      reviewAssigneeEmail,
+      reviewSlaDays: reviewSlaDays.trim() ? Number(reviewSlaDays) : null,
       relatedPageIds,
+      nextStepsHeading,
+      nextStepsIntro,
       showToc,
       tocDepth,
       showSummary,
       showPrintButton,
       blocks,
     });
+  }
+
+  function buildRevisionSnapshot(overrides: { nextReviewDate?: string } = {}): PageRevisionSnapshot {
+    const parentSegments = parentPath ? parentPath.split("/").filter(Boolean) : [];
+    return {
+      title,
+      slug,
+      path: [...parentSegments, slug],
+      summary,
+      tags: normalizePageTags(tagsText),
+      status: savedStatus,
+      visibility,
+      ownerLabel,
+      contactEmail,
+      lastReviewedDate,
+      blocks,
+      relatedPageIds,
+      relatedAssetIds: page.relatedAssetIds ?? [],
+      showToc,
+      tocDepth,
+      showSummary,
+      showPrintButton,
+      nextReviewDate: overrides.nextReviewDate ?? nextReviewDate,
+      reviewAssigneeEmail: reviewAssigneeEmail.trim(),
+      reviewSlaDays: reviewSlaDays.trim() ? Number(reviewSlaDays) : null,
+      nextStepsHeading,
+      nextStepsIntro,
+      nodeKind: page.nodeKind,
+      linkUrl: page.linkUrl,
+      linkNewTab: page.linkNewTab,
+    };
+  }
+
+  function applyEditorSnapshot(data: Record<string, unknown>) {
+    if (typeof data.title === "string") setTitle(data.title);
+    if (typeof data.slug === "string") setSlug(data.slug);
+    if (typeof data.summary === "string") setSummary(data.summary);
+    if (Array.isArray(data.tags) || typeof data.tags === "string") {
+      setTagsText(normalizePageTags(data.tags).join(", "));
+    }
+    if (data.visibility === "public" || data.visibility === "staff") setVisibility(data.visibility);
+    if (Array.isArray(data.path)) {
+      setParentPath(data.path.slice(0, -1).join("/"));
+    } else if (typeof data.parentPath === "string") {
+      setParentPath(data.parentPath);
+    }
+    if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
+    if (typeof data.contactEmail === "string") setContactEmail(data.contactEmail);
+    if (typeof data.lastReviewedDate === "string") setLastReviewedDate(data.lastReviewedDate);
+    if (typeof data.nextReviewDate === "string") setNextReviewDate(data.nextReviewDate);
+    if (typeof data.reviewAssigneeEmail === "string") setReviewAssigneeEmail(data.reviewAssigneeEmail);
+    if (typeof data.reviewSlaDays === "number") setReviewSlaDays(String(data.reviewSlaDays));
+    if (Array.isArray(data.relatedPageIds)) setRelatedPageIds(data.relatedPageIds as string[]);
+    if (typeof data.nextStepsHeading === "string") setNextStepsHeading(data.nextStepsHeading);
+    if (typeof data.nextStepsIntro === "string") setNextStepsIntro(data.nextStepsIntro);
+    if (typeof data.showToc === "boolean") setShowToc(data.showToc);
+    if (typeof data.tocDepth === "number") setTocDepth(data.tocDepth);
+    if (typeof data.showSummary === "boolean") setShowSummary(data.showSummary);
+    if (typeof data.showPrintButton === "boolean") setShowPrintButton(data.showPrintButton);
+    if (Array.isArray(data.blocks)) setBlocks(data.blocks as ContentBlock[]);
+    setEditorEpoch((n) => n + 1);
   }
 
   const currentSnapshot = buildSnapshot();
@@ -458,6 +531,10 @@ export function AdminPageEditorForm({
   // ----- Work protection: leave-page warning + local draft backup -----
   const backupKey = `kb-editor-backup:${page.id}`;
   const [backupNotice, setBackupNotice] = useState<{ savedAt: string } | null>(null);
+  const [serverDraftNotice, setServerDraftNotice] = useState<{
+    updatedAt: string;
+    snapshot: PageRevisionSnapshot;
+  } | null>(null);
   // Bumped when a backup is restored so the document editor remounts with the
   // restored blocks (it keeps its own internal state after mount).
   const [editorEpoch, setEditorEpoch] = useState(0);
@@ -495,6 +572,53 @@ export function AdminPageEditorForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backupKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin/pages/${page.id}/server-draft`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.draft?.snapshot) {
+          return;
+        }
+        const snapshot = data.draft.snapshot as PageRevisionSnapshot;
+        const draftSnapshot = JSON.stringify({
+          title: snapshot.title,
+          slug: snapshot.slug,
+          summary: snapshot.summary,
+          tags: normalizePageTags(snapshot.tags),
+          visibility: snapshot.visibility,
+          parentPath: snapshot.path.slice(0, -1).join("/"),
+          ownerLabel: snapshot.ownerLabel,
+          contactEmail: snapshot.contactEmail,
+          lastReviewedDate: snapshot.lastReviewedDate,
+          nextReviewDate: snapshot.nextReviewDate ?? "",
+          reviewAssigneeEmail: snapshot.reviewAssigneeEmail ?? "",
+          reviewSlaDays: snapshot.reviewSlaDays ?? null,
+          relatedPageIds: snapshot.relatedPageIds ?? [],
+          showToc: snapshot.showToc,
+          tocDepth: snapshot.tocDepth,
+          showSummary: snapshot.showSummary !== false,
+          showPrintButton: snapshot.showPrintButton !== false,
+          blocks: snapshot.blocks,
+        });
+        if (draftSnapshot === savedSnapshot) {
+          return;
+        }
+        setServerDraftNotice({
+          updatedAt: typeof data.draft.updatedAt === "string" ? data.draft.updatedAt : "",
+          snapshot,
+        });
+      })
+      .catch(() => {
+        // Server drafts are optional when DATABASE_URL is unset.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Run once per page; savedSnapshot here is intentionally the initial value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page.id]);
+
   // Continuously stash unsaved work locally (debounced) so it survives
   // crashes and session timeouts. Cleared on successful save.
   useEffect(() => {
@@ -511,6 +635,22 @@ export function AdminPageEditorForm({
     }, 2000);
     return () => clearTimeout(timer);
   }, [backupKey, currentSnapshot, dirty]);
+
+  useEffect(() => {
+    if (!dirty) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`/api/admin/pages/${page.id}/server-draft`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot: buildRevisionSnapshot() }),
+      }).catch(() => {
+        // Best-effort sync for multi-device recovery.
+      });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [currentSnapshot, dirty, page.id]);
 
   function clearBackup() {
     try {
@@ -534,28 +674,24 @@ export function AdminPageEditorForm({
         return;
       }
       const data = JSON.parse(parsed.snapshot) as Record<string, unknown>;
-      if (typeof data.title === "string") setTitle(data.title);
-      if (typeof data.slug === "string") setSlug(data.slug);
-      if (typeof data.summary === "string") setSummary(data.summary);
-      if (Array.isArray(data.tags) || typeof data.tags === "string") {
-        setTagsText(normalizePageTags(data.tags).join(", "));
-      }
-      if (data.visibility === "public" || data.visibility === "staff") setVisibility(data.visibility);
-      if (typeof data.parentPath === "string") setParentPath(data.parentPath);
-      if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
-      if (typeof data.contactEmail === "string") setContactEmail(data.contactEmail);
-      if (typeof data.lastReviewedDate === "string") setLastReviewedDate(data.lastReviewedDate);
-      if (typeof data.nextReviewDate === "string") setNextReviewDate(data.nextReviewDate);
-      if (typeof data.showToc === "boolean") setShowToc(data.showToc);
-      if (typeof data.tocDepth === "number") setTocDepth(data.tocDepth);
-      if (typeof data.showSummary === "boolean") setShowSummary(data.showSummary);
-      if (typeof data.showPrintButton === "boolean") setShowPrintButton(data.showPrintButton);
-      if (Array.isArray(data.blocks)) setBlocks(data.blocks as ContentBlock[]);
-      setEditorEpoch((n) => n + 1);
+      applyEditorSnapshot(data);
     } catch {
       // Corrupt backup: leave current content untouched.
     }
     setBackupNotice(null);
+  }
+
+  function restoreServerDraft() {
+    if (!serverDraftNotice) {
+      return;
+    }
+    applyEditorSnapshot(serverDraftNotice.snapshot as unknown as Record<string, unknown>);
+    setServerDraftNotice(null);
+  }
+
+  function dismissServerDraft() {
+    fetch(`/api/admin/pages/${page.id}/server-draft`, { method: "DELETE" }).catch(() => {});
+    setServerDraftNotice(null);
   }
   const readinessIssues = useMemo(() => {
     const next: string[] = [];
@@ -767,7 +903,11 @@ export function AdminPageEditorForm({
           showSummary,
           showPrintButton,
           nextReviewDate,
+          reviewAssigneeEmail: reviewAssigneeEmail.trim(),
+          reviewSlaDays: reviewSlaDays.trim() ? Number(reviewSlaDays) : null,
           relatedPageIds,
+          nextStepsHeading,
+          nextStepsIntro,
           ...(canPublish ? { publishAt: publishAt.trim() || null } : {}),
         }),
       });
@@ -787,6 +927,8 @@ export function AdminPageEditorForm({
       setSavedSnapshot(currentSnapshot);
       setHistoryToken((token) => token + 1);
       clearBackup();
+      setServerDraftNotice(null);
+      fetch(`/api/admin/pages/${page.id}/server-draft`, { method: "DELETE" }).catch(() => {});
       markSessionActive();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save the page.");
@@ -1040,6 +1182,40 @@ export function AdminPageEditorForm({
         </div>
       )}
 
+      {serverDraftNotice && (
+        <div className="alert" role="alert" style={{ marginBottom: "2rem" }}>
+          <strong>Server draft available.</strong> A newer unsaved version of this page
+          {serverDraftNotice.updatedAt ? ` from ${formatTimestamp(serverDraftNotice.updatedAt)}` : ""} is stored on
+          the server (for example from another device or browser).
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
+            <button className="button button--small" onClick={restoreServerDraft} type="button">
+              Restore server draft
+            </button>
+            <button className="button button--small button--ghost" onClick={dismissServerDraft} type="button">
+              Discard it
+            </button>
+          </div>
+        </div>
+      )}
+
+      <GuidedTour
+        steps={[
+          {
+            title: "Save often",
+            body: "Drafts sync to this browser and the server while you edit. Use Save draft before leaving if you need a named checkpoint.",
+          },
+          {
+            title: "Publishing gates",
+            body: "Published pages need summary, contact info, review dates, and accessible images. Fix anything flagged in the readiness panel before proposing or publishing.",
+          },
+          {
+            title: "Blocks and excerpts",
+            body: "Use the block toolbar for alerts, cards, and excerpt blocks. Excerpt blocks stay linked to their source page — update the source when content changes.",
+          },
+        ]}
+        tourId="page-editor"
+      />
+
       <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
         {error && <p className="error">{error}</p>}
         {issues.length > 0 && (
@@ -1092,36 +1268,16 @@ export function AdminPageEditorForm({
               value={tagsText}
             />
           </label>
-          <fieldset className="fieldset" style={{ border: "none", padding: 0, margin: 0 }}>
-            <legend className="meta">Related pages / next steps</legend>
-            <p className="meta">Shown to readers as next steps after this page.</p>
-            <div style={{ display: "grid", gap: "0.35rem", maxHeight: "12rem", overflow: "auto" }}>
-              {relatedPageOptions.length === 0 ? (
-                <p className="meta">No other pages in this knowledge base yet.</p>
-              ) : (
-                relatedPageOptions.map((option) => {
-                  const checked = relatedPageIds.includes(option.id);
-                  return (
-                    <label key={option.id} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
-                      <input
-                        checked={checked}
-                        onChange={() => {
-                          setRelatedPageIds((current) =>
-                            checked ? current.filter((id) => id !== option.id) : [...current, option.id],
-                          );
-                        }}
-                        type="checkbox"
-                      />
-                      <span>
-                        {option.title}
-                        <span className="meta"> /{option.path}</span>
-                      </span>
-                    </label>
-                  );
-                })
-              )}
-            </div>
-          </fieldset>
+          <RelatedPagesEditor
+            disabled={isLocked}
+            heading={nextStepsHeading}
+            intro={nextStepsIntro}
+            onChange={setRelatedPageIds}
+            onHeadingChange={setNextStepsHeading}
+            onIntroChange={setNextStepsIntro}
+            options={relatedPageOptions}
+            selectedIds={relatedPageIds}
+          />
           <div className="summary-field">
             <label>
               <span className="meta">
@@ -1262,6 +1418,27 @@ export function AdminPageEditorForm({
               onChange={(event) => setNextReviewDate(event.target.value)}
               type="date"
               value={nextReviewDate || ""}
+            />
+          </label>
+          <label>
+            <span className="meta">Review assignee email</span>
+            <input
+              className="input"
+              onChange={(event) => setReviewAssigneeEmail(event.target.value)}
+              placeholder="editor@example.edu"
+              type="email"
+              value={reviewAssigneeEmail}
+            />
+          </label>
+          <label>
+            <span className="meta">Review SLA warning (days before due)</span>
+            <input
+              className="input"
+              min={1}
+              onChange={(event) => setReviewSlaDays(event.target.value)}
+              placeholder="14"
+              type="number"
+              value={reviewSlaDays}
             />
           </label>
           {canPublish ? (

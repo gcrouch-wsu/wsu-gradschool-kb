@@ -1,7 +1,8 @@
 import { isDatabaseEnabled } from "@/lib/db";
 import { listUserAssignments, listUsers } from "@/lib/db-users";
 import { sendEmail } from "@/lib/email";
-import type { KbPage, PageStatus, User } from "@/lib/types";
+import { dispatchWebhooks } from "@/lib/webhooks";
+import type { KbPage, PageStatus, User, WebhookEvent } from "@/lib/types";
 
 async function recipientsForKb(kbId: string, roles: Array<User["role"]>): Promise<User[]> {
   if (!isDatabaseEnabled()) {
@@ -41,28 +42,32 @@ export async function notifyPageStatusChange(input: {
   let recipients: User[] = [];
   let subject = "";
   let text = "";
+  let webhookEvent: WebhookEvent | null = null;
 
   if (nextStatus === "proposed" && previousStatus !== "proposed") {
-    recipients = await recipientsForKb(page.kbId, ["owner", "admin"]);
+    recipients = await recipientsForKb(page.kbId, ["owner", "admin", "manager"]);
     subject = `[KB] Review requested: ${page.title}`;
     text = [
       `${actorEmail} submitted "${page.title}" (${kbTitle}) for review.`,
       `Open: ${pageUrl}`,
     ].join("\n");
+    webhookEvent = "page.proposed";
   } else if (nextStatus === "published" && previousStatus !== "published") {
-    recipients = await recipientsForKb(page.kbId, ["owner", "admin", "editor"]);
+    recipients = await recipientsForKb(page.kbId, ["owner", "admin", "manager", "editor"]);
     subject = `[KB] Published: ${page.title}`;
     text = [
       `"${page.title}" (${kbTitle}) was published by ${actorEmail}.`,
       `Open: ${pageUrl}`,
     ].join("\n");
+    webhookEvent = "page.published";
   } else if (previousStatus === "proposed" && nextStatus === "draft") {
-    recipients = await recipientsForKb(page.kbId, ["owner", "admin", "editor"]);
+    recipients = await recipientsForKb(page.kbId, ["owner", "admin", "manager", "editor"]);
     subject = `[KB] Returned to draft: ${page.title}`;
     text = [
       `"${page.title}" (${kbTitle}) was returned to draft by ${actorEmail}.`,
       `Open: ${pageUrl}`,
     ].join("\n");
+    webhookEvent = "page.draft";
   } else {
     return { attempted: 0, sent: 0 };
   }
@@ -75,5 +80,17 @@ export async function notifyPageStatusChange(input: {
       sent += 1;
     }
   }
+
+  if (webhookEvent) {
+    await dispatchWebhooks(webhookEvent, {
+      pageId: page.id,
+      kbId: page.kbId,
+      title: page.title,
+      status: page.status,
+      actorEmail,
+      pageUrl,
+    });
+  }
+
   return { attempted: unique.size, sent };
 }

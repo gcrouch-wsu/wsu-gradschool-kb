@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:a11y": "playwright test --config=playwright.a11y.config.ts",
     "test:editor": "playwright test --config=playwright.editor.config.ts",
+    "test:editor:cross-browser": "playwright test --config=playwright.editor.config.ts --project=firefox --project=mobile-chrome",
     "test:db": "vitest run --config vitest.db.config.ts"
   },
   "dependencies": {

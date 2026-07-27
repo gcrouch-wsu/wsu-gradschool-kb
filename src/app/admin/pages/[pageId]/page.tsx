@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { AdminPageEditorForm } from "@/components/AdminPageEditorForm";
 import { TreeNodeSettingsForm } from "@/components/TreeNodeSettingsForm";
 import { canAccessKb, filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
+import { canApproveProposedInKb } from "@/lib/auth-roles";
 import { getAllKbsForAdmin, getAllPageSummariesForAdmin, getExcerptReferencesToPage, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -112,7 +113,7 @@ export default async function AdminEditPage({
         </section>
       ) : null}
       <AdminPageEditorForm
-        canApproveProposed={session.role === "owner" || session.role === "admin"}
+        canApproveProposed={await canApproveProposedInKb(session, page.kbId)}
         destinationKbs={destinationKbs}
         kb={kb}
         page={page}
