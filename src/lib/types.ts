@@ -349,7 +349,8 @@ export type WebhookEvent =
   | "page.proposed"
   | "page.draft"
   | "review.overdue"
-  | "asset.replaced";
+  | "asset.replaced"
+  | "excerpt.stale";
 
 export interface WebhookEndpoint {
   id: string;

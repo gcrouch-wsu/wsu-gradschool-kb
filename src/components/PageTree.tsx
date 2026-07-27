@@ -208,13 +208,16 @@ export function PageTree({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(requiredExpanded);
 
   useEffect(() => {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      for (const id of requiredExpanded) {
-        next.add(id);
-      }
-      return next;
+    const frame = window.requestAnimationFrame(() => {
+      setExpandedIds((current) => {
+        const next = new Set(current);
+        for (const id of requiredExpanded) {
+          next.add(id);
+        }
+        return next;
+      });
     });
+    return () => window.cancelAnimationFrame(frame);
   }, [requiredExpanded]);
 
   if (nodes.length === 0) {

@@ -23,13 +23,8 @@ import {
 } from "@/lib/page-document";
 import {
   applyAltText,
-  bindPageEditor,
   commitLink,
   commitNote,
-  handleEditorDrop,
-  handleEditorKeyDown,
-  handleEditorPaste,
-  handleImageControlClick,
   getEditorInsertionContext,
   insertEditorBlockHtml,
   insertEditorLink,
@@ -38,7 +33,6 @@ import {
   registerFormatIssueReporter,
   registerLinkEditor,
   registerNoteEditor,
-  refreshEditorFormatting,
   releaseLinkDraft,
   removeLink,
   removeNote,
@@ -47,7 +41,6 @@ import {
   type LinkEditRequest,
   type NoteEditRequest,
 } from "@/lib/page-editor-format";
-import { noteEditorInput } from "@/lib/page-editor-undo";
 import { textToRichText } from "@/lib/rich-text";
 import type { EditorPalette } from "@/lib/kb-theme";
 import type { ContentBlock } from "@/lib/types";

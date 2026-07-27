@@ -43,9 +43,13 @@ export function EditorNotesRail({
   }, [rootSelector]);
 
   useEffect(() => {
-    refresh();
+    const frame = window.requestAnimationFrame(() => {
+      refresh();
+    });
     const root = document.querySelector(rootSelector);
-    if (!root) return;
+    if (!root) {
+      return () => window.cancelAnimationFrame(frame);
+    }
     const observer = new MutationObserver(() => refresh());
     observer.observe(root, {
       subtree: true,
@@ -54,7 +58,10 @@ export function EditorNotesRail({
       attributes: true,
       attributeFilter: ["data-note-body", "data-note-id", "class"],
     });
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [refresh, rootSelector]);
 
   if (notes.length === 0) {

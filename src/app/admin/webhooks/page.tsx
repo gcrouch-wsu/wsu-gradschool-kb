@@ -3,7 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageLoader } from "@/components/PageLoader";
-import type { WebhookEndpoint, WebhookEvent } from "@/lib/types";
+import type { WebhookEvent } from "@/lib/types";
+
+type WebhookListItem = {
+  id: string;
+  url: string;
+  events: WebhookEvent[];
+  enabled: boolean;
+  createdAt: string;
+  hasSecret: boolean;
+};
 
 const EVENT_OPTIONS: Array<{ value: WebhookEvent; label: string }> = [
   { value: "page.published", label: "Page published" },
@@ -11,10 +20,11 @@ const EVENT_OPTIONS: Array<{ value: WebhookEvent; label: string }> = [
   { value: "page.draft", label: "Page saved as draft" },
   { value: "review.overdue", label: "Review overdue" },
   { value: "asset.replaced", label: "Asset version activated" },
+  { value: "excerpt.stale", label: "Stale excerpt detected" },
 ];
 
 export default function AdminWebhooksPage() {
-  const [hooks, setHooks] = useState<WebhookEndpoint[]>([]);
+  const [hooks, setHooks] = useState<WebhookListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState("");
@@ -30,13 +40,28 @@ export default function AdminWebhooksPage() {
     if (!response.ok) {
       throw new Error(typeof data.message === "string" ? data.message : "Could not load webhooks.");
     }
-    setHooks(Array.isArray(data.hooks) ? data.hooks : []);
+    setHooks(Array.isArray(data.hooks) ? (data.hooks as WebhookListItem[]) : []);
   }
 
   useEffect(() => {
-    loadHooks()
-      .catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load webhooks."))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    const frame = window.requestAnimationFrame(() => {
+      loadHooks()
+        .catch((caught) => {
+          if (!cancelled) {
+            setError(caught instanceof Error ? caught.message : "Could not load webhooks.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        });
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
   }, []);
 
   function toggleEvent(event: WebhookEvent) {

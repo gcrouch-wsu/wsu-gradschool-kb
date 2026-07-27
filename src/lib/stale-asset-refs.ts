@@ -1,5 +1,5 @@
 import { assetHasPublicPublishedUsage, getAllKbsForAdmin, getAllPagesForAdmin, getAssetById } from "@/lib/kb-store";
-import type { ContentBlock, KbPage, KnowledgeBase } from "@/lib/types";
+import type { KbPage, KnowledgeBase } from "@/lib/types";
 
 export interface StaleAssetRefItem {
   pageId: string;

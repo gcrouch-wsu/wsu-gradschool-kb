@@ -9,6 +9,7 @@ const VALID_EVENTS = new Set<WebhookEvent>([
   "page.draft",
   "review.overdue",
   "asset.replaced",
+  "excerpt.stale",
 ]);
 
 type WebhookListItem = Omit<WebhookEndpoint, "secret"> & { hasSecret: boolean };

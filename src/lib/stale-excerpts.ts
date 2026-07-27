@@ -1,5 +1,5 @@
 import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
-import type { ContentBlock, KbPage, KnowledgeBase } from "@/lib/types";
+import type { ContentBlock, KbPage } from "@/lib/types";
 
 export interface StaleExcerptItem {
   pageId: string;

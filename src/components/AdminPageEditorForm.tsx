@@ -652,6 +652,8 @@ export function AdminPageEditorForm({
       });
     }, 3000);
     return () => clearTimeout(timer);
+    // buildRevisionSnapshot closes over the same editor fields as currentSnapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot fields are covered by currentSnapshot
   }, [currentSnapshot, dirty, page.id]);
 
   function clearBackup() {

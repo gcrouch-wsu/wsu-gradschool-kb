@@ -3,7 +3,12 @@ import { isCronAuthorized } from "@/lib/cron-auth";
 import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
 import { sendEmail } from "@/lib/email";
 import { listUsers, listUserAssignments } from "@/lib/db-users";
-import { getSql, isDatabaseEnabled } from "@/lib/db";
+import { isDatabaseEnabled } from "@/lib/db";
+import {
+  markNotificationSent,
+  todayStartIso,
+  wasNotificationSentToday,
+} from "@/lib/cron-notification-dedupe";
 import { listStaleExcerpts } from "@/lib/stale-excerpts";
 import { dispatchWebhooks } from "@/lib/webhooks";
 import { logError } from "@/lib/log";
@@ -22,46 +27,6 @@ function daysUntil(dateIso: string | null | undefined): number | null {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.ceil((target - today.getTime()) / (24 * 60 * 60 * 1000));
-}
-
-function todayStartIso() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today.toISOString();
-}
-
-async function wasNotificationSentToday(action: string, entityId: string, dayStartIso: string) {
-  const sql = getSql();
-  const rows = await sql`
-    SELECT 1
-    FROM kb_audit_log
-    WHERE action = ${action}
-      AND entity_type = 'page'
-      AND entity_id = ${entityId}
-      AND created_at >= ${dayStartIso}::timestamptz
-    LIMIT 1
-  `;
-  return rows.length > 0;
-}
-
-async function markNotificationSent(input: {
-  action: string;
-  entityId: string;
-  entityLabel: string;
-  kbId: string;
-  details: Record<string, unknown>;
-}) {
-  const sql = getSql();
-  await sql`
-    INSERT INTO kb_audit_log (
-      id, actor_email, actor_role, action, entity_type, entity_id,
-      entity_label, kb_id, details, created_at
-    ) VALUES (
-      ${`cron-${crypto.randomUUID()}`}, 'system', 'admin', ${input.action},
-      'page', ${input.entityId}, ${input.entityLabel}, ${input.kbId},
-      ${JSON.stringify(input.details)}, now()
-    )
-  `;
 }
 
 export async function GET(request: Request) {
@@ -162,11 +127,14 @@ export async function GET(request: Request) {
           await sendEmail({ to: user.email, subject, text });
         }
       }
-      await dispatchWebhooks("page.draft", {
-        type: "stale_excerpt",
+      await dispatchWebhooks("excerpt.stale", {
         pageId: item.pageId,
+        pageTitle: item.pageTitle,
         sourcePageId: item.sourcePageId,
+        sourceTitle: item.sourceTitle,
         kbId: item.kbId,
+        excerptBlockId: item.excerptBlockId,
+        sourceUpdatedDisplayDate: item.sourceUpdatedDisplayDate || null,
       });
       await markNotificationSent({
         action: STALE_EXCERPT_NOTIFICATION_ACTION,

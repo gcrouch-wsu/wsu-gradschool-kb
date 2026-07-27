@@ -829,7 +829,8 @@ curl -sS https://YOUR_HOST/api/health
 - Rotate `CRON_SECRET` by updating Vercel environment variables, redeploying, and confirming the scheduled routes still authorize.
 - Treat missing email/provider configuration as non-fatal unless the specific cron route documents otherwise.
 - `/api/admin/cron/review-digest` sends weekly review-date digests when an email provider is configured; without one it logs recipients/subjects as structured JSON and reports skipped deliveries.
-- `/api/admin/cron/review-overdue` sends overdue-review notifications, stale-excerpt notices, and related webhooks.
+- `/api/admin/cron/review-overdue` sends overdue-review notifications, stale-excerpt notices, and related webhooks (`review.overdue`, `excerpt.stale`).
+- `/api/admin/cron/revision-cleanup` keeps the newest 50 revisions per page and deletes abandoned `page_server_drafts` older than 30 days.
 - `/api/admin/cron/sourced-staleness` checks P&P sourced blocks for changed/missing/unreachable sources.
 - `/api/admin/cron/scheduled-publish` attempts due scheduled publishes through the normal publish gate.
 - `/api/admin/cron/audit-cleanup` also folds page-view rows older than 90 days into monthly totals.
@@ -851,6 +852,7 @@ curl -sS https://YOUR_HOST/api/health
   search, and file URLs.
 - Test owner KB export on a media-heavy KB after deploy. The ZIP response is streamed and asset bytes are loaded one entry at a time; if an asset fetch fails mid-stream the download is truncated and a structured `kb-export` error is logged, so verify the downloaded ZIP opens cleanly.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
+- If webhook endpoints are configured under `/admin/webhooks`, confirm a test publish (or overdue/stale cron) delivers to at least one HTTPS subscriber with `x-kb-signature` / `x-kb-event`.
 - `/admin/usage` loads aggregate view counts when `DATABASE_URL` is configured.
 - `/admin/review` → **Check sourced content** runs without error (lists only changed/missing/unreachable P&P sources).
 - Logs are structured JSON and suitable for forwarding through Vercel log drains.

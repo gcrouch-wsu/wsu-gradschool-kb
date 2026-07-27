@@ -1447,17 +1447,32 @@ export async function searchKb(
     scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
     let results = scored.map((entry) => entry.result);
     if (results.length === 0 && normalized.length >= 3) {
-      const dataset = await getDataset();
-      const fallbackCandidates = pagesForSearchScope(dataset, kbId, includeStaff, options)
-        .filter((page) => (page.nodeKind ?? "page") === "page" && matchesTagFacets(page.tags, tagFacets))
-        .map((page) => ({
-          id: page.id,
-          title: page.title,
-          summary: page.summary,
-          tags: normalizePageTags(page.tags),
-          path: page.path,
-          kbId: page.kbId,
-        }));
+      // Scoped lightweight candidates only — never load the full corpus via getDataset()
+      // on anonymous/public search (project_spec §8).
+      const fuzzyRows = (await sql`
+        SELECT id, title, summary, tags, path, kb_id
+        FROM kb_pages
+        WHERE COALESCE(kb_pages.node_kind, 'page') = 'page'
+        ${kbFilterPages}
+        ${pageVisibilityFilter}
+        ${tagFilterPages}
+        LIMIT 500
+      `) as unknown as Array<{
+        id: string;
+        title: string;
+        summary: string;
+        tags: unknown;
+        path: string;
+        kb_id: string;
+      }>;
+      const fallbackCandidates = fuzzyRows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        summary: row.summary,
+        tags: normalizePageTags(row.tags),
+        path: row.path ? row.path.split("/") : [],
+        kbId: row.kb_id,
+      }));
       const fallbackScored = rankFuzzyCandidates(normalized, fallbackCandidates).map((entry) => ({
         score: entry.score,
         result: {

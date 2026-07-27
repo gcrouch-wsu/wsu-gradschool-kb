@@ -2,6 +2,20 @@
 
 import { useEffect, useState } from "react";
 
+function tourStorageKey(tourId: string) {
+  return `kb-guided-tour:${tourId}`;
+}
+
+function initialTourIndex(tourId: string, stepCount: number): number | null {
+  if (typeof window === "undefined" || stepCount === 0) {
+    return null;
+  }
+  if (window.localStorage.getItem(tourStorageKey(tourId)) === "done") {
+    return null;
+  }
+  return 0;
+}
+
 export function GuidedTour({
   tourId,
   steps,
@@ -9,16 +23,14 @@ export function GuidedTour({
   tourId: string;
   steps: Array<{ title: string; body: string }>;
 }) {
-  const [index, setIndex] = useState<number | null>(null);
+  const [index, setIndex] = useState<number | null>(() => initialTourIndex(tourId, steps.length));
 
   useEffect(() => {
-    const key = `kb-guided-tour:${tourId}`;
-    if (typeof window !== "undefined" && window.localStorage.getItem(key) === "done") {
-      return;
-    }
-    if (steps.length > 0) {
-      setIndex(0);
-    }
+    // Re-evaluate when the tour id/steps change after hydration.
+    const frame = window.requestAnimationFrame(() => {
+      setIndex(initialTourIndex(tourId, steps.length));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [tourId, steps.length]);
 
   if (index === null || !steps[index]) {
@@ -29,7 +41,7 @@ export function GuidedTour({
   const isLast = index >= steps.length - 1;
 
   function finish() {
-    window.localStorage.setItem(`kb-guided-tour:${tourId}`, "done");
+    window.localStorage.setItem(tourStorageKey(tourId), "done");
     setIndex(null);
   }
 

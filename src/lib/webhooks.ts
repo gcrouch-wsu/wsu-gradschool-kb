@@ -11,6 +11,7 @@ const VALID_EVENTS = new Set<WebhookEvent>([
   "page.draft",
   "review.overdue",
   "asset.replaced",
+  "excerpt.stale",
 ]);
 
 function mapRow(row: {

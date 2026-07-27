@@ -59,3 +59,19 @@ export async function deletePageServerDraft(pageId: string, authorUserId: string
   const sql = getSql();
   await sql`DELETE FROM page_server_drafts WHERE page_id = ${pageId} AND author_user_id = ${authorUserId}`;
 }
+
+/** Drop abandoned server drafts older than `olderThanDays` (default 30). */
+export async function cleanupPageServerDrafts(olderThanDays = 30): Promise<number> {
+  if (!isDatabaseEnabled()) {
+    return 0;
+  }
+  await ensureSchema();
+  const sql = getSql();
+  const days = Math.max(1, Math.round(olderThanDays));
+  const result = await sql`
+    DELETE FROM page_server_drafts
+    WHERE updated_at < now() - (${days}::int * interval '1 day')
+    RETURNING page_id
+  `;
+  return result.length;
+}
