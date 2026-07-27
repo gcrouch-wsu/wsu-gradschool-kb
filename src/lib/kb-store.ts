@@ -703,6 +703,10 @@ export async function getExcerptReferencesToPage(sourcePageId: string): Promise<
 export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolean> {
   if (isDatabaseEnabled()) {
     const sql = getSql();
+    // Selected-text document links store data-asset-id inside rich-text HTML (nested in
+    // blocks JSON). Match both escaped JSON and plain attribute forms.
+    const dataAssetAttr = `%data-asset-id="${asset.id}"%`;
+    const dataAssetAttrEscaped = `%data-asset-id=\\"${asset.id}\\"%`;
     const rows = (await sql`
       SELECT 1
       FROM kb_pages
@@ -716,6 +720,8 @@ export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolea
             WHERE block.value->>'type' IN ('image', 'asset_link')
               AND block.value->>'assetId' = ${asset.id}
           )
+          OR kb_pages.blocks::text LIKE ${dataAssetAttr}
+          OR kb_pages.blocks::text LIKE ${dataAssetAttrEscaped}
         )
         AND NOT EXISTS (
           SELECT 1 FROM kb_pages p2
@@ -1450,7 +1456,10 @@ export async function updateAssetStatus(assetId: string, status: Asset["status"]
   return updated;
 }
 
-export async function updateAssetDescription(assetId: string, description: string): Promise<Asset> {
+export async function updateAssetMetadata(
+  assetId: string,
+  patch: { description?: string; altText?: string; tags?: unknown },
+): Promise<{ asset: Asset; fields: string[] }> {
   const normalizedId = normalizeRecordId(assetId);
   const dataset = await getDataset();
   const existing = dataset.assets.find((asset) => asset.id === normalizedId);
@@ -1458,11 +1467,26 @@ export async function updateAssetDescription(assetId: string, description: strin
     throw new Error("Asset not found.");
   }
 
+  const fields: string[] = [];
   const updated: Asset = {
     ...existing,
-    description: description.trim(),
     updatedDisplayDate: new Date().toISOString().slice(0, 10),
   };
+  if (typeof patch.description === "string") {
+    updated.description = patch.description.trim();
+    fields.push("description");
+  }
+  if (typeof patch.altText === "string") {
+    updated.altText = patch.altText.trim();
+    fields.push("altText");
+  }
+  if (patch.tags !== undefined) {
+    updated.tags = normalizeAssetTags(patch.tags);
+    fields.push("tags");
+  }
+  if (fields.length === 0) {
+    throw new Error("A description, altText, or tags value is required.");
+  }
 
   if (isDatabaseEnabled()) {
     await updateAssetRecord(updated);
@@ -1471,64 +1495,27 @@ export async function updateAssetDescription(assetId: string, description: strin
     const index = list.findIndex((asset) => asset.id === normalizedId);
     if (index >= 0) {
       list[index] = updated;
+    } else {
+      list.push(updated);
     }
   }
 
-  return updated;
+  return { asset: updated, fields };
+}
+
+export async function updateAssetDescription(assetId: string, description: string): Promise<Asset> {
+  const { asset } = await updateAssetMetadata(assetId, { description });
+  return asset;
 }
 
 export async function updateAssetAltText(assetId: string, altText: string): Promise<Asset> {
-  const normalizedId = normalizeRecordId(assetId);
-  const dataset = await getDataset();
-  const existing = dataset.assets.find((asset) => asset.id === normalizedId);
-  if (!existing) {
-    throw new Error("Asset not found.");
-  }
-
-  const updated: Asset = {
-    ...existing,
-    altText: altText.trim(),
-    updatedDisplayDate: new Date().toISOString().slice(0, 10),
-  };
-
-  if (isDatabaseEnabled()) {
-    await updateAssetRecord(updated);
-  } else {
-    const list = runtimeAssets();
-    const index = list.findIndex((asset) => asset.id === normalizedId);
-    if (index >= 0) {
-      list[index] = updated;
-    }
-  }
-
-  return updated;
+  const { asset } = await updateAssetMetadata(assetId, { altText });
+  return asset;
 }
 
 export async function updateAssetTags(assetId: string, tags: unknown): Promise<Asset> {
-  const normalizedId = normalizeRecordId(assetId);
-  const dataset = await getDataset();
-  const existing = dataset.assets.find((asset) => asset.id === normalizedId);
-  if (!existing) {
-    throw new Error("Asset not found.");
-  }
-
-  const updated: Asset = {
-    ...existing,
-    tags: normalizeAssetTags(tags),
-    updatedDisplayDate: new Date().toISOString().slice(0, 10),
-  };
-
-  if (isDatabaseEnabled()) {
-    await updateAssetRecord(updated);
-  } else {
-    const list = runtimeAssets();
-    const index = list.findIndex((asset) => asset.id === normalizedId);
-    if (index >= 0) {
-      list[index] = updated;
-    }
-  }
-
-  return updated;
+  const { asset } = await updateAssetMetadata(assetId, { tags });
+  return asset;
 }
 
 export async function permanentlyDeletePage(pageId: string): Promise<void> {

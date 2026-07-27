@@ -1,4 +1,4 @@
-import { extractAssetUsages } from "@/lib/asset-lifecycle";
+import { collectPageAssetUsages, extractAssetUsages } from "@/lib/asset-lifecycle";
 import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { getAllAssetsForAdmin, getAllKbsForAdmin, getAllPagesForAdmin, getAssetStatusById } from "@/lib/kb-store";
 import {
@@ -118,41 +118,15 @@ export async function getAdminReviewDashboard(
 
   const brokenReferences: ReviewBrokenReference[] = [];
   for (const page of allPages) {
-    for (const block of page.blocks) {
-      if (block.type === "image" && block.assetId) {
-        const status = await getAssetStatusById(block.assetId);
-        if (status !== "active") {
-          brokenReferences.push({
-            pageId: page.id,
-            pageTitle: page.title,
-            pageStatus: page.status,
-            assetId: block.assetId,
-            usageType: "inline_image",
-          });
-        }
-      }
-      if (block.type === "asset_link") {
-        const status = await getAssetStatusById(block.assetId);
-        if (status !== "active") {
-          brokenReferences.push({
-            pageId: page.id,
-            pageTitle: page.title,
-            pageStatus: page.status,
-            assetId: block.assetId,
-            usageType: "inline_link",
-          });
-        }
-      }
-    }
-    for (const assetId of page.relatedAssetIds) {
-      const status = await getAssetStatusById(assetId);
+    for (const usage of collectPageAssetUsages(page)) {
+      const status = await getAssetStatusById(usage.assetId);
       if (status !== "active") {
         brokenReferences.push({
           pageId: page.id,
           pageTitle: page.title,
           pageStatus: page.status,
-          assetId,
-          usageType: "related",
+          assetId: usage.assetId,
+          usageType: usage.usageType,
         });
       }
     }

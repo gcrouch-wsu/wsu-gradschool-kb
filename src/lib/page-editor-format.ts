@@ -387,7 +387,12 @@ export function getEditorInsertionContext(): { hasInsertionPoint: boolean; hasTe
   return { hasInsertionPoint, hasTextSelection };
 }
 
-export function insertEditorLink(request: { url: string; label: string; newTab?: boolean }): boolean {
+export function insertEditorLink(request: {
+  url: string;
+  label: string;
+  newTab?: boolean;
+  assetId?: string;
+}): boolean {
   const url = normalizeLinkUrl(request.url);
   if (!url) {
     return false;
@@ -419,7 +424,9 @@ export function insertEditorLink(request: { url: string; label: string; newTab?:
   const text = range.toString().trim() || request.label.trim() || url;
   const targetAttr = request.newTab ? ' target="_blank"' : "";
   const relAttr = request.newTab ? ' rel="noopener noreferrer"' : "";
-  const html = `<a href="${escapeHtml(url)}"${targetAttr}${relAttr}>${escapeHtml(text)}</a>`;
+  const assetId = (request.assetId ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
+  const assetAttr = assetId ? ` data-asset-id="${escapeHtml(assetId)}"` : "";
+  const html = `<a href="${escapeHtml(url)}"${targetAttr}${assetAttr}${relAttr}>${escapeHtml(text)}</a>`;
   snapshotStructuralChange();
   const ok = runEditorCommand("insertHTML", html);
   if (!ok) {

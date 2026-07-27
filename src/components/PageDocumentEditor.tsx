@@ -136,7 +136,11 @@ export function PageDocumentEditor({
 
   function insertBlockFromPicker(payload: MediaPickerInsert) {
     if (payload.type === "link") {
-      const linked = insertEditorLink({ url: payload.url, label: payload.label });
+      const linked = insertEditorLink({
+        url: payload.url,
+        label: payload.label,
+        assetId: payload.assetId,
+      });
       if (!linked && payload.assetId) {
         // Only fall back to an asset_link block when there was no text selection.
         // Cross-block selections fail in insertEditorLink and must not silently append.
