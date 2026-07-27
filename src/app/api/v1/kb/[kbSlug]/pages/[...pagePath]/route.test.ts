@@ -129,9 +129,9 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     expect(store.updatePage).not.toHaveBeenCalled();
   });
 
-  it("does not write group or link nodes through the article API", async () => {
+  it.each(["group", "link"] as const)("does not write %s nodes through the article API", async (nodeKind) => {
     const store = await import("@/lib/kb-store");
-    const response = await patchPage({ summary: "Updated summary." }, { nodeKind: "link" });
+    const response = await patchPage({ summary: "Updated summary." }, { nodeKind });
     expect(response.status).toBe(404);
     expect(store.updatePage).not.toHaveBeenCalled();
   });
