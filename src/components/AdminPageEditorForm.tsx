@@ -780,7 +780,11 @@ export function AdminPageEditorForm({
   );
 
   async function draftSummaryWithAi() {
-    if (lockError || summaryDraftBusy) return;
+    if (lockError) {
+      setSummaryDraftHint("This page is locked. Unlock or wait for the lock before drafting a summary.");
+      return;
+    }
+    if (summaryDraftBusy) return;
     if (!summaryDraftReadiness.ok) {
       setSummaryDraftHint(summaryDraftReadiness.message);
       return;
@@ -792,7 +796,7 @@ export function AdminPageEditorForm({
       return;
     }
     setSummaryDraftBusy(true);
-    setSummaryDraftHint(null);
+    setSummaryDraftHint("Drafting summary… this can take up to a minute.");
     setError(null);
     try {
       const response = await fetch(`/api/admin/pages/${page.id}/summary-draft`, {
