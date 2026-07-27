@@ -654,8 +654,8 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   lost pasted images, touchy link insertion, stale HTML-source saves, table-cell toolbar binding, and
   nested-list / Info-box callout rendering were all found by editors/review in 2026-07 and patched
   point-by-point). Every editor change needs manual verification in a real browser (Chrome + Firefox at
-  minimum), and further reports should be expected. FB-09/FB-29 moved flow, card, and procedure
-  surfaces to Lexical; FB-25 defines the release-grade browser/a11y gate.
+  minimum), and further reports should be expected. FB-09/FB-29/FB-26 moved flow, card, procedure,
+  and table-cell surfaces to Lexical; FB-25 defines the release-grade browser/a11y gate.
 - **Revision history is per-save snapshots with optional side-by-side compare:** every page
   create and save writes a full `kb_page_revisions` snapshot; editors can view/restore any of the
   newest 50 per page and compare two revisions as a plain-text line diff from the History panel.
