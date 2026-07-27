@@ -99,9 +99,10 @@ export default async function AdminHealthPage() {
     redirect("/");
   }
 
-  const report = await getContentHealthReport(await accessibleKbIds(session));
-  const staleExcerpts = await listStaleExcerpts();
-  const staleAssetRefs = await listStaleAssetRefs(await accessibleKbIds(session));
+  const scopedKbIds = await accessibleKbIds(session);
+  const report = await getContentHealthReport(scopedKbIds);
+  const staleExcerpts = await listStaleExcerpts(scopedKbIds);
+  const staleAssetRefs = await listStaleAssetRefs(scopedKbIds);
 
   return (
     <div className="page-shell">

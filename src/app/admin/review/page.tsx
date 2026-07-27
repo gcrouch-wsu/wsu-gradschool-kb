@@ -12,7 +12,11 @@ export default async function AdminReviewPage() {
     redirect("/admin/sign-in?next=/admin/review");
   }
 
-  const canApprove = session.role === "owner" || session.role === "admin";
+  // Managers may approve in their assigned KBs, and the dashboard is already
+  // scoped to those KBs by accessibleKbIds. The status API re-checks per page
+  // via canPublishInKb, so this only controls whether the control is offered.
+  const canApprove =
+    session.role === "owner" || session.role === "admin" || session.role === "manager";
   const review = await getAdminReviewDashboard(await accessibleKbIds(session));
 
   return (

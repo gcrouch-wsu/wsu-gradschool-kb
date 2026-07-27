@@ -3,6 +3,8 @@ import { createHmac } from "crypto";
 import { isDatabaseEnabled, getSql, ensureSchema } from "@/lib/db";
 import type { WebhookEndpoint, WebhookEvent } from "@/lib/types";
 
+const WEBHOOK_TIMEOUT_MS = 5_000;
+
 const VALID_EVENTS = new Set<WebhookEvent>([
   "page.published",
   "page.proposed",
@@ -88,6 +90,8 @@ export async function dispatchWebhooks(event: WebhookEvent, payload: Record<stri
   await Promise.all(
     endpoints.map(async (hook) => {
       try {
+        // Bounded: dispatch is awaited inline on the publish/status path, so a
+        // hung subscriber must not hold the editor's request open.
         await fetch(hook.url, {
           method: "POST",
           headers: {
@@ -96,6 +100,7 @@ export async function dispatchWebhooks(event: WebhookEvent, payload: Record<stri
             "x-kb-event": event,
           },
           body,
+          signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
         });
       } catch {
         // Non-fatal: webhook delivery is best-effort.

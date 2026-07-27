@@ -25,34 +25,43 @@ function mergeGroups(custom: string[][] | undefined): string[][] {
   return [...DEFAULT_SYNONYM_GROUPS, ...custom];
 }
 
-/** Expand a free-text query with synonym alternatives (OR-friendly tokens). */
-export function expandSearchQueryWithSynonyms(query: string, customGroups?: string[][]): string {
-  const trimmed = query.trim();
+export interface ExpandedSearchQuery {
+  /** The caller's query, trimmed and lowercased. Never widened. */
+  original: string;
+  /** Alternative terms for the query, to be OR-ed against it — never AND-ed. */
+  synonyms: string[];
+}
+
+/**
+ * Split a query into the original text plus synonym alternatives.
+ *
+ * Callers must combine these disjunctively. Appending synonyms to the query
+ * string instead makes them extra required terms in `to_tsquery` /
+ * `websearch_to_tsquery` (both AND bare terms), so "handbook" would only match
+ * pages that also say "manual" and "guide".
+ */
+export function expandSearchQueryTerms(query: string, customGroups?: string[][]): ExpandedSearchQuery {
+  const trimmed = query.trim().toLowerCase();
   if (!trimmed) {
-    return "";
+    return { original: "", synonyms: [] };
   }
   const lookup = buildLookup(mergeGroups(customGroups));
-  const tokens = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
   const extras = new Set<string>();
   for (const token of tokens) {
-    const alts = lookup.get(token);
-    if (alts) {
-      for (const alt of alts) {
-        extras.add(alt);
-      }
+    for (const alt of lookup.get(token) ?? []) {
+      extras.add(alt);
     }
   }
   for (const [key, alts] of lookup) {
-    if (key.includes(" ") && trimmed.toLowerCase().includes(key)) {
+    if (key.includes(" ") && trimmed.includes(key)) {
       for (const alt of alts) {
         extras.add(alt);
       }
     }
   }
-  if (extras.size === 0) {
-    return trimmed;
-  }
-  return `${trimmed} ${[...extras].join(" ")}`;
+  extras.delete(trimmed);
+  return { original: trimmed, synonyms: [...extras] };
 }
 
 export function listSynonymGroupsForTests() {

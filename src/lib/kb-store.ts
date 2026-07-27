@@ -56,7 +56,7 @@ import {
   normalizeAssetTags,
   normalizePageTags,
 } from "@/lib/page-tags";
-import { expandSearchQueryWithSynonyms } from "@/lib/search-synonyms";
+import { expandSearchQueryTerms } from "@/lib/search-synonyms";
 import { rankFuzzyCandidates } from "@/lib/search-fuzzy";
 import { loadSiteSettings } from "@/lib/db";
 import type {
@@ -1219,8 +1219,10 @@ export async function searchKb(
 ): Promise<SearchResult[]> {
   const tagFacets = normalizeSearchTags(options);
   const settings = await loadSiteSettings();
-  const expandedQuery = expandSearchQueryWithSynonyms(query, settings.searchSynonymGroups);
-  const normalized = expandedQuery.trim().toLowerCase();
+  // Synonyms are OR-ed into the tsquery below. They must never be folded into
+  // `normalized`, which drives the AND-ed token chain, websearch_to_tsquery,
+  // and the in-memory / fuzzy scorers.
+  const { original: normalized, synonyms } = expandSearchQueryTerms(query, settings.searchSynonymGroups);
   if (!normalized && tagFacets.length === 0) {
     return [];
   }
@@ -1233,8 +1235,24 @@ export async function searchKb(
       .map((t) => t.replace(/[^a-z0-9]/gi, ""))
       .filter(Boolean);
 
-    const searchTokens = safeTokens.length > 0
+    const baseTokens = safeTokens.length > 0
       ? safeTokens.map((t, i) => (i === safeTokens.length - 1 ? `${t}:*` : t)).join(" & ")
+      : null;
+    // Each synonym becomes its own alternative branch, so "handbook" matches
+    // handbook OR manual OR guide instead of requiring all three.
+    const synonymBranches = synonyms
+      .map((term) =>
+        term
+          .split(/\s+/)
+          .map((t) => t.replace(/[^a-z0-9]/gi, ""))
+          .filter(Boolean),
+      )
+      .filter((parts) => parts.length > 0)
+      .map((parts) => (parts.length === 1 ? `${parts[0]}:*` : `(${parts.join(" & ")})`));
+    const searchTokens = baseTokens
+      ? synonymBranches.length > 0
+        ? [`(${baseTokens})`, ...synonymBranches].join(" | ")
+        : baseTokens
       : null;
 
     if (!searchTokens && tagFacets.length === 0) return [];

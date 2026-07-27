@@ -77,6 +77,13 @@ export async function GET(request: Request) {
     const pages = (await Promise.all(kbs.map((kb) => getAllPagesForAdmin(kb.id)))).flat();
     const kbById = new Map(kbs.map((kb) => [kb.id, kb]));
     const users = await listUsers();
+    // Resolved once: this used to run listUserAssignments per user *per overdue
+    // page*, so a backlog of N pages cost N x users round-trips.
+    const assignmentsByUser = new Map<string, string[]>(
+      await Promise.all(
+        users.map(async (user) => [user.id, await listUserAssignments(user.id)] as [string, string[]]),
+      ),
+    );
     const notificationDayStart = todayStartIso();
     const overdue = pages.filter((page) => {
       if (page.status === "archived") {
@@ -104,7 +111,7 @@ export async function GET(request: Request) {
           recipients.add(user.email.toLowerCase());
           continue;
         }
-        const assignments = await listUserAssignments(user.id);
+        const assignments = assignmentsByUser.get(user.id) ?? [];
         if (assignments.includes(page.kbId) && (user.role === "manager" || user.role === "editor")) {
           recipients.add(user.email.toLowerCase());
         }

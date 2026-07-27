@@ -32,7 +32,7 @@ export async function getEditorialAnalytics(session: AdminSession): Promise<Edit
     getContentHealthReport(allowedKbIds),
     listPageFeedbackAggregates(allowedKbIds),
     getUsageAnalyticsForSession(session),
-    listStaleExcerpts(),
+    listStaleExcerpts(allowedKbIds),
     listStaleAssetRefs(allowedKbIds),
     listExcerptIndex(allowedKbIds),
   ]);

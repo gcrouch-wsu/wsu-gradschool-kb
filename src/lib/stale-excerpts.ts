@@ -16,14 +16,24 @@ function excerptBlocks(page: KbPage): Array<Extract<ContentBlock, { type: "excer
   return page.blocks.filter((block): block is Extract<ContentBlock, { type: "excerpt" }> => block.type === "excerpt");
 }
 
-export async function listStaleExcerpts(): Promise<StaleExcerptItem[]> {
+/**
+ * `allowedKbIds` scopes the host pages reported, matching `listStaleAssetRefs`.
+ * `null` means KB-wide (owner/admin, and the cron, which mails owners/admins).
+ */
+export async function listStaleExcerpts(allowedKbIds: string[] | null = null): Promise<StaleExcerptItem[]> {
   const kbs = await getAllKbsForAdmin();
-  const pages = (await Promise.all(kbs.map((kb) => getAllPagesForAdmin(kb.id)))).flat();
+  const allowed = allowedKbIds === null ? null : new Set(allowedKbIds);
+  const allPages = (await Promise.all(kbs.map((kb) => getAllPagesForAdmin(kb.id)))).flat();
   const kbById = new Map(kbs.map((kb) => [kb.id, kb]));
-  const pageById = new Map(pages.map((page) => [page.id, page]));
+  // Sources are resolved across every KB — an excerpt may legitimately point at
+  // another KB — but only host pages in scope are reported, and a source the
+  // caller cannot read contributes staleness without disclosing its title.
+  const pageById = new Map(allPages.map((page) => [page.id, page]));
+  const hostPages = allowed === null ? allPages : allPages.filter((page) => allowed.has(page.kbId));
+  const canSee = (kbId: string) => allowed === null || allowed.has(kbId);
   const stale: StaleExcerptItem[] = [];
 
-  for (const page of pages) {
+  for (const page of hostPages) {
     if (page.status === "archived") {
       continue;
     }
@@ -55,7 +65,7 @@ export async function listStaleExcerpts(): Promise<StaleExcerptItem[]> {
           kbId: kb.id,
           kbSlug: kb.slug,
           sourcePageId: source.id,
-          sourceTitle: source.title,
+          sourceTitle: canSee(source.kbId) ? source.title : "(source in another knowledge base)",
           sourceUpdatedDisplayDate: source.updatedDisplayDate,
           excerptBlockId: block.blockId,
         });
