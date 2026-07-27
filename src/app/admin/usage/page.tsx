@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { StatCard } from "@/components/admin/StatCard";
 import { redirect } from "next/navigation";
+import { formatAiModelLabel } from "@/lib/ai-config";
 import {
   aiFeatureLabel,
   getAiUsageAnalyticsForSession,
@@ -283,6 +284,9 @@ export default async function AdminUsagePage() {
       {!aiUsage.enabled ? (
         <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
           <h2 className="admin-panel__title">AI usage</h2>
+          <p className="meta" role="status">
+            Configured model: {formatAiModelLabel(aiUsage.provider)}
+          </p>
           <p className="admin-panel__empty">
             AI metering needs DATABASE_URL.{" "}
             {aiUsage.configured
@@ -292,6 +296,16 @@ export default async function AdminUsagePage() {
         </section>
       ) : (
         <>
+          <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
+            <h2 className="admin-panel__title">AI configuration</h2>
+            <p className="meta" role="status">
+              Configured model: <strong>{formatAiModelLabel(aiUsage.provider)}</strong>
+            </p>
+            <p className="meta">
+              Metering counts successful Draft with AI and Review with AI calls. Some free-tier models omit token
+              counts in the provider response — calls should still increment while token totals may stay at 0.
+            </p>
+          </section>
           {!aiUsage.configured ? (
             <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
               <h2 className="admin-panel__title">AI usage</h2>

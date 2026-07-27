@@ -42,3 +42,13 @@ export function parseAiTokenUsage(payload: unknown): AiTokenUsage {
 export function aiFeatureLabel(feature: AiUsageFeature): string {
   return feature === "summary_draft" ? "Draft with AI" : "Review with AI";
 }
+
+/** Successful provider calls should always count, even when token usage is omitted. */
+export function normalizeAiUsageForRecord(usage: AiTokenUsage): AiTokenUsage {
+  return {
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    totalTokens: usage.totalTokens,
+    callCount: Math.max(usage.callCount, 1),
+  };
+}

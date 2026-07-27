@@ -10,6 +10,7 @@ import { ThemeEditor } from "@/components/ThemeEditor";
 import { DEFAULT_THEME, SAFE_FONTS } from "@/lib/kb-theme";
 import { DEFAULT_AI_SUMMARY_SYSTEM_PROMPT } from "@/lib/summary-draft-core";
 import { DEFAULT_AI_PAGE_SYSTEM_PROMPT } from "@/lib/page-review-core";
+import { formatAiModelLabel, type AiProviderInfo } from "@/lib/ai-config";
 import {
   ALIGNMENTS,
   BRAND_TEXT_WEIGHTS,
@@ -36,6 +37,7 @@ export default function AdminSettingsPage() {
     })),
   ];
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [aiProvider, setAiProvider] = useState<AiProviderInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +52,7 @@ export default function AdminSettingsPage() {
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Failed to load settings"))))
       .then((data) => {
         setSettings(data.settings);
+        setAiProvider(data.aiProvider ?? null);
         setDbEnabled(Boolean(data.dbEnabled));
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Error loading settings"))
@@ -690,6 +693,9 @@ export default function AdminSettingsPage() {
               Site-wide defaults for AI features. Each knowledge base can override these under{" "}
               <strong>Admin → Knowledge bases → Edit</strong>. Resolution order: KB override → this
               site default → built-in default.
+            </p>
+            <p className="meta" role="status">
+              Configured model: {formatAiModelLabel(aiProvider)}
             </p>
           </section>
 

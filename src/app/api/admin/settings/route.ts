@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { getAiProviderInfo } from "@/lib/ai-config";
 import { isDatabaseEnabled, loadSiteSettings, saveSiteSettings } from "@/lib/db";
 import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   const settings = await loadSiteSettings();
-  return NextResponse.json({ settings, dbEnabled: isDatabaseEnabled() });
+  return NextResponse.json({ settings, dbEnabled: isDatabaseEnabled(), aiProvider: getAiProviderInfo() });
 }
 
 export async function PUT(request: Request) {

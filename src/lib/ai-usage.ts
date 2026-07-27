@@ -1,16 +1,20 @@
 import { accessibleKbIds, type AdminSession } from "@/lib/auth";
+import { getAiProviderInfo, type AiProviderInfo } from "@/lib/ai-config";
 import {
+  normalizeAiUsageForRecord,
   type AiTokenUsage,
   type AiUsageFeature,
 } from "@/lib/ai-usage-core";
 import { ensureSchema, getSql, isDatabaseEnabled } from "@/lib/db";
 import { logError } from "@/lib/log";
+import { after } from "next/server";
 
 export type { AiTokenUsage, AiUsageFeature } from "@/lib/ai-usage-core";
 export {
   addAiTokenUsage,
   aiFeatureLabel,
   emptyAiTokenUsage,
+  normalizeAiUsageForRecord,
   parseAiTokenUsage,
 } from "@/lib/ai-usage-core";
 
@@ -32,7 +36,9 @@ export async function recordAiUsage(input: {
   if (!isDatabaseEnabled()) {
     return;
   }
-  if (input.usage.callCount <= 0 && input.usage.totalTokens <= 0) {
+
+  const usage = normalizeAiUsageForRecord(input.usage);
+  if (usage.callCount <= 0) {
     return;
   }
 
@@ -50,10 +56,10 @@ export async function recordAiUsage(input: {
       ${input.feature},
       ${model},
       ${input.kbId},
-      ${input.usage.callCount},
-      ${input.usage.promptTokens},
-      ${input.usage.completionTokens},
-      ${input.usage.totalTokens}
+      ${usage.callCount},
+      ${usage.promptTokens},
+      ${usage.completionTokens},
+      ${usage.totalTokens}
     )
     ON CONFLICT (day, feature, model, kb_id)
     DO UPDATE SET
@@ -70,14 +76,23 @@ export function recordAiUsageLater(input: {
   kbId: string;
   usage: AiTokenUsage;
 }) {
-  void recordAiUsage(input).catch((error) => {
-    logError(error, {
-      route: "ai-usage",
-      action: "record",
-      feature: input.feature,
-      kbId: input.kbId,
+  if (!isDatabaseEnabled()) {
+    return;
+  }
+  const run = () =>
+    recordAiUsage(input).catch((error) => {
+      logError(error, {
+        route: "ai-usage",
+        action: "record",
+        feature: input.feature,
+        kbId: input.kbId,
+      });
     });
-  });
+  try {
+    after(run);
+  } catch {
+    void run();
+  }
 }
 
 export interface AiUsageFeatureTotal {
@@ -107,6 +122,7 @@ export interface AiUsagePeriod {
 export interface AiUsageAnalytics {
   enabled: boolean;
   configured: boolean;
+  provider: AiProviderInfo;
   periods: AiUsagePeriod[];
 }
 
@@ -208,21 +224,18 @@ async function getAiUsageForPeriod(
 }
 
 export async function getAiUsageAnalyticsForSession(session: AdminSession): Promise<AiUsageAnalytics> {
-  const configured = Boolean(
-    (process.env.AI_PROVIDER_ENDPOINT || "").trim() &&
-      (process.env.AI_API_KEY || "").trim() &&
-      (process.env.AI_MODEL || "").trim(),
-  );
+  const provider = getAiProviderInfo();
 
   if (!isDatabaseEnabled()) {
-    return { enabled: false, configured, periods: [] };
+    return { enabled: false, configured: provider.configured, provider, periods: [] };
   }
 
   await ensureSchema();
   const allowedKbIds = await accessibleKbIds(session);
   return {
     enabled: true,
-    configured,
+    configured: provider.configured,
+    provider,
     periods: await Promise.all([
       getAiUsageForPeriod(7, allowedKbIds),
       getAiUsageForPeriod(30, allowedKbIds),
