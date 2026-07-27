@@ -12,6 +12,7 @@ import { MediaPicker } from "@/components/MediaPicker";
 import type { MediaPickerInsert } from "@/components/MediaPicker";
 import { PageEditorDebugPanel } from "@/components/PageEditorDebugPanel";
 import { TableBlockEditor } from "@/components/TableBlockEditor";
+import { LexicalFlowSurface } from "@/components/LexicalFlowSurface";
 import { blocksToSections, sectionsToBlocks, type EditorSection } from "@/lib/page-editor-list";
 import {
   blocksToDocumentHtml,
@@ -87,6 +88,7 @@ export function PageDocumentEditor({
   const [formatHint, setFormatHint] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"visual" | "html">("visual");
   const [htmlDraft, setHtmlDraft] = useState("");
+  const [visualEpoch, setVisualEpoch] = useState(0);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -106,6 +108,7 @@ export function PageDocumentEditor({
     if (viewMode === "visual") return;
     const nextBlocks = documentHtmlToBlocks(htmlDraft);
     emitChange(blocksToSections(nextBlocks));
+    setVisualEpoch((value) => value + 1);
     setViewMode("visual");
   }
 
@@ -194,7 +197,7 @@ export function PageDocumentEditor({
 
   function handleInsertInfoBox() {
     const placeholder = "Replace with the message readers should see.";
-    const html = `<aside class="doc-alert doc-alert--info" data-block-id="${newBlockId()}" data-variant="info" role="note">${textToRichText(placeholder)}</aside>`;
+    const html = `<aside class="doc-alert doc-alert--info" data-block-id="${newBlockId()}" data-variant="info" role="note"><p>${textToRichText(placeholder)}</p></aside>`;
     if (!insertEditorBlockHtml(html)) {
       addBlockToFirstFlow({ type: "alert", blockId: newBlockId(), variant: "info", text: placeholder });
     }
@@ -480,7 +483,7 @@ export function PageDocumentEditor({
               isFirst={index === 0}
               isLast={index === sections.length - 1}
               kbId={kbId}
-              key={section.type === "flow" ? `flow-${index}` : section.block.blockId}
+              key={section.type === "flow" ? `flow-${index}-${visualEpoch}` : `${section.block.blockId}-${visualEpoch}`}
               kbSlug={kbSlug}
               onMove={moveSection}
               onRemove={() => removeSection(index)}
@@ -536,39 +539,6 @@ function SectionEditor({
   onUpdateExcerpt: (block: ContentBlock) => void;
   onUpdateSourced: (block: ContentBlock) => void;
 }) {
-  const surfaceRef = useRef<HTMLDivElement>(null);
-  const lastSyncedHtml = useRef("");
-
-  const onUpdateFlowRef = useRef(onUpdateFlow);
-  useEffect(() => {
-    onUpdateFlowRef.current = onUpdateFlow;
-  }, [onUpdateFlow]);
-
-  useEffect(() => {
-    if (section.type === "flow") {
-      const html = blocksToDocumentHtml(section.blocks, kbSlug);
-      lastSyncedHtml.current = html;
-      if (surfaceRef.current && !surfaceRef.current.innerHTML.trim()) {
-        surfaceRef.current.innerHTML = html;
-      }
-    }
-  }, [section, kbSlug]);
-
-  const bindThisSurface = useCallback(() => {
-    const node = surfaceRef.current;
-    if (node) {
-      bindPageEditor(node, () => onUpdateFlowRef.current(node.innerHTML, false));
-    }
-  }, []);
-
-  const attachSurface = useCallback((node: HTMLDivElement | null) => {
-    surfaceRef.current = node;
-    if (node) {
-      bindPageEditor(node, () => onUpdateFlowRef.current(node.innerHTML, false));
-      if (!node.innerHTML.trim()) node.innerHTML = lastSyncedHtml.current;
-    }
-  }, []);
-
   return (
     <article className="block-editor">
       <div className="block-bar">
@@ -605,27 +575,10 @@ function SectionEditor({
       </div>
 
       {section.type === "flow" && (
-        <div
-          className="wysiwyg-surface"
-          contentEditable
-          onBlur={(e) => onUpdateFlow(e.currentTarget.innerHTML, true)}
-          onClick={handleImageControlClick}
-          onDragOver={(e) => {
-            if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-          }}
-          onDrop={(e) => handleEditorDrop(e, kbId)}
-          onFocus={bindThisSurface}
-          onInput={(e) => {
-            noteEditorInput(e.nativeEvent as InputEvent);
-            onUpdateFlow(e.currentTarget.innerHTML, false);
-            refreshEditorFormatting();
-          }}
-          onKeyDown={handleEditorKeyDown}
-          onKeyUp={() => refreshEditorFormatting()}
-          onMouseUp={() => refreshEditorFormatting()}
-          onPaste={(e) => handleEditorPaste(e, kbId)}
-          ref={attachSurface}
-          suppressContentEditableWarning
+        <LexicalFlowSurface
+          initialHtml={blocksToDocumentHtml(section.blocks, kbSlug)}
+          kbId={kbId}
+          onHtmlChange={onUpdateFlow}
         />
       )}
 
@@ -710,42 +663,16 @@ function SectionEditor({
               </select>
             </label>
           </div>
-          <div
-            className="wysiwyg-surface procedure-section-editor__surface"
-            contentEditable
-            onBlur={(e) => {
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-            }}
-            onClick={handleImageControlClick}
-            onDragOver={(e) => {
-              if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-            }}
-            onDrop={(e) => handleEditorDrop(e, kbId)}
-            onFocus={(e) => {
-              const target = e.currentTarget;
-              bindPageEditor(target, () => {
-                const clean = sanitizePageDocument(target.innerHTML);
+          <div className="procedure-section-editor__surface-wrap">
+            <LexicalFlowSurface
+              initialHtml={blocksToDocumentHtml(section.block.blocks, kbSlug)}
+              kbId={kbId}
+              onHtmlChange={(html) => {
+                const clean = sanitizePageDocument(html);
                 onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              });
-            }}
-            onInput={(e) => {
-              noteEditorInput(e.nativeEvent as InputEvent);
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              refreshEditorFormatting();
-            }}
-            onKeyDown={handleEditorKeyDown}
-            onPaste={(e) => handleEditorPaste(e, kbId)}
-            onKeyUp={() => refreshEditorFormatting()}
-            onMouseUp={() => refreshEditorFormatting()}
-            ref={(node) => {
-              if (node && !node.innerHTML.trim()) {
-                node.innerHTML = blocksToDocumentHtml(section.block.blocks, kbSlug);
-              }
-            }}
-            suppressContentEditableWarning
-          />
+              }}
+            />
+          </div>
         </div>
       )}
 
@@ -795,42 +722,16 @@ function SectionEditor({
             </label>
           </div>
           <p className="meta">Card content uses continuous rich text.</p>
-          <div
-            className={`wysiwyg-surface card--bg-${section.block.background}`}
-            contentEditable
-            onBlur={(e) => {
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-            }}
-            onClick={handleImageControlClick}
-            onDragOver={(e) => {
-              if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-            }}
-            onDrop={(e) => handleEditorDrop(e, kbId)}
-            onFocus={(e) => {
-              const target = e.currentTarget;
-              bindPageEditor(target, () => {
-                const clean = sanitizePageDocument(target.innerHTML);
+          <div className={`card--bg-${section.block.background}`}>
+            <LexicalFlowSurface
+              initialHtml={blocksToDocumentHtml(section.block.blocks, kbSlug)}
+              kbId={kbId}
+              onHtmlChange={(html) => {
+                const clean = sanitizePageDocument(html);
                 onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              });
-            }}
-            onInput={(e) => {
-              noteEditorInput(e.nativeEvent as InputEvent);
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              refreshEditorFormatting();
-            }}
-            onKeyDown={handleEditorKeyDown}
-            onPaste={(e) => handleEditorPaste(e, kbId)}
-            onKeyUp={() => refreshEditorFormatting()}
-            onMouseUp={() => refreshEditorFormatting()}
-            ref={(node) => {
-              if (node && !node.innerHTML.trim()) {
-                node.innerHTML = blocksToDocumentHtml(section.block.blocks, kbSlug);
-              }
-            }}
-            suppressContentEditableWarning
-          />
+              }}
+            />
+          </div>
         </div>
       )}
 

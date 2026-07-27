@@ -612,8 +612,10 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 - Print/PDF is browser print-to-PDF, not a server-side tagged PDF generator.
 - Accessibility is publish-gate + axe smoke, not a completed WCAG certification.
 - Notes rail has no threaded resolve UI yet.
-- Editor framework migration (custom `contentEditable` → Lexical/ProseMirror) is planned, not started.
-  Phase 0 Lexical spike is available at `/admin/lexical-spike`; Phase 1 flow-surface swap is next.
+- Editor framework migration: flow, cards, and procedure surfaces use Lexical
+  (Phases 1–4); table cells remain `RichTextEditable` for FB-26 parity. Spike
+  remains at `/admin/lexical-spike`. Complete FB-09/FB-29 only after
+  `npm run test:editor` + release-gate Firefox/mobile checklist pass.
 
 ## 10. Known limitations
 

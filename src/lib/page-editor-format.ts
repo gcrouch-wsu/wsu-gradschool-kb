@@ -20,10 +20,33 @@ import {
   bindEditorSurface,
   getBoundEditorSurface,
   restoreRichTextSelection,
-  runEditorCommand,
+  runEditorCommand as runNativeEditorCommand,
   saveRichTextSelection,
 } from "@/lib/rich-text-selection";
+import {
+  isLexicalFlowActive,
+  lexicalApplyBlockTag,
+  lexicalApplyList,
+  lexicalIndent,
+  lexicalInsertHtml,
+  lexicalOutdent,
+  lexicalRedo,
+  lexicalRunFormatCommand,
+  lexicalUndo,
+} from "@/lib/lexical/commands";
+import { syncPreservedBlockFromDom } from "@/lib/lexical/sync-preserved-block";
+import { lexicalSelectionInAlert } from "@/lib/lexical/selection-context";
 import type { ContentBlock } from "@/lib/types";
+
+function runEditorCommand(command: string, value?: string): boolean {
+  if (isLexicalFlowActive()) {
+    const ok = lexicalRunFormatCommand(command, value);
+    if (ok) {
+      return true;
+    }
+  }
+  return runNativeEditorCommand(command, value);
+}
 
 let onDocumentMutate: (() => void) | null = null;
 let onFormatIssue: ((message: string | null) => void) | null = null;
@@ -664,6 +687,10 @@ export function removeNote(span: HTMLElement): boolean {
 }
 
 export function applyBlockTag(tag: "p" | "h2" | "h3"): boolean {
+  if (isLexicalFlowActive() && lexicalApplyBlockTag(tag)) {
+    notifyMutation();
+    return true;
+  }
   return applyEditorCommand("formatBlock", tag) || applyEditorCommand("formatBlock", `<${tag}>`);
 }
 
@@ -748,6 +775,8 @@ export function applyAltText(figure: HTMLElement, alt: string, decorative: boole
     figure.removeAttribute("data-needs-alt");
   }
 
+  syncPreservedBlockFromDom(figure);
+
   const surface = figure.closest(".wysiwyg-surface") as HTMLElement | null;
   surface?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   recordFormat("altText", true, decorative ? "decorative" : value);
@@ -828,12 +857,27 @@ export function handleImageControlClick(event: {
       return false;
   }
   styleImageFigure(figure);
+  syncPreservedBlockFromDom(figure);
   surface?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   recordFormat("imageControl", true, action ?? "");
   return true;
 }
 
 export function applyList(command: "insertUnorderedList" | "insertOrderedList"): boolean {
+  if (isLexicalFlowActive() && lexicalApplyList(command)) {
+    notifyMutation();
+    if (command === "insertOrderedList") {
+      const surface = getBoundEditorSurface();
+      const list = surface ? orderedListFromSelection(surface) : null;
+      if (list) {
+        const suggested = suggestedOrderedListStart(list);
+        if (suggested && suggested > 1) {
+          setOrderedListStart(list, suggested);
+        }
+      }
+    }
+    return true;
+  }
   const ok = applyEditorCommand(command);
   if (ok && command === "insertOrderedList") {
     const surface = getBoundEditorSurface();
@@ -908,6 +952,19 @@ function mutateListItem(li: HTMLLIElement, action: "indent" | "outdent"): boolea
 }
 
 export function applyIndent(): boolean {
+  if (isLexicalFlowActive()) {
+    if (lexicalIndent()) {
+      recordFormat("indent", true, "lexical");
+      return true;
+    }
+    recordFormat(
+      "indent",
+      false,
+      "first-item",
+      "Indent works on item 2 or later. Press Enter to add the next item, then indent that item.",
+    );
+    return false;
+  }
   const surface = getBoundEditorSurface();
   if (!surface) {
     recordFormat("indent", false, "no-surface", "Click in the editor, then indent a list item.");
@@ -922,6 +979,14 @@ export function applyIndent(): boolean {
 }
 
 export function applyOutdent(): boolean {
+  if (isLexicalFlowActive()) {
+    if (lexicalOutdent()) {
+      recordFormat("outdent", true, "lexical");
+      return true;
+    }
+    recordFormat("outdent", false, "top-level", "This list item is already at the top level.");
+    return false;
+  }
   const surface = getBoundEditorSurface();
   if (!surface) {
     recordFormat("outdent", false, "no-surface", "Click in the editor, then outdent a nested list item.");
@@ -1139,6 +1204,9 @@ export function handleEditorKeyDown(event: {
 }
 
 export function performEditorUndo(): boolean {
+  if (isLexicalFlowActive() && lexicalUndo()) {
+    return true;
+  }
   if (undoStructural()) {
     return true;
   }
@@ -1146,6 +1214,9 @@ export function performEditorUndo(): boolean {
 }
 
 export function performEditorRedo(): boolean {
+  if (isLexicalFlowActive() && lexicalRedo()) {
+    return true;
+  }
   if (redoStructural()) {
     return true;
   }
@@ -1174,6 +1245,10 @@ export function markHeadingOrderProblems(): number {
 }
 
 export function insertEditorHtml(html: string): boolean {
+  if (isLexicalFlowActive() && lexicalInsertHtml(html)) {
+    notifyMutation();
+    return true;
+  }
   const ok = runEditorCommand("insertHTML", html);
   if (ok) {
     notifyMutation();
@@ -1194,6 +1269,14 @@ function insertionAnchorFromRange(range: Range, surface: HTMLElement): HTMLEleme
 }
 
 export function insertEditorBlockHtml(html: string): boolean {
+  if (isLexicalFlowActive()) {
+    // Focus Lexical root so insertHTML has a range selection.
+    getBoundEditorSurface()?.focus({ preventScroll: true });
+    if (lexicalInsertHtml(html)) {
+      notifyMutation();
+      return true;
+    }
+  }
   const surface = getBoundEditorSurface();
   if (!surface || !restoreRichTextSelection()) {
     return false;
@@ -1479,9 +1562,14 @@ export function queryEditorFormatting(): EditorFormatting {
   const element = node ? (node.nodeType === 1 ? (node as Element) : node.parentElement) : null;
   const selectionInSurface = Boolean(surface && node && surface.contains(node));
   const li = surface && selectionInSurface ? listItemFromSelection(surface) : null;
+  const calloutAncestor =
+    element?.closest(".doc-alert, aside[data-variant='info'], aside[role='note']") ?? null;
+  const inCallout =
+    (surface && selectionInSurface && calloutAncestor && surface.contains(calloutAncestor)) ||
+    lexicalSelectionInAlert();
   const surfaceKind = surface?.classList.contains("wysiwyg-table-cell")
     ? "table-cell"
-    : surface && selectionInSurface && element?.closest(".doc-alert")
+    : inCallout
       ? "callout"
       : surface
         ? "document"

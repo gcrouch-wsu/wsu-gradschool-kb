@@ -7,6 +7,8 @@ import { saveRichTextSelection } from "@/lib/rich-text-selection";
 
 type RichTextElement = "div" | "h2" | "h3" | "li";
 
+/** Nested rich text (table cells). Stays on contentEditable until Lexical cell
+ * selection/link-draft parity matches FB-26 editor tests. */
 export function RichTextEditable({
   className,
   element = "div",
@@ -34,9 +36,6 @@ export function RichTextEditable({
     if (document.activeElement === surface) {
       return;
     }
-    // A link is being edited in this cell (the dialog took focus, leaving a
-    // draft marker behind). Rewriting innerHTML now would destroy that marker
-    // and lose the pending link, so leave the DOM alone until the edit resolves.
     if (surface.querySelector(".doc-link-draft")) {
       return;
     }
@@ -47,10 +46,6 @@ export function RichTextEditable({
   }, [value]);
 
   function syncFromSurface(surface: HTMLElement, isBlur: boolean) {
-    // A link is being edited: the dialog blurred this cell, leaving a draft
-    // marker in the DOM. Reformatting/re-serializing now would strip the marker
-    // (sanitize drops the placeholder span) and lose the pending link. Leave the
-    // DOM and model untouched — commitLink or cancel resolves it and re-syncs.
     if (surface.querySelector(".doc-link-draft")) {
       return;
     }
