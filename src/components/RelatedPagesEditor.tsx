@@ -43,6 +43,7 @@ export function RelatedPagesEditor({
     [options, selectedIds],
   );
 
+  const nextCountIfAdd = selectedIds.length + 1;
   const atLimit = !canAddRelatedPage(selectedIds.length);
   const matches = useMemo(
     () => (atLimit ? [] : filterRelatedPageMatches(options, selectedIds, query)),
@@ -84,7 +85,10 @@ export function RelatedPagesEditor({
     onChange([...selectedIds, id]);
     setQuery("");
     setActiveIndex(0);
-    setOpen(false);
+    // Keep the menu open so a second page can be added without re-focusing.
+    // onFocus will not re-fire when the input already has focus.
+    const reachedLimit = !canAddRelatedPage(nextCountIfAdd);
+    setOpen(!reachedLimit);
     inputRef.current?.focus();
   }
 
@@ -114,8 +118,8 @@ export function RelatedPagesEditor({
   }
 
   return (
-    <fieldset className="fieldset related-pages-editor" style={{ border: "none", padding: 0, margin: 0 }}>
-      <legend className="meta">Related pages / next steps</legend>
+    <fieldset className="fieldset related-pages-editor" disabled={disabled}>
+      <legend>Related pages / next steps</legend>
       <p className="meta">
         Search and add up to {RELATED_PAGES_SOFT_MAX} pages. Shown to readers after this article.
       </p>
@@ -140,11 +144,99 @@ export function RelatedPagesEditor({
         />
       </label>
 
+      <div className="related-pages-editor__add" ref={rootRef}>
+        <label className="meta" htmlFor={searchId}>
+          Add pages
+        </label>
+        <div className="kb-picker__field">
+          <input
+            aria-autocomplete="list"
+            aria-controls={listboxId}
+            aria-expanded={open && !atLimit}
+            className="input"
+            disabled={disabled || atLimit || options.length === 0}
+            id={searchId}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOpen(true);
+              setActiveIndex(0);
+            }}
+            onClick={() => {
+              if (!atLimit && !disabled) {
+                setOpen(true);
+              }
+            }}
+            onFocus={() => {
+              if (!atLimit) {
+                setOpen(true);
+              }
+            }}
+            onKeyDown={onKeyDown}
+            placeholder={
+              atLimit
+                ? `Limit reached (${RELATED_PAGES_SOFT_MAX}) — remove one to add another`
+                : options.length === 0
+                  ? "No other pages in this knowledge base yet"
+                  : selectedIds.length > 0
+                    ? "Search to add another page…"
+                    : "Search by title or path…"
+            }
+            ref={inputRef}
+            role="combobox"
+            type="search"
+            value={query}
+          />
+          {open && !atLimit && !disabled && (
+            <ul className="kb-picker__menu related-pages-editor__menu" id={listboxId} role="listbox">
+              {matches.length === 0 ? (
+                <li className="kb-picker__empty" role="presentation">
+                  {query.trim()
+                    ? "No matching pages."
+                    : selectedIds.length >= options.length
+                      ? "All available pages are already selected."
+                      : "No pages available."}
+                </li>
+              ) : (
+                matches.map((option, index) => (
+                  <li
+                    aria-selected={index === clampedActiveIndex}
+                    className={`kb-picker__option ${index === clampedActiveIndex ? "is-active" : ""}`}
+                    key={option.id}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      add(option.id);
+                    }}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    role="option"
+                  >
+                    <span className="kb-picker__option-title">{option.title}</span>
+                    <span className="kb-picker__option-slug">
+                      /{option.path}
+                      {option.status && option.status !== "published" ? ` · ${option.status}` : ""}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
+        {atLimit ? (
+          <p className="meta">
+            Soft limit of {RELATED_PAGES_SOFT_MAX} related pages keeps “Next steps” useful. Remove one to
+            add another.
+          </p>
+        ) : (
+          <p className="meta">
+            {selectedIds.length === 0
+              ? "Pick pages readers should open next."
+              : `${selectedIds.length}/${RELATED_PAGES_SOFT_MAX} selected — keep searching to add more.`}
+          </p>
+        )}
+      </div>
+
       {orderedSelected.length > 0 && (
         <div className="related-pages-editor__selected">
-          <span className="meta">
-            Selected order ({orderedSelected.length}/{RELATED_PAGES_SOFT_MAX})
-          </span>
+          <span className="meta">Selected order</span>
           <ul className="related-pages-editor__list" aria-label="Selected related pages">
             {orderedSelected.map((option, index) => (
               <li className="related-pages-editor__item" key={option.id}>
@@ -189,83 +281,6 @@ export function RelatedPagesEditor({
           </ul>
         </div>
       )}
-
-      <div className="related-pages-editor__add" ref={rootRef}>
-        <label className="meta" htmlFor={searchId}>
-          Add pages
-        </label>
-        <div className="kb-picker__field">
-          <input
-            aria-autocomplete="list"
-            aria-controls={listboxId}
-            aria-expanded={open && !atLimit}
-            className="input"
-            disabled={disabled || atLimit || options.length === 0}
-            id={searchId}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setOpen(true);
-              setActiveIndex(0);
-            }}
-            onFocus={() => {
-              if (!atLimit) {
-                setOpen(true);
-              }
-            }}
-            onKeyDown={onKeyDown}
-            placeholder={
-              atLimit
-                ? `Limit reached (${RELATED_PAGES_SOFT_MAX}) — remove one to add another`
-                : options.length === 0
-                  ? "No other pages in this knowledge base yet"
-                  : "Search by title or path…"
-            }
-            ref={inputRef}
-            role="combobox"
-            type="search"
-            value={query}
-          />
-          {open && !atLimit && !disabled && (
-            <ul className="kb-picker__menu" id={listboxId} role="listbox">
-              {matches.length === 0 ? (
-                <li className="kb-picker__empty" role="presentation">
-                  {query.trim()
-                    ? "No matching pages."
-                    : selectedIds.length >= options.length
-                      ? "All available pages are already selected."
-                      : "No pages available."}
-                </li>
-              ) : (
-                matches.map((option, index) => (
-                  <li
-                    aria-selected={index === clampedActiveIndex}
-                    className={`kb-picker__option ${index === clampedActiveIndex ? "is-active" : ""}`}
-                    key={option.id}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      add(option.id);
-                    }}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    role="option"
-                  >
-                    <span className="kb-picker__option-title">{option.title}</span>
-                    <span className="kb-picker__option-slug">
-                      /{option.path}
-                      {option.status && option.status !== "published" ? ` · ${option.status}` : ""}
-                    </span>
-                  </li>
-                ))
-              )}
-            </ul>
-          )}
-        </div>
-        {atLimit ? (
-          <p className="meta">
-            Soft limit of {RELATED_PAGES_SOFT_MAX} related pages keeps “Next steps” useful. Remove one to
-            add another.
-          </p>
-        ) : null}
-      </div>
     </fieldset>
   );
 }

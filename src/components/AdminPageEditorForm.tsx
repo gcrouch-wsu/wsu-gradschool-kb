@@ -1276,16 +1276,6 @@ export function AdminPageEditorForm({
               value={tagsText}
             />
           </label>
-          <RelatedPagesEditor
-            disabled={isLocked}
-            heading={nextStepsHeading}
-            intro={nextStepsIntro}
-            onChange={setRelatedPageIds}
-            onHeadingChange={setNextStepsHeading}
-            onIntroChange={setNextStepsIntro}
-            options={relatedPageOptions}
-            selectedIds={relatedPageIds}
-          />
           <div className="summary-field">
             <label>
               <span className="meta">
@@ -1525,6 +1515,17 @@ export function AdminPageEditorForm({
             />
           </div>
         </fieldset>
+
+        <RelatedPagesEditor
+          disabled={isLocked}
+          heading={nextStepsHeading}
+          intro={nextStepsIntro}
+          onChange={setRelatedPageIds}
+          onHeadingChange={setNextStepsHeading}
+          onIntroChange={setNextStepsIntro}
+          options={relatedPageOptions}
+          selectedIds={relatedPageIds}
+        />
 
         <details className="editor-details">
           <summary className="editor-details__summary">Revision history</summary>

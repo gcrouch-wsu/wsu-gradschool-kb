@@ -5736,12 +5736,25 @@ article ol ol ol {
 .related-pages-editor {
   display: grid;
   gap: 0.75rem;
+  border: none;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.related-pages-editor > legend {
+  padding: 0;
 }
 
 .related-pages-editor__selected,
 .related-pages-editor__add {
   display: grid;
   gap: 0.4rem;
+  min-width: 0;
+}
+
+.related-pages-editor__menu {
+  z-index: 40;
 }
 
 .related-pages-editor__list {
