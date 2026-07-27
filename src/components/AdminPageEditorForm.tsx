@@ -1043,6 +1043,7 @@ export function AdminPageEditorForm({
             className="button button--ghost"
             disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
             onClick={() => submit("draft")}
+            title="Edits already sync while you work. Save draft stores a named checkpoint you can return to."
             type="button"
           >
             {busy === "draft" ? "Saving..." : "Save draft"}
@@ -1206,24 +1207,6 @@ export function AdminPageEditorForm({
         </div>
       )}
 
-      <GuidedTour
-        steps={[
-          {
-            title: "Save often",
-            body: "Drafts sync to this browser and the server while you edit. Use Save draft before leaving if you need a named checkpoint.",
-          },
-          {
-            title: "Publishing gates",
-            body: "Published pages need summary, contact info, review dates, and accessible images. Fix anything flagged in the readiness panel before proposing or publishing.",
-          },
-          {
-            title: "Blocks and excerpts",
-            body: "Use the block toolbar for alerts, cards, and excerpt blocks. Excerpt blocks stay linked to their source page — update the source when content changes.",
-          },
-        ]}
-        tourId="page-editor"
-      />
-
       <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
         {error && <p className="error">{error}</p>}
         {issues.length > 0 && (
@@ -1249,6 +1232,23 @@ export function AdminPageEditorForm({
           </p>
         )}
         {actionButtons}
+        <details className="editor-tips">
+          <summary className="editor-tips__summary">Editor tips</summary>
+          <ul className="editor-tips__list">
+            <li>
+              <strong>Drafts sync</strong> to this browser and the server while you edit. Use{" "}
+              <strong>Save draft</strong> when you want a named checkpoint.
+            </li>
+            <li>
+              <strong>Publishing gates</strong> check summary, contact info, review dates, and image alt text.
+              Fix anything in the readiness panel before proposing or publishing.
+            </li>
+            <li>
+              <strong>Blocks and excerpts</strong> live in the content toolbar. Excerpt blocks stay linked to
+              their source page — update the source when that content changes.
+            </li>
+          </ul>
+        </details>
 
         <details
           className="editor-details"
