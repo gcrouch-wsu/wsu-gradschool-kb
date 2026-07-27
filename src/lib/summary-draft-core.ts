@@ -11,10 +11,13 @@ export const DEFAULT_AI_SUMMARY_SYSTEM_PROMPT = [
   "You write page summaries for a university graduate-school knowledge base.",
   "You MUST base the summary on the FULL page content provided (all sections), not only the opening paragraphs.",
   "Cover the page purpose and the main topics from every major section in the outline.",
-  "Return ONLY the finished summary as continuous prose: usually 2–4 sentences (up to 6 for long multi-section pages).",
-  "Do not include reasoning, planning, outlines, numbered lists, headings, markdown, quotation marks wrapping the whole answer, titles, or preamble such as 'Let me draft' or 'The user wants'.",
-  "Tone: clear, neutral, governance-appropriate. Do not invent facts not present in the page.",
+  "Your entire reply must be the finished summary as continuous prose: usually 2–4 sentences (up to 6 for long multi-section pages).",
+  "Start the reply with the first word of the summary. Do not include reasoning, planning, outlines, numbered lists, headings, markdown, or preamble.",
+  "End with a complete sentence (period). Tone: clear, neutral, governance-appropriate. Do not invent facts not present in the page.",
 ].join(" ");
+
+/** Completion budget for summary drafts (provider max_tokens). */
+export const SUMMARY_DRAFT_MAX_TOKENS = 1_200;
 
 const REASONING_START =
   /^(the user wants|i need to|i'll |i will |let me |first[,:]|okay[,.]|sure[,.]|here(?:'s| is) (?:my |the )?plan)\b/i;
@@ -211,7 +214,29 @@ export function cleanSummaryDraft(raw: string): string {
   if (!text || looksLikeReasoningLeak(text)) {
     return "";
   }
-  return text.slice(0, SUMMARY_DRAFT_MAX_CHARS);
+  if (text.length <= SUMMARY_DRAFT_MAX_CHARS) {
+    return text;
+  }
+  // Prefer a sentence boundary when capping, so we never store a mid-word cut.
+  const clipped = text.slice(0, SUMMARY_DRAFT_MAX_CHARS);
+  const lastStop = Math.max(clipped.lastIndexOf(". "), clipped.lastIndexOf("! "), clipped.lastIndexOf("? "));
+  if (lastStop >= 80) {
+    return clipped.slice(0, lastStop + 1).trim();
+  }
+  return clipped.trim();
+}
+
+/** True when the draft ends like a finished sentence (not mid-clause truncation). */
+export function isCompleteSummaryDraft(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  // Mid-generation cuts often end on a comma or a dangling connector ("…, noting").
+  if (/,\s*$/.test(trimmed) || /\b(?:noting|including|and|or|but|with|for|to|of|the|a|an)\s*$/i.test(trimmed)) {
+    return false;
+  }
+  return /[.!?]["’”']?\s*$/.test(trimmed);
 }
 
 export function getAiGatewayConfig(): {
@@ -228,6 +253,46 @@ export function getAiGatewayConfig(): {
   return { endpoint, apiKey, model };
 }
 
+async function postSummaryDraftChat(input: {
+  endpoint: string;
+  apiKey: string;
+  model: string;
+  system: string;
+  user: string;
+  signal: AbortSignal;
+}): Promise<string> {
+  const response = await fetch(input.endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${input.apiKey}`,
+    },
+    signal: input.signal,
+    body: JSON.stringify({
+      model: input.model,
+      temperature: 0.15,
+      max_tokens: SUMMARY_DRAFT_MAX_TOKENS,
+      messages: [
+        { role: "system", content: input.system },
+        { role: "user", content: input.user },
+      ],
+    }),
+  });
+
+  const json = (await response.json().catch(() => ({}))) as {
+    error?: { message?: string };
+    message?: string;
+    choices?: Array<{ message?: { content?: string; reasoning?: string } }>;
+    output_text?: string;
+    text?: string;
+  };
+  if (!response.ok) {
+    const providerMessage = json.error?.message || json.message || `HTTP ${response.status}`;
+    throw new Error(`AI provider request failed: ${providerMessage}`);
+  }
+  return String(json.choices?.[0]?.message?.content || json.output_text || json.text || "");
+}
+
 export async function requestSummaryDraftFromGateway(input: {
   title: string;
   bodyText: string;
@@ -242,26 +307,48 @@ export async function requestSummaryDraftFromGateway(input: {
     input.systemPrompt ?? DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
   );
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
-  let response: Response;
+  const timer = setTimeout(() => controller.abort(), 90_000);
   try {
-    response = await fetch(input.endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${input.apiKey}`,
-      },
+    let raw = await postSummaryDraftChat({
+      endpoint: input.endpoint,
+      apiKey: input.apiKey,
+      model: input.model,
+      system,
+      user,
       signal: controller.signal,
-      body: JSON.stringify({
-        model: input.model,
-        temperature: 0.2,
-        max_tokens: 700,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
     });
+    let summary = cleanSummaryDraft(raw);
+
+    // One automatic retry when the model burned tokens on planning and truncated.
+    if (!summary || !isCompleteSummaryDraft(summary)) {
+      raw = await postSummaryDraftChat({
+        endpoint: input.endpoint,
+        apiKey: input.apiKey,
+        model: input.model,
+        system:
+          "Write only the finished page summary as continuous prose. No planning. No lists. Start with the summary. End with a period.",
+        user: [
+          user,
+          "",
+          "IMPORTANT: Your previous reply was cut off or included planning.",
+          "Reply now with the complete summary only, starting immediately with the first sentence.",
+        ].join("\n"),
+        signal: controller.signal,
+      });
+      summary = cleanSummaryDraft(raw);
+    }
+
+    if (!summary) {
+      throw new Error(
+        "The AI provider returned planning text instead of a summary. Try Draft with AI again.",
+      );
+    }
+    if (!isCompleteSummaryDraft(summary)) {
+      throw new Error(
+        "The AI draft was cut off mid-sentence. Try Draft with AI again.",
+      );
+    }
+    return summary;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error("The AI provider timed out. Try again in a moment.");
@@ -270,25 +357,4 @@ export async function requestSummaryDraftFromGateway(input: {
   } finally {
     clearTimeout(timer);
   }
-
-  const json = (await response.json().catch(() => ({}))) as {
-    error?: { message?: string };
-    message?: string;
-    choices?: Array<{ message?: { content?: string; reasoning?: string } }>;
-    output_text?: string;
-    text?: string;
-  };
-  if (!response.ok) {
-    const providerMessage = json.error?.message || json.message || `HTTP ${response.status}`;
-    throw new Error(`AI provider request failed: ${providerMessage}`);
-  }
-  const raw =
-    json.choices?.[0]?.message?.content || json.output_text || json.text || "";
-  const summary = cleanSummaryDraft(String(raw));
-  if (!summary) {
-    throw new Error(
-      "The AI provider returned planning text instead of a summary. Try Draft with AI again.",
-    );
-  }
-  return summary;
 }

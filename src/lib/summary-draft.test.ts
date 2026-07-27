@@ -4,6 +4,7 @@ import {
   buildSummaryDraftPrompt,
   cleanSummaryDraft,
   formatBlocksForSummary,
+  isCompleteSummaryDraft,
   requestSummaryDraftFromGateway,
 } from "@/lib/summary-draft-core";
 import type { ContentBlock } from "@/lib/types";
@@ -105,10 +106,24 @@ describe("summary-draft helpers", () => {
     ).toBe("");
   });
 
+  it("detects mid-sentence truncation", () => {
+    expect(
+      isCompleteSummaryDraft(
+        "This page provides comprehensive guidance for developing or revising graduate program bylaws, noting",
+      ),
+    ).toBe(false);
+    expect(
+      isCompleteSummaryDraft(
+        "This page provides comprehensive guidance for developing or revising graduate program bylaws.",
+      ),
+    ).toBe(true);
+  });
+
   it("caps cleaned drafts at SUMMARY_DRAFT_MAX_CHARS", async () => {
     const { SUMMARY_DRAFT_MAX_CHARS } = await import("@/lib/summary-draft-core");
     const long = "The page covers graduate policies in detail. ".repeat(200);
-    expect(cleanSummaryDraft(long).length).toBe(SUMMARY_DRAFT_MAX_CHARS);
+    expect(cleanSummaryDraft(long).length).toBeLessThanOrEqual(SUMMARY_DRAFT_MAX_CHARS);
+    expect(isCompleteSummaryDraft(cleanSummaryDraft(long))).toBe(true);
   });
 });
 
@@ -150,10 +165,57 @@ describe("requestSummaryDraftFromGateway", () => {
       messages: Array<{ role: string; content: string }>;
     };
     expect(payload.model).toBe("inclusionai/ling-3.0-flash-free");
-    expect(payload.max_tokens).toBeGreaterThanOrEqual(600);
+    expect(payload.max_tokens).toBeGreaterThanOrEqual(1000);
     expect(payload.messages[1]?.content).toContain("## Eligibility");
     expect(payload.messages[1]?.content).toContain("Write a summary of the entire page now.");
     expect(payload.messages[1]?.content).toMatch(/summary prose only/i);
+  });
+
+  it("retries once when the first draft is truncated mid-sentence", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    "This page provides comprehensive guidance for developing or revising graduate program bylaws, noting",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    "This page provides comprehensive guidance for developing or revising graduate program bylaws, noting annual submission to the Graduate School.",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      requestSummaryDraftFromGateway({
+        title: "Bylaws",
+        bodyText: "x".repeat(200),
+        endpoint: "https://ai.example/v1",
+        apiKey: "k",
+        model: "m",
+      }),
+    ).resolves.toMatch(/Graduate School\.$/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("rejects responses that are only planning text", async () => {
@@ -183,7 +245,7 @@ describe("requestSummaryDraftFromGateway", () => {
         apiKey: "k",
         model: "m",
       }),
-    ).rejects.toThrow(/planning text/i);
+    ).rejects.toThrow(/planning text|cut off mid-sentence/i);
   });
 
   it("accepts output_text when choices are absent", async () => {

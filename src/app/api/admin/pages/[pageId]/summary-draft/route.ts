@@ -16,7 +16,7 @@ import { NextResponse } from "next/server";
 import { getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type Body = {
   title?: unknown;
