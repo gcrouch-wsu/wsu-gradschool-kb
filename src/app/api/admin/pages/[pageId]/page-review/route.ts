@@ -1,4 +1,5 @@
 import { loadSiteSettings } from "@/lib/db";
+import { recordAiUsageLater } from "@/lib/ai-usage";
 import { logError } from "@/lib/log";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -80,7 +81,17 @@ export async function POST(
       systemPrompt,
       ...config,
     });
-    return NextResponse.json({ ok: true, ...review });
+    recordAiUsageLater({
+      feature: "page_review",
+      model: config.model,
+      kbId: existing.kbId,
+      usage: review.usage,
+    });
+    return NextResponse.json({
+      ok: true,
+      overview: review.overview,
+      suggestions: review.suggestions,
+    });
   } catch (error) {
     logError(error, {
       route: "/api/admin/pages/[pageId]/page-review",

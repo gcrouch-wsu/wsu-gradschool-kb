@@ -1,4 +1,5 @@
 import { loadSiteSettings } from "@/lib/db";
+import { recordAiUsageLater } from "@/lib/ai-usage";
 import { logError } from "@/lib/log";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -88,7 +89,13 @@ export async function POST(
       systemPrompt,
       ...config,
     });
-    return NextResponse.json({ ok: true, summary });
+    recordAiUsageLater({
+      feature: "summary_draft",
+      model: config.model,
+      kbId: existing.kbId,
+      usage: summary.usage,
+    });
+    return NextResponse.json({ ok: true, summary: summary.summary });
   } catch (error) {
     logError(error, {
       route: "/api/admin/pages/[pageId]/summary-draft",

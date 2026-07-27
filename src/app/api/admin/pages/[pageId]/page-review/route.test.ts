@@ -157,7 +157,11 @@ describe("POST /api/admin/pages/[pageId]/page-review", () => {
     });
     const requestSpy = vi
       .spyOn(pageReview, "requestPageReviewFromGateway")
-      .mockResolvedValue({ overview: "Looks good.", suggestions: [] });
+      .mockResolvedValue({
+        overview: "Looks good.",
+        suggestions: [],
+        usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3, callCount: 1 },
+      });
 
     const response = await post();
     expect(response.status).toBe(200);

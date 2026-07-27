@@ -1032,6 +1032,26 @@ const migrations: Migration[] = [
       `;
     },
   },
+  {
+    id: "044_ai_usage",
+    async up(sql) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kb_ai_usage (
+          day DATE NOT NULL,
+          feature TEXT NOT NULL,
+          model TEXT NOT NULL,
+          kb_id TEXT NOT NULL,
+          call_count INTEGER NOT NULL DEFAULT 0,
+          prompt_tokens INTEGER NOT NULL DEFAULT 0,
+          completion_tokens INTEGER NOT NULL DEFAULT 0,
+          total_tokens INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (day, feature, model, kb_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_ai_usage_kb_day ON kb_ai_usage(kb_id, day DESC)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_ai_usage_day ON kb_ai_usage(day DESC)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

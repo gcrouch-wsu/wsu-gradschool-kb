@@ -150,7 +150,8 @@ describe("requestSummaryDraftFromGateway", () => {
       model: "inclusionai/ling-3.0-flash-free",
     });
 
-    expect(summary).toBe("A clear draft.");
+    expect(summary.summary).toBe("A clear draft.");
+    expect(summary.usage.callCount).toBe(1);
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://ai.example/v1/chat/completions");
@@ -214,7 +215,7 @@ describe("requestSummaryDraftFromGateway", () => {
         apiKey: "k",
         model: "m",
       }),
-    ).resolves.toMatch(/Graduate School\.$/);
+    ).resolves.toMatchObject({ summary: expect.stringMatching(/Graduate School\.$/) });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -266,7 +267,7 @@ describe("requestSummaryDraftFromGateway", () => {
         apiKey: "k",
         model: "m",
       }),
-    ).resolves.toBe("Alternate shape summary.");
+    ).resolves.toMatchObject({ summary: "Alternate shape summary." });
   });
 
   it("surfaces provider HTTP errors", async () => {

@@ -25,7 +25,7 @@ export async function listPageFeedbackAggregates(
       f.page_id AS page_id,
       f.kb_id AS kb_id,
       COALESCE(p.title, f.page_id) AS page_title,
-      COALESCE(array_to_string(p.path, '/'), '') AS page_path,
+      COALESCE(p.path, '') AS page_path,
       COUNT(*) FILTER (WHERE f.helpful) AS helpful,
       COUNT(*) FILTER (WHERE NOT f.helpful) AS not_helpful,
       COUNT(*) FILTER (WHERE length(trim(f.comment)) > 0) AS with_comment,

@@ -2,6 +2,7 @@ import type { AdminSession } from "@/lib/auth";
 import { accessibleKbIds } from "@/lib/auth";
 import { getContentHealthReport } from "@/lib/content-health";
 import { listExcerptIndex } from "@/lib/excerpt-index";
+import { logError } from "@/lib/log";
 import { listPageFeedbackAggregates } from "@/lib/page-feedback";
 import { getUsageAnalyticsForSession } from "@/lib/page-views";
 import { listStaleAssetRefs } from "@/lib/stale-asset-refs";
@@ -26,15 +27,42 @@ export interface EditorialAnalytics {
   };
 }
 
+const emptyHealthReport: Awaited<ReturnType<typeof getContentHealthReport>> = {
+  generatedAt: new Date(0).toISOString(),
+  counts: {
+    activePages: 0,
+    publishedPages: 0,
+    proposedPages: 0,
+    stalePages: 0,
+    missingTags: 0,
+    missingMetadata: 0,
+    zeroResultSearches: 0,
+  },
+  stalePages: [],
+  missingTags: [],
+  missingMetadata: [],
+  proposedPages: [],
+  zeroResultSearches: [],
+};
+
+async function settledOr<T>(label: string, promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise;
+  } catch (error) {
+    logError(error, { route: "editorial-analytics", action: label });
+    return fallback;
+  }
+}
+
 export async function getEditorialAnalytics(session: AdminSession): Promise<EditorialAnalytics> {
   const allowedKbIds = await accessibleKbIds(session);
   const [health, feedback, usage, staleExcerpts, staleAssets, excerpts] = await Promise.all([
-    getContentHealthReport(allowedKbIds),
-    listPageFeedbackAggregates(allowedKbIds),
-    getUsageAnalyticsForSession(session),
-    listStaleExcerpts(allowedKbIds),
-    listStaleAssetRefs(allowedKbIds),
-    listExcerptIndex(allowedKbIds),
+    settledOr("content-health", getContentHealthReport(allowedKbIds), emptyHealthReport),
+    settledOr("feedback", listPageFeedbackAggregates(allowedKbIds), []),
+    settledOr("usage", getUsageAnalyticsForSession(session), { enabled: false, periods: [] }),
+    settledOr("stale-excerpts", listStaleExcerpts(allowedKbIds), []),
+    settledOr("stale-assets", listStaleAssetRefs(allowedKbIds), []),
+    settledOr("excerpt-index", listExcerptIndex(allowedKbIds), []),
   ]);
 
   const feedbackRows = feedback

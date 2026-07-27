@@ -12,23 +12,42 @@ export interface ExcerptIndexItem {
   sourcePageId: string;
   sourceTitle: string;
   sourceStatus: string;
+  label: string;
   headingBlockId?: string;
   isStale: boolean;
 }
 
-function excerptBlocks(blocks: ContentBlock[]): Array<Extract<ContentBlock, { type: "excerpt" }>> {
-  return blocks.filter((block): block is Extract<ContentBlock, { type: "excerpt" }> => block.type === "excerpt");
+/** Walk top-level and nested card / procedure / sourced children for excerpt blocks. */
+export function collectExcerptBlocks(
+  blocks: ContentBlock[],
+): Array<Extract<ContentBlock, { type: "excerpt" }>> {
+  const found: Array<Extract<ContentBlock, { type: "excerpt" }>> = [];
+  for (const block of blocks) {
+    if (block.type === "excerpt") {
+      found.push(block);
+      continue;
+    }
+    if (block.type === "card" || block.type === "procedure_section" || block.type === "sourced") {
+      found.push(...collectExcerptBlocks(block.blocks));
+    }
+  }
+  return found;
 }
 
 export async function listExcerptIndex(allowedKbIds: string[] | null = null): Promise<ExcerptIndexItem[]> {
   const kbs = await getAllKbsForAdmin();
   const scopedKbs = allowedKbIds ? kbs.filter((kb) => allowedKbIds.includes(kb.id)) : kbs;
   const kbById = new Map<string, KnowledgeBase>(scopedKbs.map((kb) => [kb.id, kb]));
-  const pages = (await Promise.all(scopedKbs.map((kb) => getAllPagesForAdmin(kb.id)))).flat();
-  const pageById = new Map<string, KbPage>(pages.map((page) => [page.id, page]));
+  // Sources may live outside the editor's assigned KBs; load all pages for title lookup,
+  // but only index excerpt *hosts* the session can access.
+  const allPages = (await Promise.all(kbs.map((kb) => getAllPagesForAdmin(kb.id)))).flat();
+  const pageById = new Map<string, KbPage>(allPages.map((page) => [page.id, page]));
+  const hostPages = allowedKbIds
+    ? allPages.filter((page) => allowedKbIds.includes(page.kbId))
+    : allPages;
   const items: ExcerptIndexItem[] = [];
 
-  for (const page of pages) {
+  for (const page of hostPages) {
     if (page.status === "archived") {
       continue;
     }
@@ -36,7 +55,7 @@ export async function listExcerptIndex(allowedKbIds: string[] | null = null): Pr
     if (!kb) {
       continue;
     }
-    for (const block of excerptBlocks(page.blocks)) {
+    for (const block of collectExcerptBlocks(page.blocks)) {
       const source = pageById.get(block.sourcePageId);
       const pageUpdated = new Date(page.updatedDisplayDate).getTime();
       const sourceUpdated = source ? new Date(source.updatedDisplayDate).getTime() : NaN;
@@ -54,6 +73,7 @@ export async function listExcerptIndex(allowedKbIds: string[] | null = null): Pr
         sourcePageId: block.sourcePageId,
         sourceTitle: source?.title ?? "(missing source)",
         sourceStatus: source?.status ?? "missing",
+        label: block.label?.trim() || "",
         headingBlockId: block.sourceHeadingBlockId,
         isStale,
       });

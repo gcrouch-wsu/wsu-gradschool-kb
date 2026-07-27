@@ -20,8 +20,9 @@ export default async function AdminExcerptsPage() {
       <p className="eyebrow">Admin</p>
       <h1>Excerpt browser</h1>
       <p className="lead">
-        Every live excerpt block across your knowledge bases. Stale excerpts point at source pages that changed after
-        the host page was last saved.
+        Live excerpt blocks only — embedded copies of other KB pages (including nested inside cards or procedures).
+        P&amp;P sourced imports are separate; a page such as Faculty of the Graduate School appears here only when it
+        hosts or is the source of a real excerpt block.
       </p>
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
@@ -54,6 +55,7 @@ export default async function AdminExcerptsPage() {
               <thead>
                 <tr>
                   <th>Host page</th>
+                  <th>Label</th>
                   <th>Source page</th>
                   <th>Knowledge base</th>
                   <th>Status</th>
@@ -66,8 +68,13 @@ export default async function AdminExcerptsPage() {
                       <Link href={`/admin/pages/${item.pageId}`}>{item.pageTitle}</Link>
                       <div className="meta">{item.pageStatus}</div>
                     </td>
+                    <td>{item.label || "—"}</td>
                     <td>
-                      <Link href={`/admin/pages/${item.sourcePageId}`}>{item.sourceTitle}</Link>
+                      {item.sourceStatus === "missing" ? (
+                        <span>{item.sourceTitle}</span>
+                      ) : (
+                        <Link href={`/admin/pages/${item.sourcePageId}`}>{item.sourceTitle}</Link>
+                      )}
                       <div className="meta">{item.sourceStatus}</div>
                     </td>
                     <td>{item.kbTitle}</td>

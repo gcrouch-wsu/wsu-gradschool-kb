@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { StatCard } from "@/components/admin/StatCard";
 import { redirect } from "next/navigation";
+import {
+  aiFeatureLabel,
+  getAiUsageAnalyticsForSession,
+  type AiUsagePeriod,
+} from "@/lib/ai-usage";
 import { getCurrentAdminSession } from "@/lib/auth";
 import { getEditorialAnalytics } from "@/lib/editorial-analytics";
 import { getUsageAnalyticsForSession, type UsagePeriod } from "@/lib/page-views";
@@ -12,7 +17,7 @@ function formatNumber(value: number) {
 function UsagePeriodSection({ period }: { period: UsagePeriod }) {
   return (
     <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
-      <h2 className="admin-panel__title">Last {period.days} days</h2>
+      <h2 className="admin-panel__title">Page views · last {period.days} days</h2>
       <div className="grid grid--two">
         <div className="card">
           <p className="meta">Total page views</p>
@@ -80,6 +85,87 @@ function UsagePeriodSection({ period }: { period: UsagePeriod }) {
   );
 }
 
+function AiUsagePeriodSection({ period }: { period: AiUsagePeriod }) {
+  return (
+    <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
+      <h2 className="admin-panel__title">AI usage · last {period.days} days</h2>
+      <div className="grid grid--three">
+        <div className="card">
+          <p className="meta">Provider calls</p>
+          <p className="admin-stat-card__value">{formatNumber(period.callCount)}</p>
+        </div>
+        <div className="card">
+          <p className="meta">Prompt tokens</p>
+          <p className="admin-stat-card__value">{formatNumber(period.promptTokens)}</p>
+        </div>
+        <div className="card">
+          <p className="meta">Completion tokens</p>
+          <p className="admin-stat-card__value">{formatNumber(period.completionTokens)}</p>
+        </div>
+      </div>
+      <p className="meta" style={{ marginTop: "0.75rem" }}>
+        Total tokens: {formatNumber(period.totalTokens)}
+      </p>
+
+      <h3>By feature</h3>
+      {period.byFeature.length === 0 ? (
+        <p className="admin-panel__empty">No AI calls recorded in this period.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Calls</th>
+                <th>Prompt</th>
+                <th>Completion</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {period.byFeature.map((row) => (
+                <tr key={`${period.days}-${row.feature}`}>
+                  <td>{aiFeatureLabel(row.feature)}</td>
+                  <td>{formatNumber(row.callCount)}</td>
+                  <td>{formatNumber(row.promptTokens)}</td>
+                  <td>{formatNumber(row.completionTokens)}</td>
+                  <td>{formatNumber(row.totalTokens)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {period.byModel.length > 0 ? (
+        <>
+          <h3>By model</h3>
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Calls</th>
+                  <th>Total tokens</th>
+                </tr>
+              </thead>
+              <tbody>
+                {period.byModel.map((row) => (
+                  <tr key={`${period.days}-${row.model}`}>
+                    <td>{row.model}</td>
+                    <td>{formatNumber(row.callCount)}</td>
+                    <td>{formatNumber(row.totalTokens)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 export default async function AdminUsagePage() {
   const session = await getCurrentAdminSession();
   if (!session) {
@@ -89,9 +175,10 @@ export default async function AdminUsagePage() {
     redirect("/");
   }
 
-  const [analytics, editorial] = await Promise.all([
+  const [analytics, editorial, aiUsage] = await Promise.all([
     getUsageAnalyticsForSession(session),
     getEditorialAnalytics(session),
+    getAiUsageAnalyticsForSession(session),
   ]);
 
   return (
@@ -99,7 +186,8 @@ export default async function AdminUsagePage() {
       <p className="eyebrow">Admin</p>
       <h1>Usage</h1>
       <p className="lead">
-        Privacy-light page-view counts plus editorial signals, reader feedback, and search gaps.
+        Privacy-light page views, editorial signals, and AI token metering for Draft with AI / Review with AI. Counts
+        store no prompts, emails, or IP addresses.
       </p>
       <p className="meta">
         <Link href="/admin">← Back to admin</Link>
@@ -192,9 +280,36 @@ export default async function AdminUsagePage() {
         )}
       </section>
 
+      {!aiUsage.enabled ? (
+        <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
+          <h2 className="admin-panel__title">AI usage</h2>
+          <p className="admin-panel__empty">
+            AI metering needs DATABASE_URL.{" "}
+            {aiUsage.configured
+              ? "AI is configured; counts will appear after the next Draft/Review call on a database-backed deploy."
+              : "Set AI_PROVIDER_ENDPOINT, AI_API_KEY, and AI_MODEL to enable Draft with AI / Review with AI."}
+          </p>
+        </section>
+      ) : (
+        <>
+          {!aiUsage.configured ? (
+            <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
+              <h2 className="admin-panel__title">AI usage</h2>
+              <p className="admin-panel__empty">
+                Set AI_PROVIDER_ENDPOINT, AI_API_KEY, and AI_MODEL to enable Draft with AI / Review with AI. Historical
+                meter rows still appear below when present.
+              </p>
+            </section>
+          ) : null}
+          {aiUsage.periods.map((period) => (
+            <AiUsagePeriodSection key={`ai-${period.days}`} period={period} />
+          ))}
+        </>
+      )}
+
       {!analytics.enabled ? (
         <section className="admin-panel" style={{ marginTop: "1.5rem" }}>
-          <h2 className="admin-panel__title">Database required</h2>
+          <h2 className="admin-panel__title">Page views</h2>
           <p className="admin-panel__empty">
             Usage analytics are recorded only when DATABASE_URL is configured. In-memory development mode does not
             persist page views.

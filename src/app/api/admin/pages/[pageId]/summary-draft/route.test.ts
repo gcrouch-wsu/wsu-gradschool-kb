@@ -117,7 +117,10 @@ describe("POST /api/admin/pages/[pageId]/summary-draft", () => {
     const summaryDraft = await import("@/lib/summary-draft");
     const requestSpy = vi
       .spyOn(summaryDraft, "requestSummaryDraftFromGateway")
-      .mockResolvedValue("A short editable draft.");
+      .mockResolvedValue({
+        summary: "A short editable draft.",
+        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30, callCount: 1 },
+      });
     const response = await post({ title: "Ready", blocks: longBlocks });
     expect(response.status).toBe(200);
     const data = await response.json();
@@ -143,7 +146,10 @@ describe("POST /api/admin/pages/[pageId]/summary-draft", () => {
     const summaryDraft = await import("@/lib/summary-draft");
     const requestSpy = vi
       .spyOn(summaryDraft, "requestSummaryDraftFromGateway")
-      .mockResolvedValue("A short editable draft.");
+      .mockResolvedValue({
+        summary: "A short editable draft.",
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2, callCount: 1 },
+      });
 
     const response = await post({
       title: "Ready",

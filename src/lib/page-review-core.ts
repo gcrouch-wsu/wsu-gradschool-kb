@@ -1,3 +1,4 @@
+import { parseAiTokenUsage, type AiTokenUsage } from "@/lib/ai-usage";
 import { blocksToPlainText } from "@/lib/revision-diff";
 import { textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
@@ -297,7 +298,7 @@ export async function requestPageReviewFromGateway(input: {
   apiKey: string;
   model: string;
   systemPrompt?: string;
-}): Promise<PageReviewResult> {
+}): Promise<PageReviewResult & { usage: AiTokenUsage }> {
   const { system, user } = buildPageReviewPrompt({
     title: input.title,
     blocks: input.blocks,
@@ -338,7 +339,10 @@ export async function requestPageReviewFromGateway(input: {
     message?: string;
     output_text?: string;
     text?: string;
+    usage?: Record<string, unknown>;
   } | null;
+
+  const usage = parseAiTokenUsage(payload);
 
   if (!response.ok) {
     const message =
@@ -354,5 +358,5 @@ export async function requestPageReviewFromGateway(input: {
   if (typeof content !== "string" || !content.trim()) {
     throw new Error("The AI provider returned an empty page review.");
   }
-  return parsePageReviewResponse(content);
+  return { ...parsePageReviewResponse(content), usage };
 }

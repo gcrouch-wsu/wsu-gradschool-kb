@@ -269,6 +269,10 @@ describe("page-review-core", () => {
         apiKey: "secret",
         model: "model",
       }),
-    ).resolves.toEqual({ overview: "Looks readable.", suggestions: [] });
+    ).resolves.toEqual({
+      overview: "Looks readable.",
+      suggestions: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 1 },
+    });
   });
 });

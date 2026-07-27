@@ -1,3 +1,4 @@
+import { addAiTokenUsage, emptyAiTokenUsage, parseAiTokenUsage, type AiTokenUsage } from "@/lib/ai-usage";
 import { blocksToPlainText } from "@/lib/revision-diff";
 import type { ContentBlock } from "@/lib/types";
 
@@ -260,7 +261,7 @@ async function postSummaryDraftChat(input: {
   system: string;
   user: string;
   signal: AbortSignal;
-}): Promise<string> {
+}): Promise<{ content: string; usage: AiTokenUsage }> {
   const response = await fetch(input.endpoint, {
     method: "POST",
     headers: {
@@ -285,12 +286,17 @@ async function postSummaryDraftChat(input: {
     choices?: Array<{ message?: { content?: string; reasoning?: string } }>;
     output_text?: string;
     text?: string;
+    usage?: Record<string, unknown>;
   };
+  const usage = parseAiTokenUsage(json);
   if (!response.ok) {
     const providerMessage = json.error?.message || json.message || `HTTP ${response.status}`;
     throw new Error(`AI provider request failed: ${providerMessage}`);
   }
-  return String(json.choices?.[0]?.message?.content || json.output_text || json.text || "");
+  return {
+    content: String(json.choices?.[0]?.message?.content || json.output_text || json.text || ""),
+    usage,
+  };
 }
 
 export async function requestSummaryDraftFromGateway(input: {
@@ -300,7 +306,7 @@ export async function requestSummaryDraftFromGateway(input: {
   apiKey: string;
   model: string;
   systemPrompt?: string;
-}): Promise<string> {
+}): Promise<{ summary: string; usage: AiTokenUsage }> {
   const { system, user } = buildSummaryDraftPrompt(
     input.title,
     input.bodyText,
@@ -308,6 +314,7 @@ export async function requestSummaryDraftFromGateway(input: {
   );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 90_000);
+  let usage = emptyAiTokenUsage();
   try {
     let raw = await postSummaryDraftChat({
       endpoint: input.endpoint,
@@ -317,7 +324,8 @@ export async function requestSummaryDraftFromGateway(input: {
       user,
       signal: controller.signal,
     });
-    let summary = cleanSummaryDraft(raw);
+    usage = addAiTokenUsage(usage, raw.usage);
+    let summary = cleanSummaryDraft(raw.content);
 
     // One automatic retry when the model burned tokens on planning and truncated.
     if (!summary || !isCompleteSummaryDraft(summary)) {
@@ -335,7 +343,8 @@ export async function requestSummaryDraftFromGateway(input: {
         ].join("\n"),
         signal: controller.signal,
       });
-      summary = cleanSummaryDraft(raw);
+      usage = addAiTokenUsage(usage, raw.usage);
+      summary = cleanSummaryDraft(raw.content);
     }
 
     if (!summary) {
@@ -348,7 +357,7 @@ export async function requestSummaryDraftFromGateway(input: {
         "The AI draft was cut off mid-sentence. Try Draft with AI again.",
       );
     }
-    return summary;
+    return { summary, usage };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error("The AI provider timed out. Try again in a moment.");

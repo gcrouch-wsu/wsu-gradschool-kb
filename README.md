@@ -300,9 +300,11 @@ metadata plus small JSON details for page and asset creation, updates, publish/a
 version actions. It does not store before/after snapshots.
 
 The **Usage** page (`/admin/usage`) shows privacy-light aggregate page-view counts for published
-public article and KB-homepage renders. It stores only page id, KB id, day, and count; no cookies,
-IP addresses, or user agents are stored. Bot and crawler traffic can be counted. Counts are skipped
-in in-memory mode.
+public article and KB-homepage renders, plus AI metering for **Draft with AI** / **Review with AI**
+(calls and prompt/completion/total tokens by feature and model). Page views store only page id, KB
+id, day, and count; AI rows store day, feature, model, KB id, and token totals — no prompts, cookies,
+IP addresses, or user agents. Bot and crawler traffic can be counted for page views. Counts are
+skipped in in-memory mode.
 
 The **Content health** page (`/admin/health`) consolidates maintenance queues for overdue review
 dates, missing tags, missing governance metadata, proposed pages, and logged zero-result searches.

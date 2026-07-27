@@ -1,5 +1,5 @@
+import { collectExcerptBlocks } from "@/lib/excerpt-index";
 import { getAllKbsForAdmin, getAllPagesForAdmin } from "@/lib/kb-store";
-import type { ContentBlock, KbPage } from "@/lib/types";
 
 export interface StaleExcerptItem {
   pageId: string;
@@ -10,10 +10,6 @@ export interface StaleExcerptItem {
   sourceTitle: string;
   sourceUpdatedDisplayDate: string;
   excerptBlockId: string;
-}
-
-function excerptBlocks(page: KbPage): Array<Extract<ContentBlock, { type: "excerpt" }>> {
-  return page.blocks.filter((block): block is Extract<ContentBlock, { type: "excerpt" }> => block.type === "excerpt");
 }
 
 /**
@@ -41,7 +37,7 @@ export async function listStaleExcerpts(allowedKbIds: string[] | null = null): P
     if (!kb) {
       continue;
     }
-    for (const block of excerptBlocks(page)) {
+    for (const block of collectExcerptBlocks(page.blocks)) {
       const source = pageById.get(block.sourcePageId);
       if (!source) {
         stale.push({

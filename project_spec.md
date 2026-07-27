@@ -132,7 +132,7 @@ surfaces are added):
 | `/admin/redirects` and redirect APIs | Owner/Admin/assigned Manager/Editor | UI lists use `filterKbsForSession`; API routes use `requireKbAccess` on the target/resolved KB. | `src/app/admin/redirects/page.tsx`, `src/app/api/admin/redirects/**/route.ts` |
 | `/admin/review` | Owner/Admin/assigned Manager/Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
 | `/admin/health` | Owner/Admin/assigned Manager/Editor | Content-health data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. Viewers redirect to `/`. | `src/app/admin/health/page.tsx`, `src/lib/content-health.ts` |
-| `/admin/usage` | Owner/Admin/assigned Manager/Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`; Viewers redirect to `/`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
+| `/admin/usage` | Owner/Admin/assigned Manager/Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)` and `getAiUsageAnalyticsForSession(session)`, which scope through `accessibleKbIds(session)`; Viewers redirect to `/`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts`, `src/lib/ai-usage.ts` |
 | `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
 | `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only except `PATCH /api/admin/kbs/[kbId]` which also lets **Admin** toggle `requireSummary`. `GET /api/admin/kbs` is intentionally manager/editor-reachable but filtered for page creation, and Owner-only user management can assign Manager/Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
 | `/admin/kbs/[kbId]/styles` and KB theme APIs | Owner only | Server page and theme API both require `session.role === "owner"`. | `src/app/admin/kbs/[kbId]/styles/page.tsx`, `src/app/api/admin/kbs/[kbId]/theme/route.ts` |
@@ -400,18 +400,19 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) →
   app-side backfills.
-- **Current head: `043_page_server_drafts_per_author`.** Notable recent migrations: page-tree node
+- **Current head: `044_ai_usage`.** Notable recent migrations: page-tree node
   kinds (`032`), per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback
   (`035`), persisted asset-usage index (`036`), site AI summary prompt (`037`), site + per-KB AI
   summary/page prompts (`038`), page tags/tag-aware FTS (`039`), asset tags/tag-aware FTS (`040`),
-  platform features (`041`), curated next-step copy (`042`), and per-user server drafts (`043`).
+  platform features (`041`), curated next-step copy (`042`), per-user server drafts (`043`), and
+  AI token metering (`044`).
   Earlier migrations cover FTS, edit locks, revisions, page views, KB visibility, search widget,
   branding, and rate limits — see
   `src/lib/migrations/index.ts` for the full sequence.
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_asset_usages`,
   `kb_redirects`, `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`,
   `webhooks`, `page_server_drafts`, `kb_audit_log`, `kb_rate_limits`, `kb_page_revisions`,
-  `kb_page_views`, `kb_page_feedback`.
+  `kb_page_views`, `kb_page_feedback`, `kb_ai_usage`.
 - Seed data: `src/lib/demo-data.ts` (used for both the no-DB in-memory mode and first-run seeding).
 
 ## 7. Running, testing, CI
@@ -457,7 +458,9 @@ share the page lock and the process-global in-memory store.
   chat completions) for editor **Draft with AI** summaries and **Review with AI** page suggestions.
   When unset, those routes return 501. Recommended model: `inclusionai/ling-3.0-flash-free`. System
   prompts resolve KB override → site settings (`aiSummaryPrompt` / `aiPagePrompt`) → built-in
-  defaults; cleaned summary drafts are capped at 2,500 characters.
+  defaults; cleaned summary drafts are capped at 2,500 characters. Successful calls upsert daily
+  aggregates into `kb_ai_usage` (calls + prompt/completion/total tokens by feature, model, and KB)
+  and surface on `/admin/usage`.
 
 **CI** (`.github/workflows/ci.yml`): on pushes to `main` and on PRs, runs type-check, lint, unit
 tests, production build, public-page axe smoke tests, and the Chromium editor regression suite against
@@ -846,8 +849,8 @@ curl -sS https://YOUR_HOST/api/health
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `043_page_server_drafts_per_author` (and earlier ids such as `040_asset_tags` and
-  `029_kb_visibility`). Existing public
+  should include `044_ai_usage` (and earlier ids such as `043_page_server_drafts_per_author`,
+  `040_asset_tags`, and `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.
 - Public KB list renders without loading draft-only content.
@@ -860,7 +863,8 @@ curl -sS https://YOUR_HOST/api/health
 - Test owner KB export on a media-heavy KB after deploy. The ZIP response is streamed and asset bytes are loaded one entry at a time; if an asset fetch fails mid-stream the download is truncated and a structured `kb-export` error is logged, so verify the downloaded ZIP opens cleanly.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
 - If webhook endpoints are configured under `/admin/webhooks`, confirm a test publish (or overdue/stale cron) delivers to at least one HTTPS subscriber with `x-kb-signature` / `x-kb-event`.
-- `/admin/usage` loads aggregate view counts when `DATABASE_URL` is configured.
+- `/admin/usage` loads aggregate view counts and AI token metering when `DATABASE_URL` is configured.
+
 - `/admin/review` → **Check sourced content** runs without error (lists only changed/missing/unreachable P&P sources).
 - Logs are structured JSON and suitable for forwarding through Vercel log drains.
 

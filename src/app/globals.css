@@ -7684,3 +7684,36 @@ html.admin-app body.admin-app-body {
   justify-content: flex-end;
   margin-top: 0.75rem;
 }
+
+.reader-tips {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.reader-tips__summary {
+  cursor: pointer;
+  list-style: none;
+  width: fit-content;
+}
+
+.reader-tips__summary::-webkit-details-marker {
+  display: none;
+}
+
+.reader-tips__summary::before {
+  content: "▸ ";
+}
+
+.reader-tips[open] > .reader-tips__summary::before {
+  content: "▾ ";
+}
+
+.reader-tips__list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.reader-tips__list li + li {
+  margin-top: 0.25rem;
+}
