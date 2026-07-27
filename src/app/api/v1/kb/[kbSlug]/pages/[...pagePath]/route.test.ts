@@ -150,6 +150,8 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
 
   it("sanitizes supported rich text blocks before saving", async () => {
     const store = await import("@/lib/kb-store");
+    const audit = await import("@/lib/audit-log");
+    const recordAuditEvent = vi.spyOn(audit, "recordAuditEvent").mockResolvedValue();
     const response = await patchPage({
       blocks: [
         {
@@ -170,6 +172,15 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
         ],
       }),
       "kaas-write-api",
+    );
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: { email: "kaas-write-api", role: "admin" },
+        action: "page.updated",
+        entityType: "page",
+        entityId: page.id,
+        details: expect.objectContaining({ source: "kaas-write-api" }),
+      }),
     );
   });
 });

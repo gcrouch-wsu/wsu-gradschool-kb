@@ -2,8 +2,16 @@ import { ensureSchema, getSql, isDatabaseEnabled } from "@/lib/db";
 import type { AdminSession } from "@/lib/auth";
 import type { AuditEntityType, AuditLogEntry } from "@/lib/types";
 
+interface AuditActor {
+  email: string;
+  role: AdminSession["role"];
+}
+
 interface AuditInput {
-  session: AdminSession;
+  /** Prefer a real admin session when one exists. */
+  session?: AdminSession;
+  /** Synthetic actor for system/API writes (KaaS, cron, etc.). */
+  actor?: AuditActor;
   action: string;
   entityType: AuditEntityType;
   entityId: string;
@@ -110,10 +118,15 @@ export async function recordSearchEvent(input: {
 }
 
 export async function recordAuditEvent(input: AuditInput): Promise<void> {
+  const actorEmail = input.session?.email ?? input.actor?.email;
+  const actorRole = input.session?.role ?? input.actor?.role;
+  if (!actorEmail || !actorRole) {
+    throw new Error("recordAuditEvent requires session or actor.");
+  }
   const entry: AuditLogEntry = {
     id: `audit-${crypto.randomUUID()}`,
-    actorEmail: input.session.email,
-    actorRole: input.session.role,
+    actorEmail,
+    actorRole,
     action: input.action,
     entityType: input.entityType,
     entityId: input.entityId,

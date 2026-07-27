@@ -7,6 +7,7 @@ import { isDatabaseEnabled } from "@/lib/db";
 import {
   markNotificationSent,
   todayStartIso,
+  shouldSuppressDuplicateNotification,
   wasNotificationSentToday,
 } from "@/lib/cron-notification-dedupe";
 import { listStaleExcerpts } from "@/lib/stale-excerpts";
@@ -61,7 +62,11 @@ export async function GET(request: Request) {
     let notifications = 0;
     let duplicateSuppressed = 0;
     for (const page of overdue) {
-      if (await wasNotificationSentToday(OVERDUE_NOTIFICATION_ACTION, page.id, notificationDayStart)) {
+      if (
+        shouldSuppressDuplicateNotification(
+          await wasNotificationSentToday(OVERDUE_NOTIFICATION_ACTION, page.id, notificationDayStart),
+        )
+      ) {
         duplicateSuppressed += 1;
         continue;
       }
@@ -111,7 +116,15 @@ export async function GET(request: Request) {
     const staleExcerpts = await listStaleExcerpts();
     for (const item of staleExcerpts.slice(0, 25)) {
       const staleEntityId = `${item.pageId}:${item.sourcePageId}`;
-      if (await wasNotificationSentToday(STALE_EXCERPT_NOTIFICATION_ACTION, staleEntityId, notificationDayStart)) {
+      if (
+        shouldSuppressDuplicateNotification(
+          await wasNotificationSentToday(
+            STALE_EXCERPT_NOTIFICATION_ACTION,
+            staleEntityId,
+            notificationDayStart,
+          ),
+        )
+      ) {
         duplicateSuppressed += 1;
         continue;
       }

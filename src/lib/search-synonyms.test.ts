@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandSearchQueryTerms } from "@/lib/search-synonyms";
+import { expandSearchQueryTerms, synonymTsqueryBranches } from "@/lib/search-synonyms";
 import { editDistance, suggestDidYouMean } from "@/lib/search-suggest";
 
 describe("expandSearchQueryTerms", () => {
@@ -31,6 +31,15 @@ describe("expandSearchQueryTerms", () => {
       .filter(Boolean);
     expect(andChain).toEqual(["handbook"]);
     expect(synonyms.length).toBeGreaterThan(0);
+  });
+});
+
+describe("synonymTsqueryBranches", () => {
+  it("dedupes branches that normalize to the same token (i-20 / i20)", () => {
+    const { synonyms } = expandSearchQueryTerms("visa");
+    expect(synonyms).toEqual(expect.arrayContaining(["i-20", "i20"]));
+    const branches = synonymTsqueryBranches(synonyms);
+    expect(branches.filter((b) => b === "i20:*")).toHaveLength(1);
   });
 });
 

@@ -56,7 +56,7 @@ import {
   normalizeAssetTags,
   normalizePageTags,
 } from "@/lib/page-tags";
-import { expandSearchQueryTerms } from "@/lib/search-synonyms";
+import { expandSearchQueryTerms, synonymTsqueryBranches } from "@/lib/search-synonyms";
 import { rankFuzzyCandidates } from "@/lib/search-fuzzy";
 import { loadSiteSettings } from "@/lib/db";
 import type {
@@ -1240,15 +1240,7 @@ export async function searchKb(
       : null;
     // Each synonym becomes its own alternative branch, so "handbook" matches
     // handbook OR manual OR guide instead of requiring all three.
-    const synonymBranches = synonyms
-      .map((term) =>
-        term
-          .split(/\s+/)
-          .map((t) => t.replace(/[^a-z0-9]/gi, ""))
-          .filter(Boolean),
-      )
-      .filter((parts) => parts.length > 0)
-      .map((parts) => (parts.length === 1 ? `${parts[0]}:*` : `(${parts.join(" & ")})`));
+    const synonymBranches = synonymTsqueryBranches(synonyms);
     const searchTokens = baseTokens
       ? synonymBranches.length > 0
         ? [`(${baseTokens})`, ...synonymBranches].join(" | ")
@@ -1456,6 +1448,7 @@ export async function searchKb(
         ${kbFilterPages}
         ${pageVisibilityFilter}
         ${tagFilterPages}
+        ORDER BY updated_display_date DESC NULLS LAST, id ASC
         LIMIT 500
       `) as unknown as Array<{
         id: string;

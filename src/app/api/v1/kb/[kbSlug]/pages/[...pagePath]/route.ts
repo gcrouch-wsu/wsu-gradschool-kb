@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { getKbReadAccess } from "@/lib/auth";
 import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { isValidKaasApiKey } from "@/lib/kaas-auth";
@@ -157,6 +158,21 @@ export async function PATCH(
       },
       "kaas-write-api",
     );
+    await recordAuditEvent({
+      actor: { email: "kaas-write-api", role: "admin" },
+      action: "page.updated",
+      entityType: "page",
+      entityId: updated.id,
+      entityLabel: updated.title,
+      kbId: updated.kbId,
+      details: {
+        source: "kaas-write-api",
+        status: updated.status,
+        path: updated.path.join("/"),
+        summaryChanged: body.summary !== undefined,
+        blocksChanged: body.blocks !== undefined,
+      },
+    });
     return NextResponse.json({
       ok: true,
       pageId: updated.id,

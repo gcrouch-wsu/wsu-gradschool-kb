@@ -64,6 +64,26 @@ export function expandSearchQueryTerms(query: string, customGroups?: string[][])
   return { original: trimmed, synonyms: [...extras] };
 }
 
+/**
+ * Build OR-able tsquery synonym branches from expandSearchQueryTerms() output.
+ * Normalizes punctuation so "i-20" and "i20" collapse to a single `i20:*` branch.
+ */
+export function synonymTsqueryBranches(synonyms: string[]): string[] {
+  return [
+    ...new Set(
+      synonyms
+        .map((term) =>
+          term
+            .split(/\s+/)
+            .map((t) => t.replace(/[^a-z0-9]/gi, ""))
+            .filter(Boolean),
+        )
+        .filter((parts) => parts.length > 0)
+        .map((parts) => (parts.length === 1 ? `${parts[0]}:*` : `(${parts.join(" & ")})`)),
+    ),
+  ];
+}
+
 export function listSynonymGroupsForTests() {
   return DEFAULT_SYNONYM_GROUPS.map((group) => [...group]);
 }
