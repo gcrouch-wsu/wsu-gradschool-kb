@@ -4,7 +4,6 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DraftPreviewModal } from "@/components/DraftPreviewModal";
 import { DropdownSelect } from "@/components/DropdownSelect";
-import { GuidedTour } from "@/components/GuidedTour";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { RelocatePageDialog } from "@/components/RelocatePageDialog";
