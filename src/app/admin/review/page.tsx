@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArchiveUnusedAssetsButton } from "@/components/ArchiveUnusedAssetsButton";
 import { ReviewProposedActions } from "@/components/ReviewProposedActions";
 import { ReviewSourcedScan } from "@/components/ReviewSourcedScan";
 import { accessibleKbIds, getCurrentAdminSession } from "@/lib/auth";
@@ -11,7 +12,11 @@ export default async function AdminReviewPage() {
     redirect("/admin/sign-in?next=/admin/review");
   }
 
-  const canApprove = session.role === "owner" || session.role === "admin";
+  // Managers may approve in their assigned KBs, and the dashboard is already
+  // scoped to those KBs by accessibleKbIds. The status API re-checks per page
+  // via canPublishInKb, so this only controls whether the control is offered.
+  const canApprove =
+    session.role === "owner" || session.role === "admin" || session.role === "manager";
   const review = await getAdminReviewDashboard(await accessibleKbIds(session));
 
   return (
@@ -167,18 +172,21 @@ export default async function AdminReviewPage() {
         {review.unusedAssets.length === 0 ? (
           <p className="meta">Every active asset is referenced on at least one page.</p>
         ) : (
-          <ul className="import-outline">
-            {review.unusedAssets.map((asset) => (
-              <li key={asset.assetId}>
-                <Link href={`/admin/assets/${asset.assetId}`}>{asset.title}</Link>
-                <span className="meta">
-                  {" "}
-                  · {asset.slug}
-                  {asset.kbSlug ? ` · /kb/${asset.kbSlug}/files/${asset.slug}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ArchiveUnusedAssetsButton assets={review.unusedAssets} />
+            <ul className="import-outline">
+              {review.unusedAssets.map((asset) => (
+                <li key={asset.assetId}>
+                  <Link href={`/admin/assets/${asset.assetId}`}>{asset.title}</Link>
+                  <span className="meta">
+                    {" "}
+                    · {asset.slug}
+                    {asset.kbSlug ? ` · /kb/${asset.kbSlug}/files/${asset.slug}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
     </div>

@@ -33,6 +33,10 @@ function normalizeAlign(raw: string | undefined | null): TextAlign | undefined {
   return value === "center" || value === "right" || value === "left" ? (value as TextAlign) : undefined;
 }
 
+function normalizeCardBackground(raw: unknown): Extract<ContentBlock, { type: "card" }>["background"] {
+  return raw === "wash" || raw === "crimson" || raw === "paper" ? raw : "paper";
+}
+
 function alignStyleAttr(align: TextAlign | undefined): string {
   return align && align !== "left" ? ` style="text-align: ${align}"` : "";
 }
@@ -289,13 +293,14 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
       return `<aside class="doc-alert doc-alert--info" data-block-id="${id}" data-variant="info" role="note">${inner}</aside>`;
     }
     case "image": {
+      const align = normalizeAlign(block.align) ?? "left";
       return imageFigureHtml({
         blockId: block.blockId,
         src: safeImageSrc(block.url) ?? "",
         alt: block.alt ?? "",
         decorative: Boolean(block.decorative),
         width: clampWidth(block.widthPercent),
-        align: block.align ?? "left",
+        align,
         assetId: block.assetId,
         caption: block.caption,
       });
@@ -304,15 +309,17 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
       return `<div class="doc-section-break" contenteditable="false" data-block-id="${id}" role="separator" aria-label="Section break"></div>`;
     }
     case "card": {
+      const background = normalizeCardBackground(block.background);
       const titleAttr = block.title ? ` data-title="${escapeHtml(block.title)}"` : "";
       const levelAttr = block.titleLevel === 3 ? ` data-title-level="3"` : "";
       const inner = blocksToDocumentHtml(block.blocks, kbSlug);
-      return `<section class="doc-card doc-card--${block.background}" data-block-id="${id}" data-background="${block.background}"${titleAttr}${levelAttr}>${inner}</section>`;
+      return `<section class="doc-card doc-card--${background}" data-block-id="${id}" data-background="${background}"${titleAttr}${levelAttr}>${inner}</section>`;
     }
     case "procedure_section": {
-      const tag = block.level === 3 ? "h3" : "h2";
+      const level = block.level === 3 ? 3 : 2;
+      const tag = level === 3 ? "h3" : "h2";
       const inner = blocksToDocumentHtml(block.blocks, kbSlug);
-      return `<section class="doc-procedure-section" data-block-id="${id}" data-level="${block.level}"><${tag} class="anchor-heading doc-procedure-section__title" id="${id}" contenteditable="false">${textToRichText(block.title)}</${tag}>${inner}</section>`;
+      return `<section class="doc-procedure-section" data-block-id="${id}" data-level="${level}"><${tag} class="anchor-heading doc-procedure-section__title" id="${id}" contenteditable="false">${textToRichText(block.title)}</${tag}>${inner}</section>`;
     }
     case "table": {
       return serializeTable(block);
@@ -391,8 +398,7 @@ function serializeDocumentNode(node: Node): string {
   const blockId = blockIdFrom(node);
 
   if (tag === "section" && hasClass(node, "doc-card")) {
-    const background =
-      (node.getAttribute("data-background") as Extract<ContentBlock, { type: "card" }>["background"]) || "paper";
+    const background = normalizeCardBackground(node.getAttribute("data-background"));
     const title = node.getAttribute("data-title") || "";
     const inner = node.childNodes.map(serializeDocumentNode).join("");
     return `<section class="doc-card doc-card--${background}" data-block-id="${escapeHtml(blockId)}" data-background="${background}" data-title="${escapeHtml(title)}">${inner}</section>`;
@@ -592,8 +598,7 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
         type: "card",
         title: node.getAttribute("data-title") || undefined,
         titleLevel: node.getAttribute("data-title-level") === "3" ? 3 : 2,
-        background:
-          (node.getAttribute("data-background") as Extract<ContentBlock, { type: "card" }>["background"]) || "paper",
+        background: normalizeCardBackground(node.getAttribute("data-background")),
         blocks: documentHtmlToBlocks(node.innerHTML, depth + 1),
       });
       continue;

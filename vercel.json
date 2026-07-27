@@ -16,6 +16,10 @@
       "schedule": "0 15 * * 1"
     },
     {
+      "path": "/api/admin/cron/review-overdue",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/admin/cron/sourced-staleness",
       "schedule": "0 5 * * *"
     },

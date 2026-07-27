@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { TARGET_PAGE_PUBLIC_PATH } from "./helpers";
 
-const TINY_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
-  "base64",
+const TINY_IMAGE = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="#981e32"/></svg>',
 );
 
 test.describe("PDF export", () => {
@@ -14,8 +13,8 @@ test.describe("PDF export", () => {
       requestedDelayedImage = true;
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await route.fulfill({
-        body: TINY_PNG,
-        contentType: "image/png",
+        body: TINY_IMAGE,
+        contentType: "image/svg+xml",
         status: 200,
       });
     });

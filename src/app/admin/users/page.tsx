@@ -41,6 +41,11 @@ const userRoleOptions = [
     value: "editor",
   },
   {
+    description: "Can publish and approve within assigned knowledge bases",
+    label: "Manager",
+    value: "manager",
+  },
+  {
     description: "Can manage all knowledge bases",
     label: "Admin",
     value: "admin",
@@ -53,7 +58,7 @@ const userRoleOptions = [
 ];
 
 function usesKbAssignments(role: User["role"]) {
-  return role === "editor" || role === "viewer";
+  return role === "manager" || role === "editor" || role === "viewer";
 }
 
 export default function AdminUsersPage() {  const { showError, showSuccess, statusModal } = useStatusModal();

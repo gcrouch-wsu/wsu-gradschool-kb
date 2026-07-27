@@ -162,7 +162,7 @@ async function buildRecipients(pages: ReviewDigestPage[]): Promise<ReviewDigestR
       recipients.push({ user, pages });
       continue;
     }
-    if (user.role === "editor") {
+    if (user.role === "manager" || user.role === "editor") {
       const assignments = new Set(await listUserAssignments(user.id));
       const assignedPages = pages.filter((page) => assignments.has(page.kbId));
       if (assignedPages.length > 0) {

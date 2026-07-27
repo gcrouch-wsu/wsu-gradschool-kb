@@ -161,4 +161,34 @@ describe("extractAssetUsages", () => {
     const usages = extractAssetUsages(pages, "asset-1");
     expect(usages.some((u) => u.pageId === "other")).toBe(false);
   });
+
+  it("finds selected-text document links via data-asset-id in rich text", () => {
+    const linked = page("inline-doc", [
+      {
+        blockId: "p-link",
+        type: "paragraph",
+        text: "See the handbook",
+        html: '<a href="/kb/grad/files/handbook" data-asset-id="asset-1">handbook</a>',
+      },
+    ]);
+    const nested = page("card-doc", [
+      {
+        blockId: "card1",
+        type: "card",
+        background: "paper",
+        blocks: [
+          {
+            blockId: "li1",
+            type: "list",
+            items: ["form"],
+            itemHtml: ['<a href="/kb/grad/files/form" data-asset-id="asset-1">form</a>'],
+          },
+        ],
+      },
+    ]);
+    const usages = extractAssetUsages([linked, nested], "asset-1");
+    expect(usages).toHaveLength(2);
+    expect(usages.every((u) => u.usageType === "inline_link")).toBe(true);
+    expect(usages.map((u) => u.pageId).sort()).toEqual(["card-doc", "inline-doc"]);
+  });
 });

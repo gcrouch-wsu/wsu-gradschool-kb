@@ -11,8 +11,10 @@ import {
 } from "@/lib/kb-store";
 import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { logError } from "@/lib/log";
+import { normalizePageTags } from "@/lib/page-tags";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
+import { canPublishInKb } from "@/lib/auth-roles";
 import type { ContentBlock, PageStatus, PageVisibility } from "@/lib/types";
 
 interface UpdateBody {
@@ -20,6 +22,7 @@ interface UpdateBody {
   slug?: unknown;
   parentPath?: unknown;
   summary?: unknown;
+  tags?: unknown;
   visibility?: unknown;
   status?: unknown;
   sortOrder?: unknown;
@@ -32,9 +35,14 @@ interface UpdateBody {
   showSummary?: unknown;
   showPrintButton?: unknown;
   nextReviewDate?: unknown;
+  reviewAssigneeEmail?: unknown;
+  reviewSlaDays?: unknown;
   publishAt?: unknown;
   linkUrl?: unknown;
   linkNewTab?: unknown;
+  relatedPageIds?: unknown;
+  nextStepsHeading?: unknown;
+  nextStepsIntro?: unknown;
 }
 
 function isValidTreeLinkDestination(value: string) {
@@ -66,6 +74,7 @@ export async function PATCH(
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const slug = typeof body.slug === "string" ? body.slug : undefined;
   const summary = typeof body.summary === "string" ? body.summary : undefined;
+  const tags = body.tags === undefined ? undefined : normalizePageTags(body.tags);
   const ownerLabel = typeof body.ownerLabel === "string" ? body.ownerLabel : undefined;
   const contactEmail = typeof body.contactEmail === "string" ? body.contactEmail : undefined;
   const lastReviewedDate = typeof body.lastReviewedDate === "string" ? body.lastReviewedDate : undefined;
@@ -74,6 +83,14 @@ export async function PATCH(
   const showSummary = typeof body.showSummary === "boolean" ? body.showSummary : undefined;
   const showPrintButton = typeof body.showPrintButton === "boolean" ? body.showPrintButton : undefined;
   const nextReviewDate = typeof body.nextReviewDate === "string" ? body.nextReviewDate : undefined;
+  const reviewAssigneeEmail =
+    typeof body.reviewAssigneeEmail === "string" ? body.reviewAssigneeEmail.trim().slice(0, 200) : undefined;
+  const reviewSlaDays =
+    typeof body.reviewSlaDays === "number" && Number.isFinite(body.reviewSlaDays)
+      ? Math.min(365, Math.max(1, Math.round(body.reviewSlaDays)))
+      : body.reviewSlaDays === null
+        ? null
+        : undefined;
   const publishAt =
     body.publishAt === null
       ? null
@@ -93,7 +110,15 @@ export async function PATCH(
   const linkUrl =
     typeof body.linkUrl === "string" ? body.linkUrl.trim().slice(0, 500) : undefined;
   const linkNewTab = typeof body.linkNewTab === "boolean" ? body.linkNewTab : undefined;
+  const relatedPageIds = Array.isArray(body.relatedPageIds)
+    ? body.relatedPageIds.filter((id): id is string => typeof id === "string")
+    : undefined;
+  const nextStepsHeading =
+    typeof body.nextStepsHeading === "string" ? body.nextStepsHeading.trim().slice(0, 120) : undefined;
+  const nextStepsIntro =
+    typeof body.nextStepsIntro === "string" ? body.nextStepsIntro.trim().slice(0, 240) : undefined;
   const nextLinkUrl = linkUrl ?? existingPage?.linkUrl ?? "";
+  const canPublish = await canPublishInKb(guard.session, existingPage!.kbId);
 
   if (!title) {
     return NextResponse.json({ message: "Title is required." }, { status: 400 });
@@ -105,6 +130,20 @@ export async function PATCH(
     return NextResponse.json(
       { message: "A link item needs a destination: an https:// URL or an internal path starting with /." },
       { status: 400 },
+    );
+  }
+
+  if (body.publishAt !== undefined && !canPublish) {
+    return NextResponse.json(
+      { message: "Only an owner, admin, or KB manager can schedule publishing." },
+      { status: 403 },
+    );
+  }
+
+  if (status === "published" && !canPublish) {
+    return NextResponse.json(
+      { message: "Only an owner, admin, or KB manager can publish pages. Submit the page for review instead." },
+      { status: 403 },
     );
   }
 
@@ -140,6 +179,7 @@ export async function PATCH(
       title,
       slug,
       summary,
+      tags,
       visibility,
       parentPath,
       status,
@@ -153,9 +193,14 @@ export async function PATCH(
       showSummary,
       showPrintButton,
       nextReviewDate,
+      reviewAssigneeEmail,
+      reviewSlaDays,
       publishAt,
       linkUrl,
       linkNewTab,
+      relatedPageIds,
+      nextStepsHeading,
+      nextStepsIntro,
     }, guard.session.email);
     await recordAuditEvent({
       session: guard.session,

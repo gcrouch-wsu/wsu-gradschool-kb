@@ -19,13 +19,14 @@ current implementation status.
   **editor notes** anchored to selected text or a cursor position; text/image **alignment**; a **link dialog**
   (create/edit links, new-tab target); a **media picker**; per-image **alt text** and optional
   visible captions kept as separate fields.
-- **Managed assets**: stable public URLs, version history with replace/activate, usage tracking,
-  private/staff-aware delivery, archive-first permanent delete, and reference-blocking safeguards.
-- **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Editor/Viewer roles, KB
+- **Managed assets**: stable public URLs, version history with replace/activate, tags/keywords,
+  usage tracking with used/unused library views, private/staff-aware delivery, archive-first
+  permanent delete, and reference-blocking safeguards.
+- **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Manager/Editor/Viewer roles, KB
   scoping, header identity + **Sign out**, a global Owner/Admin **Audit log**, and DB-backed
   **edit locks** to prevent concurrent overwrites.
 - **Search**: global and per-KB Postgres full-text search (tsvector + GIN) with prefix/type-ahead,
-  grouped global results, zero-result gap logging, private/staff-page visibility pruning, and an
+  grouped global results, page/asset tags, zero-result gap logging, private/staff-page visibility pruning, and an
   owner-configurable **search widget** — per KB (sidebar box scoped to that KB or all KBs, with a
   custom label) and optionally on the site home page above the KB list. The widget offers **live
   in-place suggestions** (accessible combobox, visibility-scoped public `GET /api/search`, rate
@@ -33,8 +34,9 @@ current implementation status.
   only.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
-  WCAG-minded UI, automated public-page axe smoke tests in CI, proposed-edits review, reader
-  feedback, revision compare/restore, trash, and **print-to-PDF export** over semantic HTML.
+  WCAG-minded UI, automated public-page axe smoke tests in CI, owner/admin/KB-manager publish approval,
+  proposed-edits review, reader feedback, revision compare/restore, trash, a **content health**
+  dashboard, and **print-to-PDF export** over semantic HTML.
 - **AI draft summaries** (optional): write a page summary manually, or **Draft with AI** once the
   page has a title and enough body content (Vercel AI Gateway env vars; draft never auto-saves).
 - **Operations**: weekly review-date digest cron, owner-only bulk KB ZIP export, privacy-light
@@ -47,15 +49,16 @@ current implementation status.
 
 ## Current Status
 
-As of 2026-07-25, the public/private KB platform is on `main` and in active use for Grad School
+As of 2026-07-26, the public/private KB platform is on `main` and in active use for Grad School
 content work. See `project_spec.md` §9 for the shipped surface list (reader, editor, assets, search,
 governance, AI draft summaries, admin/ops) and §10 for known limitations.
 
 **Future only** (`project_spec.md` §11 / §12):
 
-1. **Editor framework migration** (FB-09 / FB-29) — plan in `docs/editor-framework-migration.md`
-2. **WSU SSO** (FB-30) — gated on WSU ITS engagement (Entra ID / Azure AD OIDC or SAML)
-3. **Confluence import/export bridge** (FB-37) — concept only; not scoped
+1. **WSU SSO** (FB-30) — gated on WSU ITS engagement (Entra ID / Azure AD OIDC or SAML)
+2. **Confluence import/export bridge** (FB-37) — concept only; not scoped
+
+Lexical editor Phases 1–4 + FB-26 are built for flow, card, procedure, and table-cell surfaces.
 
 All authentication stays local and owner-provisioned until SSO lands.
 
@@ -78,9 +81,11 @@ AI_MODEL=inclusionai/ling-3.0-flash-free
 ```
 
 Without these, the API returns a clear “not configured” error. Drafts never auto-save — review and
-Save as usual. Customize the system prompt under **Admin → Settings → AI Summary Prompt** (blank
-uses the built-in default). Cleaned AI drafts are capped at 2,500 characters; typed summaries have
-no hard max.
+Save as usual. Customize prompts under **Admin → Settings → AI Prompt** (summary + page review;
+blank uses built-in defaults). Each knowledge base can override both prompts when editing the KB.
+Cleaned AI summary drafts are capped at 2,500 characters; typed summaries have no hard max. **Review
+with AI** in the page editor returns accept/dismiss suggestions for style, readability, grammar, and
+alt text.
 
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
 axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions; optionally
@@ -168,13 +173,16 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
 Schema changes are applied automatically on first request via versioned migrations in
-`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `037_ai_summary_prompt`**
-(editable AI summary system prompt on site settings). Recent migrations also cover asset usages
-(`036`), reader feedback (`035`), scheduled publish (`034`), per-KB summary requirement (`033`),
-page-tree group/link nodes (`032`), search widget (`031`), sourced-block FTS (`030`), and KB
-visibility (`029`). No manual Neon console migration is required. See `src/lib/migrations/index.ts`
-for the full sequence (assets, redirects, imports, users/assignments, homepage, TOC, edit locks,
-FTS, revisions, page views, etc.).
+`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head:
+`043_page_server_drafts_per_author`** (per-user server drafts). Recent migrations also cover
+curated next-step copy (`042`), platform features including webhooks/server drafts/search synonyms
+(`041`), asset tags/keywords and tag-aware asset search vectors (`040`), page tags/keywords
+(`039`), site + per-KB AI summary and page-review prompts (`038`), site AI summary prompt (`037`),
+asset usages (`036`), reader feedback (`035`), scheduled publish (`034`), per-KB summary
+requirement (`033`), page-tree group/link nodes (`032`), search widget (`031`), sourced-block FTS
+(`030`), and KB visibility (`029`). No manual Neon console migration is required. See
+`src/lib/migrations/index.ts` for the full sequence (assets, redirects, imports, users/assignments,
+homepage, TOC, edit locks, FTS, revisions, page views, etc.).
 
 ## Managed assets
 
@@ -182,6 +190,8 @@ Signed-in admins can manage files at `/admin/assets`:
 
 - Upload PDF/Word/text documents (stored in Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set;
   large documents can use direct-to-Blob upload when configured).
+- Tag assets at upload or from the detail page; the library searches titles, slugs, descriptions,
+  tags, and referencing page names, with type and used/unused filters.
 - Replace a file by uploading a **draft version**, review **where the asset is used** (persisted
   usage index), then **activate** so the public URL (`/kb/{kbSlug}/files/{assetSlug}`) serves the
   new file without changing the slug. Public article images can request width variants via `?w=` /
@@ -212,8 +222,9 @@ gate. This is content tooling, not part of the deployed app.
 
 Signed-in admins manage pages at `/admin/pages`: choose a knowledge base from the view selector,
 then reopen drafts, edit metadata and content, move a page under a different parent, choose a KB
-homepage page, and publish. The page-tree editor supports drag reorder, re-nesting, inline edit,
-setting/clearing the KB homepage, and publishing drafts directly from the tree. **Copy / move to
+homepage page, submit for review, and publish if their role allows it. The page-tree editor supports
+drag reorder, re-nesting, inline edit, setting/clearing the KB homepage, and owner/admin/KB-manager publish
+approval from the tree. **Copy / move to
 another KB** is available from the page editor overflow menu and each tree row menu: copies land as
 drafts in the destination KB; moves keep status, take child pages along, clear a source homepage
 assignment if needed, and leave absolute `/kb/...` redirects from the old public URLs when the page
@@ -244,9 +255,11 @@ The document editor is a WYSIWYG surface with a wrapping toolbar:
 - **Page display**: page settings can show/hide the summary lead paragraph and the public **PDF
   export** button. Existing and new pages default to showing the export button. Summary can be
   written manually or drafted with AI when the page body is complete enough (optional Gateway env).
-- **Media**: the **Media** button opens a picker to insert images/files from the asset library,
-  upload a new image or document, or embed a YouTube/Vimeo/direct video. Library images prefill
-  alt text from the asset default when one exists.
+- **Media**: the **Media** button opens a searchable picker to insert images/files from the asset
+  library, upload a new image or document, or embed a YouTube/Vimeo/direct video. Images insert at
+  the saved editor cursor/location; document assets link selected text when there is a text
+  selection, otherwise they insert as file-link blocks. Library images prefill alt text from the
+  asset default when one exists.
 - **Images**: click an image to reveal inline controls for **alignment**, **resize**, and **Alt**
   (write a description, mark it decorative, or save the description back to the asset). Captions
   are optional, visible, and stored separately from alt text.
@@ -256,7 +269,10 @@ governance blockers. A publish then runs the server gate; if it's blocked, the e
 the specific fields (summary, responsible office, contact email), vague links, and any images
 missing alt text. *Save & publish* /
 *Save changes* save the current form first (so unsaved edits are validated), an **Unsaved
-changes** indicator is shown, and concurrent edits are guarded by DB-backed edit locks.
+changes** indicator is shown, and concurrent edits are guarded by DB-backed edit locks. Editors can
+save drafts and submit pages for review. Owners/Admins and assigned KB Managers can publish,
+approve proposed pages, or schedule a publish; restoring a published revision remains
+Owner/Admin-only.
 
 Supported DOCX inline formatting is preserved on import and can be edited in the page editor.
 
@@ -270,8 +286,8 @@ page is not public/published for a public visitor, the KB falls back to the gene
 
 ## Roles & access
 
-Four roles: **Owner**, **Admin**, **Editor**, and **Viewer**. Owners/Admins can access all KBs;
-Editors can manage assigned KBs and read all public KBs plus assigned private KBs; Viewers can read
+Five roles: **Owner**, **Admin**, **Manager**, **Editor**, and **Viewer**. Owners/Admins can access all KBs;
+Managers can manage and publish assigned KBs; Editors can manage assigned KBs and read all public KBs plus assigned private KBs; Viewers can read
 all public KBs plus assigned private KBs and cannot access admin surfaces or mutation APIs. Sessions
 are HMAC-signed, HTTP-only cookies; sign out from the header.
 
@@ -284,21 +300,27 @@ metadata plus small JSON details for page and asset creation, updates, publish/a
 version actions. It does not store before/after snapshots.
 
 The **Usage** page (`/admin/usage`) shows privacy-light aggregate page-view counts for published
-public article and KB-homepage renders. It stores only page id, KB id, day, and count; no cookies,
-IP addresses, or user agents are stored. Bot and crawler traffic can be counted. Counts are skipped
-in in-memory mode.
+public article and KB-homepage renders, plus AI metering for **Draft with AI** / **Review with AI**
+(calls and prompt/completion/total tokens by feature and model). Page views store only page id, KB
+id, day, and count; AI rows store day, feature, model, KB id, and token totals — no prompts, cookies,
+IP addresses, or user agents. Bot and crawler traffic can be counted for page views. Counts are
+skipped in in-memory mode.
+
+The **Content health** page (`/admin/health`) consolidates maintenance queues for overdue review
+dates, missing tags, missing governance metadata, proposed pages, and logged zero-result searches.
+Editors see only their assigned KBs; Owners/Admins see all KBs.
 
 **User management** (`/admin/users`, owner-only) and **KB management** (`/admin/kbs`, owner-only)
 are gated both in the UI and at the API. Owners can mark KBs public/private and create or edit
 Editors/Viewers with a **search + chips** KB assignment picker (type to filter, click/Enter to add,
 ✕ or Backspace to remove) that scales to many KBs.
 
-**Editor/Viewer scoping is enforced on mutations and public/private reads:**
+**Manager/Editor/Viewer scoping is enforced on mutations and public/private reads:**
 
 - *Mutations* (page/asset/import/redirect changes) are guarded by `requireKbAccess` — editors can
   only modify their assigned KBs, and Viewers are rejected before mutations run.
 - *List views* — `/admin/pages` and `/admin/assets` are scoped per knowledge base (view selector)
-  and filtered to the editor's assigned KBs so they can't browse or enumerate others' content. The
+  and filtered to the manager/editor's assigned KBs so they can't browse or enumerate others' content. The
   `GET /api/admin/assets` endpoint is likewise filtered. The `GET /api/admin/users` directory is
   owner-only.
 - *Public reads* — the home KB list, KB landing/article routes, per-KB search, global search, page

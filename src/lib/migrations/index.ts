@@ -841,6 +841,217 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS ai_summary_prompt TEXT NOT NULL DEFAULT ''`;
     },
   },
+  {
+    id: "038_ai_page_prompts",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS ai_page_prompt TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS ai_summary_prompt TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS ai_page_prompt TEXT NOT NULL DEFAULT ''`;
+    },
+  },
+  {
+    id: "039_page_tags",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`
+        UPDATE kb_pages
+        SET tags = '[]'::jsonb
+        WHERE tags IS NULL OR jsonb_typeof(tags) <> 'array'
+      `;
+
+      await sql`
+        CREATE OR REPLACE FUNCTION kb_pages_search_trigger() RETURNS trigger AS $$
+        begin
+          new.search_vector :=
+            setweight(to_tsvector('english', coalesce(new.title, '')), 'A') ||
+            setweight(to_tsvector('english', coalesce(new.summary, '')), 'B') ||
+            setweight(to_tsvector('english', coalesce(
+              array_to_string(
+                ARRAY(
+                  SELECT jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(coalesce(new.tags, '[]'::jsonb)) = 'array' THEN coalesce(new.tags, '[]'::jsonb)
+                      ELSE '[]'::jsonb
+                    END
+                  )
+                ),
+                ' '
+              ),
+              ''
+            )), 'B') ||
+            setweight(to_tsvector('english', coalesce(kb_extract_blocks_text(new.blocks), '')), 'C');
+          return new;
+        end
+        $$ LANGUAGE plpgsql;
+      `;
+
+      await sql`
+        UPDATE kb_pages
+        SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+                            setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
+                            setweight(to_tsvector('english', coalesce(
+                              array_to_string(
+                                ARRAY(
+                                  SELECT jsonb_array_elements_text(
+                                    CASE
+                                      WHEN jsonb_typeof(coalesce(tags, '[]'::jsonb)) = 'array' THEN coalesce(tags, '[]'::jsonb)
+                                      ELSE '[]'::jsonb
+                                    END
+                                  )
+                                ),
+                                ' '
+                              ),
+                              ''
+                            )), 'B') ||
+                            setweight(to_tsvector('english', coalesce(kb_extract_blocks_text(blocks), '')), 'C')
+      `;
+    },
+  },
+  {
+    id: "040_asset_tags",
+    async up(sql) {
+      await sql`ALTER TABLE kb_assets ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`
+        UPDATE kb_assets
+        SET tags = '[]'::jsonb
+        WHERE tags IS NULL OR jsonb_typeof(tags) <> 'array'
+      `;
+
+      await sql`
+        CREATE OR REPLACE FUNCTION kb_assets_search_trigger() RETURNS trigger AS $$
+        begin
+          new.search_vector :=
+            setweight(to_tsvector('english', coalesce(new.title, '')), 'A') ||
+            setweight(to_tsvector('english', coalesce(new.description, '')), 'B') ||
+            setweight(to_tsvector('english', coalesce(
+              array_to_string(
+                ARRAY(
+                  SELECT jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(coalesce(new.tags, '[]'::jsonb)) = 'array' THEN coalesce(new.tags, '[]'::jsonb)
+                      ELSE '[]'::jsonb
+                    END
+                  )
+                ),
+                ' '
+              ),
+              ''
+            )), 'B') ||
+            setweight(to_tsvector('english', coalesce(new.slug, '')), 'C');
+          return new;
+        end
+        $$ LANGUAGE plpgsql;
+      `;
+
+      await sql`
+        UPDATE kb_assets
+        SET search_vector = setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+                            setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
+                            setweight(to_tsvector('english', coalesce(
+                              array_to_string(
+                                ARRAY(
+                                  SELECT jsonb_array_elements_text(
+                                    CASE
+                                      WHEN jsonb_typeof(coalesce(tags, '[]'::jsonb)) = 'array' THEN coalesce(tags, '[]'::jsonb)
+                                      ELSE '[]'::jsonb
+                                    END
+                                  )
+                                ),
+                                ' '
+                              ),
+                              ''
+                            )), 'B') ||
+                            setweight(to_tsvector('english', coalesce(slug, '')), 'C')
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_assets_tags ON kb_assets USING GIN(tags)`;
+    },
+  },
+  {
+    id: "041_platform_features",
+    async up(sql) {
+      await sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS search_synonym_groups JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS review_assignee_email TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS review_sla_days INTEGER`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS webhooks (
+          id TEXT PRIMARY KEY,
+          url TEXT NOT NULL,
+          secret TEXT NOT NULL DEFAULT '',
+          events JSONB NOT NULL DEFAULT '[]'::jsonb,
+          enabled BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS page_server_drafts (
+          page_id TEXT PRIMARY KEY,
+          author_user_id TEXT NOT NULL,
+          snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_page_server_drafts_updated ON page_server_drafts(updated_at DESC)`;
+    },
+  },
+  {
+    id: "042_next_steps_fields",
+    async up(sql) {
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS next_steps_heading TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS next_steps_intro TEXT NOT NULL DEFAULT ''`;
+    },
+  },
+  {
+    id: "043_page_server_drafts_per_author",
+    async up(sql) {
+      await sql`
+        DO $$
+        BEGIN
+          IF to_regclass('public.page_server_drafts') IS NOT NULL THEN
+            IF EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conrelid = 'public.page_server_drafts'::regclass
+                AND contype = 'p'
+                AND conname = 'page_server_drafts_pkey'
+            ) THEN
+              ALTER TABLE page_server_drafts DROP CONSTRAINT page_server_drafts_pkey;
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conrelid = 'public.page_server_drafts'::regclass
+                AND contype = 'p'
+            ) THEN
+              ALTER TABLE page_server_drafts ADD PRIMARY KEY (page_id, author_user_id);
+            END IF;
+          END IF;
+        END
+        $$;
+      `;
+    },
+  },
+  {
+    id: "044_ai_usage",
+    async up(sql) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kb_ai_usage (
+          day DATE NOT NULL,
+          feature TEXT NOT NULL,
+          model TEXT NOT NULL,
+          kb_id TEXT NOT NULL,
+          call_count INTEGER NOT NULL DEFAULT 0,
+          prompt_tokens INTEGER NOT NULL DEFAULT 0,
+          completion_tokens INTEGER NOT NULL DEFAULT 0,
+          total_tokens INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (day, feature, model, kb_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_ai_usage_kb_day ON kb_ai_usage(kb_id, day DESC)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kb_ai_usage_day ON kb_ai_usage(day DESC)`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

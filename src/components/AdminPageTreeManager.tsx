@@ -153,24 +153,25 @@ function statusBadgeClass(status: PageStatus) {
   return "badge badge--draft";
 }
 
-function publishToggleLabel(status: PageStatus) {
+function publishToggleLabel(status: PageStatus, canPublish: boolean) {
   if (status === "published") return "Unpublish";
   if (status === "archived") return "Restore to draft";
-  if (status === "proposed") return "Approve & publish";
-  return "Publish";
+  if (status === "proposed") return canPublish ? "Approve & publish" : "Return to draft";
+  return canPublish ? "Publish" : "Submit for review";
 }
 
-function publishToggleBusyLabel(status: PageStatus) {
+function publishToggleBusyLabel(status: PageStatus, canPublish: boolean) {
   if (status === "published") return "Unpublishing...";
   if (status === "archived") return "Restoring...";
-  if (status === "proposed") return "Approving...";
-  return "Publishing...";
+  if (status === "proposed") return canPublish ? "Approving..." : "Returning...";
+  return canPublish ? "Publishing..." : "Submitting...";
 }
 
-function nextStatusForToggle(status: PageStatus): PageStatus {
+function nextStatusForToggle(status: PageStatus, canPublish: boolean): PageStatus {
   if (status === "published") return "draft";
   if (status === "archived") return "draft";
-  return "published";
+  if (status === "proposed") return canPublish ? "published" : "draft";
+  return canPublish ? "published" : "proposed";
 }
 
 interface TreeRowMenuItem {
@@ -391,6 +392,7 @@ function PageTreeMoveButtons({
 interface PageTreeOverflowMenuProps {
   busy: boolean;
   canDelete: boolean;
+  canPublish: boolean;
   homepageBusy: boolean;
   isHomepage: boolean;
   onArchive: () => void;
@@ -405,6 +407,7 @@ interface PageTreeOverflowMenuProps {
 function PageTreeOverflowMenu({
   busy: _busy,
   canDelete,
+  canPublish,
   homepageBusy,
   isHomepage,
   onArchive,
@@ -437,7 +440,7 @@ function PageTreeOverflowMenu({
 
     entries.push({
       icon: <CircleCheck aria-hidden size={16} strokeWidth={1.75} />,
-      label: statusBusy ? publishToggleBusyLabel(page.status) : publishToggleLabel(page.status),
+      label: statusBusy ? publishToggleBusyLabel(page.status, canPublish) : publishToggleLabel(page.status, canPublish),
       disabled: statusBusy,
       onSelect: onPublishToggle,
     });
@@ -466,6 +469,7 @@ function PageTreeOverflowMenu({
     return entries;
   }, [
     canDelete,
+    canPublish,
     homepageBusy,
     isHomepage,
     onArchive,
@@ -1287,12 +1291,13 @@ export function AdminPageTreeManager({
                   <PageTreeOverflowMenu
                     busy={busy}
                     canDelete={canDelete}
+                    canPublish={canManagePublishPolicy}
                     homepageBusy={homepageBusyId === page.id}
                     isHomepage={isHomepage}
                     onArchive={() => setArchiveTarget(page)}
                     onDelete={() => setDeleteTarget(page)}
                     onHomepage={() => setHomepage(page.id)}
-                    onPublishToggle={() => setPageStatus(page.id, nextStatusForToggle(page.status))}
+                    onPublishToggle={() => setPageStatus(page.id, nextStatusForToggle(page.status, canManagePublishPolicy))}
                     onRelocate={() => setRelocateTarget(page)}
                     page={page}
                     statusBusy={statusBusyId === page.id}

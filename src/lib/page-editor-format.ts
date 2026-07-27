@@ -20,10 +20,35 @@ import {
   bindEditorSurface,
   getBoundEditorSurface,
   restoreRichTextSelection,
-  runEditorCommand,
+  runEditorCommand as runNativeEditorCommand,
   saveRichTextSelection,
 } from "@/lib/rich-text-selection";
+import {
+  isLexicalFlowActive,
+  lexicalApplyBlockTag,
+  lexicalApplyLink,
+  lexicalApplyList,
+  lexicalIndent,
+  lexicalInsertHtml,
+  lexicalOutdent,
+  lexicalRedo,
+  lexicalRemoveLink,
+  lexicalRunFormatCommand,
+  lexicalUndo,
+} from "@/lib/lexical/commands";
+import { syncPreservedBlockFromDom } from "@/lib/lexical/sync-preserved-block";
+import { lexicalSelectionInAlert } from "@/lib/lexical/selection-context";
 import type { ContentBlock } from "@/lib/types";
+
+function runEditorCommand(command: string, value?: string): boolean {
+  if (isLexicalFlowActive()) {
+    const ok = lexicalRunFormatCommand(command, value);
+    if (ok) {
+      return true;
+    }
+  }
+  return runNativeEditorCommand(command, value);
+}
 
 let onDocumentMutate: (() => void) | null = null;
 let onFormatIssue: ((message: string | null) => void) | null = null;
@@ -282,6 +307,55 @@ export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
     return;
   }
 
+  // Lexical surfaces: never inject a DOM draft marker — Lexical reconciliation
+  // would wipe it. Commit applies TOGGLE_LINK_COMMAND against the saved selection.
+  if (isLexicalFlowActive()) {
+    const selection = window.getSelection();
+    let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    const surface = getBoundEditorSurface();
+    const inSurface = Boolean(range && surface && surface.contains(range.commonAncestorContainer));
+    if (!inSurface) {
+      if (restoreRichTextSelection()) {
+        range = window.getSelection()?.getRangeAt(0) ?? null;
+      } else {
+        recordFormat(
+          "createLink",
+          false,
+          "no-selection",
+          "Select the text that should become a link (or click where it goes), then press the link button.",
+        );
+        return;
+      }
+    }
+    if (!range) {
+      recordFormat("createLink", false, "no-range", "Click in the page body, then add a link.");
+      return;
+    }
+    if (!range.collapsed && surface) {
+      const startBlock = nearestBlock(range.startContainer, surface);
+      const endBlock = nearestBlock(range.endContainer, surface);
+      if (startBlock && endBlock && startBlock !== endBlock) {
+        recordFormat(
+          "createLink",
+          false,
+          "cross-block",
+          "Select text within a single paragraph, heading, or list item, then add a link.",
+        );
+        return;
+      }
+    }
+    saveRichTextSelection();
+    linkEditorOpener?.({
+      url: "",
+      text: range.toString(),
+      newTab: false,
+      isEdit: false,
+      anchor: null,
+      marker: null,
+    });
+    return;
+  }
+
   const surface = getBoundEditorSurface();
   const selection = window.getSelection();
   let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
@@ -371,6 +445,73 @@ export function normalizeLinkUrl(raw: string): string {
   return url;
 }
 
+export function getEditorInsertionContext(): { hasInsertionPoint: boolean; hasTextSelection: boolean } {
+  if (typeof window === "undefined") {
+    return { hasInsertionPoint: false, hasTextSelection: false };
+  }
+  if (!restoreRichTextSelection()) {
+    return { hasInsertionPoint: false, hasTextSelection: false };
+  }
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  const surface = getBoundEditorSurface();
+  const hasInsertionPoint = Boolean(range && surface?.contains(range.commonAncestorContainer));
+  const hasTextSelection = Boolean(hasInsertionPoint && range && !range.collapsed && range.toString().trim());
+  saveRichTextSelection();
+  return { hasInsertionPoint, hasTextSelection };
+}
+
+export function insertEditorLink(request: {
+  url: string;
+  label: string;
+  newTab?: boolean;
+  assetId?: string;
+}): boolean {
+  const url = normalizeLinkUrl(request.url);
+  if (!url) {
+    return false;
+  }
+  if (!restoreRichTextSelection()) {
+    recordFormat("createLink", false, "no-selection", "Click in the page body, then add a link.");
+    return false;
+  }
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  const surface = getBoundEditorSurface();
+  if (!range || !surface || !surface.contains(range.commonAncestorContainer)) {
+    recordFormat("createLink", false, "outside-editor", "Click in the page body, then add a link.");
+    return false;
+  }
+  if (!range.collapsed) {
+    const startBlock = nearestBlock(range.startContainer, surface);
+    const endBlock = nearestBlock(range.endContainer, surface);
+    if (startBlock && endBlock && startBlock !== endBlock) {
+      recordFormat(
+        "createLink",
+        false,
+        "cross-block",
+        "Select text within a single paragraph, heading, or list item, then add a link.",
+      );
+      return false;
+    }
+  }
+  const text = range.toString().trim() || request.label.trim() || url;
+  const targetAttr = request.newTab ? ' target="_blank"' : "";
+  const relAttr = request.newTab ? ' rel="noopener noreferrer"' : "";
+  const assetId = (request.assetId ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
+  const assetAttr = assetId ? ` data-asset-id="${escapeHtml(assetId)}"` : "";
+  const html = `<a href="${escapeHtml(url)}"${targetAttr}${assetAttr}${relAttr}>${escapeHtml(text)}</a>`;
+  snapshotStructuralChange();
+  const ok = runEditorCommand("insertHTML", html);
+  if (!ok) {
+    recordFormat("createLink", false, "insert-failed", "Click in the page body, then add a link.");
+    return false;
+  }
+  notifyMutation();
+  recordFormat("createLink", true, request.newTab ? `${url} (new tab)` : url);
+  return true;
+}
+
 export function commitLink(request: {
   url: string;
   text: string;
@@ -384,6 +525,36 @@ export function commitLink(request: {
     return false;
   }
   const text = request.text.trim();
+
+  if (isLexicalFlowActive()) {
+    releaseLinkDraft(request.marker ?? null);
+    let restored = restoreRichTextSelection();
+    if (!restored && request.anchor?.isConnected) {
+      const range = document.createRange();
+      range.selectNodeContents(request.anchor);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      saveRichTextSelection();
+      restored = true;
+    }
+    if (!restored) {
+      recordFormat("createLink", false, "no-selection", "Click in the page body, then add a link.");
+      return false;
+    }
+    snapshotStructuralChange();
+    const ok = lexicalApplyLink(url, { newTab: request.newTab, text: text || undefined });
+    if (!ok) {
+      recordFormat("createLink", false, "insert-failed", "Click in the page body, then add a link.");
+      return false;
+    }
+    recordFormat(
+      request.anchor ? "editLink" : "createLink",
+      true,
+      request.newTab ? `${url} (new tab)` : url,
+    );
+    return true;
+  }
 
   if (request.anchor) {
     snapshotStructuralChange();
@@ -450,6 +621,22 @@ export function commitLink(request: {
 }
 
 export function removeLink(anchor: HTMLAnchorElement): boolean {
+  if (isLexicalFlowActive()) {
+    if (anchor.isConnected) {
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      saveRichTextSelection();
+    }
+    snapshotStructuralChange();
+    const ok = lexicalRemoveLink();
+    if (ok) {
+      recordFormat("unlink", true, "removed");
+    }
+    return ok;
+  }
   const parent = anchor.parentNode;
   if (!parent) {
     return false;
@@ -597,6 +784,10 @@ export function removeNote(span: HTMLElement): boolean {
 }
 
 export function applyBlockTag(tag: "p" | "h2" | "h3"): boolean {
+  if (isLexicalFlowActive() && lexicalApplyBlockTag(tag)) {
+    notifyMutation();
+    return true;
+  }
   return applyEditorCommand("formatBlock", tag) || applyEditorCommand("formatBlock", `<${tag}>`);
 }
 
@@ -681,6 +872,8 @@ export function applyAltText(figure: HTMLElement, alt: string, decorative: boole
     figure.removeAttribute("data-needs-alt");
   }
 
+  syncPreservedBlockFromDom(figure);
+
   const surface = figure.closest(".wysiwyg-surface") as HTMLElement | null;
   surface?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   recordFormat("altText", true, decorative ? "decorative" : value);
@@ -709,7 +902,7 @@ export function handleImageControlClick(event: {
   const surface = target?.closest?.(".wysiwyg-surface") as HTMLElement | null;
 
   const link = target?.closest?.("a") as HTMLAnchorElement | null;
-  if (link && surface) {
+  if (link && target?.closest?.(EDITABLE_SURFACE_SELECTOR)) {
     event.preventDefault();
     openLinkEditor(link);
     return true;
@@ -761,12 +954,27 @@ export function handleImageControlClick(event: {
       return false;
   }
   styleImageFigure(figure);
+  syncPreservedBlockFromDom(figure);
   surface?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   recordFormat("imageControl", true, action ?? "");
   return true;
 }
 
 export function applyList(command: "insertUnorderedList" | "insertOrderedList"): boolean {
+  if (isLexicalFlowActive() && lexicalApplyList(command)) {
+    notifyMutation();
+    if (command === "insertOrderedList") {
+      const surface = getBoundEditorSurface();
+      const list = surface ? orderedListFromSelection(surface) : null;
+      if (list) {
+        const suggested = suggestedOrderedListStart(list);
+        if (suggested && suggested > 1) {
+          setOrderedListStart(list, suggested);
+        }
+      }
+    }
+    return true;
+  }
   const ok = applyEditorCommand(command);
   if (ok && command === "insertOrderedList") {
     const surface = getBoundEditorSurface();
@@ -841,6 +1049,19 @@ function mutateListItem(li: HTMLLIElement, action: "indent" | "outdent"): boolea
 }
 
 export function applyIndent(): boolean {
+  if (isLexicalFlowActive()) {
+    if (lexicalIndent()) {
+      recordFormat("indent", true, "lexical");
+      return true;
+    }
+    recordFormat(
+      "indent",
+      false,
+      "first-item",
+      "Indent works on item 2 or later. Press Enter to add the next item, then indent that item.",
+    );
+    return false;
+  }
   const surface = getBoundEditorSurface();
   if (!surface) {
     recordFormat("indent", false, "no-surface", "Click in the editor, then indent a list item.");
@@ -855,6 +1076,14 @@ export function applyIndent(): boolean {
 }
 
 export function applyOutdent(): boolean {
+  if (isLexicalFlowActive()) {
+    if (lexicalOutdent()) {
+      recordFormat("outdent", true, "lexical");
+      return true;
+    }
+    recordFormat("outdent", false, "top-level", "This list item is already at the top level.");
+    return false;
+  }
   const surface = getBoundEditorSurface();
   if (!surface) {
     recordFormat("outdent", false, "no-surface", "Click in the editor, then outdent a nested list item.");
@@ -1072,6 +1301,9 @@ export function handleEditorKeyDown(event: {
 }
 
 export function performEditorUndo(): boolean {
+  if (isLexicalFlowActive() && lexicalUndo()) {
+    return true;
+  }
   if (undoStructural()) {
     return true;
   }
@@ -1079,6 +1311,9 @@ export function performEditorUndo(): boolean {
 }
 
 export function performEditorRedo(): boolean {
+  if (isLexicalFlowActive() && lexicalRedo()) {
+    return true;
+  }
   if (redoStructural()) {
     return true;
   }
@@ -1107,6 +1342,10 @@ export function markHeadingOrderProblems(): number {
 }
 
 export function insertEditorHtml(html: string): boolean {
+  if (isLexicalFlowActive() && lexicalInsertHtml(html)) {
+    notifyMutation();
+    return true;
+  }
   const ok = runEditorCommand("insertHTML", html);
   if (ok) {
     notifyMutation();
@@ -1127,6 +1366,14 @@ function insertionAnchorFromRange(range: Range, surface: HTMLElement): HTMLEleme
 }
 
 export function insertEditorBlockHtml(html: string): boolean {
+  if (isLexicalFlowActive()) {
+    // Focus Lexical root so insertHTML has a range selection.
+    getBoundEditorSurface()?.focus({ preventScroll: true });
+    if (lexicalInsertHtml(html)) {
+      notifyMutation();
+      return true;
+    }
+  }
   const surface = getBoundEditorSurface();
   if (!surface || !restoreRichTextSelection()) {
     return false;
@@ -1412,9 +1659,14 @@ export function queryEditorFormatting(): EditorFormatting {
   const element = node ? (node.nodeType === 1 ? (node as Element) : node.parentElement) : null;
   const selectionInSurface = Boolean(surface && node && surface.contains(node));
   const li = surface && selectionInSurface ? listItemFromSelection(surface) : null;
+  const calloutAncestor =
+    element?.closest(".doc-alert, aside[data-variant='info'], aside[role='note']") ?? null;
+  const inCallout =
+    (surface && selectionInSurface && calloutAncestor && surface.contains(calloutAncestor)) ||
+    lexicalSelectionInAlert();
   const surfaceKind = surface?.classList.contains("wysiwyg-table-cell")
     ? "table-cell"
-    : surface && selectionInSurface && element?.closest(".doc-alert")
+    : inCallout
       ? "callout"
       : surface
         ? "document"

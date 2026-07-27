@@ -95,6 +95,26 @@ describe("sanitizeRichText", () => {
     expect(out).toContain(">WSU</a>");
   });
 
+  it("preserves data-asset-id on anchors for document usage tracking", () => {
+    const out = sanitizeRichText(
+      '<a href="/kb/grad/files/handbook" data-asset-id="asset-handbook-1">handbook</a>',
+      { keepNotes: true },
+    );
+    expect(out).toContain('href="/kb/grad/files/handbook"');
+    expect(out).toContain('data-asset-id="asset-handbook-1"');
+    expect(out).toContain("handbook");
+  });
+
+  it("strips unsafe characters from data-asset-id", () => {
+    const out = sanitizeRichText(
+      '<a href="/kb/grad/files/x" data-asset-id=\'asset-1" onmouseover=alert(1)\'>x</a>',
+      { keepNotes: true },
+    );
+    expect(out).toMatch(/data-asset-id="asset-1[^"]*"/);
+    expect(out).not.toContain(" onmouseover=");
+    expect(out).not.toContain("alert(");
+  });
+
   it("allows mailto links", () => {
     expect(sanitizeRichText('<a href="mailto:a@wsu.edu">mail</a>')).toContain('href="mailto:a@wsu.edu"');
   });

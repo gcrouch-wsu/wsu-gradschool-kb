@@ -34,8 +34,9 @@ test.describe("table cell workflows", () => {
 
     // Public page renders the cell content inside a real table, bold preserved.
     await page.goto(TARGET_PAGE_PUBLIC_PATH);
-    await expect(page.locator("table").getByText("CellText", { exact: true })).toBeVisible();
-    await expect(page.locator("table").locator("b, strong").filter({ hasText: "CellText" })).toBeVisible();
+    const publicCell = page.locator("table td").filter({ hasText: "CellText" }).first();
+    await expect(publicCell).toBeVisible();
+    await expect(publicCell.locator("b, strong").first()).toHaveText("CellText");
     await expect(page.locator("table th").first()).toHaveAttribute("scope", "col");
   });
 

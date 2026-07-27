@@ -4,6 +4,7 @@ import {
   buildSummaryDraftPrompt,
   cleanSummaryDraft,
   formatBlocksForSummary,
+  isCompleteSummaryDraft,
   requestSummaryDraftFromGateway,
 } from "@/lib/summary-draft-core";
 import type { ContentBlock } from "@/lib/types";
@@ -81,10 +82,48 @@ describe("summary-draft helpers", () => {
     expect(cleanSummaryDraft("<think>plan</think>\nFinal answer here.")).toBe("Final answer here.");
   });
 
+  it("strips leaked planning and keeps the drafted prose", () => {
+    const leaked = [
+      'The user wants a summary of the entire "Graduate Program Bylaw Guidance" page.',
+      "I need to cover all major sections in continuous prose, 3-6 sentences.",
+      "Let me map out the key content from each section:",
+      "1. Before you begin - purpose of the page",
+      "2. Components of graduate program bylaws",
+      "I need to condense this into 3-6 sentences of continuous prose. Let me draft:",
+      "The page serves as a comprehensive guide for developing or revising graduate program bylaws,",
+      "noting that programs must align with Graduate School policy and submit bylaws annually.",
+    ].join("\n");
+    const cleaned = cleanSummaryDraft(leaked);
+    expect(cleaned.startsWith("The page serves as a comprehensive guide")).toBe(true);
+    expect(cleaned).not.toMatch(/Let me map|The user wants|1\. Before you begin/i);
+  });
+
+  it("returns empty when only reasoning is present", () => {
+    expect(
+      cleanSummaryDraft(
+        "The user wants a summary. Let me map out the key content:\n1. One\n2. Two\nI need to condense this.",
+      ),
+    ).toBe("");
+  });
+
+  it("detects mid-sentence truncation", () => {
+    expect(
+      isCompleteSummaryDraft(
+        "This page provides comprehensive guidance for developing or revising graduate program bylaws, noting",
+      ),
+    ).toBe(false);
+    expect(
+      isCompleteSummaryDraft(
+        "This page provides comprehensive guidance for developing or revising graduate program bylaws.",
+      ),
+    ).toBe(true);
+  });
+
   it("caps cleaned drafts at SUMMARY_DRAFT_MAX_CHARS", async () => {
     const { SUMMARY_DRAFT_MAX_CHARS } = await import("@/lib/summary-draft-core");
-    const long = "word ".repeat(SUMMARY_DRAFT_MAX_CHARS);
-    expect(cleanSummaryDraft(long).length).toBe(SUMMARY_DRAFT_MAX_CHARS);
+    const long = "The page covers graduate policies in detail. ".repeat(200);
+    expect(cleanSummaryDraft(long).length).toBeLessThanOrEqual(SUMMARY_DRAFT_MAX_CHARS);
+    expect(isCompleteSummaryDraft(cleanSummaryDraft(long))).toBe(true);
   });
 });
 
@@ -111,7 +150,8 @@ describe("requestSummaryDraftFromGateway", () => {
       model: "inclusionai/ling-3.0-flash-free",
     });
 
-    expect(summary).toBe("A clear draft.");
+    expect(summary.summary).toBe("A clear draft.");
+    expect(summary.usage.callCount).toBe(1);
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://ai.example/v1/chat/completions");
@@ -126,9 +166,87 @@ describe("requestSummaryDraftFromGateway", () => {
       messages: Array<{ role: string; content: string }>;
     };
     expect(payload.model).toBe("inclusionai/ling-3.0-flash-free");
-    expect(payload.max_tokens).toBeGreaterThanOrEqual(400);
+    expect(payload.max_tokens).toBeGreaterThanOrEqual(1000);
     expect(payload.messages[1]?.content).toContain("## Eligibility");
     expect(payload.messages[1]?.content).toContain("Write a summary of the entire page now.");
+    expect(payload.messages[1]?.content).toMatch(/summary prose only/i);
+  });
+
+  it("retries once when the first draft is truncated mid-sentence", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    "This page provides comprehensive guidance for developing or revising graduate program bylaws, noting",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    "This page provides comprehensive guidance for developing or revising graduate program bylaws, noting annual submission to the Graduate School.",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      requestSummaryDraftFromGateway({
+        title: "Bylaws",
+        bodyText: "x".repeat(200),
+        endpoint: "https://ai.example/v1",
+        apiKey: "k",
+        model: "m",
+      }),
+    ).resolves.toMatchObject({ summary: expect.stringMatching(/Graduate School\.$/) });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects responses that are only planning text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    "The user wants a summary. Let me map out:\n1. One\n2. Two\nI need to condense this.",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    await expect(
+      requestSummaryDraftFromGateway({
+        title: "T",
+        bodyText: "x".repeat(200),
+        endpoint: "https://ai.example/v1",
+        apiKey: "k",
+        model: "m",
+      }),
+    ).rejects.toThrow(/planning text|cut off mid-sentence/i);
   });
 
   it("accepts output_text when choices are absent", async () => {
@@ -149,7 +267,7 @@ describe("requestSummaryDraftFromGateway", () => {
         apiKey: "k",
         model: "m",
       }),
-    ).resolves.toBe("Alternate shape summary.");
+    ).resolves.toMatchObject({ summary: "Alternate shape summary." });
   });
 
   it("surfaces provider HTTP errors", async () => {

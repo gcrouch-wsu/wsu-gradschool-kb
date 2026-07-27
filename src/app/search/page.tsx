@@ -4,10 +4,14 @@ import { headers } from "next/headers";
 import {
   getAssetById,
   getKbById,
+  getVisiblePagesForKb,
   searchKb,
   type SearchResult,
 } from "@/lib/kb-store";
+import { getPopularSearchTags } from "@/lib/popular-search-tags";
 import { globalSearchScope } from "@/lib/search-scope";
+import { suggestDidYouMean } from "@/lib/search-suggest";
+import { parseSearchTagFacets } from "@/lib/search-tags";
 import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 
 const SEARCH_LIMIT = 30;
@@ -65,22 +69,57 @@ async function assetHref(result: Extract<SearchResult, { type: "asset" }>) {
 export default async function GlobalSearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; tag?: string | string[] }>;
 }) {
-  const { q = "" } = await searchParams;
+  const params = await searchParams;
+  const q = params.q ?? "";
+  const tagFacets = parseSearchTagFacets(params.tag);
   const trimmedQuery = q.trim();
+  const hasSearch = Boolean(trimmedQuery || tagFacets.length > 0);
 
   let rateLimited = false;
-  if (trimmedQuery) {
+  if (hasSearch) {
     const clientKey = clientKeyFromHeaders(await headers());
     rateLimited = !(await rateLimit(`search:${clientKey}`, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS)).allowed;
   }
 
   const scope = await searchScope();
-  const results = rateLimited || !trimmedQuery
+  const popularTags =
+    !hasSearch && !rateLimited
+      ? await getPopularSearchTags(
+          scope.options.includeAllKbs
+            ? (await (await import("@/lib/kb-store")).getAllKbsForAdmin()).map((kb) => kb.id)
+            : (scope.options.readableKbIds ?? []),
+          scope.includeStaff,
+        )
+      : [];
+  const results = rateLimited || !hasSearch
     ? []
-    : await searchKb(undefined, q, scope.includeStaff, scope.options);
+    : await searchKb(undefined, trimmedQuery, scope.includeStaff, {
+        ...scope.options,
+        tags: tagFacets,
+      });
   const groups = await resolveResults(results);
+
+  let didYouMean: string | null = null;
+  if (!rateLimited && trimmedQuery && results.length === 0) {
+    const titles: string[] = [];
+    if (scope.options.includeAllKbs) {
+      const { getAllKbsForAdmin } = await import("@/lib/kb-store");
+      for (const kb of await getAllKbsForAdmin()) {
+        for (const page of await getVisiblePagesForKb(kb.id, true)) {
+          titles.push(page.title);
+        }
+      }
+    } else {
+      for (const kbId of scope.options.readableKbIds ?? []) {
+        for (const page of await getVisiblePagesForKb(kbId, scope.includeStaff)) {
+          titles.push(page.title);
+        }
+      }
+    }
+    didYouMean = suggestDidYouMean(trimmedQuery, titles);
+  }
 
   return (
     <div className="page-shell">
@@ -97,24 +136,91 @@ export default async function GlobalSearchPage({
             type="search"
           />
         </label>
+        <label>
+          <span className="meta">Tag facets (comma-separated, all must match)</span>
+          <input
+            className="input"
+            defaultValue={tagFacets.join(", ")}
+            name="tag"
+            placeholder="e.g. visa, deadlines"
+            type="search"
+          />
+        </label>
         <button className="button" type="submit" style={{ alignSelf: "end" }}>
           Search
         </button>
       </form>
+
+      {popularTags.length > 0 && (
+        <div style={{ marginTop: "1rem" }}>
+          <p className="meta">Popular tags</p>
+          <div className="tag-list">
+            {popularTags.map(({ tag, count }) => {
+              const nextParams = new URLSearchParams();
+              if (trimmedQuery) {
+                nextParams.set("q", trimmedQuery);
+              }
+              for (const activeTag of tagFacets) {
+                nextParams.append("tag", activeTag);
+              }
+              if (!tagFacets.includes(tag)) {
+                nextParams.append("tag", tag);
+              }
+              return (
+                <Link href={`/search?${nextParams.toString()}`} key={tag}>
+                  {tag} ({count})
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {tagFacets.length > 0 ? (
+        <div className="tag-list" style={{ marginTop: "1rem" }}>
+          {tagFacets.map((tag) => {
+            const nextParams = new URLSearchParams();
+            if (trimmedQuery) {
+              nextParams.set("q", trimmedQuery);
+            }
+            for (const activeTag of tagFacets.filter((value) => value !== tag)) {
+              nextParams.append("tag", activeTag);
+            }
+            return (
+              <Link href={`/search?${nextParams.toString()}`} key={tag}>
+                {tag} ×
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
 
       <h2>Results</h2>
       {rateLimited ? (
         <p className="empty">Too many searches in a short time. Please wait a moment and try again.</p>
       ) : (
         <>
-          {trimmedQuery && results.length > 0 && (
+          {hasSearch && results.length > 0 && (
             <p className="meta">
-              {results.length} result{results.length === 1 ? "" : "s"} for &ldquo;{trimmedQuery}&rdquo;
+              {results.length} result{results.length === 1 ? "" : "s"}
+              {trimmedQuery ? <> for &ldquo;{trimmedQuery}&rdquo;</> : null}
+              {tagFacets.length > 0 ? <> tagged {tagFacets.map((tag) => `"${tag}"`).join(" + ")}</> : null}
             </p>
           )}
-          {!trimmedQuery && <p className="empty">Enter a search term to find pages and files.</p>}
-          {trimmedQuery && results.length === 0 && (
-            <p className="empty">No results found for &ldquo;{trimmedQuery}&rdquo;.</p>
+          {!hasSearch && <p className="empty">Enter a search term or tag to find pages and files.</p>}
+          {hasSearch && results.length === 0 && (
+            <p className="empty">
+              No results found
+              {trimmedQuery ? <> for &ldquo;{trimmedQuery}&rdquo;</> : null}
+              {tagFacets.length > 0 ? <> with tags {tagFacets.join(", ")}</> : null}.
+              {didYouMean ? (
+                <>
+                  {" "}
+                  Did you mean{" "}
+                  <Link href={`/search?q=${encodeURIComponent(didYouMean)}`}>{didYouMean}</Link>?
+                </>
+              ) : null}
+            </p>
           )}
         </>
       )}

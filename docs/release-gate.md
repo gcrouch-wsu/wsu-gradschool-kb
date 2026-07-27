@@ -4,6 +4,12 @@ Copy of the production release gate from `project_spec.md` §12 FB-25.
 Mark items as you complete them; do not claim ADA/WCAG certification until the
 manual WCAG sample pass is done.
 
+**Product/code status:** the automated suite below is what CI and local
+`npm run check` / `lint` / `test` / `build` / `test:a11y` / `test:editor` /
+`test:db` cover. Completing those commands is necessary but **not** sufficient
+for FB-25 — the editor browser sample and WCAG sample still need a human
+tester and a signed “Sign-off” section.
+
 ## Automated (must be green in CI)
 
 - [ ] `npm run check`

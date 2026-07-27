@@ -383,12 +383,14 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
   if (tag === "a") {
     const href = safeHref(node.getAttribute("href"));
     const target = node.getAttribute("target") === "_blank" ? "_blank" : undefined;
+    const assetId = (node.getAttribute("data-asset-id") ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
     const inner = serializeChildren(node, mode);
     if (!href) {
       return inner;
     }
     const targetAttr = target ? ` target="${target}"` : "";
-    return `<a href="${escapeHtml(href)}"${targetAttr} rel="noopener noreferrer">${inner}</a>`;
+    const assetAttr = assetId ? ` data-asset-id="${escapeHtml(assetId)}"` : "";
+    return `<a href="${escapeHtml(href)}"${targetAttr}${assetAttr} rel="noopener noreferrer">${inner}</a>`;
   }
 
   return `<${tag}>${serializeChildren(node, mode)}</${tag}>`;

@@ -3,6 +3,7 @@ import { recordAuditEvent } from "@/lib/audit-log";
 import { activateAssetVersion, getAssetAdminDetail, getAssetHomeKbId, getKbById } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
+import { dispatchWebhooks } from "@/lib/webhooks";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,13 @@ export async function POST(
     });
     const kb = await getKbById(asset.homeKbId);
     const detail = await getAssetAdminDetail(assetId);
+    await dispatchWebhooks("asset.replaced", {
+      assetId: asset.id,
+      kbId: asset.homeKbId,
+      slug: asset.slug,
+      versionId,
+      usageCount: detail?.usages.length ?? 0,
+    });
     const url = kb && asset.status === "active" ? `/kb/${kb.slug}/files/${asset.slug}` : null;
     return NextResponse.json({
       ok: true,

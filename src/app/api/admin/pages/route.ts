@@ -1,8 +1,27 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { createPage } from "@/lib/kb-store";
+import { createPage, getAllPagesForAdmin } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
+
+export async function GET(request: Request) {
+  const guard = await requireAdminMutation(request);
+  if (!guard.ok) {
+    return guard.response;
+  }
+  const kbId = new URL(request.url).searchParams.get("kbId")?.trim() ?? "";
+  if (!kbId) {
+    return NextResponse.json({ message: "kbId is required." }, { status: 400 });
+  }
+  const denied = await requireKbAccess(guard.session, kbId);
+  if (denied) {
+    return denied;
+  }
+  const pages = (await getAllPagesForAdmin(kbId))
+    .filter((page) => (page.nodeKind ?? "page") === "page")
+    .map((page) => ({ id: page.id, title: page.title, path: page.path }));
+  return NextResponse.json({ pages });
+}
 
 export async function POST(request: Request) {
   const guard = await requireAdminMutation(request);

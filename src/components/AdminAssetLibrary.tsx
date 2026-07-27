@@ -10,19 +10,30 @@ export type AdminAssetLibraryRow = {
   id: string;
   title: string;
   slug: string;
+  description: string;
+  tags: string[];
   assetType: "document" | "image" | "video";
   status: AssetStatus;
   fileSizeBytes: number;
   formattedSize: string;
   formattedDate: string;
+  usageCount: number;
+  usagePages: string[];
   publicUrl?: string;
 };
 
 type TypeFilter = "all" | "document" | "image" | "video";
-type SortKey = "title" | "updated" | "size" | "type";
+type UsageFilter = "all" | "used" | "unused";
+type SortKey = "title" | "updated" | "size" | "type" | "usage";
 
 function assetSearchFilter(asset: AdminAssetLibraryRow, query: string) {
-  return asset.title.toLowerCase().includes(query) || asset.slug.toLowerCase().includes(query);
+  return [
+    asset.title,
+    asset.slug,
+    asset.description,
+    asset.tags.join(" "),
+    asset.usagePages.join(" "),
+  ].some((field) => field.toLowerCase().includes(query));
 }
 
 export function AdminAssetLibrary({
@@ -37,11 +48,14 @@ export function AdminAssetLibrary({
   hrefForStatus: (status?: string) => string;
 }) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [usageFilter, setUsageFilter] = useState<UsageFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("title");
 
   const documentCount = assets.filter((asset) => asset.assetType === "document").length;
   const imageCount = assets.filter((asset) => asset.assetType === "image").length;
   const videoCount = assets.filter((asset) => asset.assetType === "video").length;
+  const usedCount = assets.filter((asset) => asset.usageCount > 0).length;
+  const unusedCount = assets.length - usedCount;
 
   const tableRows = useMemo(() => {
     let rows = assets;
@@ -50,6 +64,11 @@ export function AdminAssetLibrary({
     }
     if (typeFilter !== "all") {
       rows = rows.filter((asset) => asset.assetType === typeFilter);
+    }
+    if (usageFilter === "used") {
+      rows = rows.filter((asset) => asset.usageCount > 0);
+    } else if (usageFilter === "unused") {
+      rows = rows.filter((asset) => asset.usageCount === 0);
     }
     const sorted = [...rows];
     sorted.sort((a, b) => {
@@ -62,10 +81,13 @@ export function AdminAssetLibrary({
       if (sortKey === "type") {
         return a.assetType.localeCompare(b.assetType) || a.title.localeCompare(b.title);
       }
+      if (sortKey === "usage") {
+        return b.usageCount - a.usageCount || a.title.localeCompare(b.title);
+      }
       return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
     });
     return sorted;
-  }, [assets, sortKey, statusFilter, typeFilter]);
+  }, [assets, sortKey, statusFilter, typeFilter, usageFilter]);
 
   return (
     <section className="asset-library">
@@ -125,6 +147,7 @@ export function AdminAssetLibrary({
                     Public URL
                   </a>
                 )}
+                {asset.description && <span className="asset-library__description meta">{asset.description}</span>}
               </>
             ),
           },
@@ -138,14 +161,38 @@ export function AdminAssetLibrary({
             ),
           },
           {
+            id: "tags",
+            header: "Tags",
+            cell: (asset) =>
+              asset.tags.length > 0 ? (
+                <span className="asset-library__tag-list">
+                  {asset.tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </span>
+              ) : (
+                <span className="meta">None</span>
+              ),
+          },
+          {
+            id: "usage",
+            header: "Usage",
+            cell: (asset) =>
+              asset.usageCount > 0 ? (
+                <span className="asset-library__usage">
+                  <strong>{asset.usageCount}</strong>
+                  <span className="meta">
+                    {asset.usagePages.length > 0 ? asset.usagePages.join(", ") : "Referenced in pages"}
+                  </span>
+                </span>
+              ) : (
+                <span className="asset-library__unused">Unused</span>
+              ),
+          },
+          {
             id: "slug",
             header: "Slug",
             cell: (asset) => <span className="asset-library__slug">{asset.slug}</span>,
-          },
-          {
-            id: "size",
-            header: "Size",
-            cell: (asset) => asset.formattedSize,
           },
           {
             id: "updated",
@@ -172,7 +219,7 @@ export function AdminAssetLibrary({
         getRowId={(asset) => asset.id}
         rows={tableRows}
         searchFilter={assetSearchFilter}
-        searchPlaceholder="Search by title or slug…"
+        searchPlaceholder="Search assets, tags, or usage…"
         toolbarExtra={
           <>
             <div className="asset-library__type-tabs" role="tablist" aria-label="Asset type">
@@ -198,6 +245,18 @@ export function AdminAssetLibrary({
             </div>
             <DropdownSelect
               className="asset-library__sort"
+              label="Usage"
+              onChange={(nextValue) => setUsageFilter(nextValue as UsageFilter)}
+              options={[
+                { label: `All (${assets.length})`, value: "all" },
+                { label: `Used (${usedCount})`, value: "used" },
+                { label: `Unused (${unusedCount})`, value: "unused" },
+              ]}
+              searchable={false}
+              value={usageFilter}
+            />
+            <DropdownSelect
+              className="asset-library__sort"
               label="Sort"
               onChange={(nextValue) => setSortKey(nextValue as SortKey)}
               options={[
@@ -205,6 +264,7 @@ export function AdminAssetLibrary({
                 { label: "Last updated", value: "updated" },
                 { label: "File size", value: "size" },
                 { label: "Type", value: "type" },
+                { label: "Usage", value: "usage" },
               ]}
               searchable={false}
               value={sortKey}

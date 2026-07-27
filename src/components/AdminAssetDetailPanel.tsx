@@ -2,18 +2,26 @@
 
 import { useState } from "react";
 import { FileUploadPicker } from "@/components/FileUploadPicker";
-import type { AssetUsage, AssetVersion } from "@/lib/types";
+import type { Asset, AssetUsage, AssetVersion } from "@/lib/types";
 
 export function AdminAssetDetailPanel({
   assetId,
+  assetAltText,
+  assetDescription,
   assetStatus: initialStatus,
+  assetTags,
+  assetType,
   canDelete,
   versions: initialVersions,
   usages: initialUsages,
   publicUrl: initialPublicUrl,
 }: {
   assetId: string;
+  assetAltText: string;
+  assetDescription: string;
   assetStatus: string;
+  assetTags: string[];
+  assetType: Asset["assetType"];
   canDelete: boolean;
   versions: AssetVersion[];
   usages: AssetUsage[];
@@ -23,8 +31,13 @@ export function AdminAssetDetailPanel({
   const [usages, setUsages] = useState(initialUsages);
   const [assetStatus, setAssetStatus] = useState(initialStatus);
   const [publicUrl, setPublicUrl] = useState(initialPublicUrl);
+  const [description, setDescription] = useState(assetDescription);
+  const [altText, setAltText] = useState(assetAltText);
+  const [tagsText, setTagsText] = useState(assetTags.join(", "));
   const [file, setFile] = useState<File | null>(null);
+  const [replaceImpactAck, setReplaceImpactAck] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [metadataBusy, setMetadataBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -63,6 +76,10 @@ export function AdminAssetDetailPanel({
     if (!file) {
       return;
     }
+    if (usages.length > 0 && !replaceImpactAck) {
+      setError("Confirm that you understand which pages reference this asset before uploading.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -81,6 +98,7 @@ export function AdminAssetDetailPanel({
       setUsages(data.usages ?? usages);
       setMessage(data.message ?? "Draft replacement ready.");
       setFile(null);
+      setReplaceImpactAck(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Replace failed.");
     } finally {
@@ -117,6 +135,18 @@ export function AdminAssetDetailPanel({
   }
 
   async function handleActivate(versionId: string) {
+    const impact =
+      usages.length === 0
+        ? "This asset is not referenced on any pages."
+        : `This will update ${usages.length} page reference${usages.length === 1 ? "" : "s"}:\n` +
+          usages
+            .slice(0, 8)
+            .map((usage) => `- ${usage.pageTitle} (${usage.usageType})`)
+            .join("\n") +
+          (usages.length > 8 ? `\n…and ${usages.length - 8} more` : "");
+    if (!window.confirm(`Activate this version at the same public URL?\n\n${impact}`)) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -176,6 +206,36 @@ export function AdminAssetDetailPanel({
     }
   }
 
+  async function handleSaveMetadata(event: React.FormEvent) {
+    event.preventDefault();
+    setMetadataBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/assets/${assetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description,
+          altText: assetType === "image" ? altText : undefined,
+          tags: tagsText,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "Could not update metadata.");
+      }
+      setDescription(data.asset?.description ?? description);
+      setAltText(data.asset?.altText ?? altText);
+      setTagsText(Array.isArray(data.asset?.tags) ? data.asset.tags.join(", ") : tagsText);
+      setMessage("Asset metadata updated.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update metadata.");
+    } finally {
+      setMetadataBusy(false);
+    }
+  }
+
   return (
     <div className="import-grid">
       <section className="card">
@@ -228,6 +288,31 @@ export function AdminAssetDetailPanel({
         </div>
         {error && <p className="alert">{error}</p>}
         {message && <p className="alert">{message}</p>}
+        {file && usages.length > 0 && (
+          <div className="alert asset-replace-impact" role="status">
+            <strong>Replace impact preview.</strong> This asset is referenced on {usages.length} page
+            {usages.length === 1 ? "" : "s"}. Uploading creates a draft; activating it updates the public URL used by
+            those pages.
+            <ul className="asset-replace-impact__list">
+              {usages.slice(0, 6).map((usage, index) => (
+                <li key={`${usage.pageId}-${usage.usageType}-${usage.blockId ?? index}`}>
+                  <a href={`/admin/pages/${usage.pageId}`}>{usage.pageTitle}</a> — {usage.usageType.replace(/_/g, " ")}
+                </li>
+              ))}
+            </ul>
+            {usages.length > 6 ? (
+              <p className="meta">…and {usages.length - 6} more (see Usage panel).</p>
+            ) : null}
+            <label className="checkbox-inline" style={{ marginTop: "0.75rem" }}>
+              <input
+                checked={replaceImpactAck}
+                onChange={(event) => setReplaceImpactAck(event.target.checked)}
+                type="checkbox"
+              />
+              <span>I reviewed the affected pages and want to upload a replacement</span>
+            </label>
+          </div>
+        )}
         <form className="form" onSubmit={handleReplace}>
           <FileUploadPicker
             accept={acceptedReplacementTypes}
@@ -240,10 +325,13 @@ export function AdminAssetDetailPanel({
             id={`replacement-file-${assetId}`}
             label="Replacement file"
             onError={setError}
-            onFileChange={setFile}
+            onFileChange={(nextFile) => {
+              setFile(nextFile);
+              setReplaceImpactAck(false);
+            }}
             validateFile={validateReplacementFile}
           />
-          <button className="button" disabled={busy || !file} type="submit">
+          <button className="button" disabled={busy || !file || (usages.length > 0 && !replaceImpactAck)} type="submit">
             {busy ? "Uploading…" : "Upload draft replacement"}
           </button>
         </form>
@@ -261,19 +349,75 @@ export function AdminAssetDetailPanel({
         )}
       </section>
 
+      <section className="card">
+        <h2>Metadata</h2>
+        <p className="meta">Use tags to group assets by program, workflow, audience, or content type.</p>
+        <form className="form" onSubmit={handleSaveMetadata}>
+          <label>
+            <span className="meta">Description</span>
+            <textarea
+              className="input"
+              onChange={(event) => setDescription(event.target.value)}
+              rows={3}
+              value={description}
+            />
+          </label>
+          {assetType === "image" && (
+            <label>
+              <span className="meta">Default image alt text</span>
+              <input
+                className="input"
+                onChange={(event) => setAltText(event.target.value)}
+                value={altText}
+              />
+            </label>
+          )}
+          <label>
+            <span className="meta">Tags</span>
+            <input
+              className="input"
+              onChange={(event) => setTagsText(event.target.value)}
+              placeholder="forms, admissions, handbook"
+              value={tagsText}
+            />
+          </label>
+          <button className="button" disabled={metadataBusy} type="submit">
+            {metadataBusy ? "Saving..." : "Save metadata"}
+          </button>
+        </form>
+      </section>
+
       <aside className="card import-preview">
         <h2>Usage ({usages.length})</h2>
         {usages.length === 0 ? (
           <p className="meta">This asset is not referenced on any page yet.</p>
         ) : (
-          <ul className="import-outline">
-            {usages.map((usage, index) => (
-              <li key={`${usage.pageId}-${usage.usageType}-${index}`}>
-                <a href={`/admin/pages/${usage.pageId}`}>{usage.pageTitle}</a> ({usage.pageStatus}
-                ) — {usage.usageType.replace("_", " ")}
-              </li>
-            ))}
-          </ul>
+          <div className="table-wrap">
+            <table className="admin-table asset-usage-table">
+              <thead>
+                <tr>
+                  <th scope="col">Page</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Use</th>
+                  <th scope="col">Block</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usages.map((usage, index) => (
+                  <tr key={`${usage.pageId}-${usage.usageType}-${usage.blockId ?? index}`}>
+                    <td>
+                      <a href={`/admin/pages/${usage.pageId}`}>{usage.pageTitle}</a>
+                    </td>
+                    <td>{usage.pageStatus}</td>
+                    <td>{usage.usageType.replace(/_/g, " ")}</td>
+                    <td>
+                      {usage.blockId ? <code>{usage.blockId}</code> : <span className="meta">Related file</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         <h3>Version history</h3>

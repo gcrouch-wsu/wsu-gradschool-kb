@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const PRINT_IMAGE_TIMEOUT_MS = 12000;
+const PRINT_IMAGE_TIMEOUT_MS = 15000;
 
 function wait(ms: number) {
   return new Promise<void>((resolve) => {
@@ -16,7 +16,71 @@ function nextFrame() {
   });
 }
 
-async function waitForImage(img: HTMLImageElement) {
+function imageLoaded(img: HTMLImageElement) {
+  return img.complete && img.naturalWidth > 0;
+}
+
+async function waitForImageEvent(img: HTMLImageElement, timeoutMs: number) {
+  if (imageLoaded(img)) {
+    return;
+  }
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      const done = () => {
+        img.removeEventListener("load", done);
+        img.removeEventListener("error", done);
+        resolve();
+      };
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+    }),
+    wait(timeoutMs),
+  ]);
+}
+
+async function nudgeLazyImageLoad(img: HTMLImageElement) {
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  img.scrollIntoView({ block: "center", inline: "nearest" });
+  await nextFrame();
+  window.scrollTo(scrollX, scrollY);
+  await nextFrame();
+}
+
+async function loadImageViaObjectUrl(
+  img: HTMLImageElement,
+  source: string,
+  cleanupTasks: Array<() => void>,
+) {
+  try {
+    const response = await fetch(source, { cache: "force-cache", credentials: "same-origin" });
+    if (!response.ok) {
+      return;
+    }
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const originalSrc = img.getAttribute("src");
+    const originalSrcset = img.getAttribute("srcset");
+    if (originalSrcset) {
+      img.removeAttribute("srcset");
+    }
+    img.src = objectUrl;
+    await waitForImageEvent(img, 3000);
+    cleanupTasks.push(() => {
+      if (originalSrcset) {
+        img.setAttribute("srcset", originalSrcset);
+      }
+      if (originalSrc) {
+        img.setAttribute("src", originalSrc);
+      }
+      URL.revokeObjectURL(objectUrl);
+    });
+  } catch {
+    // Cross-origin or blocked images can still fall back to the browser's print behavior.
+  }
+}
+
+async function waitForImage(img: HTMLImageElement, cleanupTasks: Array<() => void>) {
+  img.removeAttribute("loading");
   img.loading = "eager";
   await nextFrame();
 
@@ -25,7 +89,17 @@ async function waitForImage(img: HTMLImageElement) {
     return;
   }
 
-  if (!img.complete || img.naturalWidth === 0) {
+  if (!imageLoaded(img)) {
+    const loadPromise = waitForImageEvent(img, 3000);
+    await nudgeLazyImageLoad(img);
+    await loadPromise;
+  }
+
+  if (!imageLoaded(img)) {
+    await loadImageViaObjectUrl(img, source, cleanupTasks);
+  }
+
+  if (!imageLoaded(img)) {
     await new Promise<void>((resolve) => {
       const probe = new Image();
       probe.decoding = "sync";
@@ -36,44 +110,35 @@ async function waitForImage(img: HTMLImageElement) {
         resolve();
       }
     });
-    if (!img.complete || img.naturalWidth === 0) {
+    if (!imageLoaded(img)) {
       img.src = source;
       await nextFrame();
     }
   }
 
-  if (!img.complete || img.naturalWidth === 0) {
-    await Promise.race([
-      new Promise<void>((resolve) => {
-        const done = () => {
-          img.removeEventListener("load", done);
-          img.removeEventListener("error", done);
-          resolve();
-        };
-        img.addEventListener("load", done, { once: true });
-        img.addEventListener("error", done, { once: true });
-      }),
-      wait(3000),
-    ]);
+  if (!imageLoaded(img)) {
+    await waitForImageEvent(img, 3000);
   }
 
-  if (img.complete && img.naturalWidth > 0 && typeof img.decode === "function") {
+  if (imageLoaded(img) && typeof img.decode === "function") {
     await img.decode().catch(() => {});
   }
 }
 
 async function prepareArticleImagesForPrint() {
   const images = Array.from(document.querySelectorAll<HTMLImageElement>(".article img"));
+  const cleanupTasks: Array<() => void> = [];
   if (images.length === 0) {
-    return;
+    return cleanupTasks;
   }
 
   await Promise.race([
-    Promise.all(images.map(waitForImage)),
+    Promise.all(images.map((img) => waitForImage(img, cleanupTasks))),
     wait(PRINT_IMAGE_TIMEOUT_MS),
   ]);
   await nextFrame();
   await nextFrame();
+  return cleanupTasks;
 }
 
 export function PrintPdfButton() {
@@ -82,10 +147,14 @@ export function PrintPdfButton() {
   async function printPdf() {
     if (preparing) return;
     setPreparing(true);
+    let cleanupTasks: Array<() => void> = [];
     try {
-      await prepareArticleImagesForPrint();
+      cleanupTasks = await prepareArticleImagesForPrint();
       window.print();
     } finally {
+      for (const cleanup of cleanupTasks) {
+        cleanup();
+      }
       setPreparing(false);
     }
   }

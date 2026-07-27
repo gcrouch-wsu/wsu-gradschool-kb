@@ -15,6 +15,12 @@ async function openRevisionHistory(page: Page) {
 // revision, and previewing a revision must not flip that row's restore button
 // into its busy ("Working…") state — view and restore track separate busy ids.
 test.describe("revision history panel", () => {
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.project.name === "firefox" && !page.isClosed()) {
+      await page.goto("about:blank").catch(() => undefined);
+    }
+  });
+
   test("a save records a revision and viewing it leaves restore idle", async ({ page }) => {
     await openEditor(page);
     // Reset + save so there is a deterministic, freshly-created revision, and so

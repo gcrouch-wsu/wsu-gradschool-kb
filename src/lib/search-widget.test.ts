@@ -14,8 +14,11 @@ describe("home search setting", () => {
 describe("ai summary prompt setting", () => {
   it("defaults empty and accepts a custom prompt", () => {
     expect(DEFAULT_SITE_SETTINGS.aiSummaryPrompt).toBe("");
+    expect(DEFAULT_SITE_SETTINGS.aiPagePrompt).toBe("");
     expect(normalizeSiteSettings({}).aiSummaryPrompt).toBe("");
+    expect(normalizeSiteSettings({}).aiPagePrompt).toBe("");
     expect(normalizeSiteSettings({ aiSummaryPrompt: "  Be concise.  " }).aiSummaryPrompt).toBe("Be concise.");
+    expect(normalizeSiteSettings({ aiPagePrompt: "  Check alt text.  " }).aiPagePrompt).toBe("Check alt text.");
   });
 
   it("uses the custom system prompt when drafting", () => {

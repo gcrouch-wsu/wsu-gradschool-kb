@@ -1,3 +1,4 @@
+import { collectPageAssetUsages } from "@/lib/asset-lifecycle";
 import { ensureSchema, getSql, isDatabaseEnabled } from "@/lib/db";
 import type { AssetUsage, AssetUsageType, KbPage, PageStatus } from "@/lib/types";
 
@@ -8,45 +9,7 @@ export async function rebuildAssetUsagesForPage(page: KbPage): Promise<void> {
   }
   await ensureSchema();
   const sql = getSql();
-  const all: Array<{
-    assetId: string;
-    pageId: string;
-    pageTitle: string;
-    pageStatus: string;
-    blockId?: string;
-    usageType: string;
-  }> = [];
-
-  for (const block of page.blocks) {
-    if (block.type === "image" && block.assetId) {
-      all.push({
-        assetId: block.assetId,
-        pageId: page.id,
-        pageTitle: page.title,
-        pageStatus: page.status,
-        blockId: block.blockId,
-        usageType: "inline_image",
-      });
-    } else if (block.type === "asset_link" && block.assetId) {
-      all.push({
-        assetId: block.assetId,
-        pageId: page.id,
-        pageTitle: page.title,
-        pageStatus: page.status,
-        blockId: block.blockId,
-        usageType: "inline_link",
-      });
-    }
-  }
-  for (const assetId of page.relatedAssetIds) {
-    all.push({
-      assetId,
-      pageId: page.id,
-      pageTitle: page.title,
-      pageStatus: page.status,
-      usageType: "related",
-    });
-  }
+  const all = collectPageAssetUsages(page);
 
   await sql`DELETE FROM kb_asset_usages WHERE page_id = ${page.id}`;
   for (const usage of all) {

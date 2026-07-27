@@ -1,6 +1,6 @@
 "use client";
 
-import { RichTextEditable } from "@/components/RichTextEditable";
+import { LexicalTableCellSurface } from "@/components/LexicalTableCellSurface";
 import { textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 
@@ -12,9 +12,11 @@ function logicalWidth(row: string[], colSpans?: number[]): number {
 
 export function TableBlockEditor({
   block,
+  kbId,
   onChange,
 }: {
   block: TableBlock;
+  kbId: string;
   onChange: (block: ContentBlock) => void;
 }) {
   const normalizedRows = block.rows.length > 0 ? block.rows : [[""]];
@@ -195,11 +197,10 @@ export function TableBlockEditor({
                       rowSpan={rowSpan > 1 ? rowSpan : undefined}
                       style={align && align !== "left" ? { textAlign: align } : undefined}
                     >
-                      <RichTextEditable
-                        className="wysiwyg-table-cell"
-                        html={cellHtml(rowIndex, columnIndex, cell)}
+                      <LexicalTableCellSurface
+                        initialHtml={cellHtml(rowIndex, columnIndex, cell)}
+                        kbId={kbId}
                         onChange={(html, text) => updateCell(rowIndex, columnIndex, text, html)}
-                        text={cell}
                       />
                     </td>
                   );

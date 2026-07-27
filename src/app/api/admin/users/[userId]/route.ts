@@ -32,7 +32,7 @@ export async function PATCH(
     const updates: Partial<User> = {};
     if (body.fullName !== undefined) updates.fullName = body.fullName.trim();
     if (body.email !== undefined) updates.email = body.email.trim().toLowerCase();
-    if (body.role !== undefined && ["owner", "admin", "editor", "viewer"].includes(body.role)) {
+    if (body.role !== undefined && ["owner", "admin", "manager", "editor", "viewer"].includes(body.role)) {
       updates.role = body.role as UserRole;
     }
     if (body.password) {
@@ -48,7 +48,7 @@ export async function PATCH(
       const nextRole = updates.role ?? currentUser?.role;
       await replaceUserAssignments(
         userId,
-        nextRole === "editor" || nextRole === "viewer" ? body.kbAssignments : [],
+        nextRole === "editor" || nextRole === "viewer" || nextRole === "manager" ? body.kbAssignments : [],
       );
     }
 

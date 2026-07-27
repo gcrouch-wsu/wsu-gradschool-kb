@@ -29,6 +29,7 @@ import {
   updateAssetRecord,
   updateKbHomepagePageId,
   updateKbRequireSummary,
+  updateKbAiPrompts,
   updatePages,
   updatePageStatusColumn,
   updatePageLifecycle,
@@ -49,6 +50,15 @@ import {
 import { assertPageSlugAllowed, slugify } from "@/lib/slug";
 import { isStaffVisiblePageStatus } from "@/lib/page-status";
 import { rewriteKbLinksInBlocks } from "@/lib/kb-link-rewrite";
+import {
+  formatAssetTagsForSearch,
+  formatPageTagsForSearch,
+  normalizeAssetTags,
+  normalizePageTags,
+} from "@/lib/page-tags";
+import { expandSearchQueryTerms, synonymTsqueryBranches } from "@/lib/search-synonyms";
+import { rankFuzzyCandidates } from "@/lib/search-fuzzy";
+import { loadSiteSettings } from "@/lib/db";
 import type {
   Asset,
   AssetUsage,
@@ -75,6 +85,7 @@ const globalForRuntime = globalThis as unknown as {
   __kbRuntimeRedirects?: KbRedirect[];
   __kbRuntimeKbHomepages?: Map<string, string | null>;
   __kbRuntimeKbRequireSummary?: Map<string, boolean>;
+  __kbRuntimeKbAiPrompts?: Map<string, { aiSummaryPrompt: string; aiPagePrompt: string }>;
   __kbRuntimePageRevisions?: PageRevision[];
   __kbDeletedAssetIds?: Set<string>;
   __kbDeletedPageIds?: Set<string>;
@@ -115,10 +126,22 @@ function runtimeKbRequireSummary(): Map<string, boolean> {
   return globalForRuntime.__kbRuntimeKbRequireSummary;
 }
 
+function runtimeKbAiPrompts(): Map<string, { aiSummaryPrompt: string; aiPagePrompt: string }> {
+  if (!globalForRuntime.__kbRuntimeKbAiPrompts) {
+    globalForRuntime.__kbRuntimeKbAiPrompts = new Map();
+  }
+  return globalForRuntime.__kbRuntimeKbAiPrompts;
+}
+
 function applyKbRuntimeOverrides(kbs: KnowledgeBase[]): KnowledgeBase[] {
   const homepageOverrides = runtimeKbHomepages();
   const requireSummaryOverrides = runtimeKbRequireSummary();
-  if (homepageOverrides.size === 0 && requireSummaryOverrides.size === 0) {
+  const aiPromptOverrides = runtimeKbAiPrompts();
+  if (
+    homepageOverrides.size === 0 &&
+    requireSummaryOverrides.size === 0 &&
+    aiPromptOverrides.size === 0
+  ) {
     return kbs;
   }
   return kbs.map((kb) => {
@@ -128,6 +151,14 @@ function applyKbRuntimeOverrides(kbs: KnowledgeBase[]): KnowledgeBase[] {
     }
     if (requireSummaryOverrides.has(kb.id)) {
       next = { ...next, requireSummary: requireSummaryOverrides.get(kb.id) !== false };
+    }
+    if (aiPromptOverrides.has(kb.id)) {
+      const prompts = aiPromptOverrides.get(kb.id)!;
+      next = {
+        ...next,
+        aiSummaryPrompt: prompts.aiSummaryPrompt,
+        aiPagePrompt: prompts.aiPagePrompt,
+      };
     }
     return next;
   });
@@ -196,6 +227,7 @@ function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
   const extraAssets = runtimeAssets();
   const homepageOverrides = runtimeKbHomepages();
   const requireSummaryOverrides = runtimeKbRequireSummary();
+  const aiPromptOverrides = runtimeKbAiPrompts();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
   if (
@@ -203,6 +235,7 @@ function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
     extraAssets.length === 0 &&
     homepageOverrides.size === 0 &&
     requireSummaryOverrides.size === 0 &&
+    aiPromptOverrides.size === 0 &&
     deletedPages.size === 0 &&
     deletedAssets.size === 0
   ) {
@@ -234,6 +267,7 @@ const getDataset = cache(async (): Promise<KbDataset> => {
   const extraAssets = runtimeAssets();
   const homepageOverrides = runtimeKbHomepages();
   const requireSummaryOverrides = runtimeKbRequireSummary();
+  const aiPromptOverrides = runtimeKbAiPrompts();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
   if (
@@ -241,6 +275,7 @@ const getDataset = cache(async (): Promise<KbDataset> => {
     extraAssets.length === 0 &&
     homepageOverrides.size === 0 &&
     requireSummaryOverrides.size === 0 &&
+    aiPromptOverrides.size === 0 &&
     deletedPages.size === 0 &&
     deletedAssets.size === 0
   ) {
@@ -470,6 +505,34 @@ export async function setKbRequireSummary(kbId: string, requireSummary: boolean)
   return updated;
 }
 
+export async function setKbAiPrompts(
+  kbId: string,
+  prompts: { aiSummaryPrompt: string; aiPagePrompt: string },
+): Promise<KnowledgeBase> {
+  const dataset = await getDataset();
+  const kb = dataset.knowledgeBases.find((candidate) => candidate.id === kbId);
+  if (!kb) {
+    throw new Error("Knowledge base not found.");
+  }
+
+  const aiSummaryPrompt = prompts.aiSummaryPrompt.trim().slice(0, 8_000);
+  const aiPagePrompt = prompts.aiPagePrompt.trim().slice(0, 8_000);
+  const updated: KnowledgeBase = {
+    ...kb,
+    aiSummaryPrompt,
+    aiPagePrompt,
+    updatedOn: new Date().toISOString().slice(0, 10),
+  };
+
+  if (isDatabaseEnabled()) {
+    await updateKbAiPrompts(kbId, { aiSummaryPrompt, aiPagePrompt });
+  } else {
+    runtimeKbAiPrompts().set(kbId, { aiSummaryPrompt, aiPagePrompt });
+  }
+
+  return updated;
+}
+
 export async function getVisiblePagesForKb(kbId: string, includeStaff: boolean): Promise<KbPage[]> {
   if (isDatabaseEnabled()) {
     return visiblePageList(await getDbPagesForKb(kbId), kbId, includeStaff);
@@ -643,6 +706,10 @@ export async function getExcerptReferencesToPage(sourcePageId: string): Promise<
 export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolean> {
   if (isDatabaseEnabled()) {
     const sql = getSql();
+    // Selected-text document links store data-asset-id inside rich-text HTML (nested in
+    // blocks JSON). Match both escaped JSON and plain attribute forms.
+    const dataAssetAttr = `%data-asset-id="${asset.id}"%`;
+    const dataAssetAttrEscaped = `%data-asset-id=\\"${asset.id}\\"%`;
     const rows = (await sql`
       SELECT 1
       FROM kb_pages
@@ -656,6 +723,8 @@ export async function assetHasPublicPublishedUsage(asset: Asset): Promise<boolea
             WHERE block.value->>'type' IN ('image', 'asset_link')
               AND block.value->>'assetId' = ${asset.id}
           )
+          OR kb_pages.blocks::text LIKE ${dataAssetAttr}
+          OR kb_pages.blocks::text LIKE ${dataAssetAttrEscaped}
         )
         AND NOT EXISTS (
           SELECT 1 FROM kb_pages p2
@@ -711,6 +780,7 @@ export interface CreateManagedAssetInput {
   assetType: Asset["assetType"];
   title?: string;
   description?: string;
+  tags?: unknown;
 
   videoProvider?: Asset["videoProvider"];
   videoExternalId?: string | null;
@@ -724,6 +794,7 @@ export interface CreateImageAssetInput {
   mimeType: string;
   originalFilename: string;
   title?: string;
+  tags?: unknown;
 }
 
 async function persistNewAssetWithVersion(asset: Asset, version: AssetVersion): Promise<Asset> {
@@ -779,6 +850,7 @@ export async function createManagedAsset(input: CreateManagedAssetInput): Promis
     description:
       input.description?.trim() ||
       `Managed ${input.assetType} uploaded from ${input.originalFilename}.`,
+    tags: normalizeAssetTags(input.tags),
     assetType: input.assetType,
     mimeType: input.mimeType,
     fileSizeBytes: input.fileSizeBytes,
@@ -1019,6 +1091,10 @@ export interface SearchKbOptions {
   includeAllKbs?: boolean;
   readableKbIds?: string[];
   staffKbIds?: string[] | null;
+  /** Exact case-insensitive tag facets (all must match). */
+  tags?: string[];
+  /** @deprecated Use tags — single tag facet kept for compatibility. */
+  tag?: string;
 }
 
 function blocksBodyText(blocks: ContentBlock[]): string {
@@ -1068,14 +1144,86 @@ interface ScoredResult {
   score: number;
 }
 
+function normalizeSearchTags(options: SearchKbOptions): string[] {
+  const tags = [...(options.tags ?? [])];
+  if (options.tag?.trim()) {
+    tags.push(options.tag.trim());
+  }
+  return [...new Set(tags.map((tag) => tag.toLowerCase()).filter(Boolean))];
+}
+
+function matchesTagFacets(tags: unknown, requiredTags: string[]): boolean {
+  if (requiredTags.length === 0) {
+    return true;
+  }
+  const pageTags = normalizePageTags(tags).map((tag) => tag.toLowerCase());
+  return requiredTags.every((required) => pageTags.includes(required));
+}
+
+function pagesForSearchScope(
+  dataset: KbDataset,
+  kbId: string | undefined,
+  includeStaff: boolean,
+  options: SearchKbOptions,
+): KbPage[] {
+  const readableKbIds = new Set(options.readableKbIds ?? []);
+  const hasReadableScope = options.readableKbIds !== undefined;
+  const staffKbIds = options.staffKbIds === null || options.staffKbIds === undefined
+    ? null
+    : new Set(options.staffKbIds);
+  const kbById = new Map(dataset.knowledgeBases.map((kb) => [kb.id, kb]));
+  const publishedPagesByKb = new Map<string, KbPage[]>();
+  for (const page of dataset.pages) {
+    if (page.status !== "published") {
+      continue;
+    }
+    publishedPagesByKb.set(page.kbId, [...(publishedPagesByKb.get(page.kbId) ?? []), page]);
+  }
+
+  const canReadKb = (candidateKbId: string) => {
+    const kb = kbById.get(candidateKbId);
+    if (options.includeAllKbs) {
+      return !kbId || candidateKbId === kbId;
+    }
+    if (hasReadableScope) {
+      return readableKbIds.has(candidateKbId) && (!kbId || candidateKbId === kbId);
+    }
+    if (kbId && candidateKbId !== kbId) {
+      return false;
+    }
+    return Boolean(kb?.status === "published" && kb.visibility === "public");
+  };
+
+  const canReadStaffPages = (candidateKbId: string) =>
+    includeStaff && (staffKbIds === null || staffKbIds.has(candidateKbId));
+
+  return dataset.pages.filter((page) => {
+    if (!canReadKb(page.kbId)) {
+      return false;
+    }
+    if (canReadStaffPages(page.kbId)) {
+      return isStaffVisiblePageStatus(page.status);
+    }
+    if (page.status !== "published") {
+      return false;
+    }
+    return !isStaffOnly(publishedPagesByKb.get(page.kbId) ?? [], page);
+  });
+}
+
 export async function searchKb(
   kbId: string | undefined,
   query: string,
   includeStaff: boolean,
   options: SearchKbOptions = {},
 ): Promise<SearchResult[]> {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
+  const tagFacets = normalizeSearchTags(options);
+  const settings = await loadSiteSettings();
+  // Synonyms are OR-ed into the tsquery below. They must never be folded into
+  // `normalized`, which drives the AND-ed token chain, websearch_to_tsquery,
+  // and the in-memory / fuzzy scorers.
+  const { original: normalized, synonyms } = expandSearchQueryTerms(query, settings.searchSynonymGroups);
+  if (!normalized && tagFacets.length === 0) {
     return [];
   }
 
@@ -1087,16 +1235,66 @@ export async function searchKb(
       .map((t) => t.replace(/[^a-z0-9]/gi, ""))
       .filter(Boolean);
 
-    const searchTokens = safeTokens.length > 0
+    const baseTokens = safeTokens.length > 0
       ? safeTokens.map((t, i) => (i === safeTokens.length - 1 ? `${t}:*` : t)).join(" & ")
       : null;
+    // Each synonym becomes its own alternative branch, so "handbook" matches
+    // handbook OR manual OR guide instead of requiring all three.
+    const synonymBranches = synonymTsqueryBranches(synonyms);
+    const searchTokens = baseTokens
+      ? synonymBranches.length > 0
+        ? [`(${baseTokens})`, ...synonymBranches].join(" | ")
+        : baseTokens
+      : null;
 
-    if (!searchTokens) return [];
+    if (!searchTokens && tagFacets.length === 0) return [];
 
     const readableKbIds = [...new Set(options.readableKbIds ?? [])];
     const hasReadableScope = options.readableKbIds !== undefined;
     const staffKbIds = options.staffKbIds === null ? null : [...new Set(options.staffKbIds ?? [])];
     const includeAllKbs = Boolean(options.includeAllKbs);
+    const tagFilterPages =
+      tagFacets.length > 0
+        ? sql`AND (
+            SELECT COUNT(DISTINCT lower(required.tag))
+            FROM unnest(${tagFacets}::text[]) AS required(tag)
+            WHERE EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_pages.tags, '[]'::jsonb)) AS page_tag
+              WHERE lower(page_tag) = lower(required.tag)
+            )
+          ) = ${tagFacets.length}`
+        : sql``;
+    const tagFilterAssets =
+      tagFacets.length > 0
+        ? sql`AND (
+            SELECT COUNT(DISTINCT lower(required.tag))
+            FROM unnest(${tagFacets}::text[]) AS required(tag)
+            WHERE EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(COALESCE(kb_assets.tags, '[]'::jsonb)) AS asset_tag
+              WHERE lower(asset_tag) = lower(required.tag)
+            )
+          ) = ${tagFacets.length}`
+        : sql``;
+    const pageTextMatch = searchTokens
+      ? sql`(search_vector @@ to_tsquery('english', ${searchTokens})
+             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))`
+      : sql`TRUE`;
+    const assetTextMatch = searchTokens
+      ? sql`(search_vector @@ to_tsquery('english', ${searchTokens})
+             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))`
+      : sql`TRUE`;
+    const pageRank = searchTokens
+      ? sql`(GREATEST(
+                ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
+                ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
+              ) * 1.2)`
+      : sql`1.0`;
+    const assetRank = searchTokens
+      ? sql`GREATEST(
+               ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
+               ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
+             )`
+      : sql`1.0`;
 
     const kbFilterPages = kbId
       ? includeAllKbs
@@ -1190,32 +1388,26 @@ export async function searchKb(
 
     const pageRows = await sql`
       SELECT id, title, summary, path, kb_id,
-             (GREATEST(
-                ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
-                ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
-              ) * 1.2) AS rank
+             ${pageRank} AS rank
       FROM kb_pages
-      WHERE (search_vector @@ to_tsquery('english', ${searchTokens})
-             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))
+      WHERE ${pageTextMatch}
       AND kb_pages.node_kind = 'page'
       ${kbFilterPages}
       ${pageVisibilityFilter}
+      ${tagFilterPages}
       ORDER BY rank DESC
       LIMIT 20
     `;
 
     const assetRows = await sql`
       SELECT id, title, description as summary, slug, home_kb_id as kb_id,
-             GREATEST(
-               ts_rank_cd(search_vector, to_tsquery('english', ${searchTokens})),
-               ts_rank_cd(search_vector, websearch_to_tsquery('english', ${normalized}))
-             ) AS rank
+             ${assetRank} AS rank
       FROM kb_assets
-      WHERE (search_vector @@ to_tsquery('english', ${searchTokens})
-             OR search_vector @@ websearch_to_tsquery('english', ${normalized}))
+      WHERE ${assetTextMatch}
       AND status = 'active'
       AND asset_type = 'document'
       ${kbFilterAssets}
+      ${tagFilterAssets}
       ORDER BY rank DESC
       LIMIT 20
     `;
@@ -1245,7 +1437,48 @@ export async function searchKb(
     }
 
     scored.sort((a, b) => b.score - a.score || a.result.title.localeCompare(b.result.title));
-    const results = scored.map((entry) => entry.result);
+    let results = scored.map((entry) => entry.result);
+    if (results.length === 0 && normalized.length >= 3) {
+      // Scoped lightweight candidates only — never load the full corpus via getDataset()
+      // on anonymous/public search (project_spec §8).
+      const fuzzyRows = (await sql`
+        SELECT id, title, summary, tags, path, kb_id
+        FROM kb_pages
+        WHERE COALESCE(kb_pages.node_kind, 'page') = 'page'
+        ${kbFilterPages}
+        ${pageVisibilityFilter}
+        ${tagFilterPages}
+        ORDER BY updated_display_date DESC NULLS LAST, id ASC
+        LIMIT 500
+      `) as unknown as Array<{
+        id: string;
+        title: string;
+        summary: string;
+        tags: unknown;
+        path: string;
+        kb_id: string;
+      }>;
+      const fallbackCandidates = fuzzyRows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        summary: row.summary,
+        tags: normalizePageTags(row.tags),
+        path: row.path ? row.path.split("/") : [],
+        kbId: row.kb_id,
+      }));
+      const fallbackScored = rankFuzzyCandidates(normalized, fallbackCandidates).map((entry) => ({
+        score: entry.score,
+        result: {
+          type: "page" as const,
+          id: entry.candidate.id,
+          title: entry.candidate.title,
+          summary: entry.candidate.summary,
+          path: entry.candidate.path,
+          kbId: entry.candidate.kbId,
+        },
+      }));
+      results = fallbackScored.map((entry) => entry.result);
+    }
     recordSearchEvent({ query, kbId, resultCount: results.length }).catch(() => {});
     return results;
   }
@@ -1274,42 +1507,54 @@ export async function searchKb(
   };
   const canReadStaffPages = (candidateKbId: string) =>
     includeStaff && (staffKbIds === null || staffKbIds.has(candidateKbId));
-  const publishedPagesByKb = new Map<string, KbPage[]>();
-  for (const page of dataset.pages) {
-    if (page.status !== "published") {
-      continue;
-    }
-    publishedPagesByKb.set(page.kbId, [...(publishedPagesByKb.get(page.kbId) ?? []), page]);
-  }
 
-  const pagesToSearch = (
-    kbId
-      ? canReadKb(kbId)
-        ? visiblePages(dataset, kbId, includeStaff)
-        : []
-      : dataset.pages.filter((page) => {
-          if (!canReadKb(page.kbId)) {
-            return false;
-          }
-          if (canReadStaffPages(page.kbId)) {
-            return isStaffVisiblePageStatus(page.status);
-          }
-          if (page.status !== "published") {
-            return false;
-          }
-          return !isStaffOnly(publishedPagesByKb.get(page.kbId) ?? [], page);
-        })
-  ).filter((page) => (page.nodeKind ?? "page") === "page");
+  const pagesToSearch = pagesForSearchScope(dataset, kbId, includeStaff, options).filter(
+    (page) => (page.nodeKind ?? "page") === "page",
+  );
 
   for (const page of pagesToSearch) {
+    if (!matchesTagFacets(page.tags, tagFacets)) {
+      continue;
+    }
     const titleScore = fieldScore(page.title, normalized, { exact: 100, prefix: 60, includes: 40 });
     const summaryScore = fieldScore(page.summary, normalized, { exact: 25, prefix: 25, includes: 25 });
+    const tagScore = fieldScore(formatPageTagsForSearch(page.tags), normalized, { exact: 45, prefix: 35, includes: 25 });
     const bodyScore = fieldScore(pageBodyText(page), normalized, { exact: 10, prefix: 10, includes: 10 });
-    const score = titleScore + summaryScore + bodyScore;
+    const score = normalized
+      ? titleScore + summaryScore + tagScore + bodyScore
+      : matchesTagFacets(page.tags, tagFacets)
+        ? 50
+        : 0;
     if (score > 0) {
       scored.push({
         score,
         result: { type: "page", id: page.id, title: page.title, summary: page.summary, path: page.path, kbId: page.kbId },
+      });
+    }
+  }
+
+  if (scored.length === 0 && normalized.length >= 3) {
+    const fuzzyCandidates = pagesToSearch
+      .filter((page) => matchesTagFacets(page.tags, tagFacets))
+      .map((page) => ({
+        id: page.id,
+        title: page.title,
+        summary: page.summary,
+        tags: normalizePageTags(page.tags),
+        path: page.path,
+        kbId: page.kbId,
+      }));
+    for (const entry of rankFuzzyCandidates(normalized, fuzzyCandidates)) {
+      scored.push({
+        score: entry.score,
+        result: {
+          type: "page",
+          id: entry.candidate.id,
+          title: entry.candidate.title,
+          summary: entry.candidate.summary,
+          path: entry.candidate.path,
+          kbId: entry.candidate.kbId,
+        },
       });
     }
   }
@@ -1324,13 +1569,21 @@ export async function searchKb(
     if (asset.status !== "active" || asset.assetType !== "document") {
       continue;
     }
+    if (!matchesTagFacets(asset.tags, tagFacets)) {
+      continue;
+    }
     if (!canReadStaffPages(asset.homeKbId) && !(await assetHasPublicPublishedUsage(asset))) {
       continue;
     }
     const titleScore = fieldScore(asset.title, normalized, { exact: 90, prefix: 50, includes: 30 });
     const descriptionScore = fieldScore(asset.description, normalized, { exact: 15, prefix: 15, includes: 15 });
+    const tagScore = fieldScore(formatAssetTagsForSearch(asset.tags), normalized, { exact: 35, prefix: 25, includes: 18 });
     const slugScore = fieldScore(asset.slug, normalized, { exact: 15, prefix: 15, includes: 15 });
-    const score = titleScore + descriptionScore + slugScore;
+    const score = normalized
+      ? titleScore + descriptionScore + tagScore + slugScore
+      : matchesTagFacets(asset.tags, tagFacets)
+        ? 40
+        : 0;
     if (score > 0) {
       scored.push({
         score,
@@ -1385,7 +1638,10 @@ export async function updateAssetStatus(assetId: string, status: Asset["status"]
   return updated;
 }
 
-export async function updateAssetDescription(assetId: string, description: string): Promise<Asset> {
+export async function updateAssetMetadata(
+  assetId: string,
+  patch: { description?: string; altText?: string; tags?: unknown },
+): Promise<{ asset: Asset; fields: string[] }> {
   const normalizedId = normalizeRecordId(assetId);
   const dataset = await getDataset();
   const existing = dataset.assets.find((asset) => asset.id === normalizedId);
@@ -1393,11 +1649,26 @@ export async function updateAssetDescription(assetId: string, description: strin
     throw new Error("Asset not found.");
   }
 
+  const fields: string[] = [];
   const updated: Asset = {
     ...existing,
-    description: description.trim(),
     updatedDisplayDate: new Date().toISOString().slice(0, 10),
   };
+  if (typeof patch.description === "string") {
+    updated.description = patch.description.trim();
+    fields.push("description");
+  }
+  if (typeof patch.altText === "string") {
+    updated.altText = patch.altText.trim();
+    fields.push("altText");
+  }
+  if (patch.tags !== undefined) {
+    updated.tags = normalizeAssetTags(patch.tags);
+    fields.push("tags");
+  }
+  if (fields.length === 0) {
+    throw new Error("A description, altText, or tags value is required.");
+  }
 
   if (isDatabaseEnabled()) {
     await updateAssetRecord(updated);
@@ -1406,37 +1677,27 @@ export async function updateAssetDescription(assetId: string, description: strin
     const index = list.findIndex((asset) => asset.id === normalizedId);
     if (index >= 0) {
       list[index] = updated;
+    } else {
+      list.push(updated);
     }
   }
 
-  return updated;
+  return { asset: updated, fields };
+}
+
+export async function updateAssetDescription(assetId: string, description: string): Promise<Asset> {
+  const { asset } = await updateAssetMetadata(assetId, { description });
+  return asset;
 }
 
 export async function updateAssetAltText(assetId: string, altText: string): Promise<Asset> {
-  const normalizedId = normalizeRecordId(assetId);
-  const dataset = await getDataset();
-  const existing = dataset.assets.find((asset) => asset.id === normalizedId);
-  if (!existing) {
-    throw new Error("Asset not found.");
-  }
+  const { asset } = await updateAssetMetadata(assetId, { altText });
+  return asset;
+}
 
-  const updated: Asset = {
-    ...existing,
-    altText: altText.trim(),
-    updatedDisplayDate: new Date().toISOString().slice(0, 10),
-  };
-
-  if (isDatabaseEnabled()) {
-    await updateAssetRecord(updated);
-  } else {
-    const list = runtimeAssets();
-    const index = list.findIndex((asset) => asset.id === normalizedId);
-    if (index >= 0) {
-      list[index] = updated;
-    }
-  }
-
-  return updated;
+export async function updateAssetTags(assetId: string, tags: unknown): Promise<Asset> {
+  const { asset } = await updateAssetMetadata(assetId, { tags });
+  return asset;
 }
 
 export async function permanentlyDeletePage(pageId: string): Promise<void> {
@@ -1521,6 +1782,7 @@ export interface CreatePageInput {
   slug?: string;
   parentPath?: string[];
   summary?: string;
+  tags?: unknown;
   visibility?: PageVisibility;
   status?: PageStatus;
   blocks: ContentBlock[];
@@ -1596,6 +1858,7 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     path: [...parentPath, slug],
     sortOrder: input.sortOrder ?? maxSiblingOrder + 10,
     summary: input.summary?.trim() ?? "",
+    tags: normalizePageTags(input.tags),
     status: input.status ?? "draft",
     visibility: input.visibility ?? "public",
     ownerLabel: input.ownerLabel?.trim() || kb.title,
@@ -1639,6 +1902,7 @@ export interface UpdatePageInput {
   slug?: string;
   parentPath?: string[];
   summary?: string;
+  tags?: unknown;
   visibility?: PageVisibility;
   status?: PageStatus;
   blocks: ContentBlock[];
@@ -1651,6 +1915,8 @@ export interface UpdatePageInput {
   showSummary?: boolean;
   showPrintButton?: boolean;
   nextReviewDate?: string | null;
+  reviewAssigneeEmail?: string;
+  reviewSlaDays?: number | null;
   publishAt?: string | null;
   linkUrl?: string;
   linkNewTab?: boolean;
@@ -1658,6 +1924,8 @@ export interface UpdatePageInput {
   // them untouched; revision restore passes them to restore the full snapshot.
   relatedPageIds?: string[];
   relatedAssetIds?: string[];
+  nextStepsHeading?: string;
+  nextStepsIntro?: string;
 }
 
 function hasPathPrefix(path: string[], prefix: string[]) {
@@ -1680,6 +1948,7 @@ function snapshotFromPage(page: KbPage): PageRevisionSnapshot {
     slug: page.slug,
     path: [...page.path],
     summary: page.summary,
+    tags: normalizePageTags(page.tags),
     status: page.status,
     visibility: page.visibility,
     ownerLabel: page.ownerLabel,
@@ -1693,6 +1962,10 @@ function snapshotFromPage(page: KbPage): PageRevisionSnapshot {
     showSummary: page.showSummary,
     showPrintButton: page.showPrintButton,
     nextReviewDate: page.nextReviewDate ?? null,
+    reviewAssigneeEmail: page.reviewAssigneeEmail ?? "",
+    reviewSlaDays: page.reviewSlaDays ?? null,
+    nextStepsHeading: page.nextStepsHeading ?? "",
+    nextStepsIntro: page.nextStepsIntro ?? "",
     nodeKind: page.nodeKind ?? "page",
     linkUrl: page.linkUrl ?? "",
     linkNewTab: page.linkNewTab ?? false,
@@ -1803,6 +2076,7 @@ export async function updatePage(
           path: newPath,
           sortOrder: input.sortOrder ?? page.sortOrder,
           summary: input.summary?.trim() ?? "",
+          tags: input.tags === undefined ? page.tags : normalizePageTags(input.tags),
           status: input.status ?? page.status,
           visibility: input.visibility ?? page.visibility,
           ownerLabel: input.ownerLabel?.trim() ?? page.ownerLabel,
@@ -1817,6 +2091,10 @@ export async function updatePage(
           showSummary: input.showSummary ?? page.showSummary,
           showPrintButton: input.showPrintButton ?? page.showPrintButton,
           nextReviewDate: input.nextReviewDate ?? page.nextReviewDate,
+          reviewAssigneeEmail: input.reviewAssigneeEmail ?? page.reviewAssigneeEmail,
+          reviewSlaDays: input.reviewSlaDays !== undefined ? input.reviewSlaDays : page.reviewSlaDays,
+          nextStepsHeading: input.nextStepsHeading ?? page.nextStepsHeading ?? "",
+          nextStepsIntro: input.nextStepsIntro ?? page.nextStepsIntro ?? "",
           publishAt: input.publishAt !== undefined ? input.publishAt : page.publishAt,
           linkUrl: input.linkUrl ?? page.linkUrl,
           linkNewTab: input.linkNewTab ?? page.linkNewTab,
@@ -1901,6 +2179,7 @@ export async function restorePageRevision(revisionId: string, editorEmail: strin
       slug: revision.slug,
       parentPath: revision.path.slice(0, -1),
       summary: revision.summary,
+      tags: revision.tags ?? page.tags ?? [],
       visibility: revision.visibility,
       status: revision.status,
       blocks: revision.blocks,

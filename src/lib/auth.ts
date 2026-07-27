@@ -246,7 +246,7 @@ export async function canAccessKb(session: AdminSession, kbId: string): Promise<
   if (session.role === "owner" || session.role === "admin") {
     return true;
   }
-  if (session.role === "editor") {
+  if (session.role === "editor" || session.role === "manager") {
     if (!isDatabaseEnabled()) {
       return (await assignedKbIdsForSession(session)).includes(kbId);
     }
@@ -277,11 +277,11 @@ export async function getKbReadAccess(
       canReadStaffContent: true,
     };
   }
-  if (session.role === "editor" || session.role === "viewer") {
+  if (session.role === "editor" || session.role === "manager" || session.role === "viewer") {
     const assigned = isDatabaseEnabled()
       ? await isUserAssignedToKbSafe(session.userId, kb.id)
       : (await assignedKbIdsForSession(session)).includes(kb.id);
-    if (session.role === "editor") {
+    if (session.role === "editor" || session.role === "manager") {
       return {
         canRead: publiclyReadable || assigned,
         canReadStaffContent: assigned,
@@ -302,7 +302,7 @@ export async function accessibleKbIds(session: AdminSession): Promise<string[] |
   if (session.role === "owner" || session.role === "admin") {
     return null;
   }
-  if (session.role === "editor") {
+  if (session.role === "editor" || session.role === "manager") {
     return assignedKbIdsForSession(session);
   }
   return [];
@@ -331,9 +331,9 @@ export async function filterKbsForReadAccess<T extends Pick<KnowledgeBase, "id" 
   if (session.role === "owner" || session.role === "admin") {
     return kbs;
   }
-  if (session.role === "editor" || session.role === "viewer") {
+  if (session.role === "editor" || session.role === "manager" || session.role === "viewer") {
     const assigned = new Set(await assignedKbIdsForSession(session));
-    if (session.role === "editor") {
+    if (session.role === "editor" || session.role === "manager") {
       return kbs.filter((kb) => publiclyReadable(kb) || assigned.has(kb.id));
     }
     return kbs.filter((kb) => publiclyReadable(kb) || (assigned.has(kb.id) && kb.status === "published"));

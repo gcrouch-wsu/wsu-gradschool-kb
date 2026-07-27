@@ -25,6 +25,13 @@ describe("proxy CSP", () => {
     expect(scriptSrc).not.toContain("vimeo");
   });
 
+  it("allows blob image URLs for print-prepared article images", () => {
+    const csp = cspFor("https://kb.example.edu/kb/test");
+    const imgSrc = csp.split(";").map((part) => part.trim()).find((part) => part.startsWith("img-src"));
+    expect(imgSrc).toBeDefined();
+    expect(imgSrc).toContain("blob:");
+  });
+
   it("keeps the baseline lockdown directives", () => {
     const csp = cspFor("https://kb.example.edu/kb/test");
     expect(csp).toContain("default-src 'self'");

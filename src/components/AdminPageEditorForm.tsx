@@ -7,12 +7,16 @@ import { DropdownSelect } from "@/components/DropdownSelect";
 import { PageDocumentEditor } from "@/components/PageDocumentEditor";
 import { PageHistoryPanel } from "@/components/PageHistoryPanel";
 import { RelocatePageDialog } from "@/components/RelocatePageDialog";
+import { RelatedPagesEditor } from "@/components/RelatedPagesEditor";
+import { AiPageReviewPanel } from "@/components/AiPageReviewPanel";
 import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
+import { normalizePageTags } from "@/lib/page-tags";
 import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
-import type { ContentBlock, KbPage, KnowledgeBase, PageStatus, PageVisibility } from "@/lib/types";
+import type { PageReviewSuggestion } from "@/lib/page-review-core";
+import type { ContentBlock, KbPage, KnowledgeBase, PageRevisionSnapshot, PageStatus, PageVisibility } from "@/lib/types";
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const VAGUE_LINK_TEXT = new Set(["click here", "here", "more", "read more", "link", "this"]);
@@ -291,23 +295,29 @@ export function AdminPageEditorForm({
   kb,
   page,
   parentOptions,
+  relatedPageOptions,
   destinationKbs,
   canApproveProposed = false,
 }: {
   kb: KnowledgeBase;
   page: KbPage;
   parentOptions: ParentOption[];
+  relatedPageOptions: Array<{ id: string; title: string; path: string; status?: string }>;
   destinationKbs: Array<Pick<KnowledgeBase, "id" | "title" | "slug" | "visibility">>;
   canApproveProposed?: boolean;
 }) {
   const [title, setTitle] = useState(page.title);
   const [slug, setSlug] = useState(page.slug);
   const [summary, setSummary] = useState(page.summary);
+  const [tagsText, setTagsText] = useState(normalizePageTags(page.tags).join(", "));
   const [visibility, setVisibility] = useState<PageVisibility>(page.visibility);
   const [parentPath, setParentPath] = useState(page.path.slice(0, -1).join("/"));
   const [ownerLabel, setOwnerLabel] = useState(page.ownerLabel);
   const [contactEmail, setContactEmail] = useState(page.contactEmail);
   const [lastReviewedDate, setLastReviewedDate] = useState(page.lastReviewedDate);
+  const [relatedPageIds, setRelatedPageIds] = useState<string[]>(page.relatedPageIds ?? []);
+  const [nextStepsHeading, setNextStepsHeading] = useState(page.nextStepsHeading ?? "");
+  const [nextStepsIntro, setNextStepsIntro] = useState(page.nextStepsIntro ?? "");
   const [showToc, setShowToc] = useState(page.showToc);
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
@@ -315,6 +325,10 @@ export function AdminPageEditorForm({
   const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
   const [relocateOpen, setRelocateOpen] = useState(false);
   const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
+  const [reviewAssigneeEmail, setReviewAssigneeEmail] = useState(page.reviewAssigneeEmail ?? "");
+  const [reviewSlaDays, setReviewSlaDays] = useState(
+    page.reviewSlaDays != null ? String(page.reviewSlaDays) : "",
+  );
   const [publishAt, setPublishAt] = useState(page.publishAt ?? "");
   const [verifiedAt, setVerifiedAt] = useState(page.verifiedAt);
   const [verifiedBy, setVerifiedBy] = useState(page.verifiedBy);
@@ -322,6 +336,10 @@ export function AdminPageEditorForm({
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [summaryDraftBusy, setSummaryDraftBusy] = useState(false);
   const [summaryDraftHint, setSummaryDraftHint] = useState<string | null>(null);
+  const [pageReviewBusy, setPageReviewBusy] = useState(false);
+  const [pageReviewError, setPageReviewError] = useState<string | null>(null);
+  const [pageReviewOverview, setPageReviewOverview] = useState<string | null>(null);
+  const [pageReviewSuggestions, setPageReviewSuggestions] = useState<PageReviewSuggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
@@ -337,6 +355,7 @@ export function AdminPageEditorForm({
   const wasExpired = useRef(false);
   const missedHeartbeats = useRef(0);
   const signInHref = `/admin/sign-in?next=${encodeURIComponent(`/admin/pages/${page.id}`)}`;
+  const canPublish = canApproveProposed;
 
   function markSessionExpired() {
     setSessionExpired(true);
@@ -423,18 +442,85 @@ export function AdminPageEditorForm({
       title,
       slug,
       summary,
+      tags: normalizePageTags(tagsText),
       visibility,
       parentPath,
       ownerLabel,
       contactEmail,
       lastReviewedDate,
       nextReviewDate: overrides.nextReviewDate ?? nextReviewDate,
+      reviewAssigneeEmail,
+      reviewSlaDays: reviewSlaDays.trim() ? Number(reviewSlaDays) : null,
+      relatedPageIds,
+      nextStepsHeading,
+      nextStepsIntro,
       showToc,
       tocDepth,
       showSummary,
       showPrintButton,
       blocks,
     });
+  }
+
+  function buildRevisionSnapshot(overrides: { nextReviewDate?: string } = {}): PageRevisionSnapshot {
+    const parentSegments = parentPath ? parentPath.split("/").filter(Boolean) : [];
+    return {
+      title,
+      slug,
+      path: [...parentSegments, slug],
+      summary,
+      tags: normalizePageTags(tagsText),
+      status: savedStatus,
+      visibility,
+      ownerLabel,
+      contactEmail,
+      lastReviewedDate,
+      blocks,
+      relatedPageIds,
+      relatedAssetIds: page.relatedAssetIds ?? [],
+      showToc,
+      tocDepth,
+      showSummary,
+      showPrintButton,
+      nextReviewDate: overrides.nextReviewDate ?? nextReviewDate,
+      reviewAssigneeEmail: reviewAssigneeEmail.trim(),
+      reviewSlaDays: reviewSlaDays.trim() ? Number(reviewSlaDays) : null,
+      nextStepsHeading,
+      nextStepsIntro,
+      nodeKind: page.nodeKind,
+      linkUrl: page.linkUrl,
+      linkNewTab: page.linkNewTab,
+    };
+  }
+
+  function applyEditorSnapshot(data: Record<string, unknown>) {
+    if (typeof data.title === "string") setTitle(data.title);
+    if (typeof data.slug === "string") setSlug(data.slug);
+    if (typeof data.summary === "string") setSummary(data.summary);
+    if (Array.isArray(data.tags) || typeof data.tags === "string") {
+      setTagsText(normalizePageTags(data.tags).join(", "));
+    }
+    if (data.visibility === "public" || data.visibility === "staff") setVisibility(data.visibility);
+    if (Array.isArray(data.path)) {
+      setParentPath(data.path.slice(0, -1).join("/"));
+    } else if (typeof data.parentPath === "string") {
+      setParentPath(data.parentPath);
+    }
+    if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
+    if (typeof data.contactEmail === "string") setContactEmail(data.contactEmail);
+    if (typeof data.lastReviewedDate === "string") setLastReviewedDate(data.lastReviewedDate);
+    if (typeof data.nextReviewDate === "string") setNextReviewDate(data.nextReviewDate);
+    if (typeof data.reviewAssigneeEmail === "string") setReviewAssigneeEmail(data.reviewAssigneeEmail);
+    if (typeof data.reviewSlaDays === "number") setReviewSlaDays(String(data.reviewSlaDays));
+    if (Array.isArray(data.relatedPageIds)) setRelatedPageIds(data.relatedPageIds as string[]);
+    if (typeof data.nextStepsHeading === "string") setNextStepsHeading(data.nextStepsHeading);
+    if (typeof data.nextStepsIntro === "string") setNextStepsIntro(data.nextStepsIntro);
+    if (typeof data.showToc === "boolean") setShowToc(data.showToc);
+    if (typeof data.tocDepth === "number") setTocDepth(data.tocDepth);
+    if (typeof data.showSummary === "boolean") setShowSummary(data.showSummary);
+    if (typeof data.showPrintButton === "boolean") setShowPrintButton(data.showPrintButton);
+    if (Array.isArray(data.blocks)) setBlocks(data.blocks as ContentBlock[]);
+    setEditorEpoch((n) => n + 1);
   }
 
   const currentSnapshot = buildSnapshot();
@@ -444,6 +530,10 @@ export function AdminPageEditorForm({
   // ----- Work protection: leave-page warning + local draft backup -----
   const backupKey = `kb-editor-backup:${page.id}`;
   const [backupNotice, setBackupNotice] = useState<{ savedAt: string } | null>(null);
+  const [serverDraftNotice, setServerDraftNotice] = useState<{
+    updatedAt: string;
+    snapshot: PageRevisionSnapshot;
+  } | null>(null);
   // Bumped when a backup is restored so the document editor remounts with the
   // restored blocks (it keeps its own internal state after mount).
   const [editorEpoch, setEditorEpoch] = useState(0);
@@ -481,6 +571,55 @@ export function AdminPageEditorForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backupKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin/pages/${page.id}/server-draft`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.draft?.snapshot) {
+          return;
+        }
+        const snapshot = data.draft.snapshot as PageRevisionSnapshot;
+        const draftSnapshot = JSON.stringify({
+          title: snapshot.title,
+          slug: snapshot.slug,
+          summary: snapshot.summary,
+          tags: normalizePageTags(snapshot.tags),
+          visibility: snapshot.visibility,
+          parentPath: snapshot.path.slice(0, -1).join("/"),
+          ownerLabel: snapshot.ownerLabel,
+          contactEmail: snapshot.contactEmail,
+          lastReviewedDate: snapshot.lastReviewedDate,
+          nextReviewDate: snapshot.nextReviewDate ?? "",
+          reviewAssigneeEmail: snapshot.reviewAssigneeEmail ?? "",
+          reviewSlaDays: snapshot.reviewSlaDays ?? null,
+          relatedPageIds: snapshot.relatedPageIds ?? [],
+          nextStepsHeading: snapshot.nextStepsHeading ?? "",
+          nextStepsIntro: snapshot.nextStepsIntro ?? "",
+          showToc: snapshot.showToc,
+          tocDepth: snapshot.tocDepth,
+          showSummary: snapshot.showSummary !== false,
+          showPrintButton: snapshot.showPrintButton !== false,
+          blocks: snapshot.blocks,
+        });
+        if (draftSnapshot === savedSnapshot) {
+          return;
+        }
+        setServerDraftNotice({
+          updatedAt: typeof data.draft.updatedAt === "string" ? data.draft.updatedAt : "",
+          snapshot,
+        });
+      })
+      .catch(() => {
+        // Server drafts are optional when DATABASE_URL is unset.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Run once per page; savedSnapshot here is intentionally the initial value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page.id]);
+
   // Continuously stash unsaved work locally (debounced) so it survives
   // crashes and session timeouts. Cleared on successful save.
   useEffect(() => {
@@ -497,6 +636,24 @@ export function AdminPageEditorForm({
     }, 2000);
     return () => clearTimeout(timer);
   }, [backupKey, currentSnapshot, dirty]);
+
+  useEffect(() => {
+    if (!dirty) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`/api/admin/pages/${page.id}/server-draft`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot: buildRevisionSnapshot() }),
+      }).catch(() => {
+        // Best-effort sync for multi-device recovery.
+      });
+    }, 3000);
+    return () => clearTimeout(timer);
+    // buildRevisionSnapshot closes over the same editor fields as currentSnapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot fields are covered by currentSnapshot
+  }, [currentSnapshot, dirty, page.id]);
 
   function clearBackup() {
     try {
@@ -520,25 +677,24 @@ export function AdminPageEditorForm({
         return;
       }
       const data = JSON.parse(parsed.snapshot) as Record<string, unknown>;
-      if (typeof data.title === "string") setTitle(data.title);
-      if (typeof data.slug === "string") setSlug(data.slug);
-      if (typeof data.summary === "string") setSummary(data.summary);
-      if (data.visibility === "public" || data.visibility === "staff") setVisibility(data.visibility);
-      if (typeof data.parentPath === "string") setParentPath(data.parentPath);
-      if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
-      if (typeof data.contactEmail === "string") setContactEmail(data.contactEmail);
-      if (typeof data.lastReviewedDate === "string") setLastReviewedDate(data.lastReviewedDate);
-      if (typeof data.nextReviewDate === "string") setNextReviewDate(data.nextReviewDate);
-      if (typeof data.showToc === "boolean") setShowToc(data.showToc);
-      if (typeof data.tocDepth === "number") setTocDepth(data.tocDepth);
-      if (typeof data.showSummary === "boolean") setShowSummary(data.showSummary);
-      if (typeof data.showPrintButton === "boolean") setShowPrintButton(data.showPrintButton);
-      if (Array.isArray(data.blocks)) setBlocks(data.blocks as ContentBlock[]);
-      setEditorEpoch((n) => n + 1);
+      applyEditorSnapshot(data);
     } catch {
       // Corrupt backup: leave current content untouched.
     }
     setBackupNotice(null);
+  }
+
+  function restoreServerDraft() {
+    if (!serverDraftNotice) {
+      return;
+    }
+    applyEditorSnapshot(serverDraftNotice.snapshot as unknown as Record<string, unknown>);
+    setServerDraftNotice(null);
+  }
+
+  function dismissServerDraft() {
+    fetch(`/api/admin/pages/${page.id}/server-draft`, { method: "DELETE" }).catch(() => {});
+    setServerDraftNotice(null);
   }
   const readinessIssues = useMemo(() => {
     const next: string[] = [];
@@ -623,7 +779,11 @@ export function AdminPageEditorForm({
   );
 
   async function draftSummaryWithAi() {
-    if (lockError || summaryDraftBusy) return;
+    if (lockError) {
+      setSummaryDraftHint("This page is locked. Unlock or wait for the lock before drafting a summary.");
+      return;
+    }
+    if (summaryDraftBusy) return;
     if (!summaryDraftReadiness.ok) {
       setSummaryDraftHint(summaryDraftReadiness.message);
       return;
@@ -635,7 +795,7 @@ export function AdminPageEditorForm({
       return;
     }
     setSummaryDraftBusy(true);
-    setSummaryDraftHint(null);
+    setSummaryDraftHint("Drafting summary… this can take up to a minute.");
     setError(null);
     try {
       const response = await fetch(`/api/admin/pages/${page.id}/summary-draft`, {
@@ -662,6 +822,37 @@ export function AdminPageEditorForm({
       setSummaryDraftHint(caught instanceof Error ? caught.message : "Could not draft a summary with AI.");
     } finally {
       setSummaryDraftBusy(false);
+    }
+  }
+
+  async function runPageReviewWithAi() {
+    if (lockError || pageReviewBusy) return;
+    if (!title.trim() || blocks.length === 0) {
+      setPageReviewError("Add a title and page content before running an AI page review.");
+      return;
+    }
+    setPageReviewBusy(true);
+    setPageReviewError(null);
+    try {
+      const response = await fetch(`/api/admin/pages/${page.id}/page-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, blocks }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        markSessionExpired();
+        throw new Error("Your session expired. Sign in again to run a page review.");
+      }
+      if (!response.ok) {
+        throw new Error(typeof data.message === "string" ? data.message : "Could not review the page with AI.");
+      }
+      setPageReviewOverview(typeof data.overview === "string" ? data.overview : "");
+      setPageReviewSuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
+    } catch (caught) {
+      setPageReviewError(caught instanceof Error ? caught.message : "Could not review the page with AI.");
+    } finally {
+      setPageReviewBusy(false);
     }
   }
 
@@ -705,6 +896,7 @@ export function AdminPageEditorForm({
           title,
           slug,
           summary,
+          tags: normalizePageTags(tagsText),
           visibility,
           status,
           parentPath: parentPath ? parentPath.split("/") : [],
@@ -718,7 +910,12 @@ export function AdminPageEditorForm({
           showSummary,
           showPrintButton,
           nextReviewDate,
-          publishAt: publishAt.trim() || null,
+          reviewAssigneeEmail: reviewAssigneeEmail.trim(),
+          reviewSlaDays: reviewSlaDays.trim() ? Number(reviewSlaDays) : null,
+          relatedPageIds,
+          nextStepsHeading,
+          nextStepsIntro,
+          ...(canPublish ? { publishAt: publishAt.trim() || null } : {}),
         }),
       });
       if (response.status === 401) {
@@ -737,6 +934,8 @@ export function AdminPageEditorForm({
       setSavedSnapshot(currentSnapshot);
       setHistoryToken((token) => token + 1);
       clearBackup();
+      setServerDraftNotice(null);
+      fetch(`/api/admin/pages/${page.id}/server-draft`, { method: "DELETE" }).catch(() => {});
       markSessionActive();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save the page.");
@@ -843,6 +1042,7 @@ export function AdminPageEditorForm({
             className="button button--ghost"
             disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
             onClick={() => submit("draft")}
+            title="Edits already sync while you work. Save draft stores a named checkpoint you can return to."
             type="button"
           >
             {busy === "draft" ? "Saving..." : "Save draft"}
@@ -857,7 +1057,7 @@ export function AdminPageEditorForm({
               >
                 {busy === "proposed" ? "Saving…" : "Save proposal"}
               </button>
-              {canApproveProposed ? (
+              {canPublish ? (
                 <button
                   className="button"
                   disabled={lifecycleBusy || isLocked}
@@ -878,24 +1078,39 @@ export function AdminPageEditorForm({
               >
                 {busy === "proposed" ? "Submitting…" : "Submit for review"}
               </button>
-              <button
-                className="button"
-                disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
-                onClick={() => submit("published")}
-                type="button"
-              >
-                {busy === "published" ? "Publishing..." : "Save & publish"}
-              </button>
+              {canPublish ? (
+                <button
+                  className="button"
+                  disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                  onClick={() => submit("published")}
+                  type="button"
+                >
+                  {busy === "published" ? "Publishing..." : "Save & publish"}
+                </button>
+              ) : null}
             </>
           ) : (
-            <button
-              className="button"
-              disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
-              onClick={() => submit("published")}
-              type="button"
-            >
-              {busy === "published" ? "Saving..." : "Save changes"}
-            </button>
+            <>
+              {canPublish ? (
+                <button
+                  className="button"
+                  disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                  onClick={() => submit("published")}
+                  type="button"
+                >
+                  {busy === "published" ? "Saving..." : "Save changes"}
+                </button>
+              ) : (
+                <button
+                  className="button"
+                  disabled={busy !== null || lifecycleBusy || isLocked || !title || blocks.length === 0}
+                  onClick={() => submit("proposed")}
+                  type="button"
+                >
+                  {busy === "proposed" ? "Submitting…" : "Submit changes for review"}
+                </button>
+              )}
+            </>
           )}
           <ActionOverflowMenu
             disabled={lifecycleBusy || isLocked}
@@ -975,6 +1190,22 @@ export function AdminPageEditorForm({
         </div>
       )}
 
+      {serverDraftNotice && (
+        <div className="alert" role="alert" style={{ marginBottom: "2rem" }}>
+          <strong>Server draft available.</strong> A newer unsaved version of this page
+          {serverDraftNotice.updatedAt ? ` from ${formatTimestamp(serverDraftNotice.updatedAt)}` : ""} is stored on
+          the server (for example from another device or browser).
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
+            <button className="button button--small" onClick={restoreServerDraft} type="button">
+              Restore server draft
+            </button>
+            <button className="button button--small button--ghost" onClick={dismissServerDraft} type="button">
+              Discard it
+            </button>
+          </div>
+        </div>
+      )}
+
       <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
         {error && <p className="error">{error}</p>}
         {issues.length > 0 && (
@@ -1000,6 +1231,23 @@ export function AdminPageEditorForm({
           </p>
         )}
         {actionButtons}
+        <details className="editor-tips">
+          <summary className="editor-tips__summary">Editor tips</summary>
+          <ul className="editor-tips__list">
+            <li>
+              <strong>Drafts sync</strong> to this browser and the server while you edit. Use{" "}
+              <strong>Save draft</strong> when you want a named checkpoint.
+            </li>
+            <li>
+              <strong>Publishing gates</strong> check summary, contact info, review dates, and image alt text.
+              Fix anything in the readiness panel before proposing or publishing.
+            </li>
+            <li>
+              <strong>Blocks and excerpts</strong> live in the content toolbar. Excerpt blocks stay linked to
+              their source page — update the source when that content changes.
+            </li>
+          </ul>
+        </details>
 
         <details
           className="editor-details"
@@ -1017,6 +1265,15 @@ export function AdminPageEditorForm({
           <label>
             <span className="meta">Slug</span>
             <input className="input" onChange={(event) => setSlug(event.target.value)} value={slug} />
+          </label>
+          <label>
+            <span className="meta">Tags / keywords</span>
+            <input
+              className="input"
+              onChange={(event) => setTagsText(event.target.value)}
+              placeholder="visa, deadlines, assistantship"
+              value={tagsText}
+            />
           </label>
           <div className="summary-field">
             <label>
@@ -1161,14 +1418,37 @@ export function AdminPageEditorForm({
             />
           </label>
           <label>
-            <span className="meta">Schedule publish (optional)</span>
+            <span className="meta">Review assignee email</span>
             <input
               className="input"
-              onChange={(event) => setPublishAt(event.target.value)}
-              type="datetime-local"
-              value={publishAt ? publishAt.slice(0, 16) : ""}
+              onChange={(event) => setReviewAssigneeEmail(event.target.value)}
+              placeholder="editor@example.edu"
+              type="email"
+              value={reviewAssigneeEmail}
             />
           </label>
+          <label>
+            <span className="meta">Review SLA warning (days before due)</span>
+            <input
+              className="input"
+              min={1}
+              onChange={(event) => setReviewSlaDays(event.target.value)}
+              placeholder="14"
+              type="number"
+              value={reviewSlaDays}
+            />
+          </label>
+          {canPublish ? (
+            <label>
+              <span className="meta">Schedule publish (optional)</span>
+              <input
+                className="input"
+                onChange={(event) => setPublishAt(event.target.value)}
+                type="datetime-local"
+                value={publishAt ? publishAt.slice(0, 16) : ""}
+              />
+            </label>
+          ) : null}
           {verifiedAt && (
             <p className="meta" style={{ color: "var(--success)" }}>
               ✓ Verified on {formatTimestamp(verifiedAt)}{verifiedBy ? ` by ${verifiedBy}` : ""}
@@ -1202,21 +1482,55 @@ export function AdminPageEditorForm({
               </ul>
             )}
           </div>
-          <PageDocumentEditor
-            blocks={blocks}
-            editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
-            kbId={kb.id}
-            kbSlug={kb.slug}
-            key={`${page.id}:${editorEpoch}`}
-            onChange={setBlocks}
-            pageUrl={previewUrl}
-          />
+          <div className="editor-content__ai-layout">
+            <PageDocumentEditor
+              blocks={blocks}
+              editorPalette={themeToEditorPalette(kb.theme ?? DEFAULT_THEME)}
+              kbId={kb.id}
+              kbSlug={kb.slug}
+              key={`${page.id}:${editorEpoch}`}
+              onChange={setBlocks}
+              pageUrl={previewUrl}
+            />
+            <AiPageReviewPanel
+              blocks={blocks}
+              busy={pageReviewBusy}
+              disabled={isLocked}
+              error={pageReviewError}
+              onApplyBlocks={(next) => {
+                setBlocks(next);
+                setEditorEpoch((epoch) => epoch + 1);
+              }}
+              onReject={(id) =>
+                setPageReviewSuggestions((current) => current.filter((item) => item.id !== id))
+              }
+              onRejectAll={() => {
+                setPageReviewSuggestions([]);
+                setPageReviewOverview(null);
+              }}
+              onRunReview={() => void runPageReviewWithAi()}
+              overview={pageReviewOverview}
+              suggestions={pageReviewSuggestions}
+            />
+          </div>
         </fieldset>
+
+        <RelatedPagesEditor
+          disabled={isLocked}
+          heading={nextStepsHeading}
+          intro={nextStepsIntro}
+          onChange={setRelatedPageIds}
+          onHeadingChange={setNextStepsHeading}
+          onIntroChange={setNextStepsIntro}
+          options={relatedPageOptions}
+          selectedIds={relatedPageIds}
+        />
 
         <details className="editor-details">
           <summary className="editor-details__summary">Revision history</summary>
           <div className="editor-details__body">
             <PageHistoryPanel
+              canPublish={canPublish}
               isLocked={isLocked}
               kbSlug={kb.slug}
               onRestored={() => window.location.reload()}

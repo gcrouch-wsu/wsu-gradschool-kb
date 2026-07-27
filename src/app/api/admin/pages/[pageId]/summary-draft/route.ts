@@ -1,9 +1,12 @@
 import { loadSiteSettings } from "@/lib/db";
+import { recordAiUsageLater } from "@/lib/ai-usage";
 import { logError } from "@/lib/log";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
+import { resolveAiPrompt } from "@/lib/ai-prompts";
 import {
   assessPageReadyForSummaryDraft,
+  DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
   expandBlocksForSummary,
   formatBlocksForSummary,
   getAiGatewayConfig,
@@ -11,10 +14,10 @@ import {
 } from "@/lib/summary-draft";
 import type { ContentBlock } from "@/lib/types";
 import { NextResponse } from "next/server";
-import { getPageByIdForAdmin } from "@/lib/kb-store";
+import { getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type Body = {
   title?: unknown;
@@ -72,16 +75,27 @@ export async function POST(
   }
 
   try {
-    const expanded = await expandBlocksForSummary(blocks);
+    const expanded = await expandBlocksForSummary(blocks, guard.session);
     const bodyText = formatBlocksForSummary(expanded).trim() || readiness.bodyText;
-    const siteSettings = await loadSiteSettings();
+    const [siteSettings, kb] = await Promise.all([loadSiteSettings(), getKbById(existing.kbId)]);
+    const systemPrompt = resolveAiPrompt(
+      kb?.aiSummaryPrompt,
+      siteSettings.aiSummaryPrompt,
+      DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
+    );
     const summary = await requestSummaryDraftFromGateway({
       title: title.trim(),
       bodyText,
-      systemPrompt: siteSettings.aiSummaryPrompt,
+      systemPrompt,
       ...config,
     });
-    return NextResponse.json({ ok: true, summary });
+    recordAiUsageLater({
+      feature: "summary_draft",
+      model: config.model,
+      kbId: existing.kbId,
+      usage: summary.usage,
+    });
+    return NextResponse.json({ ok: true, summary: summary.summary });
   } catch (error) {
     logError(error, {
       route: "/api/admin/pages/[pageId]/summary-draft",

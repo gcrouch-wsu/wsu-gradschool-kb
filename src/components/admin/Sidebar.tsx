@@ -7,12 +7,15 @@ import {
   ClipboardCheck,
   FileText,
   FolderOpen,
+  HeartPulse,
   LayoutDashboard,
+  Link2,
   ScrollText,
   Settings,
   Trash2,
   Upload,
   Users,
+  Webhook,
 } from "lucide-react";
 import type { AdminSession } from "@/lib/auth";
 import type { SiteBrandSettings } from "@/components/SiteBrand";
@@ -42,10 +45,12 @@ export function Sidebar({ branding, isCollapsed, session }: SidebarProps) {
         <nav className="admin-shell__nav">
           <SidebarLink exact href="/admin" icon={LayoutDashboard} label="Dashboard" />
           <SidebarLink href="/admin/review" icon={ClipboardCheck} label="Review" />
+          <SidebarLink href="/admin/health" icon={HeartPulse} label="Health" />
           <SidebarLink href="/admin/pages" icon={FileText} label="Pages" />
           <SidebarLink href="/admin/trash" icon={Trash2} label="Trash" />
           <SidebarLink href="/admin/redirects" icon={ArrowRightLeft} label="Redirects" />
           <SidebarLink href="/admin/assets" icon={FolderOpen} label="Assets" />
+          <SidebarLink href="/admin/excerpts" icon={Link2} label="Excerpts" />
           {isOwner && <SidebarLink href="/admin/kbs" icon={BookOpen} label="Knowledge bases" />}
           {isOwner && <SidebarLink href="/admin/users" icon={Users} label="Users" />}
           <SidebarLink href="/admin/import" icon={Upload} label="Imports" />
@@ -56,6 +61,7 @@ export function Sidebar({ branding, isCollapsed, session }: SidebarProps) {
       <div className="admin-shell__sidebar-bottom">
         <div aria-hidden className="admin-shell__sidebar-divider" />
         <nav className="admin-shell__nav">
+          {canAudit && <SidebarLink href="/admin/webhooks" icon={Webhook} label="Webhooks" />}
           {isOwner && <SidebarLink href="/admin/settings" icon={Settings} label="Settings" />}
           {canAudit && <SidebarLink href="/admin/audit" icon={ScrollText} label="Audit log" />}
         </nav>

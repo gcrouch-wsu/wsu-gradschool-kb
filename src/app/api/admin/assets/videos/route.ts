@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       mimeType: `video/x-${provider}`,
       originalFilename: `${provider}-link`,
       fileSizeBytes: 0,
+      tags: body.tags,
 
       videoProvider: provider,
       videoExternalId: embedId ?? null,

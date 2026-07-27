@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { AdminPageEditorForm } from "@/components/AdminPageEditorForm";
 import { TreeNodeSettingsForm } from "@/components/TreeNodeSettingsForm";
 import { canAccessKb, filterKbsForSession, getCurrentAdminSession } from "@/lib/auth";
-import { getAllKbsForAdmin, getAllPageSummariesForAdmin, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
+import { canApproveProposedInKb } from "@/lib/auth-roles";
+import { getAllKbsForAdmin, getAllPageSummariesForAdmin, getExcerptReferencesToPage, getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
 
 function hasPathPrefix(path: string[], prefix: string[]) {
   return prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment);
@@ -67,31 +68,58 @@ export default async function AdminEditPage({
       status: candidate.status,
     }));
 
+  const relatedPageOptions = pages
+    .filter(
+      (candidate) =>
+        candidate.id !== page.id &&
+        candidate.status !== "archived" &&
+        (candidate.nodeKind ?? "page") === "page",
+    )
+    .map((candidate) => ({
+      id: candidate.id,
+      title: candidate.title,
+      path: candidate.path.join("/"),
+      status: candidate.status,
+    }));
+
   const destinationKbs = (await filterKbsForSession(session, await getAllKbsForAdmin())).map((candidate) => ({
     id: candidate.id,
     title: candidate.title,
     slug: candidate.slug,
     visibility: candidate.visibility,
   }));
+  const excerptRefs = await getExcerptReferencesToPage(page.id);
 
   return (
     <div className="page-shell">
       <p className="eyebrow">Admin</p>
       <h1>Edit Page</h1>
       <p className="lead">
-        Save changes as a draft while you work, publish when the page is ready, or move the page under a
-        different parent to control the KB tree. Use the overflow menu to copy or move this page to
-        another knowledge base.
+        Save changes as a draft while you work, submit pages for review, or publish approved changes
+        if your role allows it. Use the overflow menu to copy or move this page to another knowledge base.
       </p>
       <p className="meta">
         <Link href="/admin/pages">Back to pages</Link>
       </p>
+      {excerptRefs.length > 0 ? (
+        <section className="admin-panel" style={{ marginBottom: "1rem" }}>
+          <h2 className="admin-panel__title">Excerpted on {excerptRefs.length} page{excerptRefs.length === 1 ? "" : "s"}</h2>
+          <ul className="import-outline">
+            {excerptRefs.map((ref) => (
+              <li key={ref.pageId}>
+                <Link href={`/admin/pages/${ref.pageId}`}>{ref.pageTitle}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <AdminPageEditorForm
-        canApproveProposed={session.role === "owner" || session.role === "admin"}
+        canApproveProposed={await canApproveProposedInKb(session, page.kbId)}
         destinationKbs={destinationKbs}
         kb={kb}
         page={page}
         parentOptions={parentOptions}
+        relatedPageOptions={relatedPageOptions}
       />
     </div>
   );

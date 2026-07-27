@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AltTextDialog } from "@/components/AltTextDialog";
+import { ExcerptPickerDialog } from "@/components/ExcerptPickerDialog";
 import { DocumentToolbar } from "@/components/DocumentToolbar";
 import { ExcerptSectionEditor } from "@/components/ExcerptSectionEditor";
 import { SourcedSectionEditor } from "@/components/SourcedSectionEditor";
@@ -9,8 +10,10 @@ import { LinkDialog } from "@/components/LinkDialog";
 import { NoteDialog } from "@/components/NoteDialog";
 import { EditorNotesRail } from "@/components/EditorNotesRail";
 import { MediaPicker } from "@/components/MediaPicker";
+import type { MediaPickerInsert } from "@/components/MediaPicker";
 import { PageEditorDebugPanel } from "@/components/PageEditorDebugPanel";
 import { TableBlockEditor } from "@/components/TableBlockEditor";
+import { LexicalFlowSurface } from "@/components/LexicalFlowSurface";
 import { blocksToSections, sectionsToBlocks, type EditorSection } from "@/lib/page-editor-list";
 import {
   blocksToDocumentHtml,
@@ -20,21 +23,16 @@ import {
 } from "@/lib/page-document";
 import {
   applyAltText,
-  bindPageEditor,
   commitLink,
   commitNote,
-  handleEditorDrop,
-  handleEditorKeyDown,
-  handleEditorPaste,
-  handleImageControlClick,
+  getEditorInsertionContext,
   insertEditorBlockHtml,
-  insertEditorHtml,
+  insertEditorLink,
   openNoteEditor,
   registerAltEditor,
   registerFormatIssueReporter,
   registerLinkEditor,
   registerNoteEditor,
-  refreshEditorFormatting,
   releaseLinkDraft,
   removeLink,
   removeNote,
@@ -43,7 +41,6 @@ import {
   type LinkEditRequest,
   type NoteEditRequest,
 } from "@/lib/page-editor-format";
-import { noteEditorInput } from "@/lib/page-editor-undo";
 import { textToRichText } from "@/lib/rich-text";
 import type { EditorPalette } from "@/lib/kb-theme";
 import type { ContentBlock } from "@/lib/types";
@@ -75,12 +72,18 @@ export function PageDocumentEditor({
     initialSections.length > 0 ? initialSections : [{ type: "flow", blocks: [] }],
   );
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerSelection, setMediaPickerSelection] = useState({
+    hasInsertionPoint: false,
+    hasTextSelection: false,
+  });
   const [linkRequest, setLinkRequest] = useState<LinkEditRequest | null>(null);
   const [noteRequest, setNoteRequest] = useState<NoteEditRequest | null>(null);
   const [altRequest, setAltRequest] = useState<AltEditRequest | null>(null);
   const [formatHint, setFormatHint] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"visual" | "html">("visual");
   const [htmlDraft, setHtmlDraft] = useState("");
+  const [visualEpoch, setVisualEpoch] = useState(0);
+  const [excerptPickerOpen, setExcerptPickerOpen] = useState(false);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -100,6 +103,7 @@ export function PageDocumentEditor({
     if (viewMode === "visual") return;
     const nextBlocks = documentHtmlToBlocks(htmlDraft);
     emitChange(blocksToSections(nextBlocks));
+    setVisualEpoch((value) => value + 1);
     setViewMode("visual");
   }
 
@@ -123,11 +127,45 @@ export function PageDocumentEditor({
     };
   }, []);
 
-  function insertBlockFromPicker(block: ContentBlock) {
-    if (block.type === "image") {
+  function openMediaPicker() {
+    setMediaPickerSelection(getEditorInsertionContext());
+    setMediaPickerOpen(true);
+  }
 
+  function insertBlockFromPicker(payload: MediaPickerInsert) {
+    if (payload.type === "link") {
+      const linked = insertEditorLink({
+        url: payload.url,
+        label: payload.label,
+        assetId: payload.assetId,
+      });
+      if (!linked && payload.assetId) {
+        // Only fall back to an asset_link block when there was no text selection.
+        // Cross-block selections fail in insertEditorLink and must not silently append.
+        const context = getEditorInsertionContext();
+        if (!context.hasTextSelection) {
+          emitChange([
+            ...sections,
+            {
+              type: "asset_link",
+              block: {
+                blockId: newBlockId(),
+                type: "asset_link",
+                assetId: payload.assetId,
+                label: payload.label,
+              },
+            },
+          ]);
+        }
+      }
+      setMediaPickerOpen(false);
+      return;
+    }
+
+    const block = payload.block;
+    if (block.type === "image") {
       const html = blocksToDocumentHtml([block], kbSlug);
-      if (!insertEditorHtml(html)) {
+      if (!insertEditorBlockHtml(html)) {
         addBlockToFirstFlow(block);
       }
     } else if (block.type === "video") {
@@ -154,7 +192,7 @@ export function PageDocumentEditor({
 
   function handleInsertInfoBox() {
     const placeholder = "Replace with the message readers should see.";
-    const html = `<aside class="doc-alert doc-alert--info" data-block-id="${newBlockId()}" data-variant="info" role="note">${textToRichText(placeholder)}</aside>`;
+    const html = `<aside class="doc-alert doc-alert--info" data-block-id="${newBlockId()}" data-variant="info" role="note"><p>${textToRichText(placeholder)}</p></aside>`;
     if (!insertEditorBlockHtml(html)) {
       addBlockToFirstFlow({ type: "alert", blockId: newBlockId(), variant: "info", text: placeholder });
     }
@@ -268,6 +306,10 @@ export function PageDocumentEditor({
   }
 
   function addExcerpt() {
+    setExcerptPickerOpen(true);
+  }
+
+  function insertExcerptFromPicker(sourcePageId: string) {
     const next = [
       ...sections,
       {
@@ -275,11 +317,12 @@ export function PageDocumentEditor({
         block: {
           blockId: newBlockId(),
           type: "excerpt" as const,
-          sourcePageId: "",
+          sourcePageId,
         },
       },
     ];
     emitChange(next);
+    setExcerptPickerOpen(false);
   }
 
   function updateExcerptSection(index: number, block: ContentBlock) {
@@ -338,7 +381,7 @@ export function PageDocumentEditor({
           <DocumentToolbar
             editorPalette={editorPalette}
             onInsertInfoBox={handleInsertInfoBox}
-            onInsertMedia={() => setMediaPickerOpen(true)}
+            onInsertMedia={openMediaPicker}
             onAddNote={() => openNoteEditor()}
             onAddTable={addTable}
             onAddCard={addCard}
@@ -370,7 +413,21 @@ export function PageDocumentEditor({
       ) : (
         <>
       {mediaPickerOpen && (
-        <MediaPicker kbId={kbId} onClose={() => setMediaPickerOpen(false)} onInsert={insertBlockFromPicker} />
+        <MediaPicker
+          hasTextSelection={mediaPickerSelection.hasTextSelection}
+          kbId={kbId}
+          kbSlug={kbSlug}
+          onClose={() => setMediaPickerOpen(false)}
+          onInsert={insertBlockFromPicker}
+        />
+      )}
+
+      {excerptPickerOpen && (
+        <ExcerptPickerDialog
+          kbId={kbId}
+          onClose={() => setExcerptPickerOpen(false)}
+          onSelect={(sourcePageId) => insertExcerptFromPicker(sourcePageId)}
+        />
       )}
 
       {linkRequest && (
@@ -434,7 +491,7 @@ export function PageDocumentEditor({
               isFirst={index === 0}
               isLast={index === sections.length - 1}
               kbId={kbId}
-              key={section.type === "flow" ? `flow-${index}` : section.block.blockId}
+              key={section.type === "flow" ? `flow-${index}-${visualEpoch}` : `${section.block.blockId}-${visualEpoch}`}
               kbSlug={kbSlug}
               onMove={moveSection}
               onRemove={() => removeSection(index)}
@@ -490,39 +547,6 @@ function SectionEditor({
   onUpdateExcerpt: (block: ContentBlock) => void;
   onUpdateSourced: (block: ContentBlock) => void;
 }) {
-  const surfaceRef = useRef<HTMLDivElement>(null);
-  const lastSyncedHtml = useRef("");
-
-  const onUpdateFlowRef = useRef(onUpdateFlow);
-  useEffect(() => {
-    onUpdateFlowRef.current = onUpdateFlow;
-  }, [onUpdateFlow]);
-
-  useEffect(() => {
-    if (section.type === "flow") {
-      const html = blocksToDocumentHtml(section.blocks, kbSlug);
-      lastSyncedHtml.current = html;
-      if (surfaceRef.current && !surfaceRef.current.innerHTML.trim()) {
-        surfaceRef.current.innerHTML = html;
-      }
-    }
-  }, [section, kbSlug]);
-
-  const bindThisSurface = useCallback(() => {
-    const node = surfaceRef.current;
-    if (node) {
-      bindPageEditor(node, () => onUpdateFlowRef.current(node.innerHTML, false));
-    }
-  }, []);
-
-  const attachSurface = useCallback((node: HTMLDivElement | null) => {
-    surfaceRef.current = node;
-    if (node) {
-      bindPageEditor(node, () => onUpdateFlowRef.current(node.innerHTML, false));
-      if (!node.innerHTML.trim()) node.innerHTML = lastSyncedHtml.current;
-    }
-  }, []);
-
   return (
     <article className="block-editor">
       <div className="block-bar">
@@ -559,32 +583,15 @@ function SectionEditor({
       </div>
 
       {section.type === "flow" && (
-        <div
-          className="wysiwyg-surface"
-          contentEditable
-          onBlur={(e) => onUpdateFlow(e.currentTarget.innerHTML, true)}
-          onClick={handleImageControlClick}
-          onDragOver={(e) => {
-            if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-          }}
-          onDrop={(e) => handleEditorDrop(e, kbId)}
-          onFocus={bindThisSurface}
-          onInput={(e) => {
-            noteEditorInput(e.nativeEvent as InputEvent);
-            onUpdateFlow(e.currentTarget.innerHTML, false);
-            refreshEditorFormatting();
-          }}
-          onKeyDown={handleEditorKeyDown}
-          onKeyUp={() => refreshEditorFormatting()}
-          onMouseUp={() => refreshEditorFormatting()}
-          onPaste={(e) => handleEditorPaste(e, kbId)}
-          ref={attachSurface}
-          suppressContentEditableWarning
+        <LexicalFlowSurface
+          initialHtml={blocksToDocumentHtml(section.blocks, kbSlug)}
+          kbId={kbId}
+          onHtmlChange={onUpdateFlow}
         />
       )}
 
       {section.type === "table" && (
-        <TableBlockEditor block={section.block} onChange={onUpdateTable} />
+        <TableBlockEditor block={section.block} kbId={kbId} onChange={onUpdateTable} />
       )}
 
       {section.type === "asset_link" && (
@@ -664,42 +671,16 @@ function SectionEditor({
               </select>
             </label>
           </div>
-          <div
-            className="wysiwyg-surface procedure-section-editor__surface"
-            contentEditable
-            onBlur={(e) => {
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-            }}
-            onClick={handleImageControlClick}
-            onDragOver={(e) => {
-              if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-            }}
-            onDrop={(e) => handleEditorDrop(e, kbId)}
-            onFocus={(e) => {
-              const target = e.currentTarget;
-              bindPageEditor(target, () => {
-                const clean = sanitizePageDocument(target.innerHTML);
+          <div className="procedure-section-editor__surface-wrap">
+            <LexicalFlowSurface
+              initialHtml={blocksToDocumentHtml(section.block.blocks, kbSlug)}
+              kbId={kbId}
+              onHtmlChange={(html) => {
+                const clean = sanitizePageDocument(html);
                 onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              });
-            }}
-            onInput={(e) => {
-              noteEditorInput(e.nativeEvent as InputEvent);
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              refreshEditorFormatting();
-            }}
-            onKeyDown={handleEditorKeyDown}
-            onPaste={(e) => handleEditorPaste(e, kbId)}
-            onKeyUp={() => refreshEditorFormatting()}
-            onMouseUp={() => refreshEditorFormatting()}
-            ref={(node) => {
-              if (node && !node.innerHTML.trim()) {
-                node.innerHTML = blocksToDocumentHtml(section.block.blocks, kbSlug);
-              }
-            }}
-            suppressContentEditableWarning
-          />
+              }}
+            />
+          </div>
         </div>
       )}
 
@@ -749,42 +730,16 @@ function SectionEditor({
             </label>
           </div>
           <p className="meta">Card content uses continuous rich text.</p>
-          <div
-            className={`wysiwyg-surface card--bg-${section.block.background}`}
-            contentEditable
-            onBlur={(e) => {
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-            }}
-            onClick={handleImageControlClick}
-            onDragOver={(e) => {
-              if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-            }}
-            onDrop={(e) => handleEditorDrop(e, kbId)}
-            onFocus={(e) => {
-              const target = e.currentTarget;
-              bindPageEditor(target, () => {
-                const clean = sanitizePageDocument(target.innerHTML);
+          <div className={`card--bg-${section.block.background}`}>
+            <LexicalFlowSurface
+              initialHtml={blocksToDocumentHtml(section.block.blocks, kbSlug)}
+              kbId={kbId}
+              onHtmlChange={(html) => {
+                const clean = sanitizePageDocument(html);
                 onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              });
-            }}
-            onInput={(e) => {
-              noteEditorInput(e.nativeEvent as InputEvent);
-              const clean = sanitizePageDocument(e.currentTarget.innerHTML);
-              onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
-              refreshEditorFormatting();
-            }}
-            onKeyDown={handleEditorKeyDown}
-            onPaste={(e) => handleEditorPaste(e, kbId)}
-            onKeyUp={() => refreshEditorFormatting()}
-            onMouseUp={() => refreshEditorFormatting()}
-            ref={(node) => {
-              if (node && !node.innerHTML.trim()) {
-                node.innerHTML = blocksToDocumentHtml(section.block.blocks, kbSlug);
-              }
-            }}
-            suppressContentEditableWarning
-          />
+              }}
+            />
+          </div>
         </div>
       )}
 

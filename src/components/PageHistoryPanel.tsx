@@ -12,12 +12,14 @@ import type { PageRevision, PageRevisionSummary } from "@/lib/types";
 export function PageHistoryPanel({
   pageId,
   kbSlug,
+  canPublish = false,
   isLocked,
   reloadToken,
   onRestored,
 }: {
   pageId: string;
   kbSlug: string;
+  canPublish?: boolean;
   isLocked: boolean;
   reloadToken: number;
   onRestored: () => void;
@@ -276,6 +278,7 @@ export function PageHistoryPanel({
           <ul className="page-history__list">
             {revisions.map((revision) => {
               const selected = compareLeft === revision.id || compareRight === revision.id;
+              const restoreBlocked = revision.status === "published" && !canPublish;
               return (
                 <li className="page-history__item" key={revision.id}>
                   <div className="page-history__meta">
@@ -307,9 +310,15 @@ export function PageHistoryPanel({
                     <button
                       aria-busy={restoringId === revision.id}
                       className="button button--small"
-                      disabled={isLocked || restoringId === revision.id}
+                      disabled={isLocked || restoreBlocked || restoringId === revision.id}
                       onClick={() => restoreRevision(revision)}
-                      title={isLocked ? "This page is locked — you cannot restore right now." : undefined}
+                      title={
+                        isLocked
+                          ? "This page is locked — you cannot restore right now."
+                          : restoreBlocked
+                            ? "Only an owner or admin can restore a published revision."
+                            : undefined
+                      }
                       type="button"
                     >
                       {restoringId === revision.id ? "Working…" : "Restore this version"}

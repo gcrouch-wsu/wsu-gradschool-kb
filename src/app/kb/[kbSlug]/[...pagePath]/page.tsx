@@ -8,6 +8,7 @@ import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
 import { ReaderFeedbackWidget } from "@/components/ReaderFeedbackWidget";
+import { ReaderTips } from "@/components/ReaderTips";
 import { TableOfContents } from "@/components/TableOfContents";
 import { hasTocEntries } from "@/lib/toc";
 import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
@@ -18,10 +19,12 @@ import {
   getKbById,
   getKbBySlug,
   getPageByPath,
+  getVisiblePagesForKb,
 } from "@/lib/kb-store";
 import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, mergeTheme, resolvePublicTheme, themeToCssVars } from "@/lib/kb-theme";
 import { loadSiteSettings } from "@/lib/db";
+import { normalizePageTags } from "@/lib/page-tags";
 import type { CSSProperties } from "react";
 import { isPageViewPrefetch, recordPageViewLater } from "@/lib/page-views";
 
@@ -130,7 +133,20 @@ export default async function KbArticlePage({
     }),
   );
 
+  const visibleRelated = await getVisiblePagesForKb(kb.id, includeStaff);
+  const relatedById = new Map(visibleRelated.map((candidate) => [candidate.id, candidate]));
+  const relatedPageLinks = page.relatedPageIds
+    .map((relatedId) => relatedById.get(relatedId))
+    .filter((related): related is NonNullable<typeof related> => Boolean(related))
+    .filter((related) => (related.nodeKind ?? "page") === "page")
+    .map((related) => ({
+      id: related.id,
+      title: related.title,
+      href: `/kb/${kb.slug}/${related.path.join("/")}`,
+    }));
+
   const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
+  const pageTags = normalizePageTags(page.tags);
   
   const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const effectiveTheme = resolvePublicTheme(kb.theme, baseTheme);
@@ -179,7 +195,32 @@ export default async function KbArticlePage({
             </p>
           )}
           <h1>{page.title}</h1>
+          <ReaderTips
+            tips={[
+              {
+                title: "Browse the section tree",
+                body: "Use the left navigation to move between pages in this knowledge base without losing context.",
+              },
+              {
+                title: "Search this KB",
+                body: "The search box above the tree finds pages and files in this knowledge base, including tag filters.",
+              },
+              {
+                title: "Was this helpful?",
+                body: "Scroll to the bottom on public pages to leave quick feedback that helps editors prioritize updates.",
+              },
+            ]}
+          />
           {page.showSummary !== false && page.summary && <p className="lead">{page.summary}</p>}
+          {pageTags.length > 0 && (
+            <ul aria-label="Page tags" className="tag-list">
+              {pageTags.map((tag) => (
+                <li key={tag}>
+                  <Link href={`/search?q=${encodeURIComponent(tag)}`}>{tag}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="article-meta-row">
             <p className="meta">Updated on {formatDate(page.updatedDisplayDate)}</p>
             {page.showPrintButton !== false && <PrintPdfButton />}
@@ -198,6 +239,21 @@ export default async function KbArticlePage({
           </div>
 
           <PageBlocks blocks={page.blocks} />
+
+          {relatedPageLinks.length > 0 && (
+            <section className="next-steps-panel" aria-labelledby="next-steps-heading">
+              <h2 id="next-steps-heading">{page.nextStepsHeading?.trim() || "Next steps"}</h2>
+              <p className="meta">{page.nextStepsIntro?.trim() || "Continue with these related pages."}</p>
+              <div className="next-steps-grid">
+                {relatedPageLinks.map((related) => (
+                  <Link className="next-steps-card" href={related.href} key={related.id}>
+                    <strong>{related.title}</strong>
+                    <span className="meta">Open article →</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {relatedFiles.length > 0 && (
             <>

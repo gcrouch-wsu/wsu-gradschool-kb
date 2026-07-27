@@ -4,8 +4,7 @@ import {
   getAssetAdminDetail,
   getAssetHomeKbId,
   permanentlyDeleteAsset,
-  updateAssetAltText,
-  updateAssetDescription,
+  updateAssetMetadata,
 } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -24,38 +23,46 @@ export async function PATCH(request: Request, context: { params: Promise<{ asset
   }
 
   const body = (await request.json().catch(() => null)) as
-    | { description?: unknown; altText?: unknown }
+    | { description?: unknown; altText?: unknown; tags?: unknown }
     | null;
 
   try {
+    if (!body) {
+      return NextResponse.json({ message: "A description, altText, or tags value is required." }, { status: 400 });
+    }
+    const patch: { description?: string; altText?: string; tags?: unknown } = {};
+    if (typeof body.description === "string") {
+      patch.description = body.description;
+    }
+    if (typeof body.altText === "string") {
+      patch.altText = body.altText;
+    }
+    if (body.tags !== undefined) {
+      patch.tags = body.tags;
+    }
+    if (patch.description === undefined && patch.altText === undefined && patch.tags === undefined) {
+      return NextResponse.json({ message: "A description, altText, or tags value is required." }, { status: 400 });
+    }
 
-    if (body && typeof body.altText === "string") {
-      const asset = await updateAssetAltText(assetId, body.altText);
-      await recordAuditEvent({
-        session: guard.session,
-        action: "asset.alt_text_updated",
-        entityType: "asset",
-        entityId: asset.id,
-        entityLabel: asset.title,
-        kbId: asset.homeKbId,
-        details: { field: "altText" },
-      });
-      return NextResponse.json({ ok: true, asset });
-    }
-    if (body && typeof body.description === "string") {
-      const asset = await updateAssetDescription(assetId, body.description);
-      await recordAuditEvent({
-        session: guard.session,
-        action: "asset.description_updated",
-        entityType: "asset",
-        entityId: asset.id,
-        entityLabel: asset.title,
-        kbId: asset.homeKbId,
-        details: { field: "description" },
-      });
-      return NextResponse.json({ ok: true, asset });
-    }
-    return NextResponse.json({ message: "A description or altText is required." }, { status: 400 });
+    const { asset, fields } = await updateAssetMetadata(assetId, patch);
+    const actionByField: Record<string, string> = {
+      altText: "asset.alt_text_updated",
+      description: "asset.description_updated",
+      tags: "asset.tags_updated",
+    };
+    await recordAuditEvent({
+      session: guard.session,
+      action:
+        fields.length === 1
+          ? actionByField[fields[0]] ?? "asset.metadata_updated"
+          : "asset.metadata_updated",
+      entityType: "asset",
+      entityId: asset.id,
+      entityLabel: asset.title,
+      kbId: asset.homeKbId,
+      details: { fields },
+    });
+    return NextResponse.json({ ok: true, asset });
   } catch (error) {
     logError(error, { route: "/api/admin/assets/[assetId]", action: "update_asset", assetId });
     const message = error instanceof Error ? error.message : "Could not update the asset.";

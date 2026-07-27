@@ -13,7 +13,7 @@ export async function globalSearchScope(): Promise<{ includeStaff: boolean; opti
   if (session.role === "owner" || session.role === "admin") {
     return { includeStaff: true, options: { includeAllKbs: true, staffKbIds: null } };
   }
-  if (session.role === "editor") {
+  if (session.role === "editor" || session.role === "manager") {
     const assigned = (await accessibleKbIds(session)) ?? [];
     return { includeStaff: true, options: { readableKbIds, staffKbIds: assigned } };
   }

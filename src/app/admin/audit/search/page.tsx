@@ -11,7 +11,7 @@ export default async function SearchGapPage() {
   if (!session) {
     redirect("/admin/sign-in?next=/admin/audit/search");
   }
-  if (session.role === "editor") {
+  if (session.role !== "owner" && session.role !== "admin") {
     redirect("/admin");
   }
 

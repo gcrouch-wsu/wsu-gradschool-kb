@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   const file = formData?.get("file");
   const kbId = formData?.get("kbId");
   const alt = formData?.get("alt");
+  const tags = formData?.get("tags");
   if (!(file instanceof File) || typeof kbId !== "string") {
     return NextResponse.json({ message: "Image file and knowledge base are required." }, { status: 400 });
   }
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
       mimeType: file.type.toLowerCase(),
       originalFilename: file.name,
       title: file.name.replace(/\.[^.]+$/, ""),
+      tags: typeof tags === "string" ? tags : undefined,
     });
     await recordAuditEvent({
       session: guard.session,
