@@ -89,11 +89,11 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     vi.unstubAllEnvs();
   });
 
-  async function patchPage(body: Record<string, unknown>) {
+  async function patchPage(body: Record<string, unknown>, pageOverride: Partial<KbPage> = {}) {
     vi.stubEnv("KAAS_API_KEYS", "test-key");
     const store = await import("@/lib/kb-store");
     vi.spyOn(store, "getKbBySlug").mockResolvedValue(kb);
-    vi.spyOn(store, "getPageByPath").mockResolvedValue(page);
+    vi.spyOn(store, "getPageByPath").mockResolvedValue({ ...page, ...pageOverride });
     vi.spyOn(store, "getAssetStatusById").mockResolvedValue("active");
     vi.spyOn(store, "updatePage").mockImplementation(async (input) => ({
       ...page,
@@ -126,6 +126,13 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
       blocks: [{ blockId: "x", type: "unsupported", text: "Bad block." }],
     });
     expect(response.status).toBe(400);
+    expect(store.updatePage).not.toHaveBeenCalled();
+  });
+
+  it("does not write group or link nodes through the article API", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({ summary: "Updated summary." }, { nodeKind: "link" });
+    expect(response.status).toBe(404);
     expect(store.updatePage).not.toHaveBeenCalled();
   });
 

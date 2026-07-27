@@ -122,7 +122,7 @@ export async function PATCH(
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
     const page = await getPageByPath(kb.id, pagePath, false);
-    if (!page || page.status !== "published" || page.visibility === "staff") {
+    if (!page || (page.nodeKind ?? "page") !== "page" || page.status !== "published" || page.visibility === "staff") {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
     const blocks =
