@@ -226,7 +226,7 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - Toolbar formatting, links, alt text, and editor notes live in `src/lib/page-editor-format.ts`
   (selection save/restore + `document.execCommand`, plus DOM helpers). Selection plumbing is in
   `src/lib/rich-text-selection.ts`.
-- Table cells use `RichTextEditable`; on focus they bind themselves as the active editor surface so
+- Table cells use `LexicalTableCellSurface` (nested Lexical); on focus they bind themselves as the active editor surface so
   the shared toolbar can format/link selected text inside a cell. If a new rich-text sub-editor is
   added, it must bind through the same selection pipeline or toolbar commands will act stale.
 - Toolbar state is surface-aware: when editing a table cell, page-structure/list controls collapse to
@@ -615,10 +615,9 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 - Print/PDF is browser print-to-PDF, not a server-side tagged PDF generator.
 - Accessibility is publish-gate + axe smoke, not a completed WCAG certification.
 - Notes rail has no threaded resolve UI yet.
-- Editor framework migration: flow, cards, and procedure surfaces use Lexical
-  (Phases 1–4); table cells remain `RichTextEditable` for deferred FB-26 parity. Spike
-  remains at `/admin/lexical-spike`. Keep `npm run test:editor` and the release-gate
-  Firefox/mobile checklist green before claiming editor close-out.
+- Editor framework migration: flow, cards, procedure, and table-cell surfaces use Lexical
+  (Phases 1–4 + FB-26). Spike remains at `/admin/lexical-spike`. Keep `npm run test:editor`
+  and the release-gate Firefox/mobile checklist green before claiming editor close-out.
 
 ## 10. Known limitations
 
@@ -683,9 +682,9 @@ The only **product** items that remain future (not yet built) are:
    gated on WSU ITS engagement. Local owner-provisioned accounts remain interim + break-glass.
 2. **Confluence import/export bridge (§12 FB-37)** — concept only; not scoped.
 
-**Editor framework:** Lexical Phases 1–4 landed for flow, cards, and procedure surfaces; table
-cells remain `RichTextEditable` (deferred FB-26 parity). Close-out evidence is part of the manual
-release gate (FB-25): Chrome + Firefox + mobile-width editor pass.
+**Editor framework:** Lexical Phases 1–4 + FB-26 landed for flow, cards, procedure, and table-cell
+surfaces. Close-out evidence is part of the manual release gate (FB-25): Chrome + Firefox +
+mobile-width editor pass.
 
 **Release readiness** (FB-25) is ops/QA, not a new product surface: finish the manual checklist in
 `docs/release-gate.md` and §13 sign-off.
@@ -707,8 +706,7 @@ items were removed from this document; their history is in git.
   live-DB tests when DB behavior changes.
 - When completing an item: flip `status:` and leave a one-line DONE note, or remove the item and
   update §9 / §11 so the future set stays accurate.
-- **Ratified future set:** FB-30, FB-37. FB-25 is release QA only; FB-26 table-cell parity remains
-  deferred and should not be bundled into unrelated releases.
+- **Ratified future set:** FB-30, FB-37. FB-25 is release QA only.
 
 ---
 
@@ -717,18 +715,27 @@ items were removed from this document; their history is in git.
 `[AI-AGENT-TASK] id:FB-09  priority:high  area:editor-architecture  effort:L  status:done`
 `[AI-AGENT-TASK] id:FB-29  priority:high  area:editor-architecture  effort:L  status:done`
 
-- **Plan:** `docs/editor-framework-migration.md` (phases 0–4). Flow, card, and procedure surfaces
-  are delivered on Lexical; table cells remain deferred as FB-26 parity work.
+- **Plan:** `docs/editor-framework-migration.md` (phases 0–4 + FB-26). Flow, card, procedure, and
+  table-cell surfaces are delivered on Lexical.
 - **Why:** the editor still needs release-grade QA across Chrome, Firefox, and mobile widths, but
-  the core framework migration for flow surfaces is complete. Keep the existing `ContentBlock[]`
+  the core framework migration is complete. Keep the existing `ContentBlock[]`
   storage model, sanitizer, publish gate, source-HTML path, and public render.
-- **Touch points:** `src/components/PageDocumentEditor.tsx`, `src/components/RichTextEditable.tsx`,
+- **Touch points:** `src/components/PageDocumentEditor.tsx`, `src/components/LexicalFlowSurface.tsx`,
+  `src/components/LexicalTableCellSurface.tsx`, `src/components/TableBlockEditor.tsx`,
   `src/lib/page-document.ts`, `src/lib/page-editor-format.ts`, `src/lib/rich-text.ts`,
   `tests/editor/`, `docs/editor-framework-migration.md`.
 - **Acceptance:** page-document round-trip tests pass unchanged; Chromium editor regressions pass;
   a documented Chrome + Firefox manual checklist covers selection, paste, list nesting, link/note
   insert, table-cell editing, undo/redo, and source-mode round-trips. Do not mix this migration into
   unrelated feature PRs.
+
+### FB-26 — Table-cell Lexical parity
+
+`[AI-AGENT-TASK] id:FB-26  priority:med  area:editor-architecture  effort:M  status:done`
+
+- **DONE:** Table cells use nested `LexicalTableCellSurface`; toolbar bold/link bind via the shared
+  Lexical bridge; cell HTML still stores inline rich text (`sanitizeRichText`). Covered by
+  `tests/editor/table-cell.spec.ts` and `tests/editor/toolbar-context.spec.ts`.
 
 ### FB-25 — Production release gate (manual QA)
 

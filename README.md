@@ -58,8 +58,7 @@ governance, AI draft summaries, admin/ops) and §10 for known limitations.
 1. **WSU SSO** (FB-30) — gated on WSU ITS engagement (Entra ID / Azure AD OIDC or SAML)
 2. **Confluence import/export bridge** (FB-37) — concept only; not scoped
 
-Lexical editor Phases 1–4 are built for flow, card, and procedure surfaces. Table cells still use
-the legacy rich-text cell editor until the deferred FB-26 parity work.
+Lexical editor Phases 1–4 + FB-26 are built for flow, card, procedure, and table-cell surfaces.
 
 All authentication stays local and owner-provisioned until SSO lands.
 

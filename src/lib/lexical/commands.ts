@@ -20,12 +20,14 @@ import {
   INSERT_CHECK_LIST_COMMAND,
 } from "@lexical/list";
 import { $generateNodesFromDOM } from "@lexical/html";
+import { TOGGLE_LINK_COMMAND } from "@lexical/link";
 import {
   getActiveLexicalEditor,
   getActiveLexicalRoot,
   isLexicalFlowActive,
   notifyLexicalMutation,
 } from "@/lib/lexical/toolbar-bridge";
+import { escapeHtml } from "@/lib/rich-text";
 
 export function lexicalRunFormatCommand(command: string, value?: string): boolean {
   const editor = getActiveLexicalEditor();
@@ -193,6 +195,53 @@ export function lexicalInsertHtml(html: string): boolean {
   if (!inserted) {
     return false;
   }
+  notifyLexicalMutation();
+  return true;
+}
+
+/** Apply or update a link on the active Lexical selection (flow + table cells). */
+export function lexicalApplyLink(
+  url: string,
+  options?: { newTab?: boolean; text?: string },
+): boolean {
+  const editor = getActiveLexicalEditor();
+  if (!editor) {
+    return false;
+  }
+
+  let selectionText = "";
+  editor.getEditorState().read(() => {
+    const selection = $getSelection();
+    if ($isRangeSelection(selection)) {
+      selectionText = selection.getTextContent();
+    }
+  });
+
+  const label = (options?.text ?? "").trim();
+  if (label && label !== selectionText.trim()) {
+    const targetAttr = options?.newTab ? ' target="_blank"' : "";
+    const relAttr = options?.newTab ? ' rel="noopener noreferrer"' : "";
+    return lexicalInsertHtml(
+      `<a href="${escapeHtml(url)}"${targetAttr}${relAttr}>${escapeHtml(label)}</a>`,
+    );
+  }
+
+  const payload = options?.newTab
+    ? { url, target: "_blank", rel: "noopener noreferrer" }
+    : { url, target: null, rel: null };
+  editor.focus();
+  editor.dispatchCommand(TOGGLE_LINK_COMMAND, payload);
+  notifyLexicalMutation();
+  return true;
+}
+
+export function lexicalRemoveLink(): boolean {
+  const editor = getActiveLexicalEditor();
+  if (!editor) {
+    return false;
+  }
+  editor.focus();
+  editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
   notifyLexicalMutation();
   return true;
 }

@@ -4688,7 +4688,8 @@ article ol ol ol {
   padding: 0.75rem;
 }
 
-.wysiwyg-table-cell:focus {
+.wysiwyg-table-cell:focus,
+.wysiwyg-table-cell:focus-within {
   border-color: var(--wsu-crimson);
   outline: none;
   box-shadow: 0 0 0 3px rgba(166, 15, 45, 0.08);

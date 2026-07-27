@@ -37,9 +37,8 @@ export function isLexicalFlowActive(): boolean {
   if (!activeLexicalEditor || !activeLexicalRoot) {
     return false;
   }
-  // Only treat Lexical as the command target when the bound surface is this
-  // editor (or nested inside it). Table cells re-bind to contentEditable and
-  // must keep using execCommand / native selection.
+  // Treat Lexical as the command target when the bound surface is this editor
+  // (main flow or a table-cell Lexical root) or nested inside it.
   const surface = getBoundEditorSurface();
   if (surface && (surface === activeLexicalRoot || activeLexicalRoot.contains(surface))) {
     return true;

@@ -591,7 +591,7 @@ function SectionEditor({
       )}
 
       {section.type === "table" && (
-        <TableBlockEditor block={section.block} onChange={onUpdateTable} />
+        <TableBlockEditor block={section.block} kbId={kbId} onChange={onUpdateTable} />
       )}
 
       {section.type === "asset_link" && (

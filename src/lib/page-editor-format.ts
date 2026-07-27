@@ -26,11 +26,13 @@ import {
 import {
   isLexicalFlowActive,
   lexicalApplyBlockTag,
+  lexicalApplyLink,
   lexicalApplyList,
   lexicalIndent,
   lexicalInsertHtml,
   lexicalOutdent,
   lexicalRedo,
+  lexicalRemoveLink,
   lexicalRunFormatCommand,
   lexicalUndo,
 } from "@/lib/lexical/commands";
@@ -305,6 +307,55 @@ export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
     return;
   }
 
+  // Lexical surfaces: never inject a DOM draft marker — Lexical reconciliation
+  // would wipe it. Commit applies TOGGLE_LINK_COMMAND against the saved selection.
+  if (isLexicalFlowActive()) {
+    const selection = window.getSelection();
+    let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    const surface = getBoundEditorSurface();
+    const inSurface = Boolean(range && surface && surface.contains(range.commonAncestorContainer));
+    if (!inSurface) {
+      if (restoreRichTextSelection()) {
+        range = window.getSelection()?.getRangeAt(0) ?? null;
+      } else {
+        recordFormat(
+          "createLink",
+          false,
+          "no-selection",
+          "Select the text that should become a link (or click where it goes), then press the link button.",
+        );
+        return;
+      }
+    }
+    if (!range) {
+      recordFormat("createLink", false, "no-range", "Click in the page body, then add a link.");
+      return;
+    }
+    if (!range.collapsed && surface) {
+      const startBlock = nearestBlock(range.startContainer, surface);
+      const endBlock = nearestBlock(range.endContainer, surface);
+      if (startBlock && endBlock && startBlock !== endBlock) {
+        recordFormat(
+          "createLink",
+          false,
+          "cross-block",
+          "Select text within a single paragraph, heading, or list item, then add a link.",
+        );
+        return;
+      }
+    }
+    saveRichTextSelection();
+    linkEditorOpener?.({
+      url: "",
+      text: range.toString(),
+      newTab: false,
+      isEdit: false,
+      anchor: null,
+      marker: null,
+    });
+    return;
+  }
+
   const surface = getBoundEditorSurface();
   const selection = window.getSelection();
   let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
@@ -475,6 +526,36 @@ export function commitLink(request: {
   }
   const text = request.text.trim();
 
+  if (isLexicalFlowActive()) {
+    releaseLinkDraft(request.marker ?? null);
+    let restored = restoreRichTextSelection();
+    if (!restored && request.anchor?.isConnected) {
+      const range = document.createRange();
+      range.selectNodeContents(request.anchor);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      saveRichTextSelection();
+      restored = true;
+    }
+    if (!restored) {
+      recordFormat("createLink", false, "no-selection", "Click in the page body, then add a link.");
+      return false;
+    }
+    snapshotStructuralChange();
+    const ok = lexicalApplyLink(url, { newTab: request.newTab, text: text || undefined });
+    if (!ok) {
+      recordFormat("createLink", false, "insert-failed", "Click in the page body, then add a link.");
+      return false;
+    }
+    recordFormat(
+      request.anchor ? "editLink" : "createLink",
+      true,
+      request.newTab ? `${url} (new tab)` : url,
+    );
+    return true;
+  }
+
   if (request.anchor) {
     snapshotStructuralChange();
     request.anchor.setAttribute("href", url);
@@ -540,6 +621,22 @@ export function commitLink(request: {
 }
 
 export function removeLink(anchor: HTMLAnchorElement): boolean {
+  if (isLexicalFlowActive()) {
+    if (anchor.isConnected) {
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      saveRichTextSelection();
+    }
+    snapshotStructuralChange();
+    const ok = lexicalRemoveLink();
+    if (ok) {
+      recordFormat("unlink", true, "removed");
+    }
+    return ok;
+  }
   const parent = anchor.parentNode;
   if (!parent) {
     return false;
@@ -805,7 +902,7 @@ export function handleImageControlClick(event: {
   const surface = target?.closest?.(".wysiwyg-surface") as HTMLElement | null;
 
   const link = target?.closest?.("a") as HTMLAnchorElement | null;
-  if (link && surface) {
+  if (link && target?.closest?.(EDITABLE_SURFACE_SELECTOR)) {
     event.preventDefault();
     openLinkEditor(link);
     return true;
