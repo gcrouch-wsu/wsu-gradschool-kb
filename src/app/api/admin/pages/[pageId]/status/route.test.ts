@@ -47,6 +47,8 @@ async function patch(status: string, role: AdminSession["role"] = "editor") {
     session: session(role),
   });
   vi.spyOn(security, "requireKbAccess").mockResolvedValue(null);
+  const auth = await import("@/lib/auth");
+  vi.spyOn(auth, "canAccessKb").mockResolvedValue(role === "manager");
   vi.spyOn(store, "getPageByIdForAdmin").mockResolvedValue(page);
   vi.spyOn(store, "updatePageStatus").mockResolvedValue({ ...page, status: status as KbPage["status"] });
   vi.spyOn(store, "getKbById").mockResolvedValue({
@@ -104,5 +106,13 @@ describe("PATCH /api/admin/pages/[pageId]/status", () => {
       { params: Promise.resolve({ pageId: "page-1" }) },
     );
     expect(response.status).toBe(401);
+  });
+
+  it("allows KB managers to publish through status changes", async () => {
+    const store = await import("@/lib/kb-store");
+    const updateSpy = vi.spyOn(store, "updatePageStatus");
+    const response = await patch("published", "manager");
+    expect(response.status).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(page.id, "published");
   });
 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminMutation } from "@/lib/security";
 import { createWebhook, deleteWebhook, listWebhooks } from "@/lib/webhooks";
-import type { WebhookEvent } from "@/lib/types";
+import type { WebhookEndpoint, WebhookEvent } from "@/lib/types";
 
 const VALID_EVENTS = new Set<WebhookEvent>([
   "page.published",
@@ -11,6 +11,27 @@ const VALID_EVENTS = new Set<WebhookEvent>([
   "asset.replaced",
 ]);
 
+type WebhookListItem = Omit<WebhookEndpoint, "secret"> & { hasSecret: boolean };
+
+function serializeWebhook(hook: WebhookEndpoint): WebhookListItem {
+  return {
+    id: hook.id,
+    url: hook.url,
+    events: hook.events,
+    enabled: hook.enabled,
+    createdAt: hook.createdAt,
+    hasSecret: Boolean(hook.secret),
+  };
+}
+
+function isHttpsWebhookUrl(url: string) {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: Request) {
   const guard = await requireAdminMutation(request);
   if (!guard.ok) {
@@ -19,7 +40,7 @@ export async function GET(request: Request) {
   if (guard.session.role !== "owner" && guard.session.role !== "admin") {
     return NextResponse.json({ message: "Forbidden." }, { status: 403 });
   }
-  const hooks = await listWebhooks();
+  const hooks = (await listWebhooks()).map(serializeWebhook);
   return NextResponse.json({ hooks });
 }
 
@@ -37,7 +58,7 @@ export async function POST(request: Request) {
     events?: unknown;
   } | null;
   const url = typeof body?.url === "string" ? body.url.trim() : "";
-  if (!url.startsWith("https://")) {
+  if (!isHttpsWebhookUrl(url)) {
     return NextResponse.json({ message: "Webhook URL must use https." }, { status: 400 });
   }
   const events = Array.isArray(body?.events)

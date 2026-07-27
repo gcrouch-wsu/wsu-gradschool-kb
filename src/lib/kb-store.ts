@@ -1160,6 +1160,57 @@ function matchesTagFacets(tags: unknown, requiredTags: string[]): boolean {
   return requiredTags.every((required) => pageTags.includes(required));
 }
 
+function pagesForSearchScope(
+  dataset: KbDataset,
+  kbId: string | undefined,
+  includeStaff: boolean,
+  options: SearchKbOptions,
+): KbPage[] {
+  const readableKbIds = new Set(options.readableKbIds ?? []);
+  const hasReadableScope = options.readableKbIds !== undefined;
+  const staffKbIds = options.staffKbIds === null || options.staffKbIds === undefined
+    ? null
+    : new Set(options.staffKbIds);
+  const kbById = new Map(dataset.knowledgeBases.map((kb) => [kb.id, kb]));
+  const publishedPagesByKb = new Map<string, KbPage[]>();
+  for (const page of dataset.pages) {
+    if (page.status !== "published") {
+      continue;
+    }
+    publishedPagesByKb.set(page.kbId, [...(publishedPagesByKb.get(page.kbId) ?? []), page]);
+  }
+
+  const canReadKb = (candidateKbId: string) => {
+    const kb = kbById.get(candidateKbId);
+    if (options.includeAllKbs) {
+      return !kbId || candidateKbId === kbId;
+    }
+    if (hasReadableScope) {
+      return readableKbIds.has(candidateKbId) && (!kbId || candidateKbId === kbId);
+    }
+    if (kbId && candidateKbId !== kbId) {
+      return false;
+    }
+    return Boolean(kb?.status === "published" && kb.visibility === "public");
+  };
+
+  const canReadStaffPages = (candidateKbId: string) =>
+    includeStaff && (staffKbIds === null || staffKbIds.has(candidateKbId));
+
+  return dataset.pages.filter((page) => {
+    if (!canReadKb(page.kbId)) {
+      return false;
+    }
+    if (canReadStaffPages(page.kbId)) {
+      return isStaffVisiblePageStatus(page.status);
+    }
+    if (page.status !== "published") {
+      return false;
+    }
+    return !isStaffOnly(publishedPagesByKb.get(page.kbId) ?? [], page);
+  });
+}
+
 export async function searchKb(
   kbId: string | undefined,
   query: string,
@@ -1379,11 +1430,7 @@ export async function searchKb(
     let results = scored.map((entry) => entry.result);
     if (results.length === 0 && normalized.length >= 3) {
       const dataset = await getDataset();
-      const fallbackCandidates = (
-        kbId
-          ? visiblePages(dataset, kbId, includeStaff)
-          : dataset.pages.filter((page) => page.status === "published" || (includeStaff && isStaffVisiblePageStatus(page.status)))
-      )
+      const fallbackCandidates = pagesForSearchScope(dataset, kbId, includeStaff, options)
         .filter((page) => (page.nodeKind ?? "page") === "page" && matchesTagFacets(page.tags, tagFacets))
         .map((page) => ({
           id: page.id,
@@ -1434,32 +1481,10 @@ export async function searchKb(
   };
   const canReadStaffPages = (candidateKbId: string) =>
     includeStaff && (staffKbIds === null || staffKbIds.has(candidateKbId));
-  const publishedPagesByKb = new Map<string, KbPage[]>();
-  for (const page of dataset.pages) {
-    if (page.status !== "published") {
-      continue;
-    }
-    publishedPagesByKb.set(page.kbId, [...(publishedPagesByKb.get(page.kbId) ?? []), page]);
-  }
 
-  const pagesToSearch = (
-    kbId
-      ? canReadKb(kbId)
-        ? visiblePages(dataset, kbId, includeStaff)
-        : []
-      : dataset.pages.filter((page) => {
-          if (!canReadKb(page.kbId)) {
-            return false;
-          }
-          if (canReadStaffPages(page.kbId)) {
-            return isStaffVisiblePageStatus(page.status);
-          }
-          if (page.status !== "published") {
-            return false;
-          }
-          return !isStaffOnly(publishedPagesByKb.get(page.kbId) ?? [], page);
-        })
-  ).filter((page) => (page.nodeKind ?? "page") === "page");
+  const pagesToSearch = pagesForSearchScope(dataset, kbId, includeStaff, options).filter(
+    (page) => (page.nodeKind ?? "page") === "page",
+  );
 
   for (const page of pagesToSearch) {
     if (!matchesTagFacets(page.tags, tagFacets)) {

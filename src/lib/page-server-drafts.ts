@@ -1,7 +1,7 @@
 import { isDatabaseEnabled, getSql, ensureSchema } from "@/lib/db";
 import type { PageRevisionSnapshot, PageServerDraft } from "@/lib/types";
 
-export async function getPageServerDraft(pageId: string): Promise<PageServerDraft | null> {
+export async function getPageServerDraft(pageId: string, authorUserId: string): Promise<PageServerDraft | null> {
   if (!isDatabaseEnabled()) {
     return null;
   }
@@ -10,7 +10,7 @@ export async function getPageServerDraft(pageId: string): Promise<PageServerDraf
   const rows = (await sql`
     SELECT page_id, author_user_id, snapshot, updated_at
     FROM page_server_drafts
-    WHERE page_id = ${pageId}
+    WHERE page_id = ${pageId} AND author_user_id = ${authorUserId}
     LIMIT 1
   `) as unknown as Array<{
     page_id: string;
@@ -44,19 +44,18 @@ export async function savePageServerDraft(
   await sql`
     INSERT INTO page_server_drafts (page_id, author_user_id, snapshot, updated_at)
     VALUES (${pageId}, ${authorUserId}, ${JSON.stringify(snapshot)}, ${updatedAt})
-    ON CONFLICT (page_id) DO UPDATE
-    SET author_user_id = EXCLUDED.author_user_id,
-        snapshot = EXCLUDED.snapshot,
+    ON CONFLICT (page_id, author_user_id) DO UPDATE
+    SET snapshot = EXCLUDED.snapshot,
         updated_at = EXCLUDED.updated_at
   `;
   return { pageId, authorUserId, snapshot, updatedAt };
 }
 
-export async function deletePageServerDraft(pageId: string): Promise<void> {
+export async function deletePageServerDraft(pageId: string, authorUserId: string): Promise<void> {
   if (!isDatabaseEnabled()) {
     return;
   }
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM page_server_drafts WHERE page_id = ${pageId}`;
+  await sql`DELETE FROM page_server_drafts WHERE page_id = ${pageId} AND author_user_id = ${authorUserId}`;
 }

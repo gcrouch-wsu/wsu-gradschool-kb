@@ -1003,7 +1003,9 @@ export async function loadPagesForKbWithoutBlocksFromDb(kbId: string): Promise<K
       tags, owner_label, contact_email, last_reviewed_date, updated_display_date,
       '[]'::jsonb AS blocks, related_page_ids, related_asset_ids,
       show_toc, toc_depth, show_summary, show_print_button, locked_by, locked_at,
-      next_review_date, verified_at, verified_by, publish_at, node_kind, link_url, link_new_tab
+      next_review_date, review_assignee_email, review_sla_days,
+      next_steps_heading, next_steps_intro,
+      verified_at, verified_by, publish_at, node_kind, link_url, link_new_tab
     FROM kb_pages
     WHERE kb_id = ${kbId}
   `) as unknown as PageRow[];

@@ -1001,6 +1001,37 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE kb_pages ADD COLUMN IF NOT EXISTS next_steps_intro TEXT NOT NULL DEFAULT ''`;
     },
   },
+  {
+    id: "043_page_server_drafts_per_author",
+    async up(sql) {
+      await sql`
+        DO $$
+        BEGIN
+          IF to_regclass('public.page_server_drafts') IS NOT NULL THEN
+            IF EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conrelid = 'public.page_server_drafts'::regclass
+                AND contype = 'p'
+                AND conname = 'page_server_drafts_pkey'
+            ) THEN
+              ALTER TABLE page_server_drafts DROP CONSTRAINT page_server_drafts_pkey;
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conrelid = 'public.page_server_drafts'::regclass
+                AND contype = 'p'
+            ) THEN
+              ALTER TABLE page_server_drafts ADD PRIMARY KEY (page_id, author_user_id);
+            END IF;
+          END IF;
+        END
+        $$;
+      `;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

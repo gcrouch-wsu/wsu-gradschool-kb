@@ -19,7 +19,7 @@ export async function GET(
   if (denied) {
     return denied;
   }
-  const draft = await getPageServerDraft(pageId);
+  const draft = await getPageServerDraft(pageId, guard.session.userId);
   return NextResponse.json({ draft });
 }
 
@@ -64,6 +64,6 @@ export async function DELETE(
   if (denied) {
     return denied;
   }
-  await deletePageServerDraft(pageId);
+  await deletePageServerDraft(pageId, guard.session.userId);
   return NextResponse.json({ ok: true });
 }

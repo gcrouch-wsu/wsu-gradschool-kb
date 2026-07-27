@@ -135,14 +135,14 @@ export async function PATCH(
 
   if (body.publishAt !== undefined && !canPublish) {
     return NextResponse.json(
-      { message: "Only an owner or admin can schedule publishing." },
+      { message: "Only an owner, admin, or KB manager can schedule publishing." },
       { status: 403 },
     );
   }
 
   if (status === "published" && !canPublish) {
     return NextResponse.json(
-      { message: "Only an owner or admin can publish pages. Submit the page for review instead." },
+      { message: "Only an owner, admin, or KB manager can publish pages. Submit the page for review instead." },
       { status: 403 },
     );
   }

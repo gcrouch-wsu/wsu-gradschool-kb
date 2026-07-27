@@ -75,6 +75,8 @@ async function patch(input: Record<string, unknown>, role: AdminSession["role"] 
     session: session(role),
   });
   vi.spyOn(security, "requireKbAccess").mockResolvedValue(null);
+  const auth = await import("@/lib/auth");
+  vi.spyOn(auth, "canAccessKb").mockResolvedValue(role === "manager");
   vi.spyOn(store, "getPageByIdForAdmin").mockResolvedValue(page);
   vi.spyOn(store, "getKbById").mockResolvedValue(kb);
   vi.spyOn(store, "getAssetStatusById").mockResolvedValue("active");
@@ -106,7 +108,7 @@ describe("PATCH /api/admin/pages/[pageId]", () => {
     const response = await patch(body({ status: "published" }), "editor");
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({
-      message: "Only an owner or admin can publish pages. Submit the page for review instead.",
+      message: "Only an owner, admin, or KB manager can publish pages. Submit the page for review instead.",
     });
     expect(updateSpy).not.toHaveBeenCalled();
   });
@@ -117,9 +119,22 @@ describe("PATCH /api/admin/pages/[pageId]", () => {
     const response = await patch(body({ publishAt: "2026-08-01T12:00" }), "editor");
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({
-      message: "Only an owner or admin can schedule publishing.",
+      message: "Only an owner, admin, or KB manager can schedule publishing.",
     });
     expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows KB managers to publish through full page saves", async () => {
+    const store = await import("@/lib/kb-store");
+    const updateSpy = vi.spyOn(store, "updatePage");
+    const response = await patch(body({ status: "published" }), "manager");
+    expect(response.status).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "published",
+      }),
+      "manager@example.edu",
+    );
   });
 
   it("passes normalized tags to page saves", async () => {

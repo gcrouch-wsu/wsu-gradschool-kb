@@ -595,6 +595,8 @@ export function AdminPageEditorForm({
           reviewAssigneeEmail: snapshot.reviewAssigneeEmail ?? "",
           reviewSlaDays: snapshot.reviewSlaDays ?? null,
           relatedPageIds: snapshot.relatedPageIds ?? [],
+          nextStepsHeading: snapshot.nextStepsHeading ?? "",
+          nextStepsIntro: snapshot.nextStepsIntro ?? "",
           showToc: snapshot.showToc,
           tocDepth: snapshot.tocDepth,
           showSummary: snapshot.showSummary !== false,

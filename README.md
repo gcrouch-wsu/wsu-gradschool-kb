@@ -22,7 +22,7 @@ current implementation status.
 - **Managed assets**: stable public URLs, version history with replace/activate, tags/keywords,
   usage tracking with used/unused library views, private/staff-aware delivery, archive-first
   permanent delete, and reference-blocking safeguards.
-- **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Editor/Viewer roles, KB
+- **Multi-user**: password auth with HMAC-signed cookies, Owner/Admin/Manager/Editor/Viewer roles, KB
   scoping, header identity + **Sign out**, a global Owner/Admin **Audit log**, and DB-backed
   **edit locks** to prevent concurrent overwrites.
 - **Search**: global and per-KB Postgres full-text search (tsvector + GIN) with prefix/type-ahead,
@@ -34,7 +34,7 @@ current implementation status.
   only.
 - **Governance & A11y**: a live publishing-readiness panel plus a publishing gate that blocks
   inaccessible/incomplete pages, inline highlights for missing alt text and vague links,
-  WCAG-minded UI, automated public-page axe smoke tests in CI, owner/admin publish approval,
+  WCAG-minded UI, automated public-page axe smoke tests in CI, owner/admin/KB-manager publish approval,
   proposed-edits review, reader feedback, revision compare/restore, trash, a **content health**
   dashboard, and **print-to-PDF export** over semantic HTML.
 - **AI draft summaries** (optional): write a page summary manually, or **Draft with AI** once the
@@ -55,9 +55,11 @@ governance, AI draft summaries, admin/ops) and §10 for known limitations.
 
 **Future only** (`project_spec.md` §11 / §12):
 
-1. **Editor framework migration** (FB-09 / FB-29) — plan in `docs/editor-framework-migration.md`
-2. **WSU SSO** (FB-30) — gated on WSU ITS engagement (Entra ID / Azure AD OIDC or SAML)
-3. **Confluence import/export bridge** (FB-37) — concept only; not scoped
+1. **WSU SSO** (FB-30) — gated on WSU ITS engagement (Entra ID / Azure AD OIDC or SAML)
+2. **Confluence import/export bridge** (FB-37) — concept only; not scoped
+
+Lexical editor Phases 1–4 are built for flow, card, and procedure surfaces. Table cells still use
+the legacy rich-text cell editor until the deferred FB-26 parity work.
 
 All authentication stays local and owner-provisioned until SSO lands.
 
@@ -172,12 +174,14 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
 Schema changes are applied automatically on first request via versioned migrations in
-`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `040_asset_tags`**
-(asset tags/keywords and tag-aware asset search vectors). Recent migrations also cover page
-tags/keywords (`039`), site + per-KB AI summary and page-review prompts (`038`), site AI summary
-prompt (`037`), asset usages (`036`), reader feedback (`035`), scheduled publish (`034`), per-KB
-summary requirement (`033`), page-tree group/link nodes (`032`), search widget (`031`),
-sourced-block FTS (`030`), and KB visibility (`029`). No manual Neon console migration is required. See
+`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head:
+`043_page_server_drafts_per_author`** (per-user server drafts). Recent migrations also cover
+curated next-step copy (`042`), platform features including webhooks/server drafts/search synonyms
+(`041`), asset tags/keywords and tag-aware asset search vectors (`040`), page tags/keywords
+(`039`), site + per-KB AI summary and page-review prompts (`038`), site AI summary prompt (`037`),
+asset usages (`036`), reader feedback (`035`), scheduled publish (`034`), per-KB summary
+requirement (`033`), page-tree group/link nodes (`032`), search widget (`031`), sourced-block FTS
+(`030`), and KB visibility (`029`). No manual Neon console migration is required. See
 `src/lib/migrations/index.ts` for the full sequence (assets, redirects, imports, users/assignments,
 homepage, TOC, edit locks, FTS, revisions, page views, etc.).
 
@@ -220,7 +224,7 @@ gate. This is content tooling, not part of the deployed app.
 Signed-in admins manage pages at `/admin/pages`: choose a knowledge base from the view selector,
 then reopen drafts, edit metadata and content, move a page under a different parent, choose a KB
 homepage page, submit for review, and publish if their role allows it. The page-tree editor supports
-drag reorder, re-nesting, inline edit, setting/clearing the KB homepage, and owner/admin publish
+drag reorder, re-nesting, inline edit, setting/clearing the KB homepage, and owner/admin/KB-manager publish
 approval from the tree. **Copy / move to
 another KB** is available from the page editor overflow menu and each tree row menu: copies land as
 drafts in the destination KB; moves keep status, take child pages along, clear a source homepage
@@ -267,8 +271,9 @@ the specific fields (summary, responsible office, contact email), vague links, a
 missing alt text. *Save & publish* /
 *Save changes* save the current form first (so unsaved edits are validated), an **Unsaved
 changes** indicator is shown, and concurrent edits are guarded by DB-backed edit locks. Editors can
-save drafts and submit pages for review; only Owners/Admins can publish, approve proposed pages, or
-schedule a publish, or restore a published revision.
+save drafts and submit pages for review. Owners/Admins and assigned KB Managers can publish,
+approve proposed pages, or schedule a publish; restoring a published revision remains
+Owner/Admin-only.
 
 Supported DOCX inline formatting is preserved on import and can be edited in the page editor.
 
@@ -282,8 +287,8 @@ page is not public/published for a public visitor, the KB falls back to the gene
 
 ## Roles & access
 
-Four roles: **Owner**, **Admin**, **Editor**, and **Viewer**. Owners/Admins can access all KBs;
-Editors can manage assigned KBs and read all public KBs plus assigned private KBs; Viewers can read
+Five roles: **Owner**, **Admin**, **Manager**, **Editor**, and **Viewer**. Owners/Admins can access all KBs;
+Managers can manage and publish assigned KBs; Editors can manage assigned KBs and read all public KBs plus assigned private KBs; Viewers can read
 all public KBs plus assigned private KBs and cannot access admin surfaces or mutation APIs. Sessions
 are HMAC-signed, HTTP-only cookies; sign out from the header.
 
@@ -309,12 +314,12 @@ are gated both in the UI and at the API. Owners can mark KBs public/private and 
 Editors/Viewers with a **search + chips** KB assignment picker (type to filter, click/Enter to add,
 ✕ or Backspace to remove) that scales to many KBs.
 
-**Editor/Viewer scoping is enforced on mutations and public/private reads:**
+**Manager/Editor/Viewer scoping is enforced on mutations and public/private reads:**
 
 - *Mutations* (page/asset/import/redirect changes) are guarded by `requireKbAccess` — editors can
   only modify their assigned KBs, and Viewers are rejected before mutations run.
 - *List views* — `/admin/pages` and `/admin/assets` are scoped per knowledge base (view selector)
-  and filtered to the editor's assigned KBs so they can't browse or enumerate others' content. The
+  and filtered to the manager/editor's assigned KBs so they can't browse or enumerate others' content. The
   `GET /api/admin/assets` endpoint is likewise filtered. The `GET /api/admin/users` directory is
   owner-only.
 - *Public reads* — the home KB list, KB landing/article routes, per-KB search, global search, page

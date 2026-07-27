@@ -50,14 +50,14 @@ Concretely, the platform must:
 
 **In scope (built today):** public and private multi-KB reading; custom block/rich-text editor;
 managed assets with versioning, tag organization, usage index, and stable URLs (including responsive image variants);
-Postgres full-text search with an optional search widget; Owner/Admin/Editor/Viewer auth with
+Postgres full-text search with an optional search widget; Owner/Admin/Manager/Editor/Viewer auth with
 per-KB scoping; configurable KB homepage pages; per-KB theming, global default theme, and owner
 site settings; DOCX staged import; automatic redirects; edit locks; page tags/keywords;
-publish-time accessibility / governance gate; owner/admin publish approval; audit log; revision
+publish-time accessibility / governance gate; owner/admin/KB-manager publish approval; audit log; revision
 history with compare/restore; proposed-edits workflow; review dashboard (including reader feedback);
 content health dashboard; trash for archived pages; KB starter templates; home KB filter; optional
-AI draft summaries in the page editor; print-to-PDF (browser print over semantic HTML); KaaS read
-API; sitemap/robots/OG for public pages. Private KBs use KB-level
+AI draft summaries in the page editor; print-to-PDF (browser print over semantic HTML); KaaS read +
+limited-write API; sitemap/robots/OG for public pages. Private KBs use KB-level
 `public`/`private` visibility, owner-provisioned local-password `viewer` accounts,
 `kb_user_assignments` for viewer/editor access, read gating on every public surface, and
 visibility-aware asset delivery/search.
@@ -70,10 +70,8 @@ sourced-content snapshots (allowlisted external import with check-for-changes / 
 
 **Future only** (see §11 / §12):
 
-1. **Editor framework migration** (FB-09 / FB-29) — Lexical/ProseMirror behind `ContentBlock`;
-   plan in `docs/editor-framework-migration.md`.
-2. **WSU SSO** (FB-30) — Entra ID / Azure AD OIDC or SAML, gated on WSU ITS engagement.
-3. **Confluence import/export bridge** (FB-37) — concept only; not scoped.
+1. **WSU SSO** (FB-30) — Entra ID / Azure AD OIDC or SAML, gated on WSU ITS engagement.
+2. **Confluence import/export bridge** (FB-37) — concept only; not scoped.
 
 **Out of scope (intentionally, for now):** self-service public signup (accounts are Owner-provisioned);
 WYSIWYG parity with Word; real-time multi-cursor co-editing (concurrency uses locks, not CRDTs).
@@ -100,46 +98,46 @@ enforced via `getKbReadAccess` / `filterKbsForReadAccess` in `src/lib/auth.ts`; 
 public home, KB landing/article/search, page tree, redirects, asset delivery, and page-view
 recording.
 
-**Authorization matrix** (Owner/Admin are KB-wide; Editor is limited to assigned KBs for mutations;
-Viewer is read-only):
+**Authorization matrix** (Owner/Admin are KB-wide; Manager/Editor are limited to assigned KBs for
+mutations; Viewer is read-only):
 
-| Area | Owner | Admin | Editor | Viewer | Scope mechanism |
-|------|-------|-------|--------|--------|-----------------|
-| Public/private KB read | all | all | published public + assigned (incl. assigned drafts) | published public + assigned published private | `getKbReadAccess` / `filterKbsForReadAccess` (KB status enforced) |
-| Pages list/edit/submit | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
-| Publish/approve pages | all | all | no | no | Owner/Admin role checks on publish/status/restore paths |
-| KB homepage assignment | all | all | assigned | no | `requireKbAccess` |
-| Assets list/edit | all | all | assigned | no | `filterKbsForSession` + `requireKbAccess` |
-| Imports (list/detail/edit/delete) | all | all | assigned | no | `requireKbAccess` |
-| Redirects (read/create/delete) | all | all | assigned | no | `requireKbAccess` |
-| Review dashboard | all | all | assigned | no | `filterKbsForSession` |
-| Users / KB management | yes | no | no | no | owner-only |
-| Site settings | yes | no | no | no | owner-only |
-| Audit log | yes | yes | no | no | owner/admin-only |
+| Area | Owner | Admin | Manager | Editor | Viewer | Scope mechanism |
+|------|-------|-------|---------|--------|--------|-----------------|
+| Public/private KB read | all | all | published public + assigned (incl. assigned drafts) | published public + assigned (incl. assigned drafts) | published public + assigned published private | `getKbReadAccess` / `filterKbsForReadAccess` (KB status enforced) |
+| Pages list/edit/submit | all | all | assigned | assigned | no | `filterKbsForSession` + `requireKbAccess` |
+| Publish/approve pages | all | all | assigned | no | no | `canPublishInKb` / `canApproveProposedInKb` + `requireKbAccess` |
+| KB homepage assignment | all | all | assigned | assigned | no | `requireKbAccess` |
+| Assets list/edit | all | all | assigned | assigned | no | `filterKbsForSession` + `requireKbAccess` |
+| Imports (list/detail/edit/delete) | all | all | assigned | assigned | no | `requireKbAccess` |
+| Redirects (read/create/delete) | all | all | assigned | assigned | no | `requireKbAccess` |
+| Review dashboard | all | all | assigned | assigned | no | `filterKbsForSession` |
+| Users / KB management | yes | no | no | no | no | owner-only |
+| Site settings | yes | no | no | no | no | owner-only |
+| Audit log | yes | yes | no | no | no | owner/admin-only |
 
 **Authorization enforcement contract** (keep this table current when routes move or new admin
 surfaces are added):
 
 | Surface | Allowed roles | KB scoping / role gate | Implementation files |
 |---------|---------------|------------------------|----------------------|
-| `/admin` | Owner/Admin/Editor | Signed-in non-viewer session only; navigation hides owner/admin-only links but is not the authorization boundary. Viewers redirect to `/` before the admin shell renders. | `src/app/admin/layout.tsx`, `src/app/admin/page.tsx` |
-| `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Editors | The pages list is scoped to one KB via `?kb=` (slug; id also accepted and normalized) using `KbScopePicker` + `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/components/AdminPagesWorkspace.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
-| `/admin/pages/[pageId]` | Owner/Admin/assigned Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
-| Page mutation APIs | Owner/Admin/assigned Editor, except publish/schedule/restore-published/permanent-delete Owner/Admin only | `PATCH`, status, layout, lock, create, and relocate routes use `requireAdminMutation` plus `requireKbAccess` (relocate requires access to **both** source and destination KBs); publish, schedule-publish writes, restoring published revisions, and permanent delete also check owner/admin. | `src/app/api/admin/pages/**/route.ts`, `src/lib/kb-store.ts` (`relocatePage`) |
-| KB homepage API | Owner/Admin/assigned Editor | Sets or clears `knowledge_bases.home_page_id`; route uses `requireAdminMutation` plus `requireKbAccess(kbId)`. | `src/app/api/admin/kbs/[kbId]/homepage/route.ts` |
-| `/admin/assets` and asset picker API | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; picker `GET /api/admin/assets` requires a session and `requireKbAccess(kbId)`. | `src/app/admin/assets/page.tsx`, `src/app/api/admin/assets/route.ts` |
-| `/admin/assets/[assetId]` | Owner/Admin/assigned Editor | Detail page resolves the asset's home KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/assets/[assetId]/page.tsx` |
-| Asset mutation APIs | Owner/Admin/assigned Editor, except permanent delete Owner/Admin only | Upload/metadata/status/replace/activate routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/assets/**/route.ts` |
-| `/admin/import` and staged import APIs | Owner/Admin/assigned Editor | Import list page uses `accessibleKbIds`; collection/item/stage/commit APIs use `requireKbAccess` after resolving or receiving `kbId`. | `src/app/admin/import/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`, `src/app/api/admin/import/**/route.ts` |
-| `/admin/redirects` and redirect APIs | Owner/Admin/assigned Editor | UI lists use `filterKbsForSession`; API routes use `requireKbAccess` on the target/resolved KB. | `src/app/admin/redirects/page.tsx`, `src/app/api/admin/redirects/**/route.ts` |
-| `/admin/review` | Owner/Admin/assigned Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
-| `/admin/health` | Owner/Admin/assigned Editor | Content-health data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. Viewers redirect to `/`. | `src/app/admin/health/page.tsx`, `src/lib/content-health.ts` |
-| `/admin/usage` | Owner/Admin/assigned Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`; Viewers redirect to `/`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
+| `/admin` | Owner/Admin/Manager/Editor | Signed-in non-viewer session only; navigation hides owner/admin-only links but is not the authorization boundary. Viewers redirect to `/` before the admin shell renders. | `src/app/admin/layout.tsx`, `src/app/admin/page.tsx` |
+| `/admin/pages`, `/admin/pages/new` | Owner/Admin/all assigned Managers/Editors | The pages list is scoped to one KB via `?kb=` (slug; id also accepted and normalized) using `KbScopePicker` + `filterKbsForSession`; the new-page dropdown calls filtered `GET /api/admin/kbs`; writes must still pass API `requireKbAccess`. | `src/app/admin/pages/page.tsx`, `src/components/AdminPagesWorkspace.tsx`, `src/app/admin/pages/new/page.tsx`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/pages/route.ts` |
+| `/admin/pages/[pageId]` | Owner/Admin/assigned Manager/Editor | Detail page resolves the page's KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/pages/[pageId]/page.tsx` |
+| Page mutation APIs | Owner/Admin/assigned Manager/Editor, except editors cannot publish/schedule/approve and restore-published/permanent-delete remain Owner/Admin only | `PATCH`, status, layout, lock, create, and relocate routes use `requireAdminMutation` plus `requireKbAccess` (relocate requires access to **both** source and destination KBs); publish, schedule-publish writes, and approving proposed pages also allow assigned Managers through `canPublishInKb` / `canApproveProposedInKb`; restoring published revisions and permanent delete still check owner/admin. | `src/app/api/admin/pages/**/route.ts`, `src/lib/kb-store.ts` (`relocatePage`) |
+| KB homepage API | Owner/Admin/assigned Manager/Editor | Sets or clears `knowledge_bases.home_page_id`; route uses `requireAdminMutation` plus `requireKbAccess(kbId)`. | `src/app/api/admin/kbs/[kbId]/homepage/route.ts` |
+| `/admin/assets` and asset picker API | Owner/Admin/assigned Manager/Editor | UI lists use `filterKbsForSession`; picker `GET /api/admin/assets` requires a session and `requireKbAccess(kbId)`. | `src/app/admin/assets/page.tsx`, `src/app/api/admin/assets/route.ts` |
+| `/admin/assets/[assetId]` | Owner/Admin/assigned Manager/Editor | Detail page resolves the asset's home KB and calls `canAccessKb(...)`; failed access returns `notFound()`. | `src/app/admin/assets/[assetId]/page.tsx` |
+| Asset mutation APIs | Owner/Admin/assigned Manager/Editor, except permanent delete Owner/Admin only | Upload/metadata/status/replace/activate routes use `requireAdminMutation` plus `requireKbAccess`; permanent delete also checks owner/admin. | `src/app/api/admin/assets/**/route.ts` |
+| `/admin/import` and staged import APIs | Owner/Admin/assigned Manager/Editor | Import list page uses `accessibleKbIds`; collection/item/stage/commit APIs use `requireKbAccess` after resolving or receiving `kbId`. | `src/app/admin/import/page.tsx`, `src/app/admin/import/[stagedImportId]/page.tsx`, `src/app/api/admin/import/**/route.ts` |
+| `/admin/redirects` and redirect APIs | Owner/Admin/assigned Manager/Editor | UI lists use `filterKbsForSession`; API routes use `requireKbAccess` on the target/resolved KB. | `src/app/admin/redirects/page.tsx`, `src/app/api/admin/redirects/**/route.ts` |
+| `/admin/review` | Owner/Admin/assigned Manager/Editor | Dashboard data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. | `src/app/admin/review/page.tsx`, `src/lib/admin-review.ts` |
+| `/admin/health` | Owner/Admin/assigned Manager/Editor | Content-health data is called with `accessibleKbIds(session)`; owner/admin pass `null` for all KBs. Viewers redirect to `/`. | `src/app/admin/health/page.tsx`, `src/lib/content-health.ts` |
+| `/admin/usage` | Owner/Admin/assigned Manager/Editor | Usage analytics are server-rendered from `getUsageAnalyticsForSession(session)`, which scopes through `accessibleKbIds(session)`; Viewers redirect to `/`. | `src/app/admin/usage/page.tsx`, `src/lib/page-views.ts` |
 | `/admin/audit` | Owner/Admin only | Server page redirects Editors to `/admin`; audit API surface is not editor-reachable. | `src/app/admin/audit/page.tsx` |
-| `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only except `PATCH /api/admin/kbs/[kbId]` which also lets **Admin** toggle `requireSummary`. `GET /api/admin/kbs` is intentionally editor-reachable but filtered for page creation, and Owner-only user management can assign Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
+| `/admin/settings`, `/admin/kbs`, `/admin/users` | Owner only | Segment `layout.tsx` redirects non-owners before client UI loads; corresponding write APIs are owner-only except `PATCH /api/admin/kbs/[kbId]` which also lets **Admin** toggle `requireSummary`. `GET /api/admin/kbs` is intentionally manager/editor-reachable but filtered for page creation, and Owner-only user management can assign Manager/Editor/Viewer KB access. | `src/app/admin/{settings,kbs,users}/layout.tsx`, `src/app/admin/kbs/page.tsx`, `src/app/admin/users/page.tsx`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/kbs/route.ts`, `src/app/api/admin/users/**/route.ts` |
 | `/admin/kbs/[kbId]/styles` and KB theme APIs | Owner only | Server page and theme API both require `session.role === "owner"`. | `src/app/admin/kbs/[kbId]/styles/page.tsx`, `src/app/api/admin/kbs/[kbId]/theme/route.ts` |
-| Excerpt picker + preview APIs | Owner/Admin/Editor (viewers rejected) | `GET /api/admin/excerpt-sources` filters KBs/pages/headings by the caller's read access (`filterKbsForReadAccess` / `getReadableExcerptSourcePageForPicker` — staff-ancestor rules included); `POST /api/admin/excerpt-preview` resolves refs with the caller's session via `resolveExcerptForRead`. Both use `requireAdminMutation`. | `src/app/api/admin/excerpt-sources/route.ts`, `src/app/api/admin/excerpt-preview/route.ts`, `src/lib/excerpts.ts` |
-| Sourced-content import/check APIs | Owner/Admin/Editor (viewers rejected) | `POST /api/admin/sourced-content` and `…/check` use `requireAdminMutation`; outbound fetches are gated by `parseAllowedSourceUrl` (https + host allowlist) — no KB scoping needed, no KB data is read. | `src/app/api/admin/sourced-content/route.ts`, `src/app/api/admin/sourced-content/check/route.ts`, `src/lib/sourced-content.ts` |
+| Excerpt picker + preview APIs | Owner/Admin/Manager/Editor (viewers rejected) | `GET /api/admin/excerpt-sources` filters KBs/pages/headings by the caller's read access (`filterKbsForReadAccess` / `getReadableExcerptSourcePageForPicker` — staff-ancestor rules included); `POST /api/admin/excerpt-preview` resolves refs with the caller's session via `resolveExcerptForRead`. Both use `requireAdminMutation`. | `src/app/api/admin/excerpt-sources/route.ts`, `src/app/api/admin/excerpt-preview/route.ts`, `src/lib/excerpts.ts` |
+| Sourced-content import/check APIs | Owner/Admin/Manager/Editor (viewers rejected) | `POST /api/admin/sourced-content` and `…/check` use `requireAdminMutation`; outbound fetches are gated by `parseAllowedSourceUrl` (https + host allowlist) — no KB scoping needed, no KB data is read. | `src/app/api/admin/sourced-content/route.ts`, `src/app/api/admin/sourced-content/check/route.ts`, `src/lib/sourced-content.ts` |
 | Auth endpoints | Public sign-in; signed-in logout/session delete | Login is rate-limited and creates signed HMAC cookies; logout/session delete clear the admin cookie. | `src/app/admin/sign-in/page.tsx`, `src/app/api/admin/session/route.ts`, `src/app/api/admin/logout/route.ts` |
 
 For APIs, `requireAdminMutation` means "valid admin session plus same-origin `Origin`/`Referer`";
@@ -164,7 +162,7 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 > - **Editor KB scoping** — `requireKbAccess` on the redirects `GET`, the staged-import collection
 >   `GET` *and* item `GET`/`PATCH`/`DELETE` (resolving `kbId` first); list/detail views scoped via
 >   `accessibleKbIds` / `filterKbsForSession` / `canAccessKb(...) → notFound()`. `GET /api/admin/kbs`
->   returns the editor's assigned KBs so page creation works.
+>   returns the manager/editor's assigned KBs so page creation works.
 > - **Owner-only screens** — `/admin/settings`, `/admin/kbs`, `/admin/users` are guarded by a segment
 >   `layout.tsx` server component that redirects non-owners *before* the client UI loads; their write
 >   APIs were already owner-only, and `GET /api/admin/settings` is now owner-only too.
@@ -402,15 +400,18 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) →
   app-side backfills.
-- **Current head: `040_asset_tags`.** Notable recent migrations: page-tree node kinds (`032`),
-  per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback (`035`),
-  persisted asset-usage index (`036`), site AI summary prompt (`037`), site + per-KB AI summary/page
-  prompts (`038`), page tags/tag-aware FTS (`039`), and asset tags/tag-aware FTS (`040`). Earlier migrations cover FTS,
-  edit locks, revisions, page views, KB visibility, search widget, branding, and rate limits — see
+- **Current head: `043_page_server_drafts_per_author`.** Notable recent migrations: page-tree node
+  kinds (`032`), per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback
+  (`035`), persisted asset-usage index (`036`), site AI summary prompt (`037`), site + per-KB AI
+  summary/page prompts (`038`), page tags/tag-aware FTS (`039`), asset tags/tag-aware FTS (`040`),
+  platform features (`041`), curated next-step copy (`042`), and per-user server drafts (`043`).
+  Earlier migrations cover FTS, edit locks, revisions, page views, KB visibility, search widget,
+  branding, and rate limits — see
   `src/lib/migrations/index.ts` for the full sequence.
 - Core tables: `knowledge_bases`, `kb_pages`, `kb_assets`, `kb_asset_versions`, `kb_asset_usages`,
   `kb_redirects`, `kb_staged_imports` (+ media), `users`, `kb_user_assignments`, `site_settings`,
-  `kb_audit_log`, `kb_rate_limits`, `kb_page_revisions`, `kb_page_views`, `kb_page_feedback`.
+  `webhooks`, `page_server_drafts`, `kb_audit_log`, `kb_rate_limits`, `kb_page_revisions`,
+  `kb_page_views`, `kb_page_feedback`.
 - Seed data: `src/lib/demo-data.ts` (used for both the no-DB in-memory mode and first-run seeding).
 
 ## 7. Running, testing, CI
@@ -444,7 +445,9 @@ share the page lock and the process-global in-memory store.
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob; without it, DOCX import skips images and uploads fall back
   to data-backed assets.
 - `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup`,
-  `/api/admin/cron/revision-cleanup`, and `/api/admin/cron/review-digest`.
+  `/api/admin/cron/revision-cleanup`, `/api/admin/cron/review-digest`,
+  `/api/admin/cron/review-overdue`, `/api/admin/cron/sourced-staleness`, and
+  `/api/admin/cron/scheduled-publish`.
 - `EMAIL_PROVIDER_URL` / `EMAIL_PROVIDER_TOKEN` / `EMAIL_FROM` — optional HTTP email provider for the
   weekly review-date digest; when unset the digest cron logs structured JSON and reports skipped
   deliveries instead of failing.
@@ -595,11 +598,11 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   private/staff-aware delivery, archive-first delete.
 - Search: Postgres FTS (global + per-KB), tag/keyword scoring, visibility prune, search widget with
   live suggestions.
-- Governance: publish gate, owner/admin publish approval, proposed-edits workflow, review dashboard
+- Governance: publish gate, owner/admin/KB-manager publish approval, proposed-edits workflow, review dashboard
   (feedback + propose actions), content health dashboard, revision history with side-by-side
   compare/restore, trash, audit log, weekly review digest cron, reader "Was this helpful?" feedback.
-- Auth & admin: Owner/Admin/Editor/Viewer, per-KB scoping, edit locks, site settings/branding,
-  KB starter templates, cross-KB copy/move, DOCX import, redirects, KaaS read API, owner KB ZIP
+- Auth & admin: Owner/Admin/Manager/Editor/Viewer, per-KB scoping, edit locks, site settings/branding,
+  KB starter templates, cross-KB copy/move, DOCX import, redirects, KaaS read + limited-write API, owner KB ZIP
   export, usage analytics.
 
 **Before a production-compliance / a11y claim**
@@ -613,9 +616,9 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 - Accessibility is publish-gate + axe smoke, not a completed WCAG certification.
 - Notes rail has no threaded resolve UI yet.
 - Editor framework migration: flow, cards, and procedure surfaces use Lexical
-  (Phases 1–4); table cells remain `RichTextEditable` for FB-26 parity. Spike
-  remains at `/admin/lexical-spike`. Complete FB-09/FB-29 only after
-  `npm run test:editor` + release-gate Firefox/mobile checklist pass.
+  (Phases 1–4); table cells remain `RichTextEditable` for deferred FB-26 parity. Spike
+  remains at `/admin/lexical-spike`. Keep `npm run test:editor` and the release-gate
+  Firefox/mobile checklist green before claiming editor close-out.
 
 ## 10. Known limitations
 
@@ -652,8 +655,8 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   lost pasted images, touchy link insertion, stale HTML-source saves, table-cell toolbar binding, and
   nested-list / Info-box callout rendering were all found by editors/review in 2026-07 and patched
   point-by-point). Every editor change needs manual verification in a real browser (Chrome + Firefox at
-  minimum), and further reports should be expected. FB-09 (migrating the flow surfaces to a maintained
-  framework) remains the structural fix; FB-25 defines the release-grade browser/a11y gate.
+  minimum), and further reports should be expected. FB-09/FB-29 moved flow, card, and procedure
+  surfaces to Lexical; FB-25 defines the release-grade browser/a11y gate.
 - **Revision history is per-save snapshots with optional side-by-side compare:** every page
   create and save writes a full `kb_page_revisions` snapshot; editors can view/restore any of the
   newest 50 per page and compare two revisions as a plain-text line diff from the History panel.
@@ -680,8 +683,8 @@ The only **product** items that remain future (not yet built) are:
    gated on WSU ITS engagement. Local owner-provisioned accounts remain interim + break-glass.
 2. **Confluence import/export bridge (§12 FB-37)** — concept only; not scoped.
 
-**Editor framework (§12 FB-09 / FB-29):** Lexical Phases 1–4 landed for flow, cards, and procedure
-surfaces; table cells remain `RichTextEditable` (FB-26 parity). Close-out requires the manual
+**Editor framework:** Lexical Phases 1–4 landed for flow, cards, and procedure surfaces; table
+cells remain `RichTextEditable` (deferred FB-26 parity). Close-out evidence is part of the manual
 release gate (FB-25): Chrome + Firefox + mobile-width editor pass.
 
 **Release readiness** (FB-25) is ops/QA, not a new product surface: finish the manual checklist in
@@ -704,21 +707,21 @@ items were removed from this document; their history is in git.
   live-DB tests when DB behavior changes.
 - When completing an item: flip `status:` and leave a one-line DONE note, or remove the item and
   update §9 / §11 so the future set stays accurate.
-- **Ratified future set:** FB-09/FB-29, FB-30, FB-37. FB-25 is release QA only.
+- **Ratified future set:** FB-30, FB-37. FB-25 is release QA only; FB-26 table-cell parity remains
+  deferred and should not be bundled into unrelated releases.
 
 ---
 
 ### FB-09 / FB-29 — Editor framework migration
 
-`[AI-AGENT-TASK] id:FB-09  priority:high  area:editor-architecture  effort:L  status:open`
-`[AI-AGENT-TASK] id:FB-29  priority:high  area:editor-architecture  effort:L  status:open`
+`[AI-AGENT-TASK] id:FB-09  priority:high  area:editor-architecture  effort:L  status:done`
+`[AI-AGENT-TASK] id:FB-29  priority:high  area:editor-architecture  effort:L  status:done`
 
-- **Plan:** `docs/editor-framework-migration.md` (phases 0–4). Status stays open until Phase 0 spike
-  is accepted.
-- **Why:** the custom `contentEditable` editor still needs release-grade QA and recurring
-  browser-specific fixes; migrating flow surfaces to Lexical (preferred) or ProseMirror is the
-  structural fix. Keep the existing `ContentBlock[]` storage model, sanitizer, publish gate,
-  source-HTML path, and public render.
+- **Plan:** `docs/editor-framework-migration.md` (phases 0–4). Flow, card, and procedure surfaces
+  are delivered on Lexical; table cells remain deferred as FB-26 parity work.
+- **Why:** the editor still needs release-grade QA across Chrome, Firefox, and mobile widths, but
+  the core framework migration for flow surfaces is complete. Keep the existing `ContentBlock[]`
+  storage model, sanitizer, publish gate, source-HTML path, and public render.
 - **Touch points:** `src/components/PageDocumentEditor.tsx`, `src/components/RichTextEditable.tsx`,
   `src/lib/page-document.ts`, `src/lib/page-editor-format.ts`, `src/lib/rich-text.ts`,
   `tests/editor/`, `docs/editor-framework-migration.md`.
@@ -785,7 +788,7 @@ Full checklist: `docs/release-gate.md`. Minimum before a compliance claim:
 - Confirm Vercel has `DATABASE_URL`, `KB_ADMIN_EMAIL`, `KB_ADMIN_PASSWORD`, `KB_ADMIN_SESSION_SECRET`, and `CRON_SECRET` configured for the target environment.
 - If AI draft summaries are expected in the editor, confirm `AI_PROVIDER_ENDPOINT`, `AI_API_KEY`, and `AI_MODEL`.
 - If review-date email delivery is expected, confirm `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, and `EMAIL_FROM`; otherwise expect structured JSON fallback logs.
-- Confirm the Vercel plan supports the configured cron count before deploy validation; this project currently schedules audit cleanup, revision cleanup, and review digest routes.
+- Confirm the Vercel plan supports the configured cron count before deploy validation; this project currently schedules audit cleanup, revision cleanup, review digest, review overdue, sourced staleness, and scheduled publish routes.
 - For Blob-backed assets, confirm the Vercel Blob environment variables are present in the target environment.
 - Deploy through the GitHub-to-Vercel flow, then promote the successful Vercel deployment to production.
 - After deploy, visit `/`, one public KB landing page, one article page, `/admin`, `/admin/pages`, and `/admin/assets`.
@@ -817,19 +820,26 @@ Full checklist: `docs/release-gate.md`. Minimum before a compliance claim:
 curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/audit-cleanup
 curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/revision-cleanup
 curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/review-digest
+curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/review-overdue
+curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/sourced-staleness
+curl -sS -H "Authorization: Bearer $CRON_SECRET" https://YOUR_HOST/api/admin/cron/scheduled-publish
 curl -sS https://YOUR_HOST/api/health
 ```
 
 - Rotate `CRON_SECRET` by updating Vercel environment variables, redeploying, and confirming the scheduled routes still authorize.
 - Treat missing email/provider configuration as non-fatal unless the specific cron route documents otherwise.
 - `/api/admin/cron/review-digest` sends weekly review-date digests when an email provider is configured; without one it logs recipients/subjects as structured JSON and reports skipped deliveries.
+- `/api/admin/cron/review-overdue` sends overdue-review notifications, stale-excerpt notices, and related webhooks.
+- `/api/admin/cron/sourced-staleness` checks P&P sourced blocks for changed/missing/unreachable sources.
+- `/api/admin/cron/scheduled-publish` attempts due scheduled publishes through the normal publish gate.
 - `/api/admin/cron/audit-cleanup` also folds page-view rows older than 90 days into monthly totals.
 
 ### Post-Deploy Checks
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `040_asset_tags` (and earlier ids such as `029_kb_visibility`). Existing public
+  should include `043_page_server_drafts_per_author` (and earlier ids such as `040_asset_tags` and
+  `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.
 - Public KB list renders without loading draft-only content.

@@ -1,12 +1,28 @@
 import { NextResponse } from "next/server";
 import { getKbReadAccess } from "@/lib/auth";
+import { checkExcerptSourceForPublish } from "@/lib/excerpts";
 import { isValidKaasApiKey } from "@/lib/kaas-auth";
-import { getKbBySlug, getPageByPath, updatePage } from "@/lib/kb-store";
+import { getAssetStatusById, getKbBySlug, getPageByPath, updatePage } from "@/lib/kb-store";
 import type { ContentBlock } from "@/lib/types";
 import { logError } from "@/lib/log";
+import { blocksToDocumentHtml, documentHtmlToBlocks } from "@/lib/page-document";
+import { validatePageForPublish } from "@/lib/publish-gate";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+
+function normalizeKaasBlocks(input: unknown, kbSlug: string): ContentBlock[] | null {
+  if (!Array.isArray(input) || input.length === 0) {
+    return null;
+  }
+  try {
+    const html = blocksToDocumentHtml(input as ContentBlock[], kbSlug);
+    const blocks = documentHtmlToBlocks(html);
+    return blocks.length > 0 ? blocks : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * KaaS: public published article JSON for integrations (read + limited write).
@@ -93,6 +109,12 @@ export async function PATCH(
   if (!body) {
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
   }
+  if (body.summary !== undefined && typeof body.summary !== "string") {
+    return NextResponse.json({ message: "Summary must be a string." }, { status: 400 });
+  }
+  if (body.blocks !== undefined && !Array.isArray(body.blocks)) {
+    return NextResponse.json({ message: "Blocks must be an array." }, { status: 400 });
+  }
 
   try {
     const kb = await getKbBySlug(kbSlug, false);
@@ -103,8 +125,28 @@ export async function PATCH(
     if (!page || page.status !== "published" || page.visibility === "staff") {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
-    const blocks = Array.isArray(body.blocks) ? (body.blocks as ContentBlock[]) : page.blocks;
-    const summary = typeof body.summary === "string" ? body.summary : page.summary;
+    const blocks =
+      body.blocks === undefined ? page.blocks : normalizeKaasBlocks(body.blocks, kb.slug);
+    if (!blocks) {
+      return NextResponse.json({ message: "Blocks include unsupported or empty content." }, { status: 400 });
+    }
+    const summary = body.summary === undefined ? page.summary : body.summary;
+    const issues = await validatePageForPublish(
+      {
+        ...page,
+        blocks,
+        summary,
+      },
+      getAssetStatusById,
+      checkExcerptSourceForPublish,
+      { requireSummary: kb.requireSummary !== false },
+    );
+    if (issues.length > 0) {
+      return NextResponse.json(
+        { message: "This page cannot remain published with the proposed content.", issues },
+        { status: 422 },
+      );
+    }
     const updated = await updatePage(
       {
         pageId: page.id,
