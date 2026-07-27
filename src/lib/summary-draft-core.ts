@@ -1,4 +1,4 @@
-import { addAiTokenUsage, emptyAiTokenUsage, parseAiTokenUsage, type AiTokenUsage } from "@/lib/ai-usage";
+import { addAiTokenUsage, emptyAiTokenUsage, parseAiTokenUsage, type AiTokenUsage } from "@/lib/ai-usage-core";
 import { blocksToPlainText } from "@/lib/revision-diff";
 import type { ContentBlock } from "@/lib/types";
 

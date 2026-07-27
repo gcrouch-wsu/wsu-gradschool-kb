@@ -1,4 +1,4 @@
-import { parseAiTokenUsage, type AiTokenUsage } from "@/lib/ai-usage";
+import { parseAiTokenUsage, type AiTokenUsage } from "@/lib/ai-usage-core";
 import { blocksToPlainText } from "@/lib/revision-diff";
 import { textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";

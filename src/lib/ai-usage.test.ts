@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addAiTokenUsage, parseAiTokenUsage } from "@/lib/ai-usage";
+import { addAiTokenUsage, parseAiTokenUsage } from "@/lib/ai-usage-core";
 
 describe("ai-usage helpers", () => {
   it("parses OpenAI-compatible usage fields", () => {
