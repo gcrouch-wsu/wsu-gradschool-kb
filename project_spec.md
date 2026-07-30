@@ -72,6 +72,9 @@ sourced-content snapshots (allowlisted external import with check-for-changes / 
 
 1. **WSU SSO** (FB-30) — Entra ID / Azure AD OIDC or SAML, gated on WSU ITS engagement.
 2. **Confluence import/export bridge** (FB-37) — concept only; not scoped.
+3. **Hardening backlog** (FB-38–FB-44) — session/auth, Lexical toolbar binding, publish-gate
+   a11y/excerpt reachability, scheduled-publish locks, AI module split/metering, webhook/KaaS
+   hardening, and client readiness parity (from the 2026-07 codebase review).
 
 **Out of scope (intentionally, for now):** self-service public signup (accounts are Owner-provisioned);
 WYSIWYG parity with Word; real-time multi-cursor co-editing (concurrency uses locks, not CRDTs).
@@ -679,20 +682,25 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 
 ## 11. Future work (overview)
 
-The only **product** items that remain future (not yet built) are:
+**Product / platform items that remain future (not yet built):**
 
 1. **WSU SSO (§12 FB-30)** — Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers,
    gated on WSU ITS engagement. Local owner-provisioned accounts remain interim + break-glass.
 2. **Confluence import/export bridge (§12 FB-37)** — concept only; not scoped.
+3. **Hardening backlog (§12 FB-38–FB-44)** — session secret / cookie role rebinding; Lexical nested
+   toolbar focus binding; publish-gate heading + excerpt audience checks; lock-safe scheduled
+   publish; AI client/server module split + failed-call metering; webhook SSRF / KaaS key scoping;
+   client readiness panel parity with the server gate. Ratified from the 2026-07 codebase review.
 
 **Editor framework:** Lexical Phases 1–4 + FB-26 landed for flow, cards, procedure, and table-cell
 surfaces. Close-out evidence is part of the manual release gate (FB-25): Chrome + Firefox +
-mobile-width editor pass.
+mobile-width editor pass. Residual nested-surface toolbar risk is tracked as FB-39.
 
 **Release readiness** (FB-25) is ops/QA, not a new product surface: finish the manual checklist in
 `docs/release-gate.md` and §13 sign-off.
 
-Do not add new open FB items without maintainer ratification; fold polish into shipped features.
+Do not add new open FB items without maintainer ratification; fold small polish into shipped
+features rather than inventing FB IDs for every nit.
 
 ## 12. Future build — open backlog
 
@@ -709,7 +717,7 @@ items were removed from this document; their history is in git.
   live-DB tests when DB behavior changes.
 - When completing an item: flip `status:` and leave a one-line DONE note, or remove the item and
   update §9 / §11 so the future set stays accurate.
-- **Ratified future set:** FB-30, FB-37. FB-25 is release QA only.
+- **Ratified future set:** FB-30, FB-37, FB-38–FB-44. FB-25 is release QA only.
 
 ---
 
@@ -785,6 +793,93 @@ Full checklist: `docs/release-gate.md`. Minimum before a compliance claim:
 - **Open before scoping:** macro fidelity on import; export target format; reuse `/admin/import`
   vs a new surface.
 - **Acceptance:** undefined until a scoping pass (import-only vs both directions + UX).
+
+### FB-38 — Session and auth hardening
+
+`[AI-AGENT-TASK] id:FB-38  priority:high  area:auth  effort:S  status:open`
+
+- **Why:** `getSessionSecret()` can fall back to ``dev-secret:${email}:${password}`` when
+  `KB_ADMIN_SESSION_SECRET` is unset; managed sessions authorize the cookie-embedded role after an
+  `updatedAt` version check instead of rebinding role/email from the DB user row. Origin checks also
+  prefer raw `x-forwarded-host` without an allowlist.
+- **Touch points:** `src/lib/auth.ts`, `src/lib/origin.ts`, `.env.example`, §13 deploy checklist.
+- **Acceptance:** production refuses to start (or fails closed) without an independent session
+  secret; managed sessions reload `role`/`email` from `users`; Origin/host checks use a configured
+  or platform-canonical public host, not client-controlled forwarded headers alone.
+
+### FB-39 — Lexical nested-surface toolbar binding
+
+`[AI-AGENT-TASK] id:FB-39  priority:high  area:editor-architecture  effort:M  status:open`
+
+- **Why:** flow/card/procedure/table-cell Lexical surfaces call `bindPageEditor` /
+  `registerLexicalFlowEditor` on mount, so later-mounted nested surfaces can steal the global
+  toolbar target while selection remains in the main flow (§8 toolbar gotcha).
+- **Touch points:** `LexicalFlowSurface.tsx`, `LexicalTableCellSurface.tsx`,
+  `src/lib/lexical/toolbar-bridge.ts`, `tests/editor/toolbar-context.spec.ts`.
+- **Acceptance:** nested surfaces bind only on focus (or otherwise do not overwrite an active
+  focused editor); toolbar bold/link/list act on the focused surface; Chromium toolbar regressions
+  stay green; unique namespaces where shared `kb-flow` causes collisions.
+
+### FB-40 — Publish-gate heading order and excerpt reachability
+
+`[AI-AGENT-TASK] id:FB-40  priority:high  area:a11y-publish-gate  effort:M  status:open`
+
+- **Why:** heading-skip detection ignores card `titleLevel` and filters nested heading issues; a
+  public page can clear `checkExcerptSourceForPublish` while anonymous readers always see the
+  excerpt as unavailable (private/staff source).
+- **Touch points:** `src/lib/publish-gate.ts`, `src/lib/excerpts.ts`, `AdminPageEditorForm.tsx`
+  readiness helpers, `style/style.md` (keep in sync), unit tests for gate + excerpt publish checks.
+- **Acceptance:** gate fails publish when card/procedure titles create heading-order skips; excerpt
+  publish checks require the source to be readable by the host page’s intended audience (or warn as
+  a hard blocker); client readiness and `style/style.md` match.
+
+### FB-41 — Lock-safe scheduled publish
+
+`[AI-AGENT-TASK] id:FB-41  priority:high  area:concurrency  effort:S  status:open`
+
+- **Why:** `publishDueDraftPages` clears `publishAt` via a full-row `updatePages` without
+  `editorEmail`, bypassing the edit lock and racing concurrent editor saves.
+- **Touch points:** `src/lib/kb-store.ts`, `src/lib/db.ts`, scheduled-publish cron route, live-DB
+  lock/concurrency tests.
+- **Acceptance:** due-publish updates status/`publishAt` without rewriting unlocked body fields
+  under another editor’s lock; concurrent save + cron race covered by a regression test.
+
+### FB-42 — AI client/server split and metering completeness
+
+`[AI-AGENT-TASK] id:FB-42  priority:med  area:ai  effort:M  status:open`
+
+- **Why:** settings/editor client components still import `summary-draft-core` /
+  `page-review-core` modules that contain gateway `fetch` + env credential reads; provider calls
+  that succeed then fail post-processing never hit `kb_ai_usage`.
+- **Touch points:** `summary-draft-core.ts`, `page-review-core.ts`, AI routes, `ai-usage.ts`,
+  `AdminPageEditorForm.tsx`, `AiPageReviewPanel.tsx`, `admin/settings/page.tsx`.
+- **Acceptance:** client bundles import only prompt constants / readiness helpers (no gateway
+  credential paths); successful provider HTTP calls are metered even when cleanup/parse later
+  fails; route tests assert `recordAiUsageLater` behavior.
+
+### FB-43 — Webhook SSRF and KaaS key hardening
+
+`[AI-AGENT-TASK] id:FB-43  priority:med  area:security  effort:M  status:open`
+
+- **Why:** owners/admins can register arbitrary `https:` webhook URLs that the server POSTs to
+  with no private-IP / metadata blocklist; KaaS `KAAS_API_KEYS` are global and failed auth is not
+  rate-limited.
+- **Touch points:** `src/lib/webhooks.ts`, webhook admin route, `src/lib/kaas-auth.ts`,
+  `/api/v1/kb/...` route, `.env.example`.
+- **Acceptance:** webhook delivery rejects private/link-local/metadata targets (or requires an
+  allowlist); failed KaaS auth is rate-limited; optional per-KB key scoping documented or
+  implemented.
+
+### FB-44 — Client publish-readiness parity
+
+`[AI-AGENT-TASK] id:FB-44  priority:med  area:editor-ux  effort:S  status:open`
+
+- **Why:** the editor readiness panel under-reports server gate blockers (excerpt source health,
+  inactive assets), so “ready” can still 422 on publish/status.
+- **Touch points:** `AdminPageEditorForm.tsx`, publish-gate issue mapping, excerpt/asset checkers.
+- **Acceptance:** client readiness lists the same blocker classes the server gate can return for
+  the current draft (or clearly marks server-only checks); no silent “ready” → 422 surprise for
+  excerpt/asset failures.
 
 ---
 

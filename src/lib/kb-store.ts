@@ -363,12 +363,30 @@ function visiblePageList(pages: KbPage[], kbId: string, includeStaff: boolean) {
   return visiblePages({ knowledgeBases: [], pages, assets: [] }, kbId, includeStaff);
 }
 
+/**
+ * Keep only pages whose every ancestor path is also in the visible set.
+ * Prevents drafted/unpublished group headings from "releasing" published
+ * children to the public tree root.
+ */
+export function filterPagesWithVisibleAncestors(visible: KbPage[]): KbPage[] {
+  const keys = new Set(visible.map((page) => pathKey(page.path)));
+  return visible.filter((page) => {
+    for (let depth = 1; depth < page.path.length; depth += 1) {
+      if (!keys.has(pathKey(page.path.slice(0, depth)))) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
 function buildTreeFromPages(visible: KbPage[]): PageTreeNode[] {
+  const connected = filterPagesWithVisibleAncestors(visible);
   const nodes = new Map<string, PageTreeNode>();
-  visible.forEach((page) => nodes.set(pathKey(page.path), { page, children: [] }));
+  connected.forEach((page) => nodes.set(pathKey(page.path), { page, children: [] }));
 
   const roots: PageTreeNode[] = [];
-  visible.forEach((page) => {
+  connected.forEach((page) => {
     const node = nodes.get(pathKey(page.path))!;
     const parent = page.path.length > 1 ? nodes.get(pathKey(page.path.slice(0, -1))) : undefined;
     if (parent) {

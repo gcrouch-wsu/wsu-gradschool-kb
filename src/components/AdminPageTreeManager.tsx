@@ -7,9 +7,12 @@ import {
   CircleCheck,
   CornerDownRight,
   CornerUpLeft,
+  FileText,
   FolderInput,
   GripVertical,
+  Heading2,
   House,
+  Link2,
 } from "lucide-react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -897,12 +900,12 @@ export function AdminPageTreeManager({
       );
       setMessage(
         status === "published"
-          ? "Page published."
+          ? "Published. It now appears in the public tree."
           : status === "archived"
-            ? "Page archived. It is hidden from the public site."
+            ? "Archived. It is hidden from the public site."
             : status === "proposed"
-              ? "Page submitted for review."
-              : "Page saved as draft.",
+              ? "Submitted for review."
+              : "Saved as draft. Hidden from the public tree (nested published pages under a draft group stay hidden too).",
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not update page status.");
@@ -1257,10 +1260,27 @@ export function AdminPageTreeManager({
 
                   <div className="tree-editor__main">
                   <div className="tree-editor__title-row">
-                    <strong className="tree-editor__title">{page.title}</strong>
+                    <div className="tree-editor__title-line">
+                      {(() => {
+                        const kind = page.nodeKind ?? "page";
+                        const KindIcon = kind === "group" ? Heading2 : kind === "link" ? Link2 : FileText;
+                        const kindLabel = kind === "group" ? "Group heading" : kind === "link" ? "Link" : "Page";
+                        return (
+                          <span
+                            aria-label={kindLabel}
+                            className={`tree-editor__kind tree-editor__kind--${kind}`}
+                            title={kindLabel}
+                          >
+                            <KindIcon aria-hidden size={16} strokeWidth={1.75} />
+                          </span>
+                        );
+                      })()}
+                      <strong className="tree-editor__title">{page.title}</strong>
+                    </div>
                     <div className="tree-editor__badges">
-                      {page.nodeKind === "group" && <span className="badge">Group heading</span>}
-                      {page.nodeKind === "link" && <span className="badge">Link</span>}
+                      {page.nodeKind === "group" && <span className="badge badge--kind">Group heading</span>}
+                      {page.nodeKind === "link" && <span className="badge badge--kind">Link</span>}
+                      {(page.nodeKind ?? "page") === "page" && <span className="badge badge--kind">Page</span>}
                       {isHomepage && <span className="badge badge--verified">Homepage</span>}
                       {page.path.length === 1 && <span className="badge badge--section">Section</span>}
                       <span className={statusBadgeClass(page.status)}>{statusLabel(page.status)}</span>

@@ -356,11 +356,11 @@ export function DocumentToolbar({
               <CreditCard aria-hidden size={16} strokeWidth={1.75} />
             </button>
             <button
-              aria-label="Insert media"
+              aria-label="Insert image or video"
               className={`${buttonClass} rich-text-toolbar__button--icon`}
               onMouseDown={(event) => toolbarPrepare(event)}
               onClick={onInsertMedia}
-              title="Insert an image, video, or file from the asset library"
+              title="Insert an image or video"
               type="button"
             >
               <ImagePlus aria-hidden size={16} strokeWidth={1.75} />

@@ -223,6 +223,8 @@ export interface LinkEditRequest {
   // Keeps the target visibly highlighted and survives editor re-renders, so
   // committing the link can never lose the insertion point.
   marker: HTMLElement | null;
+  assetId?: string;
+  hasTextSelection?: boolean;
 }
 
 let linkEditorOpener: ((request: LinkEditRequest) => void) | null = null;
@@ -303,6 +305,8 @@ export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
       isEdit: true,
       anchor: target,
       marker: null,
+      assetId: target.getAttribute("data-asset-id") ?? "",
+      hasTextSelection: true,
     });
     return;
   }
@@ -352,6 +356,7 @@ export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
       isEdit: false,
       anchor: null,
       marker: null,
+      hasTextSelection: !range.collapsed && Boolean(range.toString().trim()),
     });
     return;
   }
@@ -417,6 +422,7 @@ export function openLinkEditor(anchor?: HTMLAnchorElement | null) {
     isEdit: false,
     anchor: null,
     marker,
+    hasTextSelection: Boolean(selectionText.trim()),
   });
 }
 
@@ -518,6 +524,7 @@ export function commitLink(request: {
   newTab: boolean;
   anchor: HTMLAnchorElement | null;
   marker?: HTMLElement | null;
+  assetId?: string;
 }): boolean {
   const url = normalizeLinkUrl(request.url);
   if (!url) {
@@ -525,6 +532,7 @@ export function commitLink(request: {
     return false;
   }
   const text = request.text.trim();
+  const assetId = (request.assetId ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
 
   if (isLexicalFlowActive()) {
     releaseLinkDraft(request.marker ?? null);
@@ -543,6 +551,25 @@ export function commitLink(request: {
       return false;
     }
     snapshotStructuralChange();
+    // Asset-tracked file links need data-asset-id; use HTML insert so the attribute survives.
+    if (assetId) {
+      const targetAttr = request.newTab ? ' target="_blank"' : "";
+      const relAttr = request.newTab ? ' rel="noopener noreferrer"' : "";
+      const label = escapeHtml(text || url);
+      const html = `<a href="${escapeHtml(url)}"${targetAttr} data-asset-id="${escapeHtml(assetId)}"${relAttr}>${label}</a>`;
+      const ok = runEditorCommand("insertHTML", html);
+      if (!ok) {
+        recordFormat("createLink", false, "insert-failed", "Click in the page body, then add a link.");
+        return false;
+      }
+      notifyMutation();
+      recordFormat(
+        request.anchor ? "editLink" : "createLink",
+        true,
+        request.newTab ? `${url} (new tab)` : url,
+      );
+      return true;
+    }
     const ok = lexicalApplyLink(url, { newTab: request.newTab, text: text || undefined });
     if (!ok) {
       recordFormat("createLink", false, "insert-failed", "Click in the page body, then add a link.");
@@ -565,6 +592,11 @@ export function commitLink(request: {
     } else {
       request.anchor.removeAttribute("target");
     }
+    if (assetId) {
+      request.anchor.setAttribute("data-asset-id", assetId);
+    } else {
+      request.anchor.removeAttribute("data-asset-id");
+    }
     if (text && text !== request.anchor.textContent) {
       request.anchor.textContent = text;
     }
@@ -580,6 +612,9 @@ export function commitLink(request: {
     if (request.newTab) {
       anchor.setAttribute("target", "_blank");
       anchor.setAttribute("rel", "noopener noreferrer");
+    }
+    if (assetId) {
+      anchor.setAttribute("data-asset-id", assetId);
     }
     const markerText = (marker.textContent ?? "").trim();
     if (marker.childNodes.length > 0 && (!text || text === markerText)) {
@@ -609,7 +644,8 @@ export function commitLink(request: {
   const label = escapeHtml(text || url);
   const targetAttr = request.newTab ? ' target="_blank"' : "";
   const relAttr = request.newTab ? ' rel="noopener noreferrer"' : "";
-  const html = `<a href="${escapeHtml(url)}"${targetAttr}${relAttr}>${label}</a>`;
+  const assetAttr = assetId ? ` data-asset-id="${escapeHtml(assetId)}"` : "";
+  const html = `<a href="${escapeHtml(url)}"${targetAttr}${assetAttr}${relAttr}>${label}</a>`;
   const ok = runEditorCommand("insertHTML", html);
   if (!ok) {
     recordFormat("createLink", false, "no-selection", "Click in the page body, then add a link.");
