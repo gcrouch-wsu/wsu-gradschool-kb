@@ -23,11 +23,11 @@ import {
 } from "@/lib/page-document";
 import {
   applyAltText,
+  applyEditorCommand,
   commitLink,
   commitNote,
   getEditorInsertionContext,
   insertEditorBlockHtml,
-  insertEditorLink,
   openNoteEditor,
   registerAltEditor,
   registerFormatIssueReporter,
@@ -133,35 +133,6 @@ export function PageDocumentEditor({
   }
 
   function insertBlockFromPicker(payload: MediaPickerInsert) {
-    if (payload.type === "link") {
-      const linked = insertEditorLink({
-        url: payload.url,
-        label: payload.label,
-        assetId: payload.assetId,
-      });
-      if (!linked && payload.assetId) {
-        // Only fall back to an asset_link block when there was no text selection.
-        // Cross-block selections fail in insertEditorLink and must not silently append.
-        const context = getEditorInsertionContext();
-        if (!context.hasTextSelection) {
-          emitChange([
-            ...sections,
-            {
-              type: "asset_link",
-              block: {
-                blockId: newBlockId(),
-                type: "asset_link",
-                assetId: payload.assetId,
-                label: payload.label,
-              },
-            },
-          ]);
-        }
-      }
-      setMediaPickerOpen(false);
-      return;
-    }
-
     const block = payload.block;
     if (block.type === "image") {
       const html = blocksToDocumentHtml([block], kbSlug);
@@ -170,12 +141,25 @@ export function PageDocumentEditor({
       }
     } else if (block.type === "video") {
       emitChange([...sections, { type: "video", block }]);
-    } else if (block.type === "asset_link") {
-      emitChange([...sections, { type: "asset_link", block }]);
     } else {
       addBlockToFirstFlow(block);
     }
     setMediaPickerOpen(false);
+  }
+
+  function insertAssetLinkBlock(assetId: string, label: string) {
+    emitChange([
+      ...sections,
+      {
+        type: "asset_link",
+        block: {
+          blockId: newBlockId(),
+          type: "asset_link",
+          assetId,
+          label,
+        },
+      },
+    ]);
   }
 
   function addBlockToFirstFlow(block: ContentBlock) {
@@ -432,17 +416,34 @@ export function PageDocumentEditor({
 
       {linkRequest && (
         <LinkDialog
+          hasTextSelection={Boolean(linkRequest.hasTextSelection || linkRequest.isEdit)}
+          kbId={kbId}
+          kbSlug={kbSlug}
           onClose={() => {
             releaseLinkDraft(linkRequest.marker);
             setLinkRequest(null);
           }}
           onRemove={() => {
             if (linkRequest.anchor) removeLink(linkRequest.anchor);
+            else applyEditorCommand("unlink");
             releaseLinkDraft(linkRequest.marker);
             setLinkRequest(null);
           }}
           onSubmit={(result) => {
-            commitLink({ ...result, anchor: linkRequest.anchor, marker: linkRequest.marker });
+            if (result.mode === "file-block") {
+              releaseLinkDraft(linkRequest.marker);
+              insertAssetLinkBlock(result.assetId, result.label);
+              setLinkRequest(null);
+              return;
+            }
+            commitLink({
+              url: result.url,
+              text: result.text,
+              newTab: result.newTab,
+              assetId: result.assetId,
+              anchor: linkRequest.anchor,
+              marker: linkRequest.marker,
+            });
             setLinkRequest(null);
           }}
           request={linkRequest}

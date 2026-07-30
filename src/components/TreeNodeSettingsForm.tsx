@@ -87,7 +87,7 @@ export function TreeNodeSettingsForm({ page }: { page: KbPage }) {
         <label>
           <span className="meta">Status</span>
           <select className="input" onChange={(e) => setStatus(e.target.value as PageStatus)} value={status}>
-            <option value="draft">Draft (hidden from readers)</option>
+            <option value="draft">Draft (hidden from the public tree)</option>
             <option value="proposed">Proposed (awaiting review)</option>
             <option value="published">Published (shown in the tree)</option>
           </select>
@@ -105,8 +105,11 @@ export function TreeNodeSettingsForm({ page }: { page: KbPage }) {
         </label>
       </div>
       <p className="meta">
-        Nest pages under this item or move it by dragging in the page tree. It has no content of its
-        own{isLink ? " — it sends readers to the destination above" : ""}.
+        Draft or Unpublish hides this {isLink ? "link" : "group heading"} from readers. Nested pages under a
+        draft group stay hidden in the public tree until the group is published again. Use Staff only when you
+        want a published heading that only staff can see, including everything nested under it. Nest or move
+        items by dragging in the page tree.
+        {isLink ? " This item has no page body — it sends readers to the destination above." : " It has no page body of its own."}
       </p>
       <div className="admin-actions">
         <button className="button" disabled={busy || !title.trim()} type="submit">

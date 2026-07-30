@@ -82,6 +82,12 @@ export function lexicalRunFormatCommand(command: string, value?: string): boolea
     notifyLexicalMutation();
     return true;
   }
+  if (command === "unlink") {
+    editor.focus();
+    editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
+    notifyLexicalMutation();
+    return true;
+  }
   // Fallback: ignore unsupported execCommand names for Lexical surfaces.
   void value;
   void INSERT_CHECK_LIST_COMMAND;

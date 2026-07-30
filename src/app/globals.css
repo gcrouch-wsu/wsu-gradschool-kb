@@ -4788,6 +4788,33 @@ article ol ol ol {
   gap: 0.35rem;
 }
 
+.tree-editor__title-line {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.tree-editor__kind {
+  align-items: center;
+  background: color-mix(in srgb, var(--line) 65%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  margin-top: 0.1rem;
+  padding: 0.2rem;
+}
+
+.tree-editor__kind--group {
+  color: var(--crimson);
+}
+
+.tree-editor__kind--link {
+  color: #1d4f91;
+}
+
 .tree-editor__title {
   display: block;
   line-height: 1.35;
@@ -4802,6 +4829,12 @@ article ol ol ol {
 
 .tree-editor__badges .badge {
   margin-left: 0;
+}
+
+.badge--kind {
+  background: color-mix(in srgb, var(--wash) 80%, white);
+  border-color: var(--line);
+  font-weight: 600;
 }
 
 .tree-editor__path {
