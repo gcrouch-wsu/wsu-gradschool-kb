@@ -23,6 +23,29 @@ function itemExactly(surface: ReturnType<Page["locator"]>, text: string) {
   return surface.locator("li").filter({ hasText: new RegExp(`^${text}$`) }).first();
 }
 
+// Click into a list item and wait until the editor selection is genuinely inside it.
+//
+// A bare click().press("End") is not enough: on a slow runner the click can land before the
+// contentEditable surface is ready to take a selection, and the caret stays wherever typing
+// left it. The next Tab then indents the wrong item — which surfaced as "expected Two, got
+// Three" and, before this test asserted intermediate levels, as a mystery missing third level.
+async function caretInItem(page: Page, surface: ReturnType<Page["locator"]>, text: string) {
+  const item = itemExactly(surface, text);
+  await expect(async () => {
+    await item.click();
+    const inItem = await page.evaluate((want) => {
+      const selection = document.getSelection();
+      if (!selection || selection.rangeCount === 0) return false;
+      const node = selection.getRangeAt(0).commonAncestorContainer;
+      const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+      const li = element?.closest("li");
+      return (li?.textContent ?? "").trim() === want;
+    }, text);
+    expect(inItem).toBe(true);
+  }).toPass({ timeout: 10_000 });
+  await page.keyboard.press("End");
+}
+
 test.describe("keyboard list nesting", () => {
   test("Tab/Shift+Tab build and outdent a three-level ordered list; public preserves nesting", async ({
     page,
@@ -32,8 +55,7 @@ test.describe("keyboard list nesting", () => {
     const surface = await makeOrderedList(page, ["One", "Two", "Three"]);
 
     // Nest "Two" under "One" (level 2).
-    await itemExactly(surface, "Two").click();
-    await page.keyboard.press("End");
+    await caretInItem(page, surface, "Two");
     await page.keyboard.press("Tab");
     // Wait for each indent to land before touching the list again. An indent reparents the
     // <li> and triggers a re-render; clicking back into the list mid-reconciliation leaves
@@ -45,12 +67,10 @@ test.describe("keyboard list nesting", () => {
     // Nest "Three" to level 3 in two steps. Re-focus the item between Tabs: the
     // indent reparents the <li>, which drops the caret, so a single burst of two
     // Tab presses would only nest once.
-    await itemExactly(surface, "Three").click();
-    await page.keyboard.press("End");
+    await caretInItem(page, surface, "Three");
     await page.keyboard.press("Tab"); // -> level 2 (sibling of "Two")
     await expect(surface.locator("ol ol > li")).toHaveText(["Two", "Three"]);
-    await itemExactly(surface, "Three").click();
-    await page.keyboard.press("End");
+    await caretInItem(page, surface, "Three");
     await page.keyboard.press("Tab"); // -> level 3 (nested under "Two")
 
     // Editor DOM has three nested <ol> levels.
@@ -58,15 +78,13 @@ test.describe("keyboard list nesting", () => {
     await expect(surface.locator("ol > li").first()).toContainText("One");
 
     // Shift+Tab outdents "Three" back to level 2.
-    await itemExactly(surface, "Three").click();
-    await page.keyboard.press("End");
+    await caretInItem(page, surface, "Three");
     await page.keyboard.press("Shift+Tab");
     await expect(surface.locator("ol ol ol")).toHaveCount(0);
     await expect(surface.locator("ol ol > li")).toHaveText(["Two", "Three"]);
 
     // Re-nest to three levels and publish.
-    await itemExactly(surface, "Three").click();
-    await page.keyboard.press("End");
+    await caretInItem(page, surface, "Three");
     await page.keyboard.press("Tab");
     await expect(surface.locator("ol ol ol > li")).toHaveText(["Three"]);
 
@@ -92,8 +110,7 @@ test.describe("keyboard list nesting", () => {
     const surface = await makeOrderedList(page, ["Alpha", "Beta"]);
 
     // First-item indent: nothing to nest under, so it explains rather than acts.
-    await itemExactly(surface, "Alpha").click();
-    await page.keyboard.press("End");
+    await caretInItem(page, surface, "Alpha");
     await page.getByRole("button", { name: "Indent list item" }).click();
     await expect(page.locator(".editor-format-hint")).toContainText(/item 2 or later/i);
     // The list is unchanged (still two top-level items, no nesting).
