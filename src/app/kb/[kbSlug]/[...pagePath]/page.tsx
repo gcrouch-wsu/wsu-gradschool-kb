@@ -8,7 +8,6 @@ import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
 import { ReaderFeedbackWidget } from "@/components/ReaderFeedbackWidget";
-import { ReaderTips } from "@/components/ReaderTips";
 import { TableOfContents } from "@/components/TableOfContents";
 import { hasTocEntries } from "@/lib/toc";
 import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
@@ -195,22 +194,6 @@ export default async function KbArticlePage({
             </p>
           )}
           <h1>{page.title}</h1>
-          <ReaderTips
-            tips={[
-              {
-                title: "Browse the section tree",
-                body: "Use the left navigation to move between pages in this knowledge base without losing context.",
-              },
-              {
-                title: "Search this KB",
-                body: "The search box above the tree finds pages and files in this knowledge base, including tag filters.",
-              },
-              {
-                title: "Was this helpful?",
-                body: "Scroll to the bottom on public pages to leave quick feedback that helps editors prioritize updates.",
-              },
-            ]}
-          />
           {page.showSummary !== false && page.summary && <p className="lead">{page.summary}</p>}
           {pageTags.length > 0 && (
             <ul aria-label="Page tags" className="tag-list">

@@ -6472,8 +6472,17 @@ article ol ol ol {
   flex-wrap: wrap;
   gap: 0.4rem;
   list-style: none;
-  margin: -0.25rem 0 1rem;
-  padding: 0;
+  /* Override .flow ul indent — tags are chips, not a reading list. */
+  margin: 0;
+  padding-left: 0;
+}
+
+.flow > .tag-list {
+  padding-left: 0;
+}
+
+.flow > .tag-list > li + li {
+  margin-top: 0;
 }
 
 .tag-list a,
@@ -7716,37 +7725,4 @@ html.admin-app body.admin-app-body {
   gap: 0.5rem;
   justify-content: flex-end;
   margin-top: 0.75rem;
-}
-
-.reader-tips {
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin: 0 0 0.75rem;
-}
-
-.reader-tips__summary {
-  cursor: pointer;
-  list-style: none;
-  width: fit-content;
-}
-
-.reader-tips__summary::-webkit-details-marker {
-  display: none;
-}
-
-.reader-tips__summary::before {
-  content: "▸ ";
-}
-
-.reader-tips[open] > .reader-tips__summary::before {
-  content: "▾ ";
-}
-
-.reader-tips__list {
-  margin: 0.35rem 0 0;
-  padding-left: 1.1rem;
-}
-
-.reader-tips__list li + li {
-  margin-top: 0.25rem;
 }
