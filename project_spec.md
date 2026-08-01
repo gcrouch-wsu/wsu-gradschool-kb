@@ -1009,6 +1009,12 @@ Before calling a build production-ready for Grad School go-live (Confluence inte
 
 ## 14. Historical notes
 
+**Content reviews.** `automated_review.md` logs agent-driven passes over the published KB —
+the 2026-08-01 pass fixed 11 broken links, 12 Title Case headings, and the audience preambles,
+and records what it left for a human. Read it before editing live pages; it also documents why
+ordinary link checkers miss dead KB URLs (not-found pages return HTTP 200 — see §10).
+
+
 Phase 1 private knowledge bases shipped 2026-07-14 (PR #11). Earlier FB backlog write-ups
 and the Phase 1 step plan were removed from this document once delivered; recover them from
 git history if needed. Prefer updating §9 / §11 / §12 over appending long audit trails here.

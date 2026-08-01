@@ -5,7 +5,8 @@ This repository contains two kinds of work. Route yourself by task:
 | Task | Read first |
 |------|------------|
 | **App development** — Next.js code, editor, publish gate, DB, tests | `project_spec.md` — the full spec and AI handoff (goal, architecture, conventions & gotchas, feature status, future work) |
-| **KB page content work** — reviewing or editing KB page HTML | `style/style.md` — the authoritative style guide and agent workflow |
+| **KB page content work** — reviewing or editing KB page HTML | `style/style.md` — the authoritative style guide and agent workflow, then `automated_review.md` |
+| **Resuming an agent-driven review of live KB pages** | `automated_review.md` — what the last pass changed, what it left alone, and the editor/session gotchas |
 
 ## App development
 
@@ -36,3 +37,9 @@ The `style/` folder is a review-and-edit pipeline for Graduate School KB page HT
   change log along with the edited file.
 
 Human-facing instructions and a copy-paste starter prompt are in `style/README.md`.
+
+**Editing live pages in the production admin** (rather than the `style/` pipeline): read
+`automated_review.md` first. It records the last agent-driven pass over the published KB —
+what changed, what was deliberately left alone, how to detect broken links (not-found pages
+return HTTP 200, so only the page title distinguishes them), and the editor and session
+gotchas that otherwise cost an hour to rediscover.
