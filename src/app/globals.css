@@ -2202,6 +2202,22 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   font-weight: 600;
 }
 
+/* `.form label` uses display:grid for field stacks; checkbox labels must stay
+   horizontal or the control sits above the text (table header toggles, etc.). */
+.form label.checkbox-row,
+.form label:has(> input[type="checkbox"]):not(.checkbox-inline):not(.attribution-checkbox) {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+}
+
+.form label.checkbox-row input[type="checkbox"],
+.form label:has(> input[type="checkbox"]):not(.checkbox-inline):not(.attribution-checkbox) input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
 /* Inline editor row for label + URL + a compact delete control (site settings
    nav links). Replaces a 2-column grid that wrapped the delete button. */
 .link-row {
@@ -2814,7 +2830,9 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   }
 
   .editor-form .checkbox-inline,
-  .editor-form label.checkbox-inline {
+  .editor-form label.checkbox-inline,
+  .editor-form .checkbox-row,
+  .editor-form label.checkbox-row {
     align-items: flex-start;
     white-space: normal;
     width: 100%;
