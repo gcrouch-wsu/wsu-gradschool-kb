@@ -84,11 +84,37 @@ describe("isSameOrigin with APP_PUBLIC_HOST configured", () => {
     expect(isSameOrigin(req({ host: "kb.wsu.edu", origin: "https://kb.wsu.edu" }))).toBe(true);
   });
 
-  it("falls back to VERCEL_PROJECT_PRODUCTION_URL when APP_PUBLIC_HOST is unset", () => {
-    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "kb.vercel.app");
-    expect(isSameOrigin(req({ host: "kb.vercel.app", origin: "https://kb.vercel.app" }))).toBe(true);
-    expect(isSameOrigin(req({ host: "evil.example.com", origin: "https://evil.example.com" }))).toBe(
-      false,
-    );
+});
+
+describe("isSameOrigin without APP_PUBLIC_HOST", () => {
+  // Regression: an earlier version inferred an allowlist from VERCEL_PROJECT_PRODUCTION_URL.
+  // Vercel sets that on preview deployments too, where it names production rather than the
+  // host being served — so every preview deployment rejected its own sign-in with a 403.
+  it("does not infer an allowlist from VERCEL_PROJECT_PRODUCTION_URL", () => {
+    vi.stubEnv("APP_PUBLIC_HOST", "");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "wsu-gradschool-kb.vercel.app");
+
+    // A preview deployment: served on its own host, same-origin request from that host.
+    expect(
+      isSameOrigin(
+        req({
+          "x-forwarded-host": "wsu-gradschool-kb-git-development-team.vercel.app",
+          origin: "https://wsu-gradschool-kb-git-development-team.vercel.app",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("still rejects a genuinely cross-origin request", () => {
+    vi.stubEnv("APP_PUBLIC_HOST", "");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "wsu-gradschool-kb.vercel.app");
+    expect(
+      isSameOrigin(
+        req({
+          "x-forwarded-host": "wsu-gradschool-kb-git-development-team.vercel.app",
+          origin: "https://evil.example.com",
+        }),
+      ),
+    ).toBe(false);
   });
 });

@@ -445,9 +445,11 @@ share the page lock and the process-global in-memory store.
 - `KB_ADMIN_EMAIL` / `KB_ADMIN_PASSWORD` / `KB_ADMIN_SESSION_SECRET` — bootstrap owner + cookie
   signing (aliases `BOOTSTRAP_OWNER_*` also accepted). Required in production: the app throws
   rather than deriving a signing key from the credentials. Rotating the secret signs everyone out.
-- `APP_PUBLIC_HOST` — optional, recommended in production. Comma-separated public hostname(s) the
-  admin same-origin check trusts, so a spoofed `x-forwarded-host` cannot define the compared
-  origin. Falls back to `VERCEL_PROJECT_PRODUCTION_URL`, then to request headers.
+- `APP_PUBLIC_HOST` — optional. Comma-separated public hostname(s) the admin same-origin check
+  trusts, so a spoofed `x-forwarded-host` cannot define the compared origin. Unset is the
+  default and is correct wherever the hostname varies per deployment (previews, local dev);
+  the check then compares against the request's own host headers. Set it only where every
+  hostname is known — an omitted host 403s sign-in and every admin mutation.
 - `DATABASE_URL` — Neon connection string. **Unset = in-memory seed mode** (fine for quick local UI
   work; not durable). Set = Neon (schema auto-creates/seeds). Two Vercel-managed Neon projects
   back this app: **kb-local-test** (`solitary-smoke-86654244`) for local/Development and
@@ -603,10 +605,12 @@ manual redirect persistence, and the single-active-version DB invariant.
   of seed-data failures that read exactly like regressions. Specs derive their absolute base URL
   from those env vars; do not hardcode a port, or the `Origin` header will not match the host and
   the same-origin guard will 403 the sign-in setup.
-- **Same-origin checks prefer a configured host.** `isSameOrigin` trusts `APP_PUBLIC_HOST` (or
-  `VERCEL_PROJECT_PRODUCTION_URL`) when set, and only falls back to request headers when neither
-  is. Leaving it unset is supported but weaker — `x-forwarded-host` then defines the origin the
-  request is compared against.
+- **Same-origin checks use `APP_PUBLIC_HOST` and nothing else.** When set, `isSameOrigin` trusts
+  only those hosts; unset, it compares against the request's own headers. Do **not** reintroduce an
+  inferred allowlist: `VERCEL_PROJECT_PRODUCTION_URL` was tried and is set on preview deployments
+  too, where it names production rather than the host being served — every preview 403'd its own
+  sign-in. A deployment's real host set includes custom domains that no env var enumerates, so any
+  inferred list is incomplete by construction.
 - **Outbound requests to operator-supplied URLs go through `net-guard.ts`.** Webhook delivery
   checks the target at registration and re-resolves it at delivery. Any new feature that POSTs or
   GETs a user-supplied address needs the same guard, or it becomes an SSRF pivot; the
@@ -907,9 +911,10 @@ history if they are ever revived.
   missing it will fail admin sign-in outright. If this deployment previously relied on the derived
   fallback, setting the variable also invalidates every existing session cookie — expect one
   round of sign-outs.
-- Set `APP_PUBLIC_HOST` to the public hostname(s) this environment serves (comma-separated). Without
-  it the admin same-origin check falls back to `VERCEL_PROJECT_PRODUCTION_URL` and then to
-  request headers, which is weaker.
+- Optionally set `APP_PUBLIC_HOST` to the public hostname(s) this environment serves
+  (comma-separated), including any custom domain. Leave it unset on Preview, whose hostname
+  changes per deployment. Without it the same-origin check compares against request headers,
+  which is weaker but never locks a valid host out.
 - If AI draft summaries are expected in the editor, confirm `AI_PROVIDER_ENDPOINT`, `AI_API_KEY`, and `AI_MODEL`.
 - If review-date email delivery is expected, confirm `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, and `EMAIL_FROM`; otherwise expect structured JSON fallback logs.
 - Confirm the Vercel plan supports the configured cron count before deploy validation; this project currently schedules audit cleanup, revision cleanup, review digest, review overdue, sourced staleness, and scheduled publish routes.
