@@ -147,6 +147,24 @@ because a refresh overwrites local edits. Fix belongs upstream or in the import 
 
 ---
 
+## 5a. Flaky test: `tests/editor/list-nesting.spec.ts`
+
+Failed intermittently on CI (never locally). The three-level nesting assertion found zero
+elements because the test pressed `Tab`, clicked back into the list, and pressed `Tab` again
+with **no assertion in between** — an indent reparents the `<li>` and triggers a re-render, so
+a click landing mid-reconciliation left the next `Tab` acting on a stale selection.
+
+Fixed by asserting the intermediate level after each indent, which gives Playwright a real
+condition to synchronize on. The rest of the test already did this, which is why only that one
+stretch flaked.
+
+**Do not try to validate this class of fix by local repeat runs.** A developer machine is fast
+enough to hide the race: 25/25 local passes while CI still failed. Only CI, whose runners are
+slower and contended, exercises the window. An earlier attempt concluded "fixed" from 17/17
+local runs and was wrong — at an ~8% rate, even 13 clean trials are ~66% likely by chance.
+
+---
+
 ## 6. Things to know before editing content here
 
 - **`style/style.md` is authoritative** and `AGENTS.md` requires reading it first. It mirrors
