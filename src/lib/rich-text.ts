@@ -17,6 +17,19 @@ const ALLOWED_TAGS = new Set([
 ]);
 const SAFE_URL_PATTERN = /^(https?:|mailto:|\/|#)/i;
 
+// Presentational tags normalize to their semantic equivalent on the way out. `b` and `i` stay
+// in ALLOWED_TAGS because they arrive constantly — `document.execCommand("bold")` emits `<b>`,
+// as does pasted Word HTML — but re-emitting them was what made `style/style.md`'s "use
+// <strong>, never <b>" rule impossible to honour through the editor: every save handed the
+// tag straight back.
+const TAG_ALIASES: Record<string, string> = { b: "strong", i: "em" };
+
+// Emphasis that means nothing when nested inside itself. Chrome's execCommand and Lexical
+// disagree about which tag to emit, so a run formatted through both paths came out as
+// `<b><strong>text</strong></b>` — two tags, one meaning, and double markup on every
+// subsequent round-trip.
+const SELF_REDUNDANT_TAGS = new Set(["strong", "em", "u", "s", "sub", "sup", "code"]);
+
 const DROP_CONTENT_TAGS = new Set(["script", "style", "template", "noscript", "iframe", "object", "embed"]);
 
 export const RICH_TEXT_FONT_FAMILIES = [
@@ -319,14 +332,16 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
     return escapeHtml(node.text ?? "");
   }
 
-  const tag = node.tagName?.toLowerCase();
-  if (!tag) {
+  const rawTag = node.tagName?.toLowerCase();
+  if (!rawTag) {
     return escapeHtml(node.text ?? "");
   }
 
-  if (DROP_CONTENT_TAGS.has(tag)) {
+  if (DROP_CONTENT_TAGS.has(rawTag)) {
     return "";
   }
+
+  const tag = TAG_ALIASES[rawTag] ?? rawTag;
 
   if (tag === "font") {
     const style = styleFromFontElement(node);
@@ -393,10 +408,24 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
     return `<a href="${escapeHtml(href)}"${targetAttr}${assetAttr} rel="noopener noreferrer">${inner}</a>`;
   }
 
+  if (SELF_REDUNDANT_TAGS.has(tag)) {
+    // Already inside the same emphasis: keep the children, drop the duplicate wrapper.
+    if (activeEmphasis.includes(tag)) {
+      return serializeChildren(node, mode);
+    }
+    activeEmphasis.push(tag);
+    const inner = serializeChildren(node, mode);
+    activeEmphasis.pop();
+    return inner ? `<${tag}>${inner}</${tag}>` : "";
+  }
+
   return `<${tag}>${serializeChildren(node, mode)}</${tag}>`;
 }
 
 let preserveNotes = false;
+// Emphasis tags currently open around the node being serialized. Module-level to match the
+// existing `preserveNotes` pattern; reset on every entry point so a throw cannot leak state.
+const activeEmphasis: string[] = [];
 
 export interface SanitizeOptions {
 
@@ -409,6 +438,7 @@ export function sanitizeRichText(value: string, opts?: SanitizeOptions) {
   }
   const previous = preserveNotes;
   preserveNotes = opts?.keepNotes ?? false;
+  activeEmphasis.length = 0;
   try {
     const root = parse(value);
     return root.childNodes
@@ -426,6 +456,7 @@ export function sanitizeCalloutHtml(value: string, opts?: SanitizeOptions) {
   }
   const previous = preserveNotes;
   preserveNotes = opts?.keepNotes ?? false;
+  activeEmphasis.length = 0;
   try {
     const root = parse(value);
     return root.childNodes
@@ -443,6 +474,7 @@ export function sanitizeListItemHtml(value: string, opts?: SanitizeOptions) {
   }
   const previous = preserveNotes;
   preserveNotes = opts?.keepNotes ?? false;
+  activeEmphasis.length = 0;
   try {
     const root = parse(value);
     return root.childNodes

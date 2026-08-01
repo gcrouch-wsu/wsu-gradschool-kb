@@ -73,7 +73,48 @@ describe("sanitizeRichText", () => {
   });
 
   it("strips event-handler and other attributes from allowed tags", () => {
-    expect(sanitizeRichText('<b onclick="steal()">x</b>')).toBe("<b>x</b>");
+    expect(sanitizeRichText('<b onclick="steal()">x</b>')).toBe("<strong>x</strong>");
+  });
+
+  describe("emphasis normalization", () => {
+    it("rewrites presentational b/i to semantic strong/em", () => {
+      expect(sanitizeRichText("<b>bold</b>")).toBe("<strong>bold</strong>");
+      expect(sanitizeRichText("<i>italic</i>")).toBe("<em>italic</em>");
+    });
+
+    // The editor formats through two paths — document.execCommand emits <b>, Lexical emits
+    // <strong> — so a run touched by both arrived as <b><strong>text</strong></b> and grew
+    // no further only because the tags were already nested. Saving handed it straight back.
+    it("collapses b/strong double-wrapping to a single strong", () => {
+      expect(sanitizeRichText("<b><strong>text</strong></b>")).toBe("<strong>text</strong>");
+      expect(sanitizeRichText("<strong><b>text</b></strong>")).toBe("<strong>text</strong>");
+      expect(sanitizeRichText("<i><em>text</em></i>")).toBe("<em>text</em>");
+    });
+
+    it("is idempotent across repeated saves", () => {
+      const once = sanitizeRichText("<b><strong>text</strong></b>");
+      expect(sanitizeRichText(once)).toBe(once);
+    });
+
+    it("keeps distinct emphasis nested together", () => {
+      expect(sanitizeRichText("<b><em>both</em></b>")).toBe("<strong><em>both</em></strong>");
+    });
+
+    it("keeps separate sibling runs intact", () => {
+      expect(sanitizeRichText("<b>one</b> plain <b>two</b>")).toBe(
+        "<strong>one</strong> plain <strong>two</strong>",
+      );
+    });
+
+    it("drops emphasis that wraps nothing", () => {
+      expect(sanitizeRichText("<b></b>")).toBe("");
+    });
+
+    it("preserves inner markup when unwrapping a duplicate", () => {
+      expect(sanitizeRichText('<strong><b>see <a href="/kb/x">the page</a></b></strong>')).toBe(
+        '<strong>see <a href="/kb/x" rel="noopener noreferrer">the page</a></strong>',
+      );
+    });
   });
 
   it("unwraps disallowed tags but keeps their text", () => {

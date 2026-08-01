@@ -508,6 +508,15 @@ manual redirect persistence, and the single-active-version DB invariant.
 - **`sanitizeRichText` is used for both storage and public render.** Notes survive only with
   `{ keepNotes: true }` (editor storage paths in `page-document.ts`); the default strips them. Don't
   flip the default on, or note bodies leak to the public page/search.
+- **The sanitizer normalizes emphasis; don't re-add `<b>`/`<i>` on the way out.**
+  `sanitizeRichText` rewrites `b`→`strong` and `i`→`em`, and drops an emphasis tag nested
+  inside the same emphasis. Both tags stay in `ALLOWED_TAGS` because they arrive constantly
+  (`document.execCommand("bold")` emits `<b>`, as does pasted Word HTML) — the normalization
+  happens at serialization. Before this, a run formatted through both the execCommand path and
+  Lexical saved as `<b><strong>text</strong></b>`, and every save handed it back, so
+  `style/style.md`'s "use `<strong>`, never `<b>`" rule could not be honoured through the UI.
+  Because the public renderer shares the sanitizer, stored content is normalized at render
+  time — no content migration is needed.
 - **`getDataset()` in `kb-store.ts` is wrapped in React `cache()`.** Within a request it memoizes;
   raw SQL writes won't be reflected by a cached read in the same request. Tests that need the real
   write path use the lower-level `db.ts` functions directly.
