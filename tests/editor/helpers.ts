@@ -7,7 +7,10 @@ import { expect, type Page } from "@playwright/test";
 export const ADMIN_EMAIL = process.env.KB_ADMIN_EMAIL?.trim() || "admin@example.edu";
 export const ADMIN_PASSWORD = process.env.KB_ADMIN_PASSWORD?.trim() || "ChangeMe123!";
 
-export const BASE_URL = "http://127.0.0.1:3000";
+// Port comes from playwright.editor.config.ts, which runs in this process. Hardcoding 3000
+// made the Origin header disagree with the server's host, which the same-origin guard
+// rejects with a 403 during sign-in.
+export const BASE_URL = `http://127.0.0.1:${process.env.EDITOR_PORT || 3101}`;
 export const AUTH_STATE_PATH = "tests/editor/.auth/state.json";
 
 // A published seed page (see src/lib/demo-data.ts). It already satisfies the

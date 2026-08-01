@@ -13,6 +13,7 @@ import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from "@lexical/html";
 import { $createParagraphNode, $getRoot, type EditorState, type LexicalEditor } from "lexical";
 import {
+  hasActiveLexicalEditor,
   registerLexicalFlowEditor,
   unregisterLexicalFlowEditor,
 } from "@/lib/lexical/toolbar-bridge";
@@ -94,11 +95,23 @@ function BridgePlugin({
       registerLexicalFlowEditor(editor, root, emit);
       bindPageEditor(root, emit);
     };
-    activate();
+    // Claim the shared toolbar on mount only when no live surface holds it; focus is what
+    // hands ownership over after that. Binding unconditionally here let a surface that
+    // mounted later steal the target from the one the caret was in (FB-39).
+    if (!hasActiveLexicalEditor()) {
+      activate();
+    }
     root.addEventListener("focusin", activate);
     return () => {
       root.removeEventListener("focusin", activate);
       unregisterLexicalFlowEditor(editor);
+      // Deliberately does NOT clear the shared selection binding. Doing so looked like tidy
+      // defence-in-depth and caused an intermittent editor bug: DOM surgery (list indent)
+      // restructures blocks and unmounts a surface while the caret stays inside a surviving
+      // one. `focusin` only fires when focus *enters* an element, so focus never leaving means
+      // nothing rebinds — the next Tab found no bound surface and silently did nothing, so a
+      // three-level list stopped nesting at two. `hasActiveLexicalEditor()` already treats a
+      // detached root as free, which is what lets the next surface claim the toolbar.
     };
   }, [editor, onHtmlChange]);
 

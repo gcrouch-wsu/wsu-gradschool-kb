@@ -5,6 +5,7 @@ import {
   getAdminCookieOptions,
   validateAdminCredentials,
 } from "@/lib/auth";
+import { logError } from "@/lib/log";
 import { clientKeyFromHeaders, rateLimit } from "@/lib/rate-limit";
 import { isSameOrigin } from "@/lib/security";
 
@@ -44,11 +45,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid email or password." }, { status: 401 });
   }
 
+  // Signing throws when KB_ADMIN_SESSION_SECRET is missing in production. That is deliberate
+  // (see src/lib/auth.ts), but an unhandled throw here surfaces as a bare 500 with the reason
+  // buried in function logs — name it in the response so a misconfigured environment is
+  // obvious from the sign-in attempt itself.
+  let token: string;
+  try {
+    token = createAdminSessionToken(session);
+  } catch (error) {
+    logError(error, { route: "/api/admin/session", action: "sign_in" });
+    return NextResponse.json(
+      { message: "Sign-in is not available: this deployment is missing its session signing secret." },
+      { status: 500 },
+    );
+  }
+
   const response = NextResponse.json({ ok: true });
   response.cookies.set({
     ...getAdminCookieOptions(),
     name: ADMIN_COOKIE_NAME,
-    value: createAdminSessionToken(session),
+    value: token,
   });
   return response;
 }

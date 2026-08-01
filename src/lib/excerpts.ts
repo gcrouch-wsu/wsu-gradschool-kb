@@ -2,7 +2,14 @@ import type { AdminSession } from "@/lib/auth";
 import { getKbReadAccess } from "@/lib/auth";
 import { getKbById, getPageByIdForAdmin, getPageByPath } from "@/lib/kb-store";
 import { richTextToPlainText, textToRichText } from "@/lib/rich-text";
-import type { ContentBlock, KbPage, KnowledgeBase } from "@/lib/types";
+import type {
+  ContentBlock,
+  KbPage,
+  KbStatus,
+  KbVisibility,
+  KnowledgeBase,
+  PageVisibility,
+} from "@/lib/types";
 
 export type ExcerptBlockRef = Pick<
   Extract<ContentBlock, { type: "excerpt" }>,
@@ -225,11 +232,75 @@ export async function resolveExcerptForExport(ref: ExcerptBlockRef): Promise<Res
   return resolveFromVisibleSource(ref, page, kb);
 }
 
-export type ExcerptSourceState = "ok" | "missing" | "unpublished" | "section_missing";
+export type ExcerptSourceState =
+  | "ok"
+  | "missing"
+  | "unpublished"
+  | "section_missing"
+  | "unreachable";
+
+/** Who can read the page hosting the excerpt — the audience the source has to match. */
+export interface ExcerptAudience {
+  kbId: string;
+  kbVisibility: KbVisibility;
+  kbStatus: KbStatus;
+  pageVisibility: PageVisibility;
+}
+
+export function excerptAudienceFor(
+  kb: Pick<KnowledgeBase, "id" | "visibility" | "status">,
+  page: Pick<KbPage, "visibility">,
+): ExcerptAudience {
+  return {
+    kbId: kb.id,
+    kbVisibility: kb.visibility,
+    kbStatus: kb.status,
+    pageVisibility: page.visibility,
+  };
+}
+
+// An excerpt that resolves fine for its author can still be permanently "unavailable" for
+// the page's actual readers, because resolveExcerptForRead gates per reader. Publishing that
+// ships a callout nobody outside staff can ever see, so the gate treats it as a blocker.
+async function isExcerptSourceReachable(
+  source: KbPage,
+  audience: ExcerptAudience,
+): Promise<boolean> {
+  const sourceKb = await getKbById(source.kbId);
+  if (!sourceKb) {
+    return false;
+  }
+  // getPageByPath with staff access off applies the same status and staff-ancestor rules the
+  // public article route does, so it answers "could an anonymous reader open this?" exactly.
+  const anonymouslyReadable =
+    sourceKb.visibility === "public" &&
+    sourceKb.status === "published" &&
+    Boolean(
+      await getPageByPath(source.kbId, source.path, false).then(
+        (visible) => visible && visible.id === source.id,
+      ),
+    );
+
+  const hostReachesAnonymousReaders =
+    audience.kbVisibility === "public" &&
+    audience.kbStatus === "published" &&
+    audience.pageVisibility !== "staff";
+
+  if (hostReachesAnonymousReaders) {
+    return anonymouslyReadable;
+  }
+  // The host page is already limited to readers of its own KB, so a source in that same KB
+  // has an audience at least as wide. Anything else has to stand on its own.
+  return source.kbId === audience.kbId || anonymouslyReadable;
+}
 
 // Publish-gate helper: unlike resolveExcerptForRead this is author-facing and
-// names the specific problem, because the editor needs to fix it.
-export async function checkExcerptSourceForPublish(ref: ExcerptBlockRef): Promise<ExcerptSourceState> {
+// names the specific problem, because the editor needs to fix it. Pass `audience`
+// (via excerptSourceCheckerFor) to also catch sources the page's readers cannot reach.
+export async function checkExcerptSourceForPublish(
+  ref: ExcerptBlockRef,
+  audience?: ExcerptAudience,
+): Promise<ExcerptSourceState> {
   if (!ref.sourcePageId) {
     return "missing";
   }
@@ -243,5 +314,13 @@ export async function checkExcerptSourceForPublish(ref: ExcerptBlockRef): Promis
   if (!extractExcerptSection(page.blocks, ref.sourceHeadingBlockId)) {
     return "section_missing";
   }
+  if (audience && !(await isExcerptSourceReachable(page, audience))) {
+    return "unreachable";
+  }
   return "ok";
+}
+
+/** Bind the gate's excerpt checker to the audience of the page being published. */
+export function excerptSourceCheckerFor(audience: ExcerptAudience) {
+  return (ref: ExcerptBlockRef) => checkExcerptSourceForPublish(ref, audience);
 }

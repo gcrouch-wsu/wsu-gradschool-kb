@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# One run per branch/PR. Pushing twice in quick succession otherwise leaves an obsolete run
+# competing for runners with the one that actually matters. `main` is excluded from
+# cancellation so every commit that lands keeps a real pass/fail record.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest

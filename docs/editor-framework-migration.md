@@ -9,14 +9,14 @@ editor close-out complete (FB-25).
 ## Phase 0 findings
 
 - Stack: Lexical + `@lexical/react` / rich-text / list / link / html.
-- Spike route: `/admin/lexical-spike` (`LexicalSpikeEditor`).
+- Spike route: was `/admin/lexical-spike` (`LexicalSpikeEditor`). **Removed 2026-08-01** once the
+  migration completed — it was a dev-only artifact still shipping as a production admin route.
+  Recover it from git history if a future spike needs a starting point.
 - Round-trip path: `ContentBlock[]` → `blocksToDocumentHtml` → Lexical `$generateNodesFromDOM`
-  → `$generateHtmlFromNodes` → `documentHtmlToBlocks`. Unit coverage in
-  `src/lib/lexical-spike.test.ts`.
+  → `$generateHtmlFromNodes` → `documentHtmlToBlocks`. The unit coverage outlived the spike and
+  now lives in `src/lib/page-document-roundtrip.test.ts`.
 - Decision: **proceed with Lexical** for Phase 1 (flow surface). Nested surfaces
   (table cells, Info boxes) stay on the current editors until Phase 2.
-- Remaining Phase 0 manual checks before calling Phase 1 done: paste-from-Word and Tab
-  list nesting on the spike route against fixtures in `tests/editor`.
 
 ## Phase 1–4 + FB-26 landing notes
 

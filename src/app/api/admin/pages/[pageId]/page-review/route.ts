@@ -4,8 +4,9 @@ import { logError } from "@/lib/log";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import { resolveAiPrompt } from "@/lib/ai-prompts";
-import { DEFAULT_AI_PAGE_SYSTEM_PROMPT, requestPageReviewFromGateway } from "@/lib/page-review-core";
-import { getAiGatewayConfig } from "@/lib/summary-draft";
+import { AiGatewayError, getAiGatewayConfig, hasBilledTokens } from "@/lib/ai-gateway";
+import { DEFAULT_AI_PAGE_SYSTEM_PROMPT } from "@/lib/page-review-core";
+import { requestPageReviewFromGateway } from "@/lib/page-review-gateway";
 import type { ContentBlock } from "@/lib/types";
 import { NextResponse } from "next/server";
 import { getKbById, getPageByIdForAdmin } from "@/lib/kb-store";
@@ -93,6 +94,15 @@ export async function POST(
       suggestions: review.suggestions,
     });
   } catch (error) {
+    // Meter a call the provider billed before our parsing rejected it (FB-42).
+    if (error instanceof AiGatewayError && hasBilledTokens(error.usage)) {
+      recordAiUsageLater({
+        feature: "page_review",
+        model: config.model,
+        kbId: existing.kbId,
+        usage: error.usage,
+      });
+    }
     logError(error, {
       route: "/api/admin/pages/[pageId]/page-review",
       action: "page_review",

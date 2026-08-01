@@ -53,14 +53,16 @@ As of 2026-07-26, the public/private KB platform is on `main` and in active use 
 content work. See `project_spec.md` §9 for the shipped surface list (reader, editor, assets, search,
 governance, AI draft summaries, admin/ops) and §10 for known limitations.
 
-**Future only** (`project_spec.md` §11 / §12):
-
-1. **WSU SSO** (FB-30) — gated on WSU ITS engagement (Entra ID / Azure AD OIDC or SAML)
-2. **Confluence import/export bridge** (FB-37) — concept only; not scoped
+**Backlog:** the 2026-07 hardening set (FB-38–FB-44 — session/auth, Lexical toolbar
+binding, publish-gate heading/excerpt checks, lock-safe scheduled publish, AI module split and
+metering, webhook/KaaS hardening, client readiness parity) is delivered. What remains before a
+production-compliance claim is the manual release gate (FB-25), which is QA, not new code. See
+`project_spec.md` §11 / §12.
 
 Lexical editor Phases 1–4 + FB-26 are built for flow, card, procedure, and table-cell surfaces.
 
-All authentication stays local and owner-provisioned until SSO lands.
+Authentication is local and owner-provisioned. WSU SSO and a Confluence import/export bridge
+were both considered and are explicitly **not** planned.
 
 **Before a production-compliance / a11y claim:**
 
@@ -90,6 +92,12 @@ alt text.
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
 axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions; optionally
 Firefox + mobile-width with `EDITOR_CROSS_BROWSER=1`). Type-check: `npm run check`.
+
+Both Playwright suites build and start their own production server — `test:a11y` on port 3100 and
+`test:editor` on 3101 (`A11Y_PORT` / `EDITOR_PORT` to override) — and never reuse an existing one.
+That is deliberate: they assert against the in-memory seed dataset, so attaching to a running
+`npm run dev` backed by a real database made every seed-dependent test fail as if it were a
+regression. You can leave a dev server running on :3000 while they run.
 
 **Live-database tests:** `npm run test:db` runs the KI-1, page-revision, review-digest, KB-export,
 page-view, and private-KB access-matrix integration suites against a real Neon database —
@@ -124,7 +132,13 @@ Set these environment variables locally or in Vercel:
 KB_ADMIN_EMAIL=
 KB_ADMIN_PASSWORD=
 KB_ADMIN_SESSION_SECRET=
+APP_PUBLIC_HOST=      # optional; recommended in production
 ```
+
+`KB_ADMIN_SESSION_SECRET` is **required in production** — the app refuses to sign session cookies
+rather than deriving a key from the admin credentials. `APP_PUBLIC_HOST` (comma-separated
+hostnames) tells the admin same-origin check which hosts to trust, so a spoofed `x-forwarded-host`
+cannot define the origin a mutation is compared against.
 
 The app also accepts `BOOTSTRAP_OWNER_EMAIL`, `BOOTSTRAP_OWNER_PASSWORD`, and
 `BOOTSTRAP_OWNER_SESSION_SECRET` as aliases. Blank values are treated as unset.
@@ -173,9 +187,9 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
 Schema changes are applied automatically on first request via versioned migrations in
-`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head:
-`043_page_server_drafts_per_author`** (per-user server drafts). Recent migrations also cover
-curated next-step copy (`042`), platform features including webhooks/server drafts/search synonyms
+`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `044_ai_usage`**
+(AI token metering). Recent migrations also cover per-user server drafts (`043`), curated
+next-step copy (`042`), platform features including webhooks/server drafts/search synonyms
 (`041`), asset tags/keywords and tag-aware asset search vectors (`040`), page tags/keywords
 (`039`), site + per-KB AI summary and page-review prompts (`038`), site AI summary prompt (`037`),
 asset usages (`036`), reader feedback (`035`), scheduled publish (`034`), per-KB summary
@@ -209,6 +223,11 @@ asset bytes load one entry at a time, so large media-heavy KBs do not buffer in 
 Admins can import Confluence-exported `.docx` files at `/admin/import`. The document is converted to KB content (headings, paragraphs, lists, tables, and supported web images), previewed for review in the browser, and saved as a **draft** page nested under the location you choose.
 
 Embedded images are promoted into managed image assets when the draft is created. If **Vercel Blob** is configured, the image bytes are stored there; otherwise supported images are retained as data-backed managed assets for local development. Non-web image formats (EMF/WMF) are not yet supported.
+
+## Creating and publishing a page
+
+`docs/create-page.md` walks an editor through taking content from an external link or a Word
+upload to a published page in production, including what the publish gate will check.
 
 ## KB page style pipeline (agent-assisted)
 

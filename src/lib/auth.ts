@@ -19,15 +19,6 @@ export interface AdminSession {
   version: string;
 }
 
-function requireInProduction(name: string, value: string | undefined) {
-  if (process.env.NODE_ENV === "production" && !value) {
-    throw new Error(
-      `${name} must be set in production. Refusing to fall back to development defaults.`,
-    );
-  }
-  return value;
-}
-
 function readEnv(name: string) {
   const value = process.env[name]?.trim();
   return value && value.length > 0 ? value : undefined;
@@ -49,16 +40,31 @@ function getBootstrapPassword() {
   );
 }
 
-function getSessionSecret() {
+// The cookie signing key. Production must supply this independently: deriving it from the
+// bootstrap credentials would mean anyone who learns the owner password can also mint valid
+// sessions for any role, and it silently re-keys every cookie when the password rotates.
+// Outside production the derived fallback keeps local dev zero-setup.
+function getSessionSecret(): string {
+  const configured =
+    readEnv("BOOTSTRAP_OWNER_SESSION_SECRET") || readEnv("KB_ADMIN_SESSION_SECRET");
+  if (configured) {
+    return configured;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "KB_ADMIN_SESSION_SECRET must be set in production. Refusing to derive a session signing key from the bootstrap credentials.",
+    );
+  }
+
   const email = getBootstrapEmail();
   const password = getBootstrapPassword();
-
-  return (
-    readEnv("BOOTSTRAP_OWNER_SESSION_SECRET") ||
-    readEnv("KB_ADMIN_SESSION_SECRET") ||
-    (email && password ? `dev-secret:${email}:${password}` : undefined) ||
-    requireInProduction("KB_ADMIN_SESSION_SECRET", undefined)!
-  );
+  if (!email || !password) {
+    throw new Error(
+      "KB_ADMIN_SESSION_SECRET is unset and no bootstrap credentials are available to derive a development secret.",
+    );
+  }
+  return `dev-secret:${email}:${password}`;
 }
 
 function toBase64Url(value: string) {
@@ -171,6 +177,10 @@ export async function readAdminSessionToken(token: string | undefined): Promise<
       if (!user || user.updatedAt !== session.version) {
         return null;
       }
+      // Authorize the current database row, not the role/email the cookie carries. The
+      // version check above already rejects a stale cookie, but rebinding means a tampered
+      // or replayed payload can never widen its own role.
+      return { ...session, email: user.email, role: user.role };
     } else {
       const bootstrapEmail = getBootstrapEmail();
       const bootstrapPassword = getBootstrapPassword();

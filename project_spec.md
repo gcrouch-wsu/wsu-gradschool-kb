@@ -68,13 +68,12 @@ sourced-content snapshots (allowlisted external import with check-for-changes / 
 **Release readiness (ops, not a product feature):** complete the manual release gate
 (`docs/release-gate.md`, §12 FB-25) and §13 sign-off before claiming production WCAG/compliance.
 
-**Future only** (see §11 / §12):
+**Remaining work** (see §11 / §12): only the manual release gate (FB-25). The 2026-07
+hardening backlog (FB-38–FB-44) shipped on 2026-08-01.
 
-1. **WSU SSO** (FB-30) — Entra ID / Azure AD OIDC or SAML, gated on WSU ITS engagement.
-2. **Confluence import/export bridge** (FB-37) — concept only; not scoped.
-3. **Hardening backlog** (FB-38–FB-44) — session/auth, Lexical toolbar binding, publish-gate
-   a11y/excerpt reachability, scheduled-publish locks, AI module split/metering, webhook/KaaS
-   hardening, and client readiness parity (from the 2026-07 codebase review).
+**Out of scope (decided, not deferred):** **WSU SSO** and a **Confluence import/export bridge**
+were both evaluated and dropped by the maintainer on 2026-08-01. Authentication stays local and
+owner-provisioned; DOCX staged import plus owner KB ZIP export remain the migration path.
 
 **Out of scope (intentionally, for now):** self-service public signup (accounts are Owner-provisioned);
 WYSIWYG parity with Word; real-time multi-cursor co-editing (concurrency uses locks, not CRDTs).
@@ -426,26 +425,37 @@ npm run dev        # http://localhost:3000
 npm run build      # production build
 npm run check      # tsc --noEmit
 npm test           # Vitest unit suite (in-memory; live-DB tests self-skip)
-npm run test:a11y  # Playwright + axe smoke tests for public pages and private viewer read access
-npm run test:editor # Playwright editor regression suite (builds + starts prod server; see below)
+npm run test:a11y  # Playwright + axe smoke tests (builds + starts a prod server on :3100)
+npm run test:editor # Playwright editor regression suite (builds + starts prod server on :3101)
 npm run test:db    # live-DB integration suite against DATABASE_URL (reads .env.local)
 ```
 
 **Editor Playwright suite (`npm run test:editor`, `tests/editor/`)** covers the authenticated
-admin page editor. Unlike the a11y suite it must run against a **production server**
-(`next build` + `next start`), which the Playwright config starts automatically: the per-request
-CSP in `src/proxy.ts` (nonce + `strict-dynamic`) does not hydrate the editor's client handlers under
-the `next dev` HMR/eval runtime, so `next dev` leaves the contentEditable surfaces non-interactive.
+admin page editor. It must run against a **production server** (`next build` + `next start`),
+which the Playwright config starts automatically on port **3101**: the per-request CSP in
+`src/proxy.ts` (nonce + `strict-dynamic`) does not hydrate the editor's client handlers under the
+`next dev` HMR/eval runtime, so `next dev` leaves the contentEditable surfaces non-interactive.
 The config injects bootstrap admin env vars and an empty `DATABASE_URL`, so the suite is hermetic
-(in-memory seed dataset, no external database). A one-time sign-in (`auth.setup.ts`) posts to
+(in-memory seed dataset, no external database). Both Playwright suites use dedicated ports and
+`reuseExistingServer: false` — see the §8 gotcha; a dev server on :3000 must never be reused. A one-time sign-in (`auth.setup.ts`) posts to
 `/api/admin/session` and shares the cookie via `storageState`; it runs single-worker because tests
 share the page lock and the process-global in-memory store.
 
 **Environment** (`.env.local`; see `.env.example`):
 - `KB_ADMIN_EMAIL` / `KB_ADMIN_PASSWORD` / `KB_ADMIN_SESSION_SECRET` — bootstrap owner + cookie
-  signing (aliases `BOOTSTRAP_OWNER_*` also accepted). Required in production.
+  signing (aliases `BOOTSTRAP_OWNER_*` also accepted). Required in production: the app throws
+  rather than deriving a signing key from the credentials. Rotating the secret signs everyone out.
+- `APP_PUBLIC_HOST` — optional. Comma-separated public hostname(s) the admin same-origin check
+  trusts, so a spoofed `x-forwarded-host` cannot define the compared origin. Unset is the
+  default and is correct wherever the hostname varies per deployment (previews, local dev);
+  the check then compares against the request's own host headers. Set it only where every
+  hostname is known — an omitted host 403s sign-in and every admin mutation.
 - `DATABASE_URL` — Neon connection string. **Unset = in-memory seed mode** (fine for quick local UI
-  work; not durable). Set = Neon (schema auto-creates/seeds).
+  work; not durable). Set = Neon (schema auto-creates/seeds). Two Vercel-managed Neon projects
+  back this app: **kb-local-test** (`solitary-smoke-86654244`) for local/Development and
+  **neon-crimson-battery** (`withered-dust-89775495`) for Production. `npm run test:db` writes and
+  deletes against whatever `DATABASE_URL` names, so confirm the endpoint host before running it —
+  kb-local-test carries a copy of real content, so the data alone does not identify which is which.
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob; without it, DOCX import skips images and uploads fall back
   to data-backed assets.
 - `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup`,
@@ -574,6 +584,37 @@ manual redirect persistence, and the single-active-version DB invariant.
   route becomes an SSRF proxy. The allowlist is hostname-only; reject userinfo, non-default ports,
   query strings, malformed anchors, and redirects before reading the response body. Reader-facing
   routes must never fetch the source.
+- **Gateway credentials live in `*-gateway.ts`, never in `*-core.ts`.** `summary-draft-core.ts`
+  and `page-review-core.ts` are imported by client components (the editor readiness panel, the
+  settings prompt screen), so they must stay free of `process.env.AI_*` reads and provider
+  `fetch`. Those live in `ai-gateway.ts`, `summary-draft-gateway.ts`, and `page-review-gateway.ts`,
+  which throw if evaluated in a browser. Server callers use the `summary-draft.ts` barrel. After
+  touching this boundary, rebuild and confirm `.next/static` has no gateway symbols.
+- **A billed AI call that fails afterwards still has to be metered.** Provider requests that
+  return 200 and then fail post-processing (empty draft, truncated prose, unparseable review) have
+  already been charged. Throw `AiGatewayError` with the accumulated usage so the route records it;
+  a plain `Error` silently drops the tokens from `/admin/usage`.
+- **The publish gate's heading walk is shared with the editor's readiness panel.**
+  `hasHeadingOrderSkip` / `collectHeadingLevels` in `publish-gate.ts` are the single source of
+  truth, and `AdminPageEditorForm` imports them. Reimplementing the walk client-side is what let a
+  page report "ready" and then 422 on publish. Card titles and procedure titles count as headings.
+- **Playwright suites run on their own ports and never reuse a server.** `test:a11y` uses 3100 and
+  `test:editor` uses 3101 (`A11Y_PORT` / `EDITOR_PORT` to override), both with
+  `reuseExistingServer: false`. They configure a hermetic server with `DATABASE_URL` forced empty,
+  and attaching to a dev server on 3000 instead — typically pointed at real Neon — produced a wall
+  of seed-data failures that read exactly like regressions. Specs derive their absolute base URL
+  from those env vars; do not hardcode a port, or the `Origin` header will not match the host and
+  the same-origin guard will 403 the sign-in setup.
+- **Same-origin checks use `APP_PUBLIC_HOST` and nothing else.** When set, `isSameOrigin` trusts
+  only those hosts; unset, it compares against the request's own headers. Do **not** reintroduce an
+  inferred allowlist: `VERCEL_PROJECT_PRODUCTION_URL` was tried and is set on preview deployments
+  too, where it names production rather than the host being served — every preview 403'd its own
+  sign-in. A deployment's real host set includes custom domains that no env var enumerates, so any
+  inferred list is incomplete by construction.
+- **Outbound requests to operator-supplied URLs go through `net-guard.ts`.** Webhook delivery
+  checks the target at registration and re-resolves it at delivery. Any new feature that POSTs or
+  GETs a user-supplied address needs the same guard, or it becomes an SSRF pivot; the
+  sourced-content importer solves the same problem with a host allowlist instead.
 - **`style/style.md` hand-mirrors the publish gate and editor block contract.** The agent style
   pipeline in `style/` (see `style/README.md`) checks pages against a prose copy of
   `validatePageForPublish` rules and the `documentHtmlToBlocks` allowed-block list. If you change
@@ -622,8 +663,9 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 - Accessibility is publish-gate + axe smoke, not a completed WCAG certification.
 - Notes rail has no threaded resolve UI yet.
 - Editor framework migration: flow, cards, procedure, and table-cell surfaces use Lexical
-  (Phases 1–4 + FB-26). Spike remains at `/admin/lexical-spike`. Keep `npm run test:editor`
-  and the release-gate Firefox/mobile checklist green before claiming editor close-out.
+  (Phases 1–4 + FB-26 + FB-39). The `/admin/lexical-spike` route was removed on 2026-08-01 now
+  that the migration is complete. Keep `npm run test:editor` and the release-gate Firefox/mobile
+  checklist green before claiming editor close-out.
 
 ## 10. Known limitations
 
@@ -650,10 +692,11 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
   never emit real titles/descriptions, but empirical probes (common bot user agents against a
   production server) still received HTTP 200 with the not-found UI — do not claim crawler-visible
   404s. Status-code fidelity for streamed `notFound()` routes remains a known framework limit.
-- **Authentication is intentionally local for now**: owner-provisioned accounts use scrypt password
-  hashes and signed HMAC cookies. There is no SSO/OIDC/SAML integration until WSU ITS engagement, and
-  no server-side idle-session table or sliding idle timeout beyond the current cookie/token expiry
-  behavior.
+- **Authentication is local by decision, not by deferral**: owner-provisioned accounts use scrypt
+  password hashes and signed HMAC cookies. SSO/OIDC/SAML was dropped on 2026-08-01 and is not
+  planned. There is still no server-side idle-session table or sliding idle timeout beyond the
+  current cookie/token expiry behavior. Production must set `KB_ADMIN_SESSION_SECRET`; the app
+  refuses to sign cookies without it rather than deriving a key from the bootstrap credentials.
 - **Manager role** — KB-scoped publish/approve in assigned KBs; Owner/Admin remain KB-wide.
 - **The contenteditable editor still needs release-grade QA.** It is custom, and complex selection
   edge cases keep surfacing in real use (heading demotion on delete, list splits with duplicate ids,
@@ -684,17 +727,15 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 
 **Product / platform items that remain future (not yet built):**
 
-1. **WSU SSO (§12 FB-30)** — Entra ID / Azure AD OIDC or SAML for staff and private-KB viewers,
-   gated on WSU ITS engagement. Local owner-provisioned accounts remain interim + break-glass.
-2. **Confluence import/export bridge (§12 FB-37)** — concept only; not scoped.
-3. **Hardening backlog (§12 FB-38–FB-44)** — session secret / cookie role rebinding; Lexical nested
-   toolbar focus binding; publish-gate heading + excerpt audience checks; lock-safe scheduled
-   publish; AI client/server module split + failed-call metering; webhook SSRF / KaaS key scoping;
-   client readiness panel parity with the server gate. Ratified from the 2026-07 codebase review.
+None. The 2026-07 hardening backlog (FB-38–FB-44) shipped on 2026-08-01. The two remaining
+concepts — WSU SSO and a Confluence import/export bridge — were dropped by the maintainer on the
+same date rather than deferred; do not re-add them without maintainer direction.
+
+The only open item is **FB-25**, the manual release gate, which is QA rather than new code.
 
 **Editor framework:** Lexical Phases 1–4 + FB-26 landed for flow, cards, procedure, and table-cell
-surfaces. Close-out evidence is part of the manual release gate (FB-25): Chrome + Firefox +
-mobile-width editor pass. Residual nested-surface toolbar risk is tracked as FB-39.
+surfaces, and FB-39 closed the nested-surface toolbar binding risk. Close-out evidence is part of
+the manual release gate (FB-25): Chrome + Firefox + mobile-width editor pass.
 
 **Release readiness** (FB-25) is ops/QA, not a new product surface: finish the manual checklist in
 `docs/release-gate.md` and §13 sign-off.
@@ -717,7 +758,7 @@ items were removed from this document; their history is in git.
   live-DB tests when DB behavior changes.
 - When completing an item: flip `status:` and leave a one-line DONE note, or remove the item and
   update §9 / §11 so the future set stays accurate.
-- **Ratified future set:** FB-30, FB-37, FB-38–FB-44. FB-25 is release QA only.
+- **Open set:** FB-25 only (release QA). FB-38–FB-44 are done; FB-30 and FB-37 were dropped.
 
 ---
 
@@ -770,116 +811,90 @@ Full checklist: `docs/release-gate.md`. Minimum before a compliance claim:
       paste, excerpts/sourced, unsaved guard, publish gate)
 - [ ] Keyboard / focus / landmarks / contrast / zoom sample pass on public + admin surfaces
 
-### FB-30 — WSU SSO integration
+### Dropped: FB-30 (WSU SSO) and FB-37 (Confluence bridge)
 
-`[AI-AGENT-TASK] id:FB-30  priority:med  area:auth  effort:L  status:open`
+`[AI-AGENT-TASK] id:FB-30  priority:med  area:auth  effort:L  status:wontfix`
+`[AI-AGENT-TASK] id:FB-37  priority:low  area:migration  effort:L  status:wontfix`
 
-- **Blocked on:** WSU ITS engagement (app registration, OIDC vs SAML, claims/groups, break-glass).
-- **Approach:** Entra ID / Azure AD OIDC (preferred) or SAML for staff and private-KB viewers.
-  Keep local owner-provisioned accounts as interim + break-glass. Map SSO subjects onto existing
-  `users` / `kb_user_assignments` by verified email.
-- **Touch points:** `src/lib/auth.ts`, `src/lib/security.ts`, `src/app/admin/sign-in/page.tsx`,
-  session cookies, user provisioning, `.env.example`, this spec.
-- **Acceptance:** approved WSU SSO users sign in, map to roles, retain KB scoping; local fallback
-  documented for IdP outages.
-
-### FB-37 — Confluence import/export bridge (concept)
-
-`[AI-AGENT-TASK] id:FB-37  priority:low  area:migration  effort:L  status:open`
-
-- **Concept only — not scoped.** Complements DOCX staged import and owner KB ZIP export.
-- **Possible directions:** import a Confluence space HTML/attachments archive through a staged
-  review flow; export a Confluence-ingestible archive from a KB.
-- **Open before scoping:** macro fidelity on import; export target format; reuse `/admin/import`
-  vs a new surface.
-- **Acceptance:** undefined until a scoping pass (import-only vs both directions + UX).
+Both were dropped by the maintainer on 2026-08-01. Authentication stays local and
+owner-provisioned (§10); DOCX staged import plus owner KB ZIP export remain the migration path
+off Confluence. Do not reopen either without maintainer direction — the write-ups are in git
+history if they are ever revived.
 
 ### FB-38 — Session and auth hardening
 
-`[AI-AGENT-TASK] id:FB-38  priority:high  area:auth  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-38  priority:high  area:auth  effort:S  status:done`
 
-- **Why:** `getSessionSecret()` can fall back to ``dev-secret:${email}:${password}`` when
-  `KB_ADMIN_SESSION_SECRET` is unset; managed sessions authorize the cookie-embedded role after an
-  `updatedAt` version check instead of rebinding role/email from the DB user row. Origin checks also
-  prefer raw `x-forwarded-host` without an allowlist.
-- **Touch points:** `src/lib/auth.ts`, `src/lib/origin.ts`, `.env.example`, §13 deploy checklist.
-- **Acceptance:** production refuses to start (or fails closed) without an independent session
-  secret; managed sessions reload `role`/`email` from `users`; Origin/host checks use a configured
-  or platform-canonical public host, not client-controlled forwarded headers alone.
+- **DONE (2026-08-01):** `getSessionSecret()` now throws in production rather than deriving a
+  signing key from the bootstrap credentials; managed sessions rebind `role`/`email` from the
+  `users` row instead of trusting the cookie payload; `isSameOrigin` honours an `APP_PUBLIC_HOST`
+  allowlist (falling back to `VERCEL_PROJECT_PRODUCTION_URL`) so a spoofed `x-forwarded-host`
+  cannot define the compared origin. Covered by `src/lib/auth.test.ts` and `src/lib/origin.test.ts`.
+- **Deploy note:** production must now set `KB_ADMIN_SESSION_SECRET`. See §13.
 
 ### FB-39 — Lexical nested-surface toolbar binding
 
-`[AI-AGENT-TASK] id:FB-39  priority:high  area:editor-architecture  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-39  priority:high  area:editor-architecture  effort:M  status:done`
 
-- **Why:** flow/card/procedure/table-cell Lexical surfaces call `bindPageEditor` /
-  `registerLexicalFlowEditor` on mount, so later-mounted nested surfaces can steal the global
-  toolbar target while selection remains in the main flow (§8 toolbar gotcha).
-- **Touch points:** `LexicalFlowSurface.tsx`, `LexicalTableCellSurface.tsx`,
-  `src/lib/lexical/toolbar-bridge.ts`, `tests/editor/toolbar-context.spec.ts`.
-- **Acceptance:** nested surfaces bind only on focus (or otherwise do not overwrite an active
-  focused editor); toolbar bold/link/list act on the focused surface; Chromium toolbar regressions
-  stay green; unique namespaces where shared `kb-flow` causes collisions.
+- **DONE (2026-08-01):** flow and table-cell surfaces claim the shared toolbar on mount only when
+  `hasActiveLexicalEditor()` reports it free; focus hands ownership over after that, and unmount
+  releases the selection binding when the surface still held it. The shared `kb-flow` namespace
+  was kept deliberately — it is what preserves node structure when pasting between flow surfaces.
+  Covered by `tests/editor/toolbar-context.spec.ts` and `tests/editor/table-cell.spec.ts`.
 
 ### FB-40 — Publish-gate heading order and excerpt reachability
 
-`[AI-AGENT-TASK] id:FB-40  priority:high  area:a11y-publish-gate  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-40  priority:high  area:a11y-publish-gate  effort:M  status:done`
 
-- **Why:** heading-skip detection ignores card `titleLevel` and filters nested heading issues; a
-  public page can clear `checkExcerptSourceForPublish` while anonymous readers always see the
-  excerpt as unavailable (private/staff source).
-- **Touch points:** `src/lib/publish-gate.ts`, `src/lib/excerpts.ts`, `AdminPageEditorForm.tsx`
-  readiness helpers, `style/style.md` (keep in sync), unit tests for gate + excerpt publish checks.
-- **Acceptance:** gate fails publish when card/procedure titles create heading-order skips; excerpt
-  publish checks require the source to be readable by the host page’s intended audience (or warn as
-  a hard blocker); client readiness and `style/style.md` match.
+- **DONE (2026-08-01):** `collectHeadingLevels` walks headings, procedure-section titles, and card
+  titles (at `titleLevel`) in document order, including nested blocks, so a card titled H3 before
+  any H2 now blocks publish. `checkExcerptSourceForPublish` takes an optional `ExcerptAudience` and
+  returns `unreachable` when the source is narrower than the host page's audience. `style/style.md`
+  was updated to match. Covered by `src/lib/publish-gate.test.ts` and `src/lib/excerpts.test.ts`.
 
 ### FB-41 — Lock-safe scheduled publish
 
-`[AI-AGENT-TASK] id:FB-41  priority:high  area:concurrency  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-41  priority:high  area:concurrency  effort:S  status:done`
 
-- **Why:** `publishDueDraftPages` clears `publishAt` via a full-row `updatePages` without
-  `editorEmail`, bypassing the edit lock and racing concurrent editor saves.
-- **Touch points:** `src/lib/kb-store.ts`, `src/lib/db.ts`, scheduled-publish cron route, live-DB
-  lock/concurrency tests.
-- **Acceptance:** due-publish updates status/`publishAt` without rewriting unlocked body fields
-  under another editor’s lock; concurrent save + cron race covered by a regression test.
+- **DONE (2026-08-01):** `publishDueDraftPages` clears the schedule through
+  `clearPagePublishAtColumn` (a single-column write) instead of a full-row `updatePages`, so the
+  cron no longer overwrites a concurrent editor's locked draft. Regression test lives in
+  `src/lib/ki1.db.test.ts` and needs a live DB (`npm run test:db`).
 
 ### FB-42 — AI client/server split and metering completeness
 
-`[AI-AGENT-TASK] id:FB-42  priority:med  area:ai  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-42  priority:med  area:ai  effort:M  status:done`
 
-- **Why:** settings/editor client components still import `summary-draft-core` /
-  `page-review-core` modules that contain gateway `fetch` + env credential reads; provider calls
-  that succeed then fail post-processing never hit `kb_ai_usage`.
-- **Touch points:** `summary-draft-core.ts`, `page-review-core.ts`, AI routes, `ai-usage.ts`,
-  `AdminPageEditorForm.tsx`, `AiPageReviewPanel.tsx`, `admin/settings/page.tsx`.
-- **Acceptance:** client bundles import only prompt constants / readiness helpers (no gateway
-  credential paths); successful provider HTTP calls are metered even when cleanup/parse later
-  fails; route tests assert `recordAiUsageLater` behavior.
+- **DONE (2026-08-01):** gateway credentials and provider `fetch` moved into server-only
+  `ai-gateway.ts` / `summary-draft-gateway.ts` / `page-review-gateway.ts`; the `*-core` modules
+  client components import now hold prompts, parsing, and readiness only. `AiGatewayError` carries
+  the tokens a billed call consumed so both AI routes meter failures that happened after the
+  provider responded. Verified by grepping `.next/static` for gateway symbols after a build.
+- **Note:** the original write-up claimed client bundles shipped credential paths. They did not —
+  tree-shaking removed them. The real defects were the fragile module boundary and the metering
+  gap, both of which are fixed.
 
 ### FB-43 — Webhook SSRF and KaaS key hardening
 
-`[AI-AGENT-TASK] id:FB-43  priority:med  area:security  effort:M  status:open`
+`[AI-AGENT-TASK] id:FB-43  priority:med  area:security  effort:M  status:done`
 
-- **Why:** owners/admins can register arbitrary `https:` webhook URLs that the server POSTs to
-  with no private-IP / metadata blocklist; KaaS `KAAS_API_KEYS` are global and failed auth is not
-  rate-limited.
-- **Touch points:** `src/lib/webhooks.ts`, webhook admin route, `src/lib/kaas-auth.ts`,
-  `/api/v1/kb/...` route, `.env.example`.
-- **Acceptance:** webhook delivery rejects private/link-local/metadata targets (or requires an
-  allowlist); failed KaaS auth is rate-limited; optional per-KB key scoping documented or
-  implemented.
+- **DONE (2026-08-01):** new `src/lib/net-guard.ts` rejects loopback, RFC1918, CGNAT, link-local
+  (including `169.254.169.254`), multicast/reserved, IPv6 ULA/link-local, and IPv4-mapped-IPv6
+  targets, plus `localhost`/`.local`/`.internal` hostnames. Webhook URLs are checked at
+  registration *and* re-checked with DNS resolution at delivery. `requireKaasAuth` throttles failed
+  KaaS authentication per client (10/minute, then 429). Covered by `src/lib/net-guard.test.ts` and
+  `src/lib/kaas-auth.test.ts`.
+- **Residual:** DNS rebinding between the resolution check and the socket connect is not closed;
+  per-KB KaaS key scoping is still not implemented.
 
 ### FB-44 — Client publish-readiness parity
 
-`[AI-AGENT-TASK] id:FB-44  priority:med  area:editor-ux  effort:S  status:open`
+`[AI-AGENT-TASK] id:FB-44  priority:med  area:editor-ux  effort:S  status:done`
 
-- **Why:** the editor readiness panel under-reports server gate blockers (excerpt source health,
-  inactive assets), so “ready” can still 422 on publish/status.
-- **Touch points:** `AdminPageEditorForm.tsx`, publish-gate issue mapping, excerpt/asset checkers.
-- **Acceptance:** client readiness lists the same blocker classes the server gate can return for
-  the current draft (or clearly marks server-only checks); no silent “ready” → 422 surprise for
-  excerpt/asset failures.
+- **DONE (2026-08-01):** the readiness panel calls the gate's own `hasHeadingOrderSkip`, so the two
+  cannot drift; `countBlockIssues` recurses into `sourced` blocks; and the panel lists the
+  server-only checks ("Checked when you publish": asset active status, excerpt reachability)
+  instead of implying a clean bill of health.
 
 ---
 
@@ -891,6 +906,15 @@ Full checklist: `docs/release-gate.md`. Minimum before a compliance claim:
 - Confirm `npm run check`, `npm run lint`, `npm test`, and `npm run build` pass locally or in CI.
 - Confirm `npm run test:db` passes against the current Neon test branch before promoting changes that touch migrations or DB behavior.
 - Confirm Vercel has `DATABASE_URL`, `KB_ADMIN_EMAIL`, `KB_ADMIN_PASSWORD`, `KB_ADMIN_SESSION_SECRET`, and `CRON_SECRET` configured for the target environment.
+- **`KB_ADMIN_SESSION_SECRET` is now mandatory in production.** The app throws on any cookie-signing
+  path without it instead of quietly deriving a key from the bootstrap credentials, so a deployment
+  missing it will fail admin sign-in outright. If this deployment previously relied on the derived
+  fallback, setting the variable also invalidates every existing session cookie — expect one
+  round of sign-outs.
+- Optionally set `APP_PUBLIC_HOST` to the public hostname(s) this environment serves
+  (comma-separated), including any custom domain. Leave it unset on Preview, whose hostname
+  changes per deployment. Without it the same-origin check compares against request headers,
+  which is weaker but never locks a valid host out.
 - If AI draft summaries are expected in the editor, confirm `AI_PROVIDER_ENDPOINT`, `AI_API_KEY`, and `AI_MODEL`.
 - If review-date email delivery is expected, confirm `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, and `EMAIL_FROM`; otherwise expect structured JSON fallback logs.
 - Confirm the Vercel plan supports the configured cron count before deploy validation; this project currently schedules audit cleanup, revision cleanup, review digest, review overdue, sourced staleness, and scheduled publish routes.

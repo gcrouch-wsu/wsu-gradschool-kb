@@ -32,6 +32,7 @@ import {
   updateKbAiPrompts,
   updatePages,
   updatePageStatusColumn,
+  clearPagePublishAtColumn,
   updatePageLifecycle,
   listPageRevisionsFromDb,
   getPageRevisionFromDb,
@@ -2290,7 +2291,8 @@ export async function publishDueDraftPages(now = new Date()): Promise<{
   published: string[];
   blocked: Array<{ pageId: string; issues: string[] }>;
 }> {
-  const { checkExcerptSourceForPublish } = await import("@/lib/excerpts");
+  const { checkExcerptSourceForPublish, excerptAudienceFor, excerptSourceCheckerFor } =
+    await import("@/lib/excerpts");
   const { validatePageForPublish } = await import("@/lib/publish-gate");
   const dataset = await getDataset();
   const due = dataset.pages.filter((page) => {
@@ -2308,23 +2310,27 @@ export async function publishDueDraftPages(now = new Date()): Promise<{
 
   for (const page of due) {
     const kb = dataset.knowledgeBases.find((candidate) => candidate.id === page.kbId);
-    const issues = await validatePageForPublish(page, getAssetStatusById, checkExcerptSourceForPublish, {
-      requireSummary: kb?.requireSummary !== false,
-    });
+    const issues = await validatePageForPublish(
+      page,
+      getAssetStatusById,
+      kb ? excerptSourceCheckerFor(excerptAudienceFor(kb, page)) : checkExcerptSourceForPublish,
+      { requireSummary: kb?.requireSummary !== false },
+    );
     if (issues.length > 0) {
       blocked.push({ pageId: page.id, issues });
       continue;
     }
     await updatePageStatus(page.id, "published");
-    // Clear schedule after publish so the cron doesn't re-attempt.
-    const cleared: KbPage = {
-      ...(await getPageByIdForAdmin(page.id))!,
-      publishAt: null,
-    };
+    // Clear the schedule so the cron doesn't re-attempt. Both branches touch only
+    // publishAt: a full-row write here would overwrite an editor's concurrent save,
+    // because the cron holds no edit lock (FB-41).
     if (isDatabaseEnabled()) {
-      await updatePages([cleared]);
+      await clearPagePublishAtColumn(page.id);
     } else {
-      storeRuntimePage(cleared);
+      const current = await getPageByIdForAdmin(page.id);
+      if (current) {
+        storeRuntimePage({ ...current, publishAt: null });
+      }
     }
     published.push(page.id);
   }

@@ -32,7 +32,58 @@ const EXCERPT_ISSUES: Record<Exclude<ExcerptSourceState, "ok">, string> = {
   missing: "An included excerpt references a page that no longer exists. Remove or repoint the excerpt.",
   unpublished: "An included excerpt references a page that is not published.",
   section_missing: "An included excerpt references a section that no longer exists on its source page.",
+  unreachable:
+    "An included excerpt points at a page this page's readers cannot open, so they would only ever see an \"unavailable\" callout. Point it at a source with the same or wider audience.",
 };
+
+// Headings reach the public outline from three places, not one: heading blocks, procedure
+// section titles, and card titles (rendered at `titleLevel`, default 2). Walking them
+// together in document order is what makes a card titled H3 before any H2 count as the same
+// skip a bare H3 there would be. Nested blocks are walked here rather than by the recursive
+// validate call below, which deliberately drops nested "Heading levels" issues so the same
+// problem is not reported twice.
+/**
+ * Shared by the server gate and the editor's readiness panel so the two cannot drift —
+ * a panel that says "ready" and then 422s on publish is worse than no panel (FB-44).
+ */
+export function hasHeadingOrderSkip(blocks: ContentBlock[]): boolean {
+  let seenLevel2 = false;
+  for (const level of collectHeadingLevels(blocks)) {
+    if (level === 2) {
+      seenLevel2 = true;
+    } else if (level === 3 && !seenLevel2) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function collectHeadingLevels(blocks: ContentBlock[]): number[] {
+  const levels: number[] = [];
+  for (const block of blocks) {
+    switch (block.type) {
+      case "heading":
+        levels.push(block.level);
+        break;
+      case "procedure_section":
+        levels.push(block.level);
+        levels.push(...collectHeadingLevels(block.blocks));
+        break;
+      case "card":
+        if ((block.title ?? "").trim()) {
+          levels.push(block.titleLevel ?? 2);
+        }
+        levels.push(...collectHeadingLevels(block.blocks));
+        break;
+      case "sourced":
+        levels.push(...collectHeadingLevels(block.blocks));
+        break;
+      default:
+        break;
+    }
+  }
+  return levels;
+}
 
 /** Sync metadata checks used by the publish gate and the Pages tree badges. */
 export function collectMetadataPublishIssues(
@@ -103,18 +154,7 @@ export async function validatePageForPublish(
     return issues;
   }
 
-  let seenLevel2 = false;
-  let skippedHeading = false;
-  for (const block of page.blocks) {
-    const level = block.type === "heading" || block.type === "procedure_section" ? block.level : null;
-    if (!level) continue;
-    if (level === 2) {
-      seenLevel2 = true;
-    } else if (level === 3 && !seenLevel2) {
-      skippedHeading = true;
-    }
-  }
-  if (skippedHeading) {
+  if (hasHeadingOrderSkip(page.blocks)) {
     issues.push("Heading levels are skipped (a sub-heading appears before any section heading).");
   }
 

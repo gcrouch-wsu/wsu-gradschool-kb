@@ -2071,7 +2071,6 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   outline-offset: 2px;
 }
 
-
 .block-editor { min-width: 0; 
   background: var(--paper);
   border: 1.5px solid var(--line);
@@ -2200,6 +2199,22 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   display: flex;
   gap: 0.75rem;
   font-weight: 600;
+}
+
+/* `.form label` uses display:grid for field stacks; checkbox labels must stay
+   horizontal or the control sits above the text (table header toggles, etc.). */
+.form label.checkbox-row,
+.form label:has(> input[type="checkbox"]):not(.checkbox-inline):not(.attribution-checkbox) {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+}
+
+.form label.checkbox-row input[type="checkbox"],
+.form label:has(> input[type="checkbox"]):not(.checkbox-inline):not(.attribution-checkbox) input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 /* Inline editor row for label + URL + a compact delete control (site settings
@@ -2486,7 +2501,6 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
 .summary-field__hint {
   margin: 0;
 }
-
 
 .toc {
   background: var(--wash);
@@ -2814,7 +2828,9 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   }
 
   .editor-form .checkbox-inline,
-  .editor-form label.checkbox-inline {
+  .editor-form label.checkbox-inline,
+  .editor-form .checkbox-row,
+  .editor-form label.checkbox-row {
     align-items: flex-start;
     white-space: normal;
     width: 100%;
@@ -7697,32 +7713,3 @@ html.admin-app body.admin-app-body {
   border-color: var(--crimson);
 }
 
-.guided-tour {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  bottom: 1rem;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
-  max-width: 22rem;
-  padding: 1rem;
-  position: fixed;
-  right: 1rem;
-  z-index: 40;
-}
-
-.guided-tour__eyebrow {
-  color: var(--muted);
-  font-size: 0.8rem;
-  margin: 0 0 0.25rem;
-}
-
-.guided-tour__title {
-  margin: 0 0 0.5rem;
-}
-
-.guided-tour__actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  margin-top: 0.75rem;
-}

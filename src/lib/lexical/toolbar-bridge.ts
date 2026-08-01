@@ -25,6 +25,26 @@ export function unregisterLexicalFlowEditor(editor: LexicalEditor) {
   }
 }
 
+/**
+ * True when a live surface already owns the shared toolbar.
+ *
+ * Surfaces use this to claim the toolbar on mount only when it is free. Every flow, card,
+ * procedure, and table-cell surface registers through this one module, so a nested surface
+ * mounting later (a table the user just inserted, a card rendering below the caret) would
+ * otherwise take the target away from the surface the caret is actually in, and toolbar
+ * bold/link/list would silently act on the wrong editor (FB-39).
+ *
+ * A root that is no longer in the document does not count as live: React can mount the
+ * replacement before the old surface's cleanup runs, and a detached root must never keep
+ * ownership.
+ */
+export function hasActiveLexicalEditor(): boolean {
+  if (!activeLexicalEditor || !activeLexicalRoot) {
+    return false;
+  }
+  return activeLexicalRoot.isConnected;
+}
+
 export function getActiveLexicalEditor(): LexicalEditor | null {
   return activeLexicalEditor;
 }

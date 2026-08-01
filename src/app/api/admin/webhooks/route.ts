@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isPubliclyRoutableUrl, parseOutboundWebhookUrl } from "@/lib/net-guard";
 import { requireAdminMutation } from "@/lib/security";
 import { createWebhook, deleteWebhook, listWebhooks } from "@/lib/webhooks";
 import type { WebhookEndpoint, WebhookEvent } from "@/lib/types";
@@ -25,13 +26,6 @@ function serializeWebhook(hook: WebhookEndpoint): WebhookListItem {
   };
 }
 
-function isHttpsWebhookUrl(url: string) {
-  try {
-    return new URL(url).protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(request: Request) {
   const guard = await requireAdminMutation(request);
@@ -59,8 +53,18 @@ export async function POST(request: Request) {
     events?: unknown;
   } | null;
   const url = typeof body?.url === "string" ? body.url.trim() : "";
-  if (!isHttpsWebhookUrl(url)) {
-    return NextResponse.json({ message: "Webhook URL must use https." }, { status: 400 });
+  const target = parseOutboundWebhookUrl(url);
+  if (!target) {
+    return NextResponse.json(
+      { message: "Webhook URL must be an https:// address on a public host, with no credentials." },
+      { status: 400 },
+    );
+  }
+  if (!(await isPubliclyRoutableUrl(target))) {
+    return NextResponse.json(
+      { message: "Webhook URL resolves to a private or link-local address, which is not allowed." },
+      { status: 400 },
+    );
   }
   const events = Array.isArray(body?.events)
     ? body!.events.filter((event): event is WebhookEvent => VALID_EVENTS.has(event as WebhookEvent))

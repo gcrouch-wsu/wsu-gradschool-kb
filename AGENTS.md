@@ -13,6 +13,16 @@ The app is a Next.js 16 / React 19 knowledge-base platform. `project_spec.md` is
 handoff document; **§8 Conventions & gotchas** is required reading before changing the areas it
 covers. `README.md` covers running, testing, and deployment.
 
+Two things that routinely waste time:
+
+- **`next-env.d.ts` flips between `./.next/types/routes.d.ts` and `./.next/dev/types/routes.d.ts`**
+  depending on whether `next build` or `next dev` ran last. Next generates it and the file says not
+  to edit it. Do not "fix" the diff or commit the flip on its own — run a build before committing
+  if you want the stable form.
+- **Playwright suites use ports 3100 (a11y) and 3101 (editor) and never reuse a server.** A local
+  failure is not a regression until you have confirmed the suite actually started its own hermetic
+  server. See `project_spec.md` §8.
+
 ## KB page style pipeline (`style/`)
 
 The `style/` folder is a review-and-edit pipeline for Graduate School KB page HTML.

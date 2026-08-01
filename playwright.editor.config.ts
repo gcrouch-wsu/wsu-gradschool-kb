@@ -2,6 +2,16 @@ import { defineConfig, devices } from "@playwright/test";
 
 const isCi = Boolean(process.env.CI);
 
+// Deliberately not port 3000, and never reused. This suite needs the production server it
+// builds below; attaching to an already-running `next dev` on the default port gave a
+// server whose editor never hydrates (the nonce + strict-dynamic CSP blocks it), and one
+// backed by a real database rather than the in-memory seed. Override with EDITOR_PORT.
+const port = Number(process.env.EDITOR_PORT || 3101);
+const baseURL = `http://127.0.0.1:${port}`;
+// Published back so tests/editor/helpers.ts builds the same origin. The sign-in setup sends
+// an explicit Origin header, and a mismatch here is rejected by the same-origin guard.
+process.env.EDITOR_PORT = String(port);
+
 // Editor regression suite. Unlike the a11y suite this drives the authenticated
 // admin editor, so it signs in once (the `setup` project) and reuses the
 // resulting session cookie. Runs single-worker because the tests share the
@@ -15,7 +25,7 @@ export default defineConfig({
   workers: 1,
   reporter: isCi ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL,
     trace: "retain-on-failure",
   },
   projects: [
@@ -63,9 +73,9 @@ export default defineConfig({
   // NODE_ENV (see src/lib/auth.ts). DATABASE_URL is forced empty so the app uses
   // the in-memory seed dataset — the suite needs no external database.
   webServer: {
-    command: "npm run build && npm run start",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: !isCi,
+    command: `npm run build && npm run start -- --port ${port}`,
+    url: baseURL,
+    reuseExistingServer: false,
     timeout: 300_000,
     env: {
       NODE_ENV: "production",

@@ -1,4 +1,6 @@
-import { parseAiTokenUsage, type AiTokenUsage } from "@/lib/ai-usage-core";
+// Client-safe. Imported by AiPageReviewPanel and the settings screen, so it holds prompt
+// building, response parsing, and suggestion application only — the provider call lives in
+// page-review-gateway.ts (FB-42).
 import { blocksToPlainText } from "@/lib/revision-diff";
 import { textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
@@ -289,74 +291,4 @@ export function applyPageReviewSuggestion(
 
 export function suggestionIsActionable(suggestion: PageReviewSuggestion): boolean {
   return Boolean(suggestion.proposedAlt?.trim() || suggestion.proposedText?.trim());
-}
-
-export async function requestPageReviewFromGateway(input: {
-  title: string;
-  blocks: ContentBlock[];
-  endpoint: string;
-  apiKey: string;
-  model: string;
-  systemPrompt?: string;
-}): Promise<PageReviewResult & { usage: AiTokenUsage }> {
-  const { system, user } = buildPageReviewPrompt({
-    title: input.title,
-    blocks: input.blocks,
-    systemPrompt: input.systemPrompt,
-  });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 90_000);
-  let response: Response;
-  try {
-    response = await fetch(input.endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${input.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: input.model,
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("The AI page review timed out. Try again.");
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-
-  const payload = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    error?: { message?: string };
-    message?: string;
-    output_text?: string;
-    text?: string;
-    usage?: Record<string, unknown>;
-  } | null;
-
-  const usage = parseAiTokenUsage(payload);
-
-  if (!response.ok) {
-    const message =
-      typeof payload?.error?.message === "string"
-        ? payload.error.message
-        : typeof payload?.message === "string"
-          ? payload.message
-        : `AI provider returned HTTP ${response.status}.`;
-    throw new Error(message);
-  }
-
-  const content = payload?.choices?.[0]?.message?.content || payload?.output_text || payload?.text;
-  if (typeof content !== "string" || !content.trim()) {
-    throw new Error("The AI provider returned an empty page review.");
-  }
-  return { ...parsePageReviewResponse(content), usage };
 }

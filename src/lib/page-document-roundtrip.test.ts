@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import { blocksToDocumentHtml, documentHtmlToBlocks } from "@/lib/page-document";
 import type { ContentBlock } from "@/lib/types";
 
-/** Phase 0 gate: ContentBlock HTML boundary stays the source of truth for Lexical import/export. */
-describe("Lexical spike ContentBlock round-trip fixtures", () => {
+/**
+ * The ContentBlock ↔ HTML boundary is the storage contract every editor surface round-trips
+ * through, so it stays the source of truth regardless of which framework renders the surface.
+ * Started life as the Lexical Phase 0 gate; kept after the spike route was removed.
+ */
+describe("ContentBlock round-trip through the document HTML boundary", () => {
   it("round-trips paragraph, heading, and list through HTML boundary", () => {
     const blocks: ContentBlock[] = [
       { blockId: "h", type: "heading", level: 2, text: "Heading", html: "Heading" },

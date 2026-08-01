@@ -9,7 +9,11 @@ import {
   permanentlyDeletePage,
   updatePage,
 } from "@/lib/kb-store";
-import { checkExcerptSourceForPublish } from "@/lib/excerpts";
+import {
+  checkExcerptSourceForPublish,
+  excerptAudienceFor,
+  excerptSourceCheckerFor,
+} from "@/lib/excerpts";
 import { logError } from "@/lib/log";
 import { normalizePageTags } from "@/lib/page-tags";
 import { validatePageForPublish } from "@/lib/publish-gate";
@@ -162,7 +166,9 @@ export async function PATCH(
         linkUrl: nextLinkUrl,
       },
       getAssetStatusById,
-      checkExcerptSourceForPublish,
+      kb
+        ? excerptSourceCheckerFor(excerptAudienceFor(kb, { visibility }))
+        : checkExcerptSourceForPublish,
       { requireSummary: kb?.requireSummary !== false },
     );
     if (issues.length > 0) {
