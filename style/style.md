@@ -43,10 +43,17 @@ Filenames keep the page title, with a lowercase `.html` extension (e.g. `draft/M
 
 ## Audience and scope
 
-Graduate School KB pages are written primarily for **staff who configure or administer systems** — program coordinators, department staff, Graduate School reviewers — not for students.
+This entire knowledge base has one audience: **Graduate Program Coordinators and Directors**. That is a
+given, established here once — individual pages do not restate it.
 
-- **State the audience in the first paragraph** of every procedural page: who uses it and what they will accomplish.
-- **Do not write as if students use the page.** Students interact with downstream workflows (e.g. future **Program of Study** submission) that staff configure elsewhere.
+- **Do not open pages with an audience statement.** "This page is for program coordinators who…" is
+  noise in a KB whose every reader is a program coordinator. Open with the task instead.
+- **Do not disclaim who the page is *not* for.** Students never use this KB, so "students do not use
+  this page" tells the actual reader nothing and costs them a sentence.
+- **Do write for that reader's level.** Assume familiarity with myWSU, program and plan codes, and
+  Graduate School workflows; do not assume familiarity with any one system's screens.
+- **Do not write as if students use the page.** Students interact with downstream workflows (e.g.
+  **Program of Study** submission) that coordinators configure elsewhere.
 - When student impact matters, frame it for coordinators: *"These rules feed the Program of Study workflow students will use."*
 - Troubleshooting and status sections should address **coordinator actions and expectations**, not student-visible behavior on this page.
 
@@ -75,7 +82,8 @@ Match structure to intent. A how-to should not bury steps under long prose; a po
 ### Opening
 
 - **First H2** orients the reader. The reference uses *Start here: What you need to know*.
-- **First paragraph names the audience** and clarifies who does *not* use the page (students).
+- **First paragraph states the task**, not the audience: what this page gets done and when a
+  coordinator needs it. Skip "This page is for…" openings entirely.
 - **Second paragraph** states scope: what the page covers and the main concepts (e.g. credit requirements + course sequences).
 - Put **critical warnings** before detailed steps. Promote non-negotiable rules to their **own H2** when the rule is as important as the procedure itself (e.g. *Important: Use effective terms correctly*), not buried as an H3 under Start here.
 
@@ -83,7 +91,7 @@ Match structure to intent. A how-to should not bury steps under long prose; a po
 
 Use H2 for top-level sections only. The reference pattern:
 
-1. **Start here** — audience, scope, overview of main parts
+1. **Start here** — task, scope, overview of main parts
 2. **Important: [critical rule]** — standalone H2 when a mistake has serious consequences (optional but recommended for high-stakes rules)
 3. **Before you begin** — navigation path, prerequisites, gather list
 4. **Choose the right path** — decision table when workflows branch
@@ -180,7 +188,7 @@ For systems this table does not cover (e.g. WordPress Fact Sheets, Slate), match
 
 ### Readability checks (agent checklist)
 
-- [ ] Does the first paragraph name the audience and clarify who does not use this page?
+- [ ] Does the first paragraph state the task, without an audience preamble?
 - [ ] Can a coordinator skim H2s and know the full journey?
 - [ ] Are critical rules promoted to H2 or bold lead sentences, not buried in lists?
 - [ ] Is every acronym or internal term defined or linked once?
@@ -372,7 +380,7 @@ When reviewing HTML-only files, **note metadata gaps** the author must fill in t
 
 ```html
 <h2 class="anchor-heading" data-block-id="…" id="…">Start here: [topic in plain language]</h2>
-<p>This page is for <strong>[audience role]</strong> who [main task]. [Downstream audience, e.g. students] do not use this page directly; [what this feeds].</p>
+<p>[What this page gets done, in one sentence, starting with the task — not with who the reader is.]</p>
 <p>[Scope: what the page covers in plain terms.]</p>
 ```
 
@@ -461,7 +469,7 @@ For complex programs, keep the full detail to show what is possible. Add an intr
 
 **Patterns to emulate:**
 
-- Audience stated in paragraph one; students referenced only via downstream Program of Study workflow
+- Opens on the task; students referenced only via the downstream Program of Study workflow
 - Critical effective-term rule as its own H2 before procedural steps
 - Program code formats (P1234, P1234_1234) and campus prefixes in gather list
 - Course ID prep flagged as **Important** with OBIEE breadcrumb and fast-vs-slow contrast
@@ -474,8 +482,8 @@ For complex programs, keep the full detail to show what is possible. Add an intr
 
 **Agents should still flag on other pages:**
 
-- Missing audience statement
-- Student-facing voice on staff-only pages
+- Audience preamble that restates what the whole KB already establishes
+- Student-facing voice on coordinator-facing pages
 - Skipped or conflated submission statuses
 - Lookup vs Look Up inconsistency
 - Generic screenshot alt text
@@ -489,7 +497,7 @@ When reviewing a file `style/draft/Some Page.html`, respond with:
 
 ```markdown
 ## Summary
-[One paragraph: audience, page type, overall quality]
+[One paragraph: page type, task it serves, overall quality]
 
 ## Must fix
 - [Issue]: [Location hint] → [Suggested fix]
@@ -502,7 +510,7 @@ When reviewing a file `style/draft/Some Page.html`, respond with:
 
 ## Publish readiness
 - [ ] Heading order  [ ] Tables  [ ] Links  [ ] Images/alt  [ ] Editor-safe HTML
-- [ ] Audience clear  [ ] Status/workflow accurate  [ ] No duplicate troubleshooting
+- [ ] Opens on the task  [ ] Status/workflow accurate  [ ] No duplicate troubleshooting
 
 ## Suggested rewrites (if any)
 [Only for high-impact paragraphs; provide replacement HTML snippets]
