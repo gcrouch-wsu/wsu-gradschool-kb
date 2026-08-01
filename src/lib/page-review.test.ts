@@ -4,10 +4,10 @@ import {
   applyPageReviewSuggestion,
   buildBlockInventory,
   parsePageReviewResponse,
-  requestPageReviewFromGateway,
   suggestionIsActionable,
   type PageReviewSuggestion,
 } from "@/lib/page-review-core";
+import { requestPageReviewFromGateway } from "@/lib/page-review-gateway";
 import type { ContentBlock } from "@/lib/types";
 
 afterEach(() => {

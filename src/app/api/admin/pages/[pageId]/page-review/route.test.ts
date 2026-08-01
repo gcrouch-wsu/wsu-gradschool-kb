@@ -146,7 +146,7 @@ describe("POST /api/admin/pages/[pageId]/page-review", () => {
     await mockAuthedPage();
     const db = await import("@/lib/db");
     const store = await import("@/lib/kb-store");
-    const pageReview = await import("@/lib/page-review-core");
+    const pageReview = await import("@/lib/page-review-gateway");
     vi.mocked(store.getKbById).mockResolvedValue({
       ...kb,
       aiPagePrompt: "KB page prompt",
@@ -176,7 +176,7 @@ describe("POST /api/admin/pages/[pageId]/page-review", () => {
     mockAiEnv();
     await mockAuthedPage();
     const db = await import("@/lib/db");
-    const pageReview = await import("@/lib/page-review-core");
+    const pageReview = await import("@/lib/page-review-gateway");
     vi.spyOn(db, "loadSiteSettings").mockResolvedValue(DEFAULT_SITE_SETTINGS);
     vi.spyOn(pageReview, "requestPageReviewFromGateway").mockRejectedValue(new Error("provider down"));
 
@@ -184,5 +184,53 @@ describe("POST /api/admin/pages/[pageId]/page-review", () => {
     expect(response.status).toBe(502);
     const data = await response.json();
     expect(data.message).toBe("provider down");
+  });
+
+  // FB-42: a 200 from the provider that our parser then rejects has still been billed.
+  it("meters a billed call that failed after the provider responded", async () => {
+    mockAiEnv();
+    await mockAuthedPage();
+    const db = await import("@/lib/db");
+    const pageReview = await import("@/lib/page-review-gateway");
+    const aiUsage = await import("@/lib/ai-usage");
+    const { AiGatewayError } = await import("@/lib/ai-gateway");
+    vi.spyOn(db, "loadSiteSettings").mockResolvedValue(DEFAULT_SITE_SETTINGS);
+    const record = vi.spyOn(aiUsage, "recordAiUsageLater").mockImplementation(() => {});
+    vi.spyOn(pageReview, "requestPageReviewFromGateway").mockRejectedValue(
+      new AiGatewayError("The AI provider returned an empty page review.", {
+        promptTokens: 900,
+        completionTokens: 40,
+        totalTokens: 940,
+        callCount: 1,
+      }),
+    );
+
+    const response = await post();
+    expect(response.status).toBe(502);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feature: "page_review",
+        model: "test-model",
+        usage: expect.objectContaining({ totalTokens: 940 }),
+      }),
+    );
+  });
+
+  it("does not meter a failure that never reached the provider", async () => {
+    mockAiEnv();
+    await mockAuthedPage();
+    const db = await import("@/lib/db");
+    const pageReview = await import("@/lib/page-review-gateway");
+    const aiUsage = await import("@/lib/ai-usage");
+    const { AiGatewayError } = await import("@/lib/ai-gateway");
+    vi.spyOn(db, "loadSiteSettings").mockResolvedValue(DEFAULT_SITE_SETTINGS);
+    const record = vi.spyOn(aiUsage, "recordAiUsageLater").mockImplementation(() => {});
+    vi.spyOn(pageReview, "requestPageReviewFromGateway").mockRejectedValue(
+      new AiGatewayError("The AI page review timed out. Try again."),
+    );
+
+    const response = await post();
+    expect(response.status).toBe(502);
+    expect(record).not.toHaveBeenCalled();
   });
 });

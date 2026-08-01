@@ -16,6 +16,7 @@ import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import { normalizePageTags } from "@/lib/page-tags";
 import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
 import type { PageReviewSuggestion } from "@/lib/page-review-core";
+import { hasHeadingOrderSkip } from "@/lib/publish-gate";
 import type { ContentBlock, KbPage, KnowledgeBase, PageRevisionSnapshot, PageStatus, PageVisibility } from "@/lib/types";
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -249,46 +250,48 @@ function hasBadLinks(blocks: ContentBlock[]) {
 interface BlockIssueCounts {
   imagesMissingAlt: number;
   tablesMissingHeaders: number;
-  h3BeforeH2: boolean;
-  hasH2: boolean;
+  /** Blocks that only the server can validate, because they need a database read. */
+  excerptCount: number;
+  assetRefCount: number;
 }
 
+// Mirrors the block walks in validatePageForPublish. Heading order deliberately delegates to
+// the gate's own `hasHeadingOrderSkip` rather than reimplementing it — the two used to drift,
+// which is how a page could read "ready" here and then 422 on publish (FB-44).
 function countBlockIssues(blocks: ContentBlock[]): BlockIssueCounts {
   let imagesMissingAlt = 0;
   let tablesMissingHeaders = 0;
-  let h3BeforeH2 = false;
-  let seenH2 = false;
+  let excerptCount = 0;
+  let assetRefCount = 0;
 
   for (const block of blocks) {
-    if (block.type === "heading") {
-      if (block.level === 2) seenH2 = true;
-      if (block.level === 3 && !seenH2) h3BeforeH2 = true;
-    } else if (block.type === "procedure_section") {
-      if (block.level === 2) seenH2 = true;
-      if (block.level === 3 && !seenH2) h3BeforeH2 = true;
-      const nested = countBlockIssues(block.blocks);
-      imagesMissingAlt += nested.imagesMissingAlt;
-      tablesMissingHeaders += nested.tablesMissingHeaders;
-      h3BeforeH2 ||= nested.h3BeforeH2 && !seenH2;
-      seenH2 ||= nested.hasH2;
-    } else if (block.type === "image") {
+    if (block.type === "image") {
       if ((block.assetId || block.url) && !block.decorative && !(block.alt ?? "").trim()) {
         imagesMissingAlt += 1;
       }
+      if (block.assetId) assetRefCount += 1;
     } else if (block.type === "table") {
       if (!block.hasHeaderRow && !block.hasHeaderColumn) {
         tablesMissingHeaders += 1;
       }
-    } else if (block.type === "card") {
+    } else if (block.type === "asset_link") {
+      assetRefCount += 1;
+    } else if (block.type === "excerpt") {
+      excerptCount += 1;
+    } else if (
+      block.type === "card" ||
+      block.type === "procedure_section" ||
+      block.type === "sourced"
+    ) {
       const nested = countBlockIssues(block.blocks);
       imagesMissingAlt += nested.imagesMissingAlt;
       tablesMissingHeaders += nested.tablesMissingHeaders;
-      h3BeforeH2 ||= nested.h3BeforeH2 && !seenH2;
-      seenH2 ||= nested.hasH2;
+      excerptCount += nested.excerptCount;
+      assetRefCount += nested.assetRefCount;
     }
   }
 
-  return { imagesMissingAlt, tablesMissingHeaders, h3BeforeH2, hasH2: seenH2 };
+  return { imagesMissingAlt, tablesMissingHeaders, excerptCount, assetRefCount };
 }
 
 export function AdminPageEditorForm({
@@ -708,7 +711,7 @@ export function AdminPageEditorForm({
     if (!lastReviewedDate.trim()) next.push("Add a last reviewed date.");
 
     const blockIssues = countBlockIssues(blocks);
-    if (blockIssues.h3BeforeH2) {
+    if (hasHeadingOrderSkip(blocks)) {
       next.push("Fix heading order: use an H2 before any H3 (offending headings are outlined in the editor).");
     }
     if (blockIssues.imagesMissingAlt > 0) {
@@ -727,6 +730,25 @@ export function AdminPageEditorForm({
     if (linkIssues.empty) next.push("Add destinations for empty links.");
     return next;
   }, [blocks, contactEmail, kb.requireSummary, lastReviewedDate, ownerLabel, summary, title]);
+  // The server gate also runs checks that need a database read — whether each referenced
+  // asset is still active, and whether an excerpt's source is published and readable by this
+  // page's audience. The panel cannot answer those from the draft alone, so it names them
+  // rather than implying a clean bill of health and then 422-ing on publish (FB-44).
+  const serverOnlyChecks = useMemo(() => {
+    const { excerptCount, assetRefCount } = countBlockIssues(blocks);
+    const checks: string[] = [];
+    if (assetRefCount > 0) {
+      checks.push(
+        `${assetRefCount} image/file reference${assetRefCount === 1 ? "" : "s"}: publish re-checks that each asset is still active.`,
+      );
+    }
+    if (excerptCount > 0) {
+      checks.push(
+        `${excerptCount} excerpt${excerptCount === 1 ? "" : "s"}: publish re-checks that the source is published and readable by this page's readers.`,
+      );
+    }
+    return checks;
+  }, [blocks]);
   const [governanceOpen, setGovernanceOpen] = useState(false);
   useEffect(() => {
     markProblemLinks();
@@ -1481,6 +1503,16 @@ export function AdminPageEditorForm({
                 ))}
               </ul>
             )}
+            {serverOnlyChecks.length > 0 ? (
+              <>
+                <p className="meta">Checked when you publish:</p>
+                <ul className="meta">
+                  {serverOnlyChecks.map((check) => (
+                    <li key={check}>{check}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </div>
           <div className="editor-content__ai-layout">
             <PageDocumentEditor

@@ -1,9 +1,10 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import { getSql, ensureSchema, loadDatasetFromDb } from "./db";
+import { getSql, ensureSchema, loadDatasetFromDb, tryAcquirePageLock } from "./db";
 import {
   createPage,
   getKbBySlug,
   getPageByPath,
+  publishDueDraftPages,
   searchKb,
   verifyPage,
 } from "./kb-store";
@@ -153,5 +154,69 @@ describe("KI-1 live-DB integration", () => {
       HAVING COUNT(*) > 1
     `;
     expect(duplicateBaselineBackfills).toHaveLength(0);
+  });
+
+  // FB-41: the scheduled-publish cron holds no edit lock. It must therefore touch only
+  // status/publish_at — a full-row rewrite would silently discard whatever the editor
+  // holding the lock is working on.
+  it("publishes a due page without clobbering a concurrent editor's locked draft", async () => {
+    const sql = getSql();
+    const testId = `test-kb-${crypto.randomUUID()}`;
+    await sql`
+      INSERT INTO knowledge_bases (id, slug, title, description, status, updated_on)
+      VALUES (${testId}, ${testId}, 'Scheduled Publish KB', 'Temp KB for CI', 'published', now())
+    `;
+    const kb = await getKbBySlug(testId);
+    if (!kb) throw new Error("Could not create a test KB");
+
+    const page = await createPage({
+      kbId: kb.id,
+      title: "Scheduled Publish Page",
+      summary: "A page scheduled to publish.",
+      ownerLabel: "Graduate School",
+      contactEmail: "tester@wsu.edu",
+      status: "draft",
+      blocks: [
+        { type: "paragraph", blockId: "p1", text: "Scheduled body.", html: "Scheduled body." },
+      ],
+    });
+
+    try {
+      await sql`
+        UPDATE kb_pages
+        SET last_reviewed_date = '2026-01-01', publish_at = now() - interval '1 minute'
+        WHERE id = ${page.id}
+      `;
+
+      // Another editor opens the page and takes the lock, then the cron fires.
+      expect(await tryAcquirePageLock(page.id, "other-editor@wsu.edu")).toBe(true);
+      await sql`
+        UPDATE kb_pages SET summary = 'Edit in progress by the lock holder.' WHERE id = ${page.id}
+      `;
+
+      const result = await publishDueDraftPages();
+      expect(result.published).toContain(page.id);
+
+      const rows = (await sql`
+        SELECT status, publish_at, summary, locked_by FROM kb_pages WHERE id = ${page.id}
+      `) as unknown as Array<{
+        status: string;
+        publish_at: string | null;
+        summary: string;
+        locked_by: string | null;
+      }>;
+
+      expect(rows[0].status).toBe("published");
+      expect(rows[0].publish_at).toBeNull();
+      // The cron must not have rolled back the lock holder's in-flight edit, nor
+      // stolen/released their lock.
+      expect(rows[0].summary).toBe("Edit in progress by the lock holder.");
+      expect(rows[0].locked_by).toBe("other-editor@wsu.edu");
+    } finally {
+      await sql`DELETE FROM kb_page_revisions WHERE page_id = ${page.id}`;
+      await sql`DELETE FROM kb_asset_usages WHERE page_id = ${page.id}`;
+      await sql`DELETE FROM kb_pages WHERE id = ${page.id}`;
+      await sql`DELETE FROM knowledge_bases WHERE id = ${testId}`;
+    }
   });
 });

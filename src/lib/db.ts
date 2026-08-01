@@ -764,6 +764,19 @@ export async function updatePageStatusColumn(
   `;
 }
 
+// Scheduled publish clears the schedule after it fires. This is a single-column write on
+// purpose: routing it through `updatePages` would rewrite every body/metadata column under
+// whatever lock an editor currently holds, clobbering their in-flight edits (FB-41).
+export async function clearPagePublishAtColumn(pageId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE kb_pages
+    SET publish_at = NULL
+    WHERE id = ${pageId}
+  `;
+}
+
 export async function releasePageLock(pageId: string, userEmail: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();

@@ -354,12 +354,12 @@ These mirror the live editor **Publishing readiness** checklist and `validatePag
 
 | Check | Requirement |
 |-------|----------------|
-| Heading order | H2 before any H3 |
+| Heading order | H2 before any H3. Card titles (`doc-card` with a title) and procedure-section titles count as headings here, at whatever level they render, and so do headings nested inside them |
 | Images | Alt text or decorative flag |
 | Tables | Header row or header column |
 | Links | No vague text; no empty `href` |
 | Assets | Images/files referenced must be active in the library |
-| Excerpts | `doc-excerpt` blocks must reference an existing, published page and a section that still exists on it |
+| Excerpts | `doc-excerpt` blocks must reference an existing, published page and a section that still exists on it — **and** a page whose audience is at least as wide as the hosting page's. A public page including a staff-only or private-KB section is blocked, because its readers would only ever see an "unavailable" callout |
 | Governance (page metadata, not in HTML) | Title, responsible office, contact email, last reviewed date; summary when the KB requires it |
 
 When reviewing HTML-only files, **note metadata gaps** the author must fill in the editor (summary, dates, etc.).

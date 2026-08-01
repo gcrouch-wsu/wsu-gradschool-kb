@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { createHmac } from "crypto";
 import { isDatabaseEnabled, getSql, ensureSchema } from "@/lib/db";
+import { logError } from "@/lib/log";
+import { isPubliclyRoutableUrl, parseOutboundWebhookUrl } from "@/lib/net-guard";
 import type { WebhookEndpoint, WebhookEvent } from "@/lib/types";
 
 const WEBHOOK_TIMEOUT_MS = 5_000;
@@ -91,9 +93,20 @@ export async function dispatchWebhooks(event: WebhookEvent, payload: Record<stri
   await Promise.all(
     endpoints.map(async (hook) => {
       try {
+        // Re-checked at delivery, not only at registration: rows predating the guard, and
+        // hostnames that have since been repointed at an internal address, both reach here.
+        const target = parseOutboundWebhookUrl(hook.url);
+        if (!target || !(await isPubliclyRoutableUrl(target))) {
+          logError(new Error("Blocked webhook target"), {
+            surface: "dispatchWebhooks",
+            webhookId: hook.id,
+            event,
+          });
+          return;
+        }
         // Bounded: dispatch is awaited inline on the publish/status path, so a
         // hung subscriber must not hold the editor's request open.
-        await fetch(hook.url, {
+        await fetch(target, {
           method: "POST",
           headers: {
             "content-type": "application/json",

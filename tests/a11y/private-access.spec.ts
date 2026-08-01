@@ -6,7 +6,9 @@ import {
   type AdminSession,
 } from "../../src/lib/auth";
 
-const BASE = "http://127.0.0.1:3000";
+// Port comes from playwright.a11y.config.ts, which runs in this process — hardcoding 3000
+// pointed these at whatever dev server happened to be running.
+const BASE = `http://127.0.0.1:${process.env.A11Y_PORT || 3100}`;
 
 async function addViewerCookie(context: BrowserContext) {
   const bootstrap = await validateAdminCredentials("admin@example.edu", "ChangeMe123!");

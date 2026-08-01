@@ -1,5 +1,9 @@
 import { collectPageAssetUsages, extractAssetUsages } from "@/lib/asset-lifecycle";
-import { checkExcerptSourceForPublish } from "@/lib/excerpts";
+import {
+  checkExcerptSourceForPublish,
+  excerptAudienceFor,
+  excerptSourceCheckerFor,
+} from "@/lib/excerpts";
 import { getAllAssetsForAdmin, getAllKbsForAdmin, getAllPagesForAdmin, getAssetStatusById } from "@/lib/kb-store";
 import {
   listPageFeedbackAggregates,
@@ -80,10 +84,16 @@ export async function getAdminReviewDashboard(
   const draftPagesBlocked: ReviewDraftPage[] = [];
 
   for (const page of draftPages) {
-    const issues = await validatePageForPublish(page, getAssetStatusById, checkExcerptSourceForPublish, {
-      requireSummary: kbById.get(page.kbId)?.requireSummary !== false,
-    });
-    const kb = kbById.get(page.kbId);
+    const pageKb = kbById.get(page.kbId);
+    const issues = await validatePageForPublish(
+      page,
+      getAssetStatusById,
+      pageKb
+        ? excerptSourceCheckerFor(excerptAudienceFor(pageKb, page))
+        : checkExcerptSourceForPublish,
+      { requireSummary: pageKb?.requireSummary !== false },
+    );
+    const kb = pageKb;
     if (issues.length === 0) {
       draftPagesReady.push({
         pageId: page.id,

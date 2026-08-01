@@ -5,11 +5,13 @@ import { rateLimit } from "@/lib/rate-limit";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
 import { resolveAiPrompt } from "@/lib/ai-prompts";
 import {
+  AiGatewayError,
   assessPageReadyForSummaryDraft,
   DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
   expandBlocksForSummary,
   formatBlocksForSummary,
   getAiGatewayConfig,
+  hasBilledTokens,
   requestSummaryDraftFromGateway,
 } from "@/lib/summary-draft";
 import type { ContentBlock } from "@/lib/types";
@@ -97,6 +99,16 @@ export async function POST(
     });
     return NextResponse.json({ ok: true, summary: summary.summary });
   } catch (error) {
+    // A provider call that succeeded and then failed our post-processing was still billed,
+    // so meter it here too or /admin/usage under-reports the expensive failures (FB-42).
+    if (error instanceof AiGatewayError && hasBilledTokens(error.usage)) {
+      recordAiUsageLater({
+        feature: "summary_draft",
+        model: config.model,
+        kbId: existing.kbId,
+        usage: error.usage,
+      });
+    }
     logError(error, {
       route: "/api/admin/pages/[pageId]/summary-draft",
       action: "summary_draft",

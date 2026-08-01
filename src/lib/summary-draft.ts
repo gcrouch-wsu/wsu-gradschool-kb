@@ -2,6 +2,9 @@ import type { AdminSession } from "@/lib/auth";
 import { resolveExcerptForRead } from "@/lib/excerpts";
 import type { ContentBlock } from "@/lib/types";
 
+// Server-side barrel: the client-safe helpers plus the gateway pieces, so route handlers
+// have one import. Client components must import from `summary-draft-core` directly —
+// pulling this in would drag the gateway module along with it.
 export {
   DEFAULT_AI_SUMMARY_SYSTEM_PROMPT,
   SUMMARY_DRAFT_MAX_BODY_CHARS,
@@ -11,10 +14,10 @@ export {
   buildSummaryDraftPrompt,
   cleanSummaryDraft,
   formatBlocksForSummary,
-  getAiGatewayConfig,
   isCompleteSummaryDraft,
-  requestSummaryDraftFromGateway,
 } from "@/lib/summary-draft-core";
+export { getAiGatewayConfig, AiGatewayError, hasBilledTokens } from "@/lib/ai-gateway";
+export { requestSummaryDraftFromGateway } from "@/lib/summary-draft-gateway";
 
 /** Expand live excerpts the current editor can read so the model sees allowed included section text. Server-only. */
 export async function expandBlocksForSummary(

@@ -64,9 +64,11 @@ export function LinkDialog({
   useEffect(() => {
     if (tab !== "file") return;
     let active = true;
-    setLoading(true);
-    setError(null);
     (async () => {
+      // Reset inside the async body, not the effect body: a synchronous setState in an
+      // effect schedules an extra render pass before the fetch has even started.
+      setLoading(true);
+      setError(null);
       try {
         const res = await fetch(`/api/admin/assets?kbId=${encodeURIComponent(kbId)}`);
         const data = await res.json();

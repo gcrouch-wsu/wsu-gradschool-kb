@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { getKbReadAccess } from "@/lib/auth";
-import { checkExcerptSourceForPublish } from "@/lib/excerpts";
-import { isValidKaasApiKey } from "@/lib/kaas-auth";
+import { excerptAudienceFor, excerptSourceCheckerFor } from "@/lib/excerpts";
+import { requireKaasAuth } from "@/lib/kaas-auth";
 import { getAssetStatusById, getKbBySlug, getPageByPath, updatePage } from "@/lib/kb-store";
 import type { ContentBlock } from "@/lib/types";
 import { logError } from "@/lib/log";
@@ -33,8 +33,9 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ kbSlug: string; pagePath: string[] }> },
 ) {
-  if (!isValidKaasApiKey(request.headers.get("authorization"))) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const unauthorized = await requireKaasAuth(request);
+  if (unauthorized) {
+    return unauthorized;
   }
 
   const { kbSlug, pagePath } = await context.params;
@@ -90,8 +91,9 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ kbSlug: string; pagePath: string[] }> },
 ) {
-  if (!isValidKaasApiKey(request.headers.get("authorization"))) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  const unauthorized = await requireKaasAuth(request);
+  if (unauthorized) {
+    return unauthorized;
   }
 
   const { kbSlug, pagePath } = await context.params;
@@ -139,7 +141,7 @@ export async function PATCH(
         summary,
       },
       getAssetStatusById,
-      checkExcerptSourceForPublish,
+      excerptSourceCheckerFor(excerptAudienceFor(kb, page)),
       { requireSummary: kb.requireSummary !== false },
     );
     if (issues.length > 0) {

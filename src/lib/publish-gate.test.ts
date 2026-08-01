@@ -79,6 +79,88 @@ describe("validatePageForPublish", () => {
     );
   });
 
+  const HEADING_SKIP = "Heading levels are skipped (a sub-heading appears before any section heading).";
+
+  it("flags a card title at H3 before any H2 (card titles are outline headings too)", async () => {
+    const page = validPage();
+    page.blocks = [
+      {
+        blockId: "c1",
+        type: "card",
+        title: "Orphan card heading",
+        titleLevel: 3,
+        background: "paper",
+        blocks: [{ blockId: "p1", type: "paragraph", text: "Body.", html: "Body." }],
+      },
+    ];
+    expect(await validatePageForPublish(page, activeResolver)).toContain(HEADING_SKIP);
+  });
+
+  it("accepts a card title at H3 once an H2 precedes it", async () => {
+    const page = validPage();
+    page.blocks = [
+      { blockId: "h1", type: "heading", level: 2, text: "Overview", html: "Overview" },
+      {
+        blockId: "c1",
+        type: "card",
+        title: "Detail",
+        titleLevel: 3,
+        background: "paper",
+        blocks: [{ blockId: "p1", type: "paragraph", text: "Body.", html: "Body." }],
+      },
+    ];
+    expect(await validatePageForPublish(page, activeResolver)).not.toContain(HEADING_SKIP);
+  });
+
+  it("ignores an untitled card (it contributes no heading)", async () => {
+    const page = validPage();
+    page.blocks = [
+      {
+        blockId: "c1",
+        type: "card",
+        titleLevel: 3,
+        background: "paper",
+        blocks: [{ blockId: "p1", type: "paragraph", text: "Body.", html: "Body." }],
+      },
+      { blockId: "h1", type: "heading", level: 2, text: "Overview", html: "Overview" },
+    ];
+    expect(await validatePageForPublish(page, activeResolver)).not.toContain(HEADING_SKIP);
+  });
+
+  it("flags a heading skip nested inside a procedure section", async () => {
+    const page = validPage();
+    page.blocks = [
+      {
+        blockId: "ps1",
+        type: "procedure_section",
+        title: "Procedure",
+        level: 2,
+        blocks: [{ blockId: "h3", type: "heading", level: 3, text: "Step", html: "Step" }],
+      },
+      {
+        blockId: "ps2",
+        type: "procedure_section",
+        title: "Second",
+        level: 3,
+        blocks: [],
+      },
+    ];
+    // The H3 inside the first section is fine (its own H2 title precedes it); this asserts
+    // the nested walk runs at all rather than being dropped by the recursion filter.
+    expect(await validatePageForPublish(page, activeResolver)).not.toContain(HEADING_SKIP);
+
+    page.blocks = [
+      {
+        blockId: "ps1",
+        type: "procedure_section",
+        title: "Procedure",
+        level: 3,
+        blocks: [{ blockId: "h3", type: "heading", level: 3, text: "Step", html: "Step" }],
+      },
+    ];
+    expect(await validatePageForPublish(page, activeResolver)).toContain(HEADING_SKIP);
+  });
+
   it("flags images without alt text", async () => {
     const page = validPage();
     page.blocks = [{ blockId: "img", type: "image", url: "/kb/x/files/y", alt: "" }];

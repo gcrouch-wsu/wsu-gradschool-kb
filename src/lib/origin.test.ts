@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { isSameOrigin } from "@/lib/origin";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function req(headers: Record<string, string>): Request {
   const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
@@ -43,5 +47,48 @@ describe("isSameOrigin", () => {
 
   it("rejects when no host can be determined", () => {
     expect(isSameOrigin(req({ origin: "https://app.wsu.edu" }))).toBe(false);
+  });
+});
+
+describe("isSameOrigin with APP_PUBLIC_HOST configured", () => {
+  it("ignores a forwarded host outside the allowlist and falls back to the real host", () => {
+    vi.stubEnv("APP_PUBLIC_HOST", "app.wsu.edu");
+    // A spoofed x-forwarded-host must not become the origin the request is compared against.
+    expect(
+      isSameOrigin(
+        req({
+          host: "app.wsu.edu",
+          "x-forwarded-host": "evil.example.com",
+          origin: "https://evil.example.com",
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts a request whose forwarded host and Origin are both allowlisted", () => {
+    vi.stubEnv("APP_PUBLIC_HOST", "app.wsu.edu");
+    expect(
+      isSameOrigin(req({ "x-forwarded-host": "app.wsu.edu", origin: "https://app.wsu.edu" })),
+    ).toBe(true);
+  });
+
+  it("rejects when neither host header is allowlisted", () => {
+    vi.stubEnv("APP_PUBLIC_HOST", "app.wsu.edu");
+    expect(
+      isSameOrigin(req({ host: "other.example.com", origin: "https://other.example.com" })),
+    ).toBe(false);
+  });
+
+  it("supports several comma-separated hosts", () => {
+    vi.stubEnv("APP_PUBLIC_HOST", "app.wsu.edu, kb.wsu.edu");
+    expect(isSameOrigin(req({ host: "kb.wsu.edu", origin: "https://kb.wsu.edu" }))).toBe(true);
+  });
+
+  it("falls back to VERCEL_PROJECT_PRODUCTION_URL when APP_PUBLIC_HOST is unset", () => {
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "kb.vercel.app");
+    expect(isSameOrigin(req({ host: "kb.vercel.app", origin: "https://kb.vercel.app" }))).toBe(true);
+    expect(isSameOrigin(req({ host: "evil.example.com", origin: "https://evil.example.com" }))).toBe(
+      false,
+    );
   });
 });

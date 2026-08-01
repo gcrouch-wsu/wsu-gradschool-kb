@@ -13,9 +13,11 @@ import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from "@lexical/html";
 import { $createParagraphNode, $getRoot, type EditorState, type LexicalEditor } from "lexical";
 import {
+  hasActiveLexicalEditor,
   registerLexicalFlowEditor,
   unregisterLexicalFlowEditor,
 } from "@/lib/lexical/toolbar-bridge";
+import { getBoundEditorSurface } from "@/lib/rich-text-selection";
 import {
   bindPageEditor,
   handleEditorKeyDown,
@@ -94,11 +96,21 @@ function BridgePlugin({
       registerLexicalFlowEditor(editor, root, emit);
       bindPageEditor(root, emit);
     };
-    activate();
+    // Claim the shared toolbar on mount only when no live surface holds it; focus is what
+    // hands ownership over after that. Binding unconditionally here let a surface that
+    // mounted later steal the target from the one the caret was in (FB-39).
+    if (!hasActiveLexicalEditor()) {
+      activate();
+    }
     root.addEventListener("focusin", activate);
     return () => {
       root.removeEventListener("focusin", activate);
       unregisterLexicalFlowEditor(editor);
+      // Release the selection binding too, so a detached root cannot keep receiving
+      // toolbar commands after this surface goes away.
+      if (getBoundEditorSurface() === root) {
+        bindPageEditor(null, () => {});
+      }
     };
   }, [editor, onHtmlChange]);
 

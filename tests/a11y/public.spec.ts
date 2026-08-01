@@ -13,7 +13,9 @@ const PUBLIC_ROUTES = [
   { name: "global search", path: "/search?q=fact" },
   { name: "search", path: "/kb/graduate-school/search?q=fact" },
 ];
-const BASE = "http://127.0.0.1:3000";
+// Port comes from playwright.a11y.config.ts, which runs in this process — hardcoding 3000
+// pointed these at whatever dev server happened to be running.
+const BASE = `http://127.0.0.1:${process.env.A11Y_PORT || 3100}`;
 
 for (const route of PUBLIC_ROUTES) {
   test(`${route.name} has no axe violations`, async ({ page }) => {

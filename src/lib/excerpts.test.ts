@@ -3,6 +3,8 @@ import type { AdminSession } from "@/lib/auth";
 import {
   checkExcerptSourceForPublish,
   demoteExcerptBlocks,
+  excerptAudienceFor,
+  excerptSourceCheckerFor,
   extractExcerptSection,
   resolveExcerptForRead,
 } from "@/lib/excerpts";
@@ -294,5 +296,77 @@ describe("publish gate excerpt checks", () => {
       activeAsset,
     );
     expect(issues).toEqual([]);
+  });
+
+  // FB-40: an excerpt can be "published and intact" yet permanently unavailable to the host
+  // page's readers, because resolveExcerptForRead gates per reader.
+  describe("audience reachability", () => {
+    const publicKb = { id: "kb-grad-school", visibility: "public", status: "published" } as const;
+    const privateKb = { id: "kb-private-staff", visibility: "private", status: "published" } as const;
+
+    it("blocks a public page that includes a staff-only source", async () => {
+      vi.stubEnv("DATABASE_URL", "");
+      const issues = await validatePageForPublish(
+        publishablePage([
+          { blockId: "e1", type: "excerpt", sourcePageId: "page-section-templates" },
+        ]),
+        activeAsset,
+        excerptSourceCheckerFor(excerptAudienceFor(publicKb, { visibility: "public" })),
+      );
+      expect(issues.some((issue) => issue.includes("readers cannot open"))).toBe(true);
+    });
+
+    it("blocks a public page that includes a private-KB source", async () => {
+      vi.stubEnv("DATABASE_URL", "");
+      const issues = await validatePageForPublish(
+        publishablePage([
+          { blockId: "e1", type: "excerpt", sourcePageId: "page-private-staff-orientation" },
+        ]),
+        activeAsset,
+        excerptSourceCheckerFor(excerptAudienceFor(publicKb, { visibility: "public" })),
+      );
+      expect(issues.some((issue) => issue.includes("readers cannot open"))).toBe(true);
+    });
+
+    it("allows a staff-only host page to include a staff-only source in its own KB", async () => {
+      vi.stubEnv("DATABASE_URL", "");
+      const issues = await validatePageForPublish(
+        publishablePage([
+          { blockId: "e1", type: "excerpt", sourcePageId: "page-section-templates" },
+        ]),
+        activeAsset,
+        excerptSourceCheckerFor(excerptAudienceFor(publicKb, { visibility: "staff" })),
+      );
+      expect(issues).toEqual([]);
+    });
+
+    it("allows a private-KB host page to include a source from that same private KB", async () => {
+      vi.stubEnv("DATABASE_URL", "");
+      const issues = await validatePageForPublish(
+        publishablePage([
+          { blockId: "e1", type: "excerpt", sourcePageId: "page-private-staff-orientation" },
+        ]),
+        activeAsset,
+        excerptSourceCheckerFor(excerptAudienceFor(privateKb, { visibility: "public" })),
+      );
+      expect(issues).toEqual([]);
+    });
+
+    it("still allows a public page to include a public source", async () => {
+      vi.stubEnv("DATABASE_URL", "");
+      const issues = await validatePageForPublish(
+        publishablePage([
+          {
+            blockId: "e1",
+            type: "excerpt",
+            sourcePageId: "page-program-fact-sheets",
+            sourceHeadingBlockId: "access-heading",
+          },
+        ]),
+        activeAsset,
+        excerptSourceCheckerFor(excerptAudienceFor(publicKb, { visibility: "public" })),
+      );
+      expect(issues).toEqual([]);
+    });
   });
 });
