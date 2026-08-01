@@ -35,6 +35,12 @@ test.describe("keyboard list nesting", () => {
     await itemExactly(surface, "Two").click();
     await page.keyboard.press("End");
     await page.keyboard.press("Tab");
+    // Wait for each indent to land before touching the list again. An indent reparents the
+    // <li> and triggers a re-render; clicking back into the list mid-reconciliation leaves
+    // the next Tab acting on a stale selection and the level is silently never added. The
+    // rest of this test already asserts between interactions, which is why only this stretch
+    // was flaky — and only on CI, whose runners are slow enough to widen the window.
+    await expect(surface.locator("ol ol > li")).toHaveText(["Two"]);
 
     // Nest "Three" to level 3 in two steps. Re-focus the item between Tabs: the
     // indent reparents the <li>, which drops the caret, so a single burst of two
@@ -42,6 +48,7 @@ test.describe("keyboard list nesting", () => {
     await itemExactly(surface, "Three").click();
     await page.keyboard.press("End");
     await page.keyboard.press("Tab"); // -> level 2 (sibling of "Two")
+    await expect(surface.locator("ol ol > li")).toHaveText(["Two", "Three"]);
     await itemExactly(surface, "Three").click();
     await page.keyboard.press("End");
     await page.keyboard.press("Tab"); // -> level 3 (nested under "Two")
