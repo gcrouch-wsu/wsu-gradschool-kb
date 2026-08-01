@@ -454,8 +454,8 @@ share the page lock and the process-global in-memory store.
   work; not durable). Set = Neon (schema auto-creates/seeds). Two Vercel-managed Neon projects
   back this app: **kb-local-test** (`solitary-smoke-86654244`) for local/Development and
   **neon-crimson-battery** (`withered-dust-89775495`) for Production. `npm run test:db` writes and
-  deletes against whatever `DATABASE_URL` names, so confirm the endpoint host before running it —
-  kb-local-test carries a copy of real content, so the data alone does not identify which is which.
+  deletes against whatever `DATABASE_URL` names, so confirm the endpoint host before running it.
+  Identify the target by endpoint host, not by its contents.
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob; without it, DOCX import skips images and uploads fall back
   to data-backed assets.
 - `CRON_SECRET` — bearer token Vercel Cron sends to `/api/admin/cron/audit-cleanup`,
