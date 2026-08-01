@@ -17,7 +17,6 @@ import {
   registerLexicalFlowEditor,
   unregisterLexicalFlowEditor,
 } from "@/lib/lexical/toolbar-bridge";
-import { getBoundEditorSurface } from "@/lib/rich-text-selection";
 import {
   bindPageEditor,
   handleEditorKeyDown,
@@ -106,11 +105,13 @@ function BridgePlugin({
     return () => {
       root.removeEventListener("focusin", activate);
       unregisterLexicalFlowEditor(editor);
-      // Release the selection binding too, so a detached root cannot keep receiving
-      // toolbar commands after this surface goes away.
-      if (getBoundEditorSurface() === root) {
-        bindPageEditor(null, () => {});
-      }
+      // Deliberately does NOT clear the shared selection binding. Doing so looked like tidy
+      // defence-in-depth and caused an intermittent editor bug: DOM surgery (list indent)
+      // restructures blocks and unmounts a surface while the caret stays inside a surviving
+      // one. `focusin` only fires when focus *enters* an element, so focus never leaving means
+      // nothing rebinds — the next Tab found no bound surface and silently did nothing, so a
+      // three-level list stopped nesting at two. `hasActiveLexicalEditor()` already treats a
+      // detached root as free, which is what lets the next surface claim the toolbar.
     };
   }, [editor, onHtmlChange]);
 
