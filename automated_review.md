@@ -158,6 +158,16 @@ Fixed by asserting the intermediate level after each indent, which gives Playwri
 condition to synchronize on. The rest of the test already did this, which is why only that one
 stretch flaked.
 
+The intermediate assertions were not the fix — they were the diagnosis. They converted the
+symptom ("third level missing") into the actual cause: after the first Tab the nested item was
+**"Three", not "Two"**, meaning the click on "Two" never moved the caret. It stayed where
+`makeOrderedList` left it after typing, so Tab indented the wrong item.
+
+The real fix is `caretInItem()`, which clicks and then polls `document.getSelection()` until
+the caret is genuinely inside the intended `<li>` before sending keys. A bare
+`click()` + `press("End")` is not sufficient on a slow runner: the click can land before the
+contentEditable surface is ready to take a selection, and it is silently dropped.
+
 **Do not try to validate this class of fix by local repeat runs.** A developer machine is fast
 enough to hide the race: 25/25 local passes while CI still failed. Only CI, whose runners are
 slower and contended, exercises the window. An earlier attempt concluded "fixed" from 17/17
