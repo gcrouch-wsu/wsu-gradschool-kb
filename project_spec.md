@@ -574,6 +574,15 @@ manual redirect persistence, and the single-active-version DB invariant.
   (2) the applied-check runs *before* the lock is taken, so two racing cold starts can both execute
   the same migration — every statement must be individually idempotent, and the `_schema_migrations`
   insert uses `ON CONFLICT DO NOTHING` for that reason.
+- **`userEditedRef` is a ref, never state.** Calling `setState` from the capture listener
+  re-renders the editor mid HTML→Visual transition and drops in-flight content — it lost an
+  editor note outright. Nothing needs to re-render when the flag flips: the work-protection
+  effects already re-run on every snapshot change and read the ref then. The capture listener
+  runs before React processes the same event, so the ref is set before the effect sees the
+  resulting snapshot.
+- **The listeners are native and capture-phase, not React props.** React's synthetic `onInput`
+  on the form does not see edits inside the Lexical contentEditable, so gating on it silently
+  disabled work protection for body edits while leaving it working for metadata fields.
 - **Work protection is armed by a real edit, not by `dirty`.** `dirty` compares serialized
   snapshots, and the editor re-serializes on benign actions (opening the HTML source view,
   Lexical normalizing markup on first focus), so it goes true on pages nobody edited. The
