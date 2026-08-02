@@ -44,6 +44,18 @@ async function caretInItem(page: Page, surface: ReturnType<Page["locator"]>, tex
     expect(inItem).toBe(true);
   }).toPass({ timeout: 10_000 });
   await page.keyboard.press("End");
+  // Let Lexical pick the new selection up before any key is sent.
+  //
+  // The Tab path reads two different selection sources: handleEditorTabKey decides whether to
+  // act from window.getSelection(), then applyIndent() delegates to lexicalIndent(), which
+  // acts on Lexical's own selection. Lexical syncs from the DOM on its next frame, so a key
+  // sent inside that window indents whatever was selected *before* the click — which is how
+  // "click Two, press Tab" ended up indenting "Three". Two frames is the browser's own
+  // synchronization point, not an arbitrary sleep. A human's click-to-key gap is ~100ms, so
+  // real editing never lands inside this window.
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
 }
 
 test.describe("keyboard list nesting", () => {
