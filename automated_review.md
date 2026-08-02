@@ -147,6 +147,31 @@ because a refresh overwrites local edits. Fix belongs upstream or in the import 
 
 ---
 
+## 5b. Sourced snapshots go stale silently
+
+The P&P table on *Faculty of the Graduate School* rendered with its `colspan` stripped — six
+empty cells with the group label stranded beside them — while the source rendered correctly.
+
+The pipeline was never broken. Sourced blocks are **snapshots**: this one was imported before
+table-span support landed and only changes on an explicit refresh, so it kept serving the
+pre-fix output indefinitely. **Refresh from source** in the editor fixed it; a regression test
+now pins span survival using the real table as a fixture
+(`tests/fixtures/pp-spanned-table.html`).
+
+Worth knowing: nothing surfaces a snapshot that predates a parser improvement. The staleness
+cron only compares against the *source*, which had not changed. If parsing changes again, every
+existing sourced block keeps its old output until someone refreshes it by hand.
+
+**Two verification traps hit while diagnosing this**, both of which produced false "it's broken"
+readings:
+
+- React server-renders the attribute as **`colSpan`** (capital S). A case-sensitive grep for
+  `colspan=` reports the span missing on markup that is perfectly correct.
+- The public page is CDN-cached. Fetch with a cache-busting query and check
+  `x-vercel-cache: MISS` before concluding a content change did not take effect.
+
+---
+
 ## 5a. Flaky test: `tests/editor/list-nesting.spec.ts`
 
 Failed intermittently on CI (never locally). The three-level nesting assertion found zero
