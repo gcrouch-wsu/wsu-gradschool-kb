@@ -366,6 +366,12 @@ export interface PageServerDraft {
   authorUserId: string;
   snapshot: PageRevisionSnapshot;
   updatedAt: string;
+  /**
+   * Hash of the saved page this draft diverged from, so the editor can tell whether the page
+   * has been saved since. Null for drafts written before the base was recorded — treat that
+   * as "unknown", never as "current".
+   */
+  baseHash?: string | null;
 }
 
 export type AuditEntityType = "page" | "asset" | "kb" | "import" | "redirect" | "user" | "settings" | "search" | "webhook";

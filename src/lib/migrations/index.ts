@@ -1052,6 +1052,16 @@ const migrations: Migration[] = [
       await sql`CREATE INDEX IF NOT EXISTS idx_kb_ai_usage_day ON kb_ai_usage(day DESC)`;
     },
   },
+  {
+    id: "045_page_server_drafts_base",
+    async up(sql) {
+      // Hash of the saved page the draft diverged from. Without it nothing can tell whether
+      // the page has moved on since the draft was written, so "Restore" silently reverts any
+      // save made in the meantime. Nullable: drafts written before this migration have no
+      // recorded base and are surfaced as "unknown", not as up to date.
+      await sql`ALTER TABLE page_server_drafts ADD COLUMN IF NOT EXISTS base_hash TEXT`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

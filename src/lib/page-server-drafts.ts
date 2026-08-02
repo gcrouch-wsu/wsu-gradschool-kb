@@ -8,7 +8,7 @@ export async function getPageServerDraft(pageId: string, authorUserId: string): 
   await ensureSchema();
   const sql = getSql();
   const rows = (await sql`
-    SELECT page_id, author_user_id, snapshot, updated_at
+    SELECT page_id, author_user_id, snapshot, updated_at, base_hash
     FROM page_server_drafts
     WHERE page_id = ${pageId} AND author_user_id = ${authorUserId}
     LIMIT 1
@@ -17,6 +17,7 @@ export async function getPageServerDraft(pageId: string, authorUserId: string): 
     author_user_id: string;
     snapshot: PageRevisionSnapshot;
     updated_at: string;
+    base_hash: string | null;
   }>;
   const row = rows[0];
   if (!row) {
@@ -27,6 +28,7 @@ export async function getPageServerDraft(pageId: string, authorUserId: string): 
     authorUserId: row.author_user_id,
     snapshot: row.snapshot,
     updatedAt: row.updated_at,
+    baseHash: row.base_hash,
   };
 }
 
@@ -34,21 +36,23 @@ export async function savePageServerDraft(
   pageId: string,
   authorUserId: string,
   snapshot: PageRevisionSnapshot,
+  baseHash: string | null = null,
 ): Promise<PageServerDraft> {
   const updatedAt = new Date().toISOString();
   if (!isDatabaseEnabled()) {
-    return { pageId, authorUserId, snapshot, updatedAt };
+    return { pageId, authorUserId, snapshot, updatedAt, baseHash };
   }
   await ensureSchema();
   const sql = getSql();
   await sql`
-    INSERT INTO page_server_drafts (page_id, author_user_id, snapshot, updated_at)
-    VALUES (${pageId}, ${authorUserId}, ${JSON.stringify(snapshot)}, ${updatedAt})
+    INSERT INTO page_server_drafts (page_id, author_user_id, snapshot, updated_at, base_hash)
+    VALUES (${pageId}, ${authorUserId}, ${JSON.stringify(snapshot)}, ${updatedAt}, ${baseHash})
     ON CONFLICT (page_id, author_user_id) DO UPDATE
     SET snapshot = EXCLUDED.snapshot,
-        updated_at = EXCLUDED.updated_at
+        updated_at = EXCLUDED.updated_at,
+        base_hash = EXCLUDED.base_hash
   `;
-  return { pageId, authorUserId, snapshot, updatedAt };
+  return { pageId, authorUserId, snapshot, updatedAt, baseHash };
 }
 
 export async function deletePageServerDraft(pageId: string, authorUserId: string): Promise<void> {
