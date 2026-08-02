@@ -4,6 +4,7 @@ import {
   TARGET_PAGE_ID,
   TARGET_PAGE_PUBLIC_PATH,
   openEditor,
+  resetDocument,
   saveAndPublish,
   setDocumentHtml,
 } from "./helpers";
@@ -47,6 +48,32 @@ test.describe("work protection and editor-only notes", () => {
     await page.getByRole("button", { name: "Visual", exact: true }).click();
     await page.waitForTimeout(5000);
 
+    const stored = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `kb-editor-backup:${TARGET_PAGE_ID}`,
+    );
+    expect(stored).toBeNull();
+  });
+
+  // Saving must disarm the edit flag. It previously stayed armed for the rest of the session,
+  // so the next benign re-serialization wrote a fresh recovery draft immediately after a save —
+  // "I deleted the drafts, saved the page, and see two draft warnings again".
+  test("saving clears the unsaved indicator and does not immediately re-arm", async ({ page }) => {
+    await openEditor(page);
+    await resetDocument(page);
+    await page.evaluate((key) => window.localStorage.removeItem(key), `kb-editor-backup:${TARGET_PAGE_ID}`);
+
+    const surface = page.locator(".wysiwyg-surface").first();
+    await surface.click();
+    await page.keyboard.type(" armed");
+    await expect(page.locator(".unsaved-pill").first()).toBeVisible();
+
+    await saveAndPublish(page);
+    await expect(page.locator(".unsaved-pill")).toHaveCount(0);
+
+    // Give the debounce longer than its 2s window to prove nothing re-arms on its own.
+    await page.waitForTimeout(5000);
+    await expect(page.locator(".unsaved-pill")).toHaveCount(0);
     const stored = await page.evaluate(
       (key) => window.localStorage.getItem(key),
       `kb-editor-backup:${TARGET_PAGE_ID}`,

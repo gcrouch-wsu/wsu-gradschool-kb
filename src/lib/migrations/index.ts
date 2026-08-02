@@ -1062,6 +1062,18 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE page_server_drafts ADD COLUMN IF NOT EXISTS base_hash TEXT`;
     },
   },
+  {
+    id: "046_drop_page_server_drafts_base",
+    async up(sql) {
+      // 045 added base_hash so the editor could tell whether a draft was still based on the
+      // current page. That comparison was unreliable: the hash was taken over the client's
+      // saved snapshot, which becomes the editor's normalized content after an in-session
+      // save, so it reported "the page has been saved since" for drafts that were current.
+      // Staleness is now answered server-side against kb_page_revisions.created_at, which is
+      // authoritative and precise, and nothing reads this column.
+      await sql`ALTER TABLE page_server_drafts DROP COLUMN IF EXISTS base_hash`;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

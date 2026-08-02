@@ -187,8 +187,8 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
 Schema changes are applied automatically on first request via versioned migrations in
-`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `045_page_server_drafts_base`**
-(server-draft base marker). Recent migrations also cover AI token metering (`044`), per-user
+`src/lib/migrations/` (tracked in `_schema_migrations`). **Current head: `046_drop_page_server_drafts_base`**
+(removes the short-lived server-draft base marker). Recent migrations also cover AI token metering (`044`), per-user
 server drafts (`043`), curated
 next-step copy (`042`), platform features including webhooks/server drafts/search synonyms
 (`041`), asset tags/keywords and tag-aware asset search vectors (`040`), page tags/keywords
