@@ -9,6 +9,51 @@ import {
 } from "./helpers";
 
 test.describe("work protection and editor-only notes", () => {
+  // The restore test below seeds a backup and never writes one, so the write path had no
+  // coverage — which is how a change that stopped arming work protection reached production
+  // with a green suite. These two cover both directions of the gate.
+  test("typing in the body arms work protection and writes a backup", async ({ page }) => {
+    await openEditor(page);
+    await page.evaluate((key) => window.localStorage.removeItem(key), `kb-editor-backup:${TARGET_PAGE_ID}`);
+
+    const surface = page.locator(".wysiwyg-surface").first();
+    await surface.click();
+    await page.keyboard.type("Recovery probe");
+
+    // The backup is debounced; poll rather than sleep.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate((key) => window.localStorage.getItem(key), `kb-editor-backup:${TARGET_PAGE_ID}`),
+        { timeout: 15_000 },
+      )
+      .not.toBeNull();
+
+    const stored = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `kb-editor-backup:${TARGET_PAGE_ID}`,
+    );
+    expect(stored).toContain("Recovery probe");
+
+    await page.evaluate((key) => window.localStorage.removeItem(key), `kb-editor-backup:${TARGET_PAGE_ID}`);
+  });
+
+  test("opening the HTML view without editing does not write a backup", async ({ page }) => {
+    await openEditor(page);
+    await page.evaluate((key) => window.localStorage.removeItem(key), `kb-editor-backup:${TARGET_PAGE_ID}`);
+
+    // The benign action that used to leave a recovery draft behind on pages nobody edited.
+    await page.getByTitle("Edit the document HTML").click();
+    await page.getByRole("button", { name: "Visual", exact: true }).click();
+    await page.waitForTimeout(5000);
+
+    const stored = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `kb-editor-backup:${TARGET_PAGE_ID}`,
+    );
+    expect(stored).toBeNull();
+  });
+
   test("local draft backup restores body content and lifecycle metadata", async ({ page }) => {
     const backupSnapshot = {
       title: "Restored local draft title",

@@ -568,15 +568,44 @@ export function AdminPageEditorForm({
   // benign actions — opening the HTML source view, or Lexical normalizing markup on first
   // focus — which produced "drafts" for pages nobody had edited. Those trained editors to
   // dismiss the banner on sight, which is exactly the wrong reflex for a recovery feature.
+  // A ref, deliberately not state: calling setState from this listener re-rendered the editor
+  // in the middle of the HTML->Visual transition and dropped in-flight content (it lost an
+  // editor note outright). Nothing needs to re-render when this flips — the effects below
+  // already re-run whenever the snapshot changes, and they read the ref at that point. The
+  // capture listener runs before React processes the same event, so the ref is always set
+  // before the effect sees the resulting snapshot.
   const userEditedRef = useRef(false);
-  const [userEdited, setUserEdited] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const markUserEdited = useCallback(() => {
-    if (userEditedRef.current) {
+    userEditedRef.current = true;
+  }, []);
+
+  // Native listeners in the CAPTURE phase, not React props.
+  //
+  // React's synthetic `onInput` on the form did not see edits made inside the Lexical
+  // contentEditable, so a genuine edit never armed recovery — worse than the spurious drafts
+  // this gate exists to prevent. Capture runs before any descendant handler, so nothing
+  // between the surface and the form can swallow the signal.
+  //
+  // `input`/`change` cover typing and form controls; paste/drop/cut cover content arriving
+  // without a keystroke. Deliberately not `keydown` or `pointerdown`: arrow keys, Tab, and
+  // clicking a toolbar toggle are navigation, not edits, and arming on those would restore
+  // the original bug where merely opening the HTML view produced a draft.
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) {
       return;
     }
-    userEditedRef.current = true;
-    setUserEdited(true);
-  }, []);
+    const events = ["input", "change", "paste", "drop", "cut"] as const;
+    for (const name of events) {
+      form.addEventListener(name, markUserEdited, true);
+    }
+    return () => {
+      for (const name of events) {
+        form.removeEventListener(name, markUserEdited, true);
+      }
+    };
+  }, [markUserEdited]);
   // Bumped when a backup is restored so the document editor remounts with the
   // restored blocks (it keeps its own internal state after mount).
   const [editorEpoch, setEditorEpoch] = useState(0);
@@ -585,14 +614,14 @@ export function AdminPageEditorForm({
     // Same gate as the draft: warn about work the user did, not about the editor having
     // re-serialized the document. Warning on a page that was only opened teaches people to
     // click through the dialog without reading it.
-    if (!dirty || !userEdited) return;
+    if (!dirty || !userEditedRef.current) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty, userEdited]);
+  }, [dirty, currentSnapshot]);
 
   // Offer to restore a backup left behind by a crash, timeout, or closed tab.
   useEffect(() => {
@@ -672,7 +701,7 @@ export function AdminPageEditorForm({
   // Continuously stash unsaved work locally (debounced) so it survives
   // crashes and session timeouts. Cleared on successful save.
   useEffect(() => {
-    if (!dirty || !userEdited) return;
+    if (!dirty || !userEditedRef.current) return;
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(
@@ -684,11 +713,11 @@ export function AdminPageEditorForm({
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [backupKey, currentSnapshot, dirty, userEdited]);
+  }, [backupKey, currentSnapshot, dirty]);
 
   useEffect(() => {
     // Requires a real edit, not merely a snapshot difference — see `markUserEdited`.
-    if (!dirty || !userEdited) {
+    if (!dirty || !userEditedRef.current) {
       return;
     }
     const timer = setTimeout(() => {
@@ -705,7 +734,7 @@ export function AdminPageEditorForm({
     return () => clearTimeout(timer);
     // buildRevisionSnapshot closes over the same editor fields as currentSnapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot fields are covered by currentSnapshot
-  }, [currentSnapshot, dirty, page.id, savedSnapshot, userEdited]);
+  }, [currentSnapshot, dirty, page.id, savedSnapshot]);
 
   function clearBackup() {
     try {
@@ -1363,15 +1392,7 @@ export function AdminPageEditorForm({
 
       <form
         className="form card editor-form"
-        // Real interaction is what arms the recovery draft. `input` covers typing and the
-        // synthetic input events the toolbar dispatches after DOM surgery; `change` covers
-        // selects and checkboxes; paste/drop/cut cover content arriving without a keystroke.
-        // Deliberately not `keydown` — arrow keys and Tab navigation are not edits.
-        onChange={markUserEdited}
-        onCut={markUserEdited}
-        onDrop={markUserEdited}
-        onInput={markUserEdited}
-        onPaste={markUserEdited}
+        ref={formRef}
         onSubmit={(event) => event.preventDefault()}
       >
         {error && <p className="error">{error}</p>}
