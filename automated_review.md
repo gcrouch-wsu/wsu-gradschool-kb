@@ -193,6 +193,21 @@ the caret is genuinely inside the intended `<li>` before sending keys. A bare
 `click()` + `press("End")` is not sufficient on a slow runner: the click can land before the
 contentEditable surface is ready to take a selection, and it is silently dropped.
 
+**Root cause (found on the fourth attempt, by reading the code rather than inferring):** the Tab
+path reads two different selection sources. `handleEditorTabKey` gates on
+`window.getSelection()` via `listItemFromSelection`, then `applyIndent` delegates to
+`lexicalIndent()`, which acts on **Lexical's own selection**. Lexical syncs from the DOM on its
+next frame, so a key sent inside that window indents the item selected *before* the click. The
+test now waits two animation frames after positioning the caret — the browser's own
+synchronization point, not an arbitrary sleep. Recorded in `project_spec.md` §8.
+
+Real editing does not hit this: a human click-to-key gap is ~100ms against a ~16ms window.
+
+Three earlier attempts were wrong, and each was pushed to `main` on the strength of local runs:
+removing an unbind-on-unmount (correct in itself, wrong cause), adding intermediate assertions
+(a diagnosis, not a fix), and syncing the DOM selection (the wrong selection source). Each time
+"it did not reproduce locally" was treated as "fixed".
+
 **Do not try to validate this class of fix by local repeat runs.** A developer machine is fast
 enough to hide the race: 25/25 local passes while CI still failed. Only CI, whose runners are
 slower and contended, exercises the window. An earlier attempt concluded "fixed" from 17/17

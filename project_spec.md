@@ -527,6 +527,14 @@ manual redirect persistence, and the single-active-version DB invariant.
   `DATABASE_URL`.
 - **The editor surface binds once** (stable ref callback in `PageDocumentEditor`); re-creating the
   ref each render previously thrashed selection/caret. Keep callbacks stable / behind refs.
+- **The Tab path reads two selection sources; keep them in sync.** `handleEditorTabKey` decides
+  whether to act from `window.getSelection()` (via `listItemFromSelection`), then `applyIndent`
+  delegates to `lexicalIndent()`, which acts on **Lexical's own selection**. Lexical syncs from
+  the DOM on its next frame, so anything that moves the caret and immediately sends a key can
+  indent the previously-selected item. Real editing never hits it (a human click-to-key gap is
+  ~100ms against a ~16ms window), but automation does — it made
+  `tests/editor/list-nesting.spec.ts` flaky on CI for four merges. If you add another path that
+  reads one selection to gate and the other to act, expect the same class of bug.
 - **Any rich-text sub-editor must bind the shared toolbar target.** Flow, card, procedure, and table
   cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
   binding the active surface makes toolbar commands fail because the selection is treated as outside
