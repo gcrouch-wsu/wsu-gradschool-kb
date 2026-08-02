@@ -773,11 +773,14 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 
 **Product / platform items that remain future (not yet built):**
 
-None. The 2026-07 hardening backlog (FB-38–FB-44) shipped on 2026-08-01. The two remaining
-concepts — WSU SSO and a Confluence import/export bridge — were dropped by the maintainer on the
-same date rather than deferred; do not re-add them without maintainer direction.
+**FB-45 — readable diffs** is the one open build item: the draft and revision comparison is a
+flat line diff, which does not scale to long pages. Ratified 2026-08-02.
 
-The only open item is **FB-25**, the manual release gate, which is QA rather than new code.
+The 2026-07 hardening backlog (FB-38–FB-44) shipped on 2026-08-01. The two remaining concepts —
+WSU SSO and a Confluence import/export bridge — were dropped by the maintainer on the same date
+rather than deferred; do not re-add them without maintainer direction.
+
+**FB-25**, the manual release gate, also remains open but is QA rather than new code.
 
 **Editor framework:** Lexical Phases 1–4 + FB-26 landed for flow, cards, procedure, and table-cell
 surfaces, and FB-39 closed the nested-surface toolbar binding risk. Close-out evidence is part of
@@ -804,9 +807,49 @@ items were removed from this document; their history is in git.
   live-DB tests when DB behavior changes.
 - When completing an item: flip `status:` and leave a one-line DONE note, or remove the item and
   update §9 / §11 so the future set stays accurate.
-- **Open set:** FB-25 only (release QA). FB-38–FB-44 are done; FB-30 and FB-37 were dropped.
+- **Open set:** FB-45 (build) and FB-25 (release QA). FB-38–FB-44 are done; FB-30 and FB-37 were dropped.
 
 ---
+
+### FB-45 — Readable diffs for drafts and revisions
+
+`[AI-AGENT-TASK] id:FB-45  priority:med  area:editor-ux  effort:M  status:open`
+
+- **Why:** `diffLines` renders a flat, whole-line, plain-text diff, and it backs both the
+  recovery-draft banner and the revision History compare. On a long page it forces the reader to
+  do the work the tool should: a one-word edit shows the whole line removed and re-added, every
+  unchanged line still renders, and the `<ol>` line numbers correspond to nothing an editor can
+  navigate to. `revisionPlainDocument` also flattens blocks, so a change cannot be attributed to
+  a heading, a table cell, or a list item.
+- **Do first (small, self-contained):**
+  1. **Collapse unchanged regions** — 2–3 lines of context per change with an expandable
+     "… N unchanged lines …" separator. Biggest single win for long pages.
+  2. **Word-level highlighting inside changed lines** — keep the line pairing, diff within the
+     lines already known to differ.
+  3. **Replace line numbers with location labels** derived from the nearest preceding heading
+     ("under *Need help?*"), because editors navigate by section.
+  4. **Name the changed settings** when only metadata differs — today that case reads "the page
+     text matches; only page settings differ", which is true and useless.
+- **Then (the part that actually scales):** a **block-level change summary** read first, with the
+  line diff underneath as detail on demand — "Heading *Before you begin* — text changed",
+  "Paragraph added after *Step 3*", "Table row removed". Blocks carry stable `data-block-id`s,
+  which is what makes this possible and what a text diff cannot use: matching ids detect a
+  **moved** block (a line diff renders a move as an unrelated delete and add, often screens
+  apart) and give each entry an anchor to jump to. The summary is proportional to the number of
+  changes rather than the length of the page.
+- **Considered and not recommended for now:** rendered track-changes over formatted content
+  (most readable, but tables, images, and block-type changes all need separate handling), and
+  side-by-side (needs more width than the banner has — would require a modal).
+- **Accessibility:** convey add/remove with real `<ins>`/`<del>` elements rather than colour plus
+  a `+`/`−` glyph, so assistive tech announces the change type. Nothing checks admin UI the way
+  the publish gate checks content, so this will not be caught for you.
+- **Touch points:** `src/lib/revision-diff.ts`, `src/components/AdminPageEditorForm.tsx` (draft
+  banner), `src/components/PageHistoryPanel.tsx` (revision compare), `src/lib/types.ts` if the
+  summary needs a block-change shape.
+- **Acceptance:** a long page with a handful of edits shows what changed without scrolling past
+  unchanged content; a one-word edit is visible as a word, not two whole lines; each entry says
+  where the change is in the page's own vocabulary; both the draft banner and History compare use
+  the same implementation.
 
 ### FB-09 / FB-29 — Editor framework migration
 

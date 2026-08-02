@@ -145,6 +145,11 @@ because a refresh overwrites local edits. Fix belongs upstream or in the import 
 
 **A link checker.** See §2.
 
+**Readable diffs (FB-45).** The recovery-draft banner and the revision History compare share a
+flat, whole-line, plain-text diff that does not scale to long pages: a one-word edit renders as
+two whole lines, nothing collapses, and the line numbers point at nothing an editor can
+navigate to. Ratified 2026-08-02; scoped in `project_spec.md` §12.
+
 ---
 
 ## 5b. Sourced snapshots go stale silently
