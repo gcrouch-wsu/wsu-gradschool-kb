@@ -68,7 +68,12 @@ export function PublicSiteChrome({
             ))}
             {session?.role !== "viewer" && (
               // Plain anchor: entering the admin shell needs a full page load.
-              <a href={session ? "/admin" : "/admin/sign-in?next=%2Fadmin"}>Admin</a>
+              // Signing in from an article returns to that article rather than dumping the
+              // editor on the admin dashboard — they were reading a page and wanted to act on
+              // it, and the "Edit page" button is waiting for them once the session exists.
+              <a href={session ? "/admin" : `/admin/sign-in?next=${encodeURIComponent(pathname || "/admin")}`}>
+                Admin
+              </a>
             )}
             {session && (
               <span className="nav-user" title={`Signed in as ${session.email}`}>
