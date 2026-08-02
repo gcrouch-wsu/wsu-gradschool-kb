@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { deletePageServerDraft, getPageServerDraft, savePageServerDraft } from "@/lib/page-server-drafts";
+import {
+  deletePageServerDraft,
+  getPageServerDraft,
+  pageSavedAfterDraft,
+  savePageServerDraft,
+} from "@/lib/page-server-drafts";
 import { getPageByIdForAdmin } from "@/lib/kb-store";
 import { logError } from "@/lib/log";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -20,7 +25,10 @@ export async function GET(
     return denied;
   }
   const draft = await getPageServerDraft(pageId, guard.session.userId);
-  return NextResponse.json({ draft });
+  // Staleness is answered here, against the revision log, rather than by the client comparing
+  // hashes of its own editor state — see pageSavedAfterDraft.
+  const pageSavedSince = draft ? await pageSavedAfterDraft(pageId, draft.updatedAt) : null;
+  return NextResponse.json({ draft, pageSavedSince });
 }
 
 export async function PUT(
@@ -37,16 +45,12 @@ export async function PUT(
   if (denied) {
     return denied;
   }
-  const body = (await request.json().catch(() => null)) as {
-    snapshot?: PageRevisionSnapshot;
-    baseHash?: unknown;
-  } | null;
+  const body = (await request.json().catch(() => null)) as { snapshot?: PageRevisionSnapshot } | null;
   if (!body?.snapshot || typeof body.snapshot !== "object") {
     return NextResponse.json({ message: "Invalid snapshot." }, { status: 400 });
   }
-  const baseHash = typeof body.baseHash === "string" && body.baseHash ? body.baseHash : null;
   try {
-    const draft = await savePageServerDraft(pageId, guard.session.userId, body.snapshot, baseHash);
+    const draft = await savePageServerDraft(pageId, guard.session.userId, body.snapshot);
     return NextResponse.json({ draft });
   } catch (error) {
     logError(error, { route: "/api/admin/pages/[pageId]/server-draft", action: "save" });

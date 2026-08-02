@@ -109,39 +109,10 @@ describe("/api/admin/pages/[pageId]/server-draft", () => {
       { params: Promise.resolve({ pageId: page.id }) },
     );
     expect(response.status).toBe(200);
-    // baseHash records which saved version the draft diverged from, so a later session can
-    // warn before restoring over a page that has been saved since.
-    expect(drafts.savePageServerDraft).toHaveBeenCalledWith(page.id, session.userId, snapshot, null);
+    expect(drafts.savePageServerDraft).toHaveBeenCalledWith(page.id, session.userId, snapshot);
   });
 
-  it("stores the base hash when the client supplies one", async () => {
-    const drafts = await setup();
-    const { PUT } = await import("@/app/api/admin/pages/[pageId]/server-draft/route");
-    const response = await PUT(
-      new Request("http://localhost/api/admin/pages/page-1/server-draft", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot, baseHash: "abc123-9" }),
-      }),
-      { params: Promise.resolve({ pageId: page.id }) },
-    );
-    expect(response.status).toBe(200);
-    expect(drafts.savePageServerDraft).toHaveBeenCalledWith(page.id, session.userId, snapshot, "abc123-9");
-  });
 
-  it("ignores a non-string base hash rather than storing junk", async () => {
-    const drafts = await setup();
-    const { PUT } = await import("@/app/api/admin/pages/[pageId]/server-draft/route");
-    await PUT(
-      new Request("http://localhost/api/admin/pages/page-1/server-draft", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot, baseHash: { nope: true } }),
-      }),
-      { params: Promise.resolve({ pageId: page.id }) },
-    );
-    expect(drafts.savePageServerDraft).toHaveBeenCalledWith(page.id, session.userId, snapshot, null);
-  });
 
   it("deletes only the authenticated user's server draft", async () => {
     const drafts = await setup();

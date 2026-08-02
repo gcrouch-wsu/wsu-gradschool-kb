@@ -295,25 +295,6 @@ function countBlockIssues(blocks: ContentBlock[]): BlockIssueCounts {
   return { imagesMissingAlt, tablesMissingHeaders, excerptCount, assetRefCount };
 }
 
-/**
- * Short, stable fingerprint of a serialized editor snapshot.
- *
- * Used only to answer "is this draft still based on the page as it stands?" — never for
- * integrity or security, so a cheap non-cryptographic hash is the right tool. Collisions would
- * at worst suppress a staleness warning, which is why the warning also treats a missing hash
- * as unknown rather than assuming the draft is current.
- */
-function hashSnapshot(snapshot: string): string {
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let i = 0; i < snapshot.length; i += 1) {
-    const c = snapshot.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 0x01000193);
-    h2 = Math.imul(h2 + c, 0x85ebca6b) ^ (h2 >>> 13);
-  }
-  return `${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}-${snapshot.length.toString(36)}`;
-}
-
 export function AdminPageEditorForm({
   kb,
   page,
@@ -556,9 +537,9 @@ export function AdminPageEditorForm({
   const [serverDraftNotice, setServerDraftNotice] = useState<{
     updatedAt: string;
     snapshot: PageRevisionSnapshot;
-    /** False when the page was saved after this draft was written. */
+    /** True when the server confirmed the page has not been saved since the draft. */
     baseIsCurrent: boolean;
-    /** True when the draft predates base tracking, so staleness cannot be judged. */
+    /** True when staleness could not be determined (no revisions, or no database). */
     baseUnknown: boolean;
   } | null>(null);
   const [draftCompareOpen, setDraftCompareOpen] = useState(false);
@@ -576,6 +557,10 @@ export function AdminPageEditorForm({
   // before the effect sees the resulting snapshot.
   const userEditedRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
+  // UI mirror of the ref. Updated from an effect so the state change lands after render —
+  // setting it inside the capture listener re-rendered the editor mid HTML->Visual transition
+  // and dropped in-flight content.
+  const [userEdited, setUserEdited] = useState(false);
   const markUserEdited = useCallback(() => {
     userEditedRef.current = true;
   }, []);
@@ -591,6 +576,12 @@ export function AdminPageEditorForm({
   // without a keystroke. Deliberately not `keydown` or `pointerdown`: arrow keys, Tab, and
   // clicking a toolbar toggle are navigation, not edits, and arming on those would restore
   // the original bug where merely opening the HTML view produced a draft.
+  useEffect(() => {
+    if (userEditedRef.current !== userEdited) {
+      setUserEdited(userEditedRef.current);
+    }
+  }, [currentSnapshot, userEdited]);
+
   useEffect(() => {
     const form = formRef.current;
     if (!form) {
@@ -680,12 +671,14 @@ export function AdminPageEditorForm({
         if (draftSnapshot === savedSnapshot) {
           return;
         }
-        const baseHash = typeof data.draft.baseHash === "string" ? data.draft.baseHash : null;
+        // The server compares the draft against the revision log; the client no longer
+        // second-guesses it by hashing its own editor state.
+        const savedSince = data.pageSavedSince;
         setServerDraftNotice({
           updatedAt: typeof data.draft.updatedAt === "string" ? data.draft.updatedAt : "",
           snapshot,
-          baseIsCurrent: baseHash !== null && baseHash === hashSnapshot(savedSnapshot),
-          baseUnknown: baseHash === null,
+          baseIsCurrent: savedSince === false,
+          baseUnknown: savedSince !== true && savedSince !== false,
         });
       })
       .catch(() => {
@@ -726,7 +719,7 @@ export function AdminPageEditorForm({
         headers: { "Content-Type": "application/json" },
         // savedSnapshot identifies the page this draft diverged from, so a later session can
         // tell whether the page has been saved since and warn before restoring over it.
-        body: JSON.stringify({ snapshot: buildRevisionSnapshot(), baseHash: hashSnapshot(savedSnapshot) }),
+        body: JSON.stringify({ snapshot: buildRevisionSnapshot() }),
       }).catch(() => {
         // Best-effort sync for multi-device recovery.
       });
@@ -734,7 +727,7 @@ export function AdminPageEditorForm({
     return () => clearTimeout(timer);
     // buildRevisionSnapshot closes over the same editor fields as currentSnapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot fields are covered by currentSnapshot
-  }, [currentSnapshot, dirty, page.id, savedSnapshot]);
+  }, [currentSnapshot, dirty, page.id]);
 
   function clearBackup() {
     try {
@@ -1069,6 +1062,8 @@ export function AdminPageEditorForm({
       setSavedStatus(status);
       setSavedUrl(data.url ?? null);
       setSavedSnapshot(currentSnapshot);
+      userEditedRef.current = false;
+      setUserEdited(false);
       setHistoryToken((token) => token + 1);
       clearBackup();
       setServerDraftNotice(null);
@@ -1159,7 +1154,7 @@ export function AdminPageEditorForm({
   const actionButtons = (
     <div className="import-actions">
       <span className={statusPillClass}>{statusPillText}</span>
-      {dirty && (
+      {dirty && userEdited && (
         <span className="unsaved-pill" role="status">
           ● Unsaved changes
         </span>
@@ -1311,7 +1306,7 @@ export function AdminPageEditorForm({
         />
       )}
 
-      {backupNotice && (
+      {backupNotice && !serverDraftNotice && (
         <div className="alert" role="alert" style={{ marginBottom: "2rem" }}>
           <strong>Unsaved draft found.</strong> This browser has edits to this page
           {backupNotice.savedAt ? ` from ${formatTimestamp(backupNotice.savedAt)}` : ""} that were never saved to

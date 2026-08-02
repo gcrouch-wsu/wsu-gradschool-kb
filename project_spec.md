@@ -402,11 +402,11 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) →
   app-side backfills.
-- **Current head: `045_page_server_drafts_base`.** Notable recent migrations: page-tree node
+- **Current head: `046_drop_page_server_drafts_base`.** Notable recent migrations: page-tree node
   kinds (`032`), per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback
   (`035`), persisted asset-usage index (`036`), site AI summary prompt (`037`), site + per-KB AI
   summary/page prompts (`038`), page tags/tag-aware FTS (`039`), asset tags/tag-aware FTS (`040`),
-  platform features (`041`), curated next-step copy (`042`), per-user server drafts (`043`), AI token metering (`044`), and the server-draft base marker (`045`).
+  platform features (`041`), curated next-step copy (`042`), per-user server drafts (`043`), AI token metering (`044`), and the server-draft base marker added then removed (`045`, `046`).
   Earlier migrations cover FTS, edit locks, revisions, page views, KB visibility, search widget,
   branding, and rate limits — see
   `src/lib/migrations/index.ts` for the full sequence.
@@ -590,11 +590,20 @@ manual redirect persistence, and the single-active-version DB invariant.
   `userEdited`, set from `input`/`change`/`paste`/`drop`/`cut` on the form. Do not re-gate any of
   them on `dirty` alone — spurious "Server draft available" banners train editors to dismiss the
   banner on sight, which is the opposite of what a recovery feature needs.
-- **Server drafts record the page version they diverged from** (`page_server_drafts.base_hash`,
-  migration `045`). The editor compares it with the current saved snapshot to warn when the page
-  has been saved since the draft was written, because restoring otherwise reverts that save
-  silently. A null hash means the draft predates the column: surface it as *unknown*, never as
-  current.
+- **Draft staleness is answered server-side, against `kb_page_revisions.created_at`.** The
+  editor must warn before restoring a draft over a page that has been saved since, or the
+  restore silently reverts that save. Do not compute this on the client by hashing editor state
+  — `045` tried that and `046` removed it: the hash was taken over the saved snapshot, which
+  becomes the editor's *normalized* content after an in-session save, so it reported "the page
+  has been saved since" for drafts that were perfectly current. `kb_pages` only carries a
+  day-granularity display date, so revisions are the only precise record of a save. An unknown
+  answer (no revisions, no database) must surface as *unknown*, never as current.
+- **Saving clears `userEditedRef`.** It previously stayed armed for the rest of the session, so
+  the first benign re-serialization after a save wrote a fresh recovery draft — the user saved,
+  discarded the banners, and watched them come straight back.
+- **One recovery notice, not two.** The localStorage backup and the server draft both cover the
+  same edits in the same browser; the local banner renders only when there is no server draft,
+  which says strictly more (what changed, whether the page moved on).
 - **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
 - **Vertical rhythm lives in the `.flow` container, not per-block margins.** Public reading surfaces
   (`.article`, the home content wrapper, `.card__blocks`, `.procedure-section__blocks`) carry the
@@ -1005,7 +1014,7 @@ curl -sS https://YOUR_HOST/api/health
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `045_page_server_drafts_base` (and earlier ids such as `043_page_server_drafts_per_author`,
+  should include `046_drop_page_server_drafts_base` (and earlier ids such as `043_page_server_drafts_per_author`,
   `040_asset_tags`, and `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.
