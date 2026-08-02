@@ -402,12 +402,11 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) →
   app-side backfills.
-- **Current head: `044_ai_usage`.** Notable recent migrations: page-tree node
+- **Current head: `045_page_server_drafts_base`.** Notable recent migrations: page-tree node
   kinds (`032`), per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback
   (`035`), persisted asset-usage index (`036`), site AI summary prompt (`037`), site + per-KB AI
   summary/page prompts (`038`), page tags/tag-aware FTS (`039`), asset tags/tag-aware FTS (`040`),
-  platform features (`041`), curated next-step copy (`042`), per-user server drafts (`043`), and
-  AI token metering (`044`).
+  platform features (`041`), curated next-step copy (`042`), per-user server drafts (`043`), AI token metering (`044`), and the server-draft base marker (`045`).
   Earlier migrations cover FTS, edit locks, revisions, page views, KB visibility, search widget,
   branding, and rate limits — see
   `src/lib/migrations/index.ts` for the full sequence.
@@ -575,6 +574,18 @@ manual redirect persistence, and the single-active-version DB invariant.
   (2) the applied-check runs *before* the lock is taken, so two racing cold starts can both execute
   the same migration — every statement must be individually idempotent, and the `_schema_migrations`
   insert uses `ON CONFLICT DO NOTHING` for that reason.
+- **Work protection is armed by a real edit, not by `dirty`.** `dirty` compares serialized
+  snapshots, and the editor re-serializes on benign actions (opening the HTML source view,
+  Lexical normalizing markup on first focus), so it goes true on pages nobody edited. The
+  server draft, the localStorage backup, and the `beforeunload` warning all additionally require
+  `userEdited`, set from `input`/`change`/`paste`/`drop`/`cut` on the form. Do not re-gate any of
+  them on `dirty` alone — spurious "Server draft available" banners train editors to dismiss the
+  banner on sight, which is the opposite of what a recovery feature needs.
+- **Server drafts record the page version they diverged from** (`page_server_drafts.base_hash`,
+  migration `045`). The editor compares it with the current saved snapshot to warn when the page
+  has been saved since the draft was written, because restoring otherwise reverts that save
+  silently. A null hash means the draft predates the column: surface it as *unknown*, never as
+  current.
 - **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
 - **Vertical rhythm lives in the `.flow` container, not per-block margins.** Public reading surfaces
   (`.article`, the home content wrapper, `.card__blocks`, `.procedure-section__blocks`) carry the
@@ -985,7 +996,7 @@ curl -sS https://YOUR_HOST/api/health
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `044_ai_usage` (and earlier ids such as `043_page_server_drafts_per_author`,
+  should include `045_page_server_drafts_base` (and earlier ids such as `043_page_server_drafts_per_author`,
   `040_asset_tags`, and `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DraftPreviewModal } from "@/components/DraftPreviewModal";
 import { DropdownSelect } from "@/components/DropdownSelect";
@@ -17,6 +17,7 @@ import { normalizePageTags } from "@/lib/page-tags";
 import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
 import type { PageReviewSuggestion } from "@/lib/page-review-core";
 import { hasHeadingOrderSkip } from "@/lib/publish-gate";
+import { diffLines, revisionPlainDocument } from "@/lib/revision-diff";
 import type { ContentBlock, KbPage, KnowledgeBase, PageRevisionSnapshot, PageStatus, PageVisibility } from "@/lib/types";
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -294,6 +295,25 @@ function countBlockIssues(blocks: ContentBlock[]): BlockIssueCounts {
   return { imagesMissingAlt, tablesMissingHeaders, excerptCount, assetRefCount };
 }
 
+/**
+ * Short, stable fingerprint of a serialized editor snapshot.
+ *
+ * Used only to answer "is this draft still based on the page as it stands?" — never for
+ * integrity or security, so a cheap non-cryptographic hash is the right tool. Collisions would
+ * at worst suppress a staleness warning, which is why the warning also treats a missing hash
+ * as unknown rather than assuming the draft is current.
+ */
+function hashSnapshot(snapshot: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < snapshot.length; i += 1) {
+    const c = snapshot.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 + c, 0x85ebca6b) ^ (h2 >>> 13);
+  }
+  return `${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}-${snapshot.length.toString(36)}`;
+}
+
 export function AdminPageEditorForm({
   kb,
   page,
@@ -536,20 +556,43 @@ export function AdminPageEditorForm({
   const [serverDraftNotice, setServerDraftNotice] = useState<{
     updatedAt: string;
     snapshot: PageRevisionSnapshot;
+    /** False when the page was saved after this draft was written. */
+    baseIsCurrent: boolean;
+    /** True when the draft predates base tracking, so staleness cannot be judged. */
+    baseUnknown: boolean;
   } | null>(null);
+  const [draftCompareOpen, setDraftCompareOpen] = useState(false);
+
+  // A server draft is recovery for work in progress, so it is armed by a real edit rather
+  // than by `dirty`. `dirty` compares serialized snapshots, and the editor re-serializes on
+  // benign actions — opening the HTML source view, or Lexical normalizing markup on first
+  // focus — which produced "drafts" for pages nobody had edited. Those trained editors to
+  // dismiss the banner on sight, which is exactly the wrong reflex for a recovery feature.
+  const userEditedRef = useRef(false);
+  const [userEdited, setUserEdited] = useState(false);
+  const markUserEdited = useCallback(() => {
+    if (userEditedRef.current) {
+      return;
+    }
+    userEditedRef.current = true;
+    setUserEdited(true);
+  }, []);
   // Bumped when a backup is restored so the document editor remounts with the
   // restored blocks (it keeps its own internal state after mount).
   const [editorEpoch, setEditorEpoch] = useState(0);
 
   useEffect(() => {
-    if (!dirty) return;
+    // Same gate as the draft: warn about work the user did, not about the editor having
+    // re-serialized the document. Warning on a page that was only opened teaches people to
+    // click through the dialog without reading it.
+    if (!dirty || !userEdited) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  }, [dirty, userEdited]);
 
   // Offer to restore a backup left behind by a crash, timeout, or closed tab.
   useEffect(() => {
@@ -608,9 +651,12 @@ export function AdminPageEditorForm({
         if (draftSnapshot === savedSnapshot) {
           return;
         }
+        const baseHash = typeof data.draft.baseHash === "string" ? data.draft.baseHash : null;
         setServerDraftNotice({
           updatedAt: typeof data.draft.updatedAt === "string" ? data.draft.updatedAt : "",
           snapshot,
+          baseIsCurrent: baseHash !== null && baseHash === hashSnapshot(savedSnapshot),
+          baseUnknown: baseHash === null,
         });
       })
       .catch(() => {
@@ -626,7 +672,7 @@ export function AdminPageEditorForm({
   // Continuously stash unsaved work locally (debounced) so it survives
   // crashes and session timeouts. Cleared on successful save.
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || !userEdited) return;
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(
@@ -638,17 +684,20 @@ export function AdminPageEditorForm({
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [backupKey, currentSnapshot, dirty]);
+  }, [backupKey, currentSnapshot, dirty, userEdited]);
 
   useEffect(() => {
-    if (!dirty) {
+    // Requires a real edit, not merely a snapshot difference — see `markUserEdited`.
+    if (!dirty || !userEdited) {
       return;
     }
     const timer = setTimeout(() => {
       fetch(`/api/admin/pages/${page.id}/server-draft`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot: buildRevisionSnapshot() }),
+        // savedSnapshot identifies the page this draft diverged from, so a later session can
+        // tell whether the page has been saved since and warn before restoring over it.
+        body: JSON.stringify({ snapshot: buildRevisionSnapshot(), baseHash: hashSnapshot(savedSnapshot) }),
       }).catch(() => {
         // Best-effort sync for multi-device recovery.
       });
@@ -656,7 +705,7 @@ export function AdminPageEditorForm({
     return () => clearTimeout(timer);
     // buildRevisionSnapshot closes over the same editor fields as currentSnapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot fields are covered by currentSnapshot
-  }, [currentSnapshot, dirty, page.id]);
+  }, [currentSnapshot, dirty, page.id, savedSnapshot, userEdited]);
 
   function clearBackup() {
     try {
@@ -686,6 +735,43 @@ export function AdminPageEditorForm({
     }
     setBackupNotice(null);
   }
+
+  // Page-vs-draft comparison, reusing the same plain-text diff the revision History panel
+  // uses. Without it the banner offers a destructive choice on the strength of a timestamp.
+  const draftDiff = useMemo(() => {
+    if (!serverDraftNotice || !draftCompareOpen) {
+      return [];
+    }
+    const before = revisionPlainDocument({ title, summary, blocks });
+    const after = revisionPlainDocument({
+      title: serverDraftNotice.snapshot.title,
+      summary: serverDraftNotice.snapshot.summary,
+      blocks: serverDraftNotice.snapshot.blocks,
+    });
+    return diffLines(before, after);
+  }, [blocks, draftCompareOpen, serverDraftNotice, summary, title]);
+
+  const draftChangeSummary = useMemo(() => {
+    if (!serverDraftNotice) {
+      return "";
+    }
+    const before = revisionPlainDocument({ title, summary, blocks });
+    const after = revisionPlainDocument({
+      title: serverDraftNotice.snapshot.title,
+      summary: serverDraftNotice.snapshot.summary,
+      blocks: serverDraftNotice.snapshot.blocks,
+    });
+    const lines = diffLines(before, after);
+    const added = lines.filter((line) => line.kind === "add").length;
+    const removed = lines.filter((line) => line.kind === "remove").length;
+    if (added === 0 && removed === 0) {
+      return "The page text matches; only page settings differ.";
+    }
+    const parts: string[] = [];
+    if (added) parts.push(`${added} added line${added === 1 ? "" : "s"}`);
+    if (removed) parts.push(`${removed} removed line${removed === 1 ? "" : "s"}`);
+    return `${parts.join(", ")} compared with this page.`;
+  }, [blocks, serverDraftNotice, summary, title]);
 
   function restoreServerDraft() {
     if (!serverDraftNotice) {
@@ -1214,21 +1300,80 @@ export function AdminPageEditorForm({
 
       {serverDraftNotice && (
         <div className="alert" role="alert" style={{ marginBottom: "2rem" }}>
-          <strong>Server draft available.</strong> A newer unsaved version of this page
-          {serverDraftNotice.updatedAt ? ` from ${formatTimestamp(serverDraftNotice.updatedAt)}` : ""} is stored on
-          the server (for example from another device or browser).
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
+          <strong>Unsaved changes from another session.</strong>{" "}
+          {serverDraftNotice.updatedAt
+            ? `Last edited ${formatTimestamp(serverDraftNotice.updatedAt)}.`
+            : "Edited earlier."}{" "}
+          {draftChangeSummary}
+          {!serverDraftNotice.baseIsCurrent && (
+            <p className="meta" style={{ marginTop: "0.5rem" }}>
+              <strong>
+                {serverDraftNotice.baseUnknown
+                  ? "This draft does not record which version it started from."
+                  : "The page has been saved since this draft was written."}
+              </strong>{" "}
+              Restoring replaces the current content with the draft, so compare them first.
+            </p>
+          )}
+          <p className="meta" style={{ marginTop: "0.5rem" }}>
+            Restoring loads the draft into the editor only. Nothing changes for readers until you save.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.6rem" }}>
+            <button
+              aria-expanded={draftCompareOpen}
+              className="button button--small button--ghost"
+              onClick={() => setDraftCompareOpen((open) => !open)}
+              type="button"
+            >
+              {draftCompareOpen ? "Hide comparison" : "Compare with this page"}
+            </button>
             <button className="button button--small" onClick={restoreServerDraft} type="button">
-              Restore server draft
+              Restore into editor
             </button>
             <button className="button button--small button--ghost" onClick={dismissServerDraft} type="button">
-              Discard it
+              Discard draft
             </button>
           </div>
+          {draftCompareOpen && (
+            <div className="revision-diff" style={{ marginTop: "0.75rem" }}>
+              <p className="meta">
+                <span aria-hidden="true">−</span> this page · <span aria-hidden="true">+</span> the draft
+              </p>
+              {draftDiff.length === 0 ? (
+                <p className="meta">No differences in the page text. The change is in page settings only.</p>
+              ) : (
+                <ol className="revision-diff__lines">
+                  {draftDiff.map((line, index) => (
+                    <li
+                      className={`revision-diff__line revision-diff__line--${line.kind}`}
+                      key={`${line.kind}-${index}`}
+                    >
+                      <span aria-hidden="true" className="revision-diff__marker">
+                        {line.kind === "add" ? "+" : line.kind === "remove" ? "−" : " "}
+                      </span>
+                      <span>{line.text || " "}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      <form className="form card editor-form" onSubmit={(event) => event.preventDefault()}>
+      <form
+        className="form card editor-form"
+        // Real interaction is what arms the recovery draft. `input` covers typing and the
+        // synthetic input events the toolbar dispatches after DOM surgery; `change` covers
+        // selects and checkboxes; paste/drop/cut cover content arriving without a keystroke.
+        // Deliberately not `keydown` — arrow keys and Tab navigation are not edits.
+        onChange={markUserEdited}
+        onCut={markUserEdited}
+        onDrop={markUserEdited}
+        onInput={markUserEdited}
+        onPaste={markUserEdited}
+        onSubmit={(event) => event.preventDefault()}
+      >
         {error && <p className="error">{error}</p>}
         {issues.length > 0 && (
           <div className="error" role="alert">

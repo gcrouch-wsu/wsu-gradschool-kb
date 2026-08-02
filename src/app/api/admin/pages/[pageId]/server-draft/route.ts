@@ -37,12 +37,16 @@ export async function PUT(
   if (denied) {
     return denied;
   }
-  const body = (await request.json().catch(() => null)) as { snapshot?: PageRevisionSnapshot } | null;
+  const body = (await request.json().catch(() => null)) as {
+    snapshot?: PageRevisionSnapshot;
+    baseHash?: unknown;
+  } | null;
   if (!body?.snapshot || typeof body.snapshot !== "object") {
     return NextResponse.json({ message: "Invalid snapshot." }, { status: 400 });
   }
+  const baseHash = typeof body.baseHash === "string" && body.baseHash ? body.baseHash : null;
   try {
-    const draft = await savePageServerDraft(pageId, guard.session.userId, body.snapshot);
+    const draft = await savePageServerDraft(pageId, guard.session.userId, body.snapshot, baseHash);
     return NextResponse.json({ draft });
   } catch (error) {
     logError(error, { route: "/api/admin/pages/[pageId]/server-draft", action: "save" });
