@@ -62,6 +62,9 @@ function imageControlsHtml(): string {
     `<span class="doc-image__control-sep" aria-hidden="true"></span>` +
     `<button type="button" class="doc-image__control" data-img-action="width-down" title="Smaller" aria-label="Shrink image">−</button>` +
     `<button type="button" class="doc-image__control" data-img-action="width-up" title="Larger" aria-label="Enlarge image">+</button>` +
+    `<span class="doc-image__control-sep" aria-hidden="true"></span>` +
+    `<button type="button" class="doc-image__control" data-img-action="move-up" title="Move up" aria-label="Move image up">↑</button>` +
+    `<button type="button" class="doc-image__control" data-img-action="move-down" title="Move down" aria-label="Move image down">↓</button>` +
     `</div>`
   );
 }
