@@ -13,6 +13,9 @@ test.describe("image alt text workflow", () => {
         `</figure>`,
     );
 
+    await expect(page.locator(".image-section-editor figure.doc-image")).toBeVisible();
+    await expect(page.locator(".lexical-preserved-block figure.doc-image")).toHaveCount(0);
+
     const firstParagraph = page.locator(".wysiwyg-surface p").first();
     await expect(firstParagraph).toBeVisible();
     await firstParagraph.click();
@@ -41,7 +44,7 @@ test.describe("image alt text workflow", () => {
         `<p>Paragraph after the image.</p>`,
     );
 
-    const figure = page.locator(".wysiwyg-surface figure.doc-image").first();
+    const figure = page.locator(".image-section-editor figure.doc-image").first();
     await figure.click();
     await page.getByRole("button", { name: "Move image down" }).click();
 
@@ -66,7 +69,7 @@ test.describe("image alt text workflow", () => {
         `</figure>`,
     );
 
-    const figure = page.locator(".wysiwyg-surface figure.doc-image").first();
+    const figure = page.locator(".image-section-editor figure.doc-image").first();
     await expect(figure).toBeVisible();
     await expect(figure).toHaveAttribute("data-needs-alt", "true");
 

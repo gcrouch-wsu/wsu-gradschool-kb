@@ -860,6 +860,7 @@ export interface AltEditRequest {
   decorative: boolean;
   assetId: string | null;
   figure: HTMLElement;
+  onApply?: () => void;
 }
 
 let altEditorOpener: ((request: AltEditRequest) => void) | null = null;
@@ -868,7 +869,7 @@ export function registerAltEditor(open: ((request: AltEditRequest) => void) | nu
   altEditorOpener = open;
 }
 
-function openAltEditor(figure: HTMLElement) {
+export function openImageAltEditor(figure: HTMLElement, onApply?: () => void) {
   const img = figure.querySelector("img");
   altEditorOpener?.({
     alt: img?.getAttribute("alt") ?? "",
@@ -876,6 +877,7 @@ function openAltEditor(figure: HTMLElement) {
     decorative: figure.getAttribute("data-decorative") === "true",
     assetId: figure.getAttribute("data-asset-id"),
     figure,
+    onApply,
   });
 }
 
@@ -918,7 +920,7 @@ export function applyAltText(figure: HTMLElement, alt: string, decorative: boole
 
 export function markMissingAltImages(): number {
   let count = 0;
-  document.querySelectorAll<HTMLElement>(".wysiwyg-surface figure.doc-image").forEach((figure) => {
+  document.querySelectorAll<HTMLElement>(".page-document-editor figure.doc-image").forEach((figure) => {
     const alt = (figure.querySelector("img")?.getAttribute("alt") ?? "").trim();
     const decorative = figure.getAttribute("data-decorative") === "true";
     const missing = !decorative && !alt;
@@ -970,7 +972,7 @@ export function handleImageControlClick(event: {
   event.preventDefault();
   const action = button.getAttribute("data-img-action");
   if (action === "alt") {
-    openAltEditor(figure);
+    openImageAltEditor(figure);
     return true;
   }
   if (action === "move-up" || action === "move-down") {
