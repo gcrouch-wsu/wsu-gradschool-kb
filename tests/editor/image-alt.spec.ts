@@ -31,6 +31,32 @@ test.describe("image alt text workflow", () => {
     ).toBeVisible();
   });
 
+  test("selected image can be moved down within the page body", async ({ page }) => {
+    await openEditor(page);
+    await setDocumentHtml(
+      page,
+      `<figure class="doc-image" data-block-id="img-move-test" data-width="100" data-align="left">` +
+        `<img src="${TINY_GIF}" alt="One-pixel test image" />` +
+        `</figure>` +
+        `<p>Paragraph after the image.</p>`,
+    );
+
+    const figure = page.locator(".wysiwyg-surface figure.doc-image").first();
+    await figure.click();
+    await page.getByRole("button", { name: "Move image down" }).click();
+
+    await expect(page.locator(".wysiwyg-surface > *").first()).toHaveText("Paragraph after the image.");
+
+    await saveAndPublish(page);
+
+    await page.goto(TARGET_PAGE_PUBLIC_PATH);
+    const publicParagraph = page.locator(".article > p").filter({ hasText: "Paragraph after the image." }).first();
+    await expect(publicParagraph).toBeVisible();
+    await expect(
+      publicParagraph.locator("xpath=following-sibling::*[1][self::figure[contains(@class, 'content-image')]]"),
+    ).toBeVisible();
+  });
+
   test("Alt dialog updates editor image metadata and public render", async ({ page }) => {
     await openEditor(page);
     await setDocumentHtml(

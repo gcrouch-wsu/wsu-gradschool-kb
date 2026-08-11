@@ -36,7 +36,7 @@ import {
   lexicalRunFormatCommand,
   lexicalUndo,
 } from "@/lib/lexical/commands";
-import { syncPreservedBlockFromDom } from "@/lib/lexical/sync-preserved-block";
+import { movePreservedBlockFromDom, syncPreservedBlockFromDom } from "@/lib/lexical/sync-preserved-block";
 import { lexicalSelectionInAlert } from "@/lib/lexical/selection-context";
 import type { ContentBlock } from "@/lib/types";
 
@@ -960,6 +960,7 @@ export function handleImageControlClick(event: {
   }
   if (figure) {
     figure.classList.add("is-selected");
+    surface?.focus({ preventScroll: true });
   }
 
   const button = target?.closest?.("[data-img-action]") as HTMLElement | null;
@@ -971,6 +972,21 @@ export function handleImageControlClick(event: {
   if (action === "alt") {
     openAltEditor(figure);
     return true;
+  }
+  if (action === "move-up" || action === "move-down") {
+    const direction = action === "move-up" ? "up" : "down";
+    const ok = movePreservedBlockFromDom(figure, direction);
+    if (!ok) {
+      recordFormat(
+        "imageControl",
+        false,
+        action,
+        direction === "up" ? "This image is already at the top." : "This image is already at the bottom.",
+      );
+    } else {
+      recordFormat("imageControl", true, action);
+    }
+    return ok;
   }
   const currentWidth = Number(figure.getAttribute("data-width")) || IMAGE_MAX_WIDTH;
   snapshotStructuralChange();
