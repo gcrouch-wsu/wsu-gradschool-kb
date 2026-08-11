@@ -6,7 +6,7 @@ import {
   mergeDocumentAndExtraBlocks,
   sanitizePageDocument,
 } from "@/lib/page-document";
-import { blocksToSections } from "@/lib/page-editor-list";
+import { blocksToSections, sectionsToBlocks } from "@/lib/page-editor-list";
 import type { ContentBlock } from "@/lib/types";
 
 describe("page-document", () => {
@@ -409,5 +409,25 @@ describe("page-document", () => {
     expect(sections[1].type).toBe("table");
     expect(sections[2].type).toBe("flow");
     expect(mergeDocumentAndExtraBlocks(blocks.slice(0, 1), blocks.slice(1))).toEqual(blocks);
+  });
+
+  it("promotes top-level images and section dividers into standalone editor sections", () => {
+    const blocks: ContentBlock[] = [
+      { blockId: "img1", type: "image", url: "/kb/x/files/photo", alt: "A photo", widthPercent: 100 },
+      { blockId: "p1", type: "paragraph", text: "Body" },
+      { blockId: "s1", type: "section_divider" },
+      { blockId: "img2", type: "image", url: "/kb/x/files/photo-2", alt: "Another photo", widthPercent: 75 },
+    ];
+    const sections = blocksToSections(blocks);
+    expect(sections.map((section) => section.type)).toEqual([
+      "flow",
+      "image",
+      "flow",
+      "section_divider",
+      "flow",
+      "image",
+      "flow",
+    ]);
+    expect(sectionsToBlocks(sections)).toEqual(blocks);
   });
 });

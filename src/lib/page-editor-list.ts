@@ -154,6 +154,7 @@ export function outdentListItem(li: HTMLLIElement): boolean {
 
 export type EditorSection =
   | { type: "flow"; blocks: ContentBlock[] }
+  | { type: "image"; block: Extract<ContentBlock, { type: "image" }> }
   | { type: "table"; block: Extract<ContentBlock, { type: "table" }> }
   | { type: "asset_link"; block: Extract<ContentBlock, { type: "asset_link" }> }
   | { type: "card"; block: Extract<ContentBlock, { type: "card" }> }
@@ -162,6 +163,46 @@ export type EditorSection =
   | { type: "excerpt"; block: Extract<ContentBlock, { type: "excerpt" }> }
   | { type: "sourced"; block: Extract<ContentBlock, { type: "sourced" }> }
   | { type: "section_divider"; block: Extract<ContentBlock, { type: "section_divider" }> };
+
+function isFlowBlock(block: ContentBlock): boolean {
+  return block.type === "paragraph" || block.type === "heading" || block.type === "list" || block.type === "alert";
+}
+
+function isEditableGapTarget(section: EditorSection): boolean {
+  return section.type === "image" || section.type === "section_divider";
+}
+
+function mergeAdjacentFlowSections(sections: EditorSection[]): EditorSection[] {
+  const merged: EditorSection[] = [];
+  for (const section of sections) {
+    const previous = merged[merged.length - 1];
+    if (section.type === "flow" && previous?.type === "flow") {
+      previous.blocks.push(...section.blocks);
+    } else if (section.type === "flow") {
+      merged.push({ type: "flow", blocks: [...section.blocks] });
+    } else {
+      merged.push(section);
+    }
+  }
+  return merged;
+}
+
+export function normalizeEditorSections(sections: EditorSection[]): EditorSection[] {
+  const merged = mergeAdjacentFlowSections(sections);
+  const normalized: EditorSection[] = [];
+  for (let index = 0; index < merged.length; index += 1) {
+    const section = merged[index];
+    if (isEditableGapTarget(section) && normalized[normalized.length - 1]?.type !== "flow") {
+      normalized.push({ type: "flow", blocks: [] });
+    }
+    normalized.push(section);
+    const next = merged[index + 1];
+    if (isEditableGapTarget(section) && (!next || isEditableGapTarget(next))) {
+      normalized.push({ type: "flow", blocks: [] });
+    }
+  }
+  return mergeAdjacentFlowSections(normalized);
+}
 
 export function blocksToSections(blocks: ContentBlock[]): EditorSection[] {
   const sections: EditorSection[] = [];
@@ -175,17 +216,12 @@ export function blocksToSections(blocks: ContentBlock[]): EditorSection[] {
   };
 
   for (const block of blocks) {
-    if (
-      block.type === "paragraph" ||
-      block.type === "heading" ||
-      block.type === "list" ||
-      block.type === "alert" ||
-      block.type === "image"
-    ) {
+    if (isFlowBlock(block)) {
       currentFlow.push(block);
     } else {
       flushFlow();
-      if (block.type === "table") sections.push({ type: "table", block });
+      if (block.type === "image") sections.push({ type: "image", block });
+      else if (block.type === "table") sections.push({ type: "table", block });
       else if (block.type === "asset_link") sections.push({ type: "asset_link", block });
       else if (block.type === "card") sections.push({ type: "card", block });
       else if (block.type === "procedure_section") sections.push({ type: "procedure_section", block });
@@ -196,13 +232,14 @@ export function blocksToSections(blocks: ContentBlock[]): EditorSection[] {
     }
   }
   flushFlow();
-  return sections;
+  return normalizeEditorSections(sections);
 }
 
 export function sectionsToBlocks(sections: EditorSection[]): ContentBlock[] {
   const blocks: ContentBlock[] = [];
   for (const section of sections) {
     if (section.type === "flow") blocks.push(...section.blocks);
+    else if (section.type === "image") blocks.push(section.block);
     else if (section.type === "table") blocks.push(section.block);
     else if (section.type === "asset_link") blocks.push(section.block);
     else if (section.type === "card") blocks.push(section.block);

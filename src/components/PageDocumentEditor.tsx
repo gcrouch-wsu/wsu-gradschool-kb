@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { AltTextDialog } from "@/components/AltTextDialog";
 import { ExcerptPickerDialog } from "@/components/ExcerptPickerDialog";
 import { DocumentToolbar } from "@/components/DocumentToolbar";
@@ -14,7 +15,12 @@ import type { MediaPickerInsert } from "@/components/MediaPicker";
 import { PageEditorDebugPanel } from "@/components/PageEditorDebugPanel";
 import { TableBlockEditor } from "@/components/TableBlockEditor";
 import { LexicalFlowSurface } from "@/components/LexicalFlowSurface";
-import { blocksToSections, sectionsToBlocks, type EditorSection } from "@/lib/page-editor-list";
+import {
+  blocksToSections,
+  normalizeEditorSections,
+  sectionsToBlocks,
+  type EditorSection,
+} from "@/lib/page-editor-list";
 import {
   blocksToDocumentHtml,
   blocksToSourceHtml,
@@ -28,6 +34,7 @@ import {
   commitNote,
   getEditorInsertionContext,
   insertEditorBlockHtml,
+  openImageAltEditor,
   openNoteEditor,
   registerAltEditor,
   registerFormatIssueReporter,
@@ -47,6 +54,40 @@ import type { ContentBlock } from "@/lib/types";
 
 function newBlockId() {
   return `block-${crypto.randomUUID()}`;
+}
+
+type ImageBlock = Extract<ContentBlock, { type: "image" }>;
+
+function isBlankParagraphBlock(block: ContentBlock): boolean {
+  if (block.type !== "paragraph" || block.text.trim()) {
+    return false;
+  }
+  const html = block.html ?? "";
+  return !html || html.replace(/<br\s*\/?>/gi, "").replace(/&nbsp;|\u00a0/g, "").trim() === "";
+}
+
+function flowBlocksFromEditorHtml(html: string): ContentBlock[] {
+  const blocks = documentHtmlToBlocks(html);
+  return blocks.length === 1 && isBlankParagraphBlock(blocks[0]) ? [] : blocks;
+}
+
+function imageBlockFromFigure(figure: HTMLElement, fallback: ImageBlock): ImageBlock {
+  const block = documentHtmlToBlocks(figure.outerHTML).find((candidate): candidate is ImageBlock => {
+    return candidate.type === "image";
+  });
+  return block ?? fallback;
+}
+
+function isEmptyFlowSection(section: EditorSection): boolean {
+  return section.type === "flow" && section.blocks.length === 0;
+}
+
+function moveTargetIndex(sections: EditorSection[], index: number, direction: -1 | 1): number {
+  let target = index + direction;
+  while (target >= 0 && target < sections.length && isEmptyFlowSection(sections[target])) {
+    target += direction;
+  }
+  return target >= 0 && target < sections.length ? target : -1;
 }
 
 export function PageDocumentEditor({
@@ -89,8 +130,9 @@ export function PageDocumentEditor({
   onChangeRef.current = onChange;
 
   const emitChange = useCallback((nextSections: EditorSection[]) => {
-    setSections(nextSections);
-    onChangeRef.current(sectionsToBlocks(nextSections));
+    const normalized = normalizeEditorSections(nextSections);
+    setSections(normalized);
+    onChangeRef.current(sectionsToBlocks(normalized));
   }, []);
 
   function switchToHtml() {
@@ -137,7 +179,7 @@ export function PageDocumentEditor({
     if (block.type === "image") {
       const html = blocksToDocumentHtml([block], kbSlug);
       if (!insertEditorBlockHtml(html)) {
-        addBlockToFirstFlow(block);
+        emitChange([...sections, { type: "image", block }]);
       }
     } else if (block.type === "video") {
       emitChange([...sections, { type: "video", block }]);
@@ -163,6 +205,14 @@ export function PageDocumentEditor({
   }
 
   function addBlockToFirstFlow(block: ContentBlock) {
+    if (block.type === "image") {
+      emitChange([...sections, { type: "image", block }]);
+      return;
+    }
+    if (block.type === "section_divider") {
+      emitChange([...sections, { type: "section_divider", block }]);
+      return;
+    }
     const next = [...sections];
     const flowIndex = next.findIndex((s) => s.type === "flow");
     const existing = flowIndex >= 0 ? next[flowIndex] : null;
@@ -183,30 +233,44 @@ export function PageDocumentEditor({
   }
 
   function handleInsertSectionBreak() {
-    const html = `<div class="doc-section-break" contenteditable="false" data-block-id="${newBlockId()}" role="separator" aria-label="Section break"></div>`;
+    const block: Extract<ContentBlock, { type: "section_divider" }> = {
+      type: "section_divider",
+      blockId: newBlockId(),
+    };
+    const html = blocksToDocumentHtml([block], kbSlug);
     if (!insertEditorBlockHtml(html)) {
-      addBlockToFirstFlow({ type: "section_divider", blockId: newBlockId() });
+      emitChange([...sections, { type: "section_divider", block }]);
     }
   }
 
   function moveSection(index: number, direction: -1 | 1) {
     const next = [...sections];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
+    const target = moveTargetIndex(next, index, direction);
+    if (target < 0) return;
     [next[index], next[target]] = [next[target], next[index]];
+    setVisualEpoch((value) => value + 1);
     emitChange(next);
   }
 
   function removeSection(index: number) {
     const next = sections.filter((_, i) => i !== index);
+    setVisualEpoch((value) => value + 1);
     emitChange(next);
   }
 
   function updateFlowSection(index: number, html: string, _isBlur: boolean) {
     const clean = sanitizePageDocument(html);
-    const flowBlocks = documentHtmlToBlocks(clean);
+    const flowBlocks = flowBlocksFromEditorHtml(clean);
     const next = [...sections];
-    next[index] = { type: "flow", blocks: flowBlocks };
+    const replacement = blocksToSections(flowBlocks);
+    next.splice(index, 1, ...(replacement.length > 0 ? replacement : [{ type: "flow" as const, blocks: [] }]));
+    emitChange(next);
+  }
+
+  function updateImageSection(index: number, block: ContentBlock) {
+    if (block.type !== "image") return;
+    const next = [...sections];
+    next[index] = { type: "image", block };
     emitChange(next);
   }
 
@@ -470,6 +534,7 @@ export function PageDocumentEditor({
           onClose={() => setAltRequest(null)}
           onSubmit={({ alt, caption, decorative, saveToAsset }) => {
             applyAltText(altRequest.figure, alt, decorative, caption);
+            altRequest.onApply?.();
             if (saveToAsset && altRequest.assetId) {
               fetch(`/api/admin/assets/${altRequest.assetId}`, {
                 method: "PATCH",
@@ -489,14 +554,19 @@ export function PageDocumentEditor({
           {sections.map((section, index) => (
             <SectionEditor
               index={index}
-              isFirst={index === 0}
-              isLast={index === sections.length - 1}
+              isFirst={moveTargetIndex(sections, index, -1) < 0}
+              isLast={moveTargetIndex(sections, index, 1) < 0}
               kbId={kbId}
-              key={section.type === "flow" ? `flow-${index}-${visualEpoch}` : `${section.block.blockId}-${visualEpoch}`}
+              key={
+                section.type === "flow"
+                  ? `flow-${index}-${visualEpoch}`
+                  : `${section.block.blockId}-${visualEpoch}`
+              }
               kbSlug={kbSlug}
               onMove={moveSection}
               onRemove={() => removeSection(index)}
               onUpdateFlow={(html, isBlur) => updateFlowSection(index, html, isBlur)}
+              onUpdateImage={(next) => updateImageSection(index, next)}
               onUpdateTable={(next) => updateTableSection(index, next)}
               onUpdateCard={(next) => updateCardSection(index, next)}
               onUpdateProcedureSection={(next) => updateProcedureSection(index, next)}
@@ -515,6 +585,92 @@ export function PageDocumentEditor({
   );
 }
 
+const IMAGE_WIDTH_STEP = 25;
+const IMAGE_MIN_WIDTH = 25;
+const IMAGE_MAX_WIDTH = 100;
+
+function clampImageWidth(value: number | undefined): number {
+  const width = Number.isFinite(value as number) ? Math.round(value as number) : IMAGE_MAX_WIDTH;
+  return Math.min(IMAGE_MAX_WIDTH, Math.max(IMAGE_MIN_WIDTH, width));
+}
+
+function ImageSectionEditor({
+  block,
+  index,
+  kbSlug,
+  onChange,
+  onMove,
+}: {
+  block: ImageBlock;
+  index: number;
+  kbSlug: string;
+  onChange: (block: ContentBlock) => void;
+  onMove: (index: number, direction: -1 | 1) => void;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  function selectFigure(figure: HTMLElement) {
+    rootRef.current?.querySelectorAll("figure.doc-image.is-selected").forEach((element) => {
+      if (element !== figure) element.classList.remove("is-selected");
+    });
+    figure.classList.add("is-selected");
+  }
+
+  function handleClick(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement | null;
+    const figure = target?.closest("figure.doc-image") as HTMLElement | null;
+    if (!figure || !rootRef.current?.contains(figure)) {
+      return;
+    }
+
+    selectFigure(figure);
+
+    const button = target?.closest("[data-img-action]") as HTMLElement | null;
+    if (!button || !figure.contains(button)) {
+      return;
+    }
+
+    event.preventDefault();
+    const action = button.getAttribute("data-img-action");
+    if (action === "alt") {
+      openImageAltEditor(figure, () => onChange(imageBlockFromFigure(figure, block)));
+      return;
+    }
+    if (action === "move-up" || action === "move-down") {
+      onMove(index, action === "move-up" ? -1 : 1);
+      return;
+    }
+
+    const next: ImageBlock = { ...block };
+    const currentWidth = clampImageWidth(next.widthPercent ?? Number(figure.getAttribute("data-width")));
+    switch (action) {
+      case "align-left":
+      case "align-center":
+      case "align-right":
+        next.align = action.replace("align-", "") as ImageBlock["align"];
+        break;
+      case "width-down":
+        next.widthPercent = Math.max(IMAGE_MIN_WIDTH, currentWidth - IMAGE_WIDTH_STEP);
+        break;
+      case "width-up":
+        next.widthPercent = Math.min(IMAGE_MAX_WIDTH, currentWidth + IMAGE_WIDTH_STEP);
+        break;
+      default:
+        return;
+    }
+    onChange(next);
+  }
+
+  return (
+    <div
+      className="image-section-editor"
+      dangerouslySetInnerHTML={{ __html: blocksToDocumentHtml([block], kbSlug) }}
+      onClick={handleClick}
+      ref={rootRef}
+    />
+  );
+}
+
 function SectionEditor({
   section,
   index,
@@ -525,6 +681,7 @@ function SectionEditor({
   onMove,
   onRemove,
   onUpdateFlow,
+  onUpdateImage,
   onUpdateTable,
   onUpdateCard,
   onUpdateProcedureSection,
@@ -541,6 +698,7 @@ function SectionEditor({
   onMove: (index: number, direction: -1 | 1) => void;
   onRemove: () => void;
   onUpdateFlow: (html: string, isBlur: boolean) => void;
+  onUpdateImage: (block: ContentBlock) => void;
   onUpdateTable: (block: ContentBlock) => void;
   onUpdateCard: (block: ContentBlock) => void;
   onUpdateProcedureSection: (block: ContentBlock) => void;
@@ -588,6 +746,16 @@ function SectionEditor({
           initialHtml={blocksToDocumentHtml(section.blocks, kbSlug)}
           kbId={kbId}
           onHtmlChange={onUpdateFlow}
+        />
+      )}
+
+      {section.type === "image" && (
+        <ImageSectionEditor
+          block={section.block}
+          index={index}
+          kbSlug={kbSlug}
+          onChange={onUpdateImage}
+          onMove={onMove}
         />
       )}
 

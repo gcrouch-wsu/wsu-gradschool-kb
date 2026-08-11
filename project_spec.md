@@ -218,9 +218,9 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   sanitizer.
 
 ### Editor (`src/components/PageDocumentEditor.tsx`)
-- The editor groups blocks into **sections**; a run of inline blocks renders as one
-  `contentEditable` "flow" surface, round-tripped through `page-document.ts` on input/blur. Tables,
-  procedure sections, cards, videos, and asset links are their own section editors.
+- The editor groups blocks into **sections**; a run of inline text blocks renders as one
+  `contentEditable` "flow" surface, round-tripped through `page-document.ts` on input/blur. Images,
+  section dividers, tables, procedure sections, cards, videos, and asset links are their own section editors.
 - **HTML source mode** is not just a view toggle: textarea edits are parsed through
   `documentHtmlToBlocks` as the user types so Save/Preview use the source draft even if the editor
   never switches back to Visual. Switching back to Visual re-parses the same draft and rebuilds the
