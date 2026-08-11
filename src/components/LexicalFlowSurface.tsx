@@ -14,8 +14,12 @@ import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { ListItemNode, ListNode } from "@lexical/list";
 import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from "@lexical/html";
-import { $createParagraphNode, $getRoot, type EditorState, type LexicalEditor } from "lexical";
-import { PreservedBlockNode } from "@/lib/lexical/preserved-block-node";
+import { $createParagraphNode, $getRoot, type EditorState, type LexicalEditor, type LexicalNode } from "lexical";
+import { $isPreservedBlockNode, PreservedBlockNode } from "@/lib/lexical/preserved-block-node";
+import {
+  $createEditorBoundaryParagraphNode,
+  EditorBoundaryParagraphNode,
+} from "@/lib/lexical/editor-boundary-paragraph-node";
 import { AlertNode } from "@/lib/lexical/alert-node";
 import { NoteNode } from "@/lib/lexical/note-node";
 import {
@@ -48,6 +52,20 @@ function theme() {
   };
 }
 
+function addPreservedBlockBoundaries(nodes: LexicalNode[]): LexicalNode[] {
+  const out: LexicalNode[] = [];
+  for (const node of nodes) {
+    if ($isPreservedBlockNode(node) && (out.length === 0 || $isPreservedBlockNode(out[out.length - 1]))) {
+      out.push($createEditorBoundaryParagraphNode());
+    }
+    out.push(node);
+  }
+  if (out.length > 0 && $isPreservedBlockNode(out[out.length - 1])) {
+    out.push($createEditorBoundaryParagraphNode());
+  }
+  return out;
+}
+
 function HydrateOncePlugin({ initialHtml }: { initialHtml: string }) {
   const [editor] = useLexicalComposerContext();
   const done = useRef(false);
@@ -63,7 +81,7 @@ function HydrateOncePlugin({ initialHtml }: { initialHtml: string }) {
       const root = $getRoot();
       root.clear();
       if (nodes.length > 0) {
-        root.append(...nodes);
+        root.append(...addPreservedBlockBoundaries(nodes));
       } else {
         root.append($createParagraphNode());
       }
@@ -184,6 +202,7 @@ export function LexicalFlowSurface({
         LinkNode,
         AutoLinkNode,
         PreservedBlockNode,
+        EditorBoundaryParagraphNode,
         AlertNode,
         NoteNode,
       ],

@@ -368,6 +368,17 @@ describe("page-document", () => {
     expect(clean).toContain('data-align="center"');
   });
 
+  it("drops only unused editor boundary paragraphs around preserved image blocks", () => {
+    const clean = sanitizePageDocument(
+      `<p data-editor-boundary="true"><br></p>` +
+        `<figure class="doc-image" data-block-id="img1"><img src="/kb/x/files/photo" alt="A"></figure>` +
+        `<p data-editor-boundary="true">Intro above a later image.</p>`,
+    );
+    const parsed = documentHtmlToBlocks(clean);
+    expect(parsed.map((block) => block.type)).toEqual(["image", "paragraph"]);
+    expect(parsed[1]).toMatchObject({ type: "paragraph", text: "Intro above a later image." });
+  });
+
   it("round-trips optional section dividers", () => {
     const blocks: ContentBlock[] = [
       { blockId: "p1", type: "paragraph", text: "Before" },

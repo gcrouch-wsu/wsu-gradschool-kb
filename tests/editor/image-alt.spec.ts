@@ -4,6 +4,33 @@ import { TARGET_PAGE_PUBLIC_PATH, openEditor, saveAndPublish, setDocumentHtml } 
 const TINY_GIF = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
 test.describe("image alt text workflow", () => {
+  test("text can be added above an image at the top of the page", async ({ page }) => {
+    await openEditor(page);
+    await setDocumentHtml(
+      page,
+      `<figure class="doc-image" data-block-id="img-top-test" data-width="100" data-align="left">` +
+        `<img src="${TINY_GIF}" alt="One-pixel test image" />` +
+        `</figure>`,
+    );
+
+    const firstParagraph = page.locator(".wysiwyg-surface p").first();
+    await expect(firstParagraph).toBeVisible();
+    await firstParagraph.click();
+    await page.keyboard.type("Intro above the image.");
+
+    const firstBlock = page.locator(".wysiwyg-surface > *").first();
+    await expect(firstBlock).toHaveText("Intro above the image.");
+
+    await saveAndPublish(page);
+
+    await page.goto(TARGET_PAGE_PUBLIC_PATH);
+    const publicIntro = page.locator(".article > p").filter({ hasText: "Intro above the image." }).first();
+    await expect(publicIntro).toBeVisible();
+    await expect(
+      publicIntro.locator("xpath=following-sibling::*[1][self::figure[contains(@class, 'content-image')]]"),
+    ).toBeVisible();
+  });
+
   test("Alt dialog updates editor image metadata and public render", async ({ page }) => {
     await openEditor(page);
     await setDocumentHtml(
