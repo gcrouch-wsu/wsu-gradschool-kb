@@ -227,6 +227,10 @@ function inlineFields(node: HTMLElement, listItem = false) {
   return { html, text };
 }
 
+function isBreakOnlyRichText(html: string) {
+  return html.replace(/<br\s*\/?>/gi, "").replace(/&nbsp;|\u00a0/g, "").trim() === "";
+}
+
 function alertFields(node: HTMLElement) {
   const html = sanitizeCalloutHtml(node.innerHTML, { keepNotes: true });
   const text = collapseWhitespace(richTextToPlainText(html) || node.text);
@@ -493,6 +497,12 @@ function serializeDocumentNode(node: Node): string {
   }
 
   if (tag === "p") {
+    if (node.getAttribute("data-editor-boundary") === "true") {
+      const { html: blockHtml, text } = inlineFields(node);
+      if (!text && isBreakOnlyRichText(blockHtml)) {
+        return "";
+      }
+    }
     // Chromium's insertOrderedList/insertUnorderedList can leave the new list
     // wrapped inside the paragraph it converted (`<p><ol>…</ol></p>`). A plain
     // paragraph serialize would flatten that list via inline sanitization, so
