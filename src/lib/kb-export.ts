@@ -8,6 +8,7 @@ import {
   getKbById,
 } from "@/lib/kb-store";
 import { escapeHtml, sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
+import { isBlankParagraphBlock } from "@/lib/page-document-quality";
 import { logError } from "@/lib/log";
 import { collectZipArchive, zipArchiveStream, type ZipEntry } from "@/lib/zip";
 import type { AssetVersion, ContentBlock, KbPage } from "@/lib/types";
@@ -95,6 +96,9 @@ function renderBlock(
 ): string {
   switch (block.type) {
     case "paragraph":
+      if (isBlankParagraphBlock(block)) {
+        return "";
+      }
       return `<p>${renderInline(block.html, block.text) || "<br>"}</p>`;
     case "heading":
       return `<h${block.level}>${renderInline(block.html, block.text)}</h${block.level}>`;

@@ -5,6 +5,7 @@ import { excerptAttributionLabel, resolveExcerptForRead } from "@/lib/excerpts";
 import { formatDate } from "@/lib/format";
 import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
+import { isBlankParagraphBlock } from "@/lib/page-document-quality";
 import { sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
 
@@ -298,6 +299,9 @@ export function PageBlocks({
           case "video":
             return <VideoBlock block={block} key={block.blockId} />;
           case "paragraph":
+            if (isBlankParagraphBlock(block)) {
+              return null;
+            }
             return (
               <p key={block.blockId} style={block.align ? { textAlign: block.align } : undefined}>
                 <RichText html={block.html} text={block.text} />

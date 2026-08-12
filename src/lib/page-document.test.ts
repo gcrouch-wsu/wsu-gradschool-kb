@@ -67,6 +67,17 @@ describe("page-document", () => {
     expect(ids).toContain("list-3");
   });
 
+  it("drops blank paragraph spacer blocks when real content exists", () => {
+    const clean = sanitizePageDocument(
+      '<p data-block-id="h"><strong>Create service request</strong></p>' +
+        '<p data-block-id="blank"><br></p>' +
+        '<p data-block-id="body">Select the category.</p>',
+    );
+    expect(clean).not.toContain('data-block-id="blank"');
+    const parsed = documentHtmlToBlocks(clean);
+    expect(parsed.map((block) => block.blockId)).toEqual(["h", "body"]);
+  });
+
   it("preserves a list the browser wrapped inside a paragraph on save", () => {
     // Chromium's insertOrderedList can produce <p><ol>…</ol></p>; the list must
     // survive save (a paragraph serialize would flatten it) including nesting.

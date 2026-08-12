@@ -11,6 +11,7 @@ import { RelatedPagesEditor } from "@/components/RelatedPagesEditor";
 import { AiPageReviewPanel } from "@/components/AiPageReviewPanel";
 import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
+import { cleanDocumentLayout } from "@/lib/page-document-quality";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import { normalizePageTags } from "@/lib/page-tags";
@@ -326,7 +327,7 @@ export function AdminPageEditorForm({
   const [tocDepth, setTocDepth] = useState(page.tocDepth);
   const [showSummary, setShowSummary] = useState(page.showSummary !== false);
   const [showPrintButton, setShowPrintButton] = useState(page.showPrintButton !== false);
-  const [blocks, setBlocks] = useState<ContentBlock[]>(page.blocks);
+  const [blocks, setBlocks] = useState<ContentBlock[]>(() => cleanDocumentLayout(page.blocks));
   const [relocateOpen, setRelocateOpen] = useState(false);
   const [nextReviewDate, setNextReviewDate] = useState(page.nextReviewDate);
   const [reviewAssigneeEmail, setReviewAssigneeEmail] = useState(page.reviewAssigneeEmail ?? "");
@@ -523,7 +524,7 @@ export function AdminPageEditorForm({
     if (typeof data.tocDepth === "number") setTocDepth(data.tocDepth);
     if (typeof data.showSummary === "boolean") setShowSummary(data.showSummary);
     if (typeof data.showPrintButton === "boolean") setShowPrintButton(data.showPrintButton);
-    if (Array.isArray(data.blocks)) setBlocks(data.blocks as ContentBlock[]);
+    if (Array.isArray(data.blocks)) setBlocks(cleanDocumentLayout(data.blocks as ContentBlock[]));
     setEditorEpoch((n) => n + 1);
   }
 
@@ -1691,7 +1692,7 @@ export function AdminPageEditorForm({
               disabled={isLocked}
               error={pageReviewError}
               onApplyBlocks={(next) => {
-                setBlocks(next);
+                setBlocks(cleanDocumentLayout(next));
                 setEditorEpoch((epoch) => epoch + 1);
               }}
               onReject={(id) =>

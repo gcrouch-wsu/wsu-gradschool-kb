@@ -220,6 +220,27 @@ function dedupeBlockIds(html: string): string {
   return changed ? root.toString() : html;
 }
 
+function isBlankParagraphElement(node: Node) {
+  if (!isElement(node) || node.tagName?.toLowerCase() !== "p") {
+    return false;
+  }
+  return collapseWhitespace(richTextToPlainText(sanitizeRichText(node.innerHTML, { keepNotes: true })) || node.text) === "";
+}
+
+function dropBlankSpacerParagraphs(html: string) {
+  const root = parse(html);
+  const hasContent = root.childNodes.some((node) =>
+    isElement(node) ? !isBlankParagraphElement(node) : Boolean(collapseWhitespace(node.text ?? "")),
+  );
+  if (!hasContent) {
+    return html;
+  }
+  return root.childNodes
+    .filter((node) => !isBlankParagraphElement(node))
+    .map((node) => node.toString())
+    .join("");
+}
+
 function inlineFields(node: HTMLElement, listItem = false) {
   const html = listItem
     ? sanitizeListItemHtml(node.innerHTML, { keepNotes: true })
@@ -576,7 +597,7 @@ export function sanitizePageDocument(html: string) {
     return `<p data-block-id="${newBlockId()}"><br></p>`;
   }
   const root = parse(html);
-  const clean = root.childNodes.map(serializeDocumentNode).join("");
+  const clean = dropBlankSpacerParagraphs(root.childNodes.map(serializeDocumentNode).join(""));
   return clean ? dedupeBlockIds(clean) : `<p data-block-id="${newBlockId()}"><br></p>`;
 }
 

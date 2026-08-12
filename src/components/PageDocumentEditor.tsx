@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { AltTextDialog } from "@/components/AltTextDialog";
 import { ExcerptPickerDialog } from "@/components/ExcerptPickerDialog";
@@ -27,6 +27,11 @@ import {
   documentHtmlToBlocks,
   sanitizePageDocument,
 } from "@/lib/page-document";
+import {
+  analyzeDocumentQuality,
+  cleanDocumentLayout,
+  type DocumentQualityIssue,
+} from "@/lib/page-document-quality";
 import {
   applyAltText,
   applyEditorCommand,
@@ -105,7 +110,7 @@ export function PageDocumentEditor({
   onChange: (blocks: ContentBlock[]) => void;
   pageUrl?: string;
 }) {
-  const initialSections = blocksToSections(blocks);
+  const initialSections = blocksToSections(cleanDocumentLayout(blocks));
   // Always present at least one editable flow surface — otherwise an empty
   // document (e.g. fresh Home Page Rich Content) renders just the toolbar with
   // nowhere to type.
@@ -125,6 +130,7 @@ export function PageDocumentEditor({
   const [htmlDraft, setHtmlDraft] = useState("");
   const [visualEpoch, setVisualEpoch] = useState(0);
   const [excerptPickerOpen, setExcerptPickerOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -403,8 +409,34 @@ export function PageDocumentEditor({
     emitChange(next);
   }
 
+  const currentBlocksForQuality = useMemo(
+    () => (viewMode === "html" ? documentHtmlToBlocks(htmlDraft) : sectionsToBlocks(sections)),
+    [htmlDraft, sections, viewMode],
+  );
+  const qualityIssues = useMemo(
+    () => analyzeDocumentQuality(currentBlocksForQuality),
+    [currentBlocksForQuality],
+  );
+  const safeCleanupCount = qualityIssues.filter((item) => item.fixable).length;
+
+  function markEditorAction() {
+    rootRef.current?.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function applySafeLayoutCleanup() {
+    const cleaned = cleanDocumentLayout(currentBlocksForQuality);
+    markEditorAction();
+    if (viewMode === "html") {
+      setHtmlDraft(blocksToSourceHtml(cleaned, kbSlug));
+      onChangeRef.current(cleaned);
+      return;
+    }
+    setVisualEpoch((value) => value + 1);
+    emitChange(blocksToSections(cleaned));
+  }
+
   return (
-    <div className="page-document-editor">
+    <div className="page-document-editor" ref={rootRef}>
       <div className="editor-toolbar-sticky">
         <div className="seg editor-mode-toggle" role="group" aria-label="Editor mode">
           <button
@@ -441,6 +473,11 @@ export function PageDocumentEditor({
           />
         )}
         {formatHint && <p className="alert editor-format-hint">{formatHint}</p>}
+        <EditorLayoutSuggestions
+          issues={qualityIssues}
+          onApplySafeCleanup={applySafeLayoutCleanup}
+          safeCleanupCount={safeCleanupCount}
+        />
         <PageEditorDebugPanel />
       </div>
 
@@ -581,6 +618,38 @@ export function PageDocumentEditor({
       </div>
         </>
       )}
+    </div>
+  );
+}
+
+function EditorLayoutSuggestions({
+  issues,
+  onApplySafeCleanup,
+  safeCleanupCount,
+}: {
+  issues: DocumentQualityIssue[];
+  onApplySafeCleanup: () => void;
+  safeCleanupCount: number;
+}) {
+  if (issues.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="editor-layout-suggestions">
+      <div className="editor-layout-suggestions__header">
+        <strong>Layout suggestions</strong>
+        {safeCleanupCount > 0 ? (
+          <button className="button button--small button--ghost" onClick={onApplySafeCleanup} type="button">
+            Clean spacing
+          </button>
+        ) : null}
+      </div>
+      <ul className="issue-list">
+        {issues.map((item) => (
+          <li key={item.id}>{item.message}</li>
+        ))}
+      </ul>
     </div>
   );
 }

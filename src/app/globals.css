@@ -3660,6 +3660,26 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   margin-bottom: 0.35rem;
 }
 
+.editor-layout-suggestions {
+  background: #fff8e5;
+  border: 1px solid #e8cf86;
+  border-radius: var(--radius-sm);
+  margin-top: 0.75rem;
+  padding: 0.8rem 1rem;
+}
+
+.editor-layout-suggestions__header {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.editor-layout-suggestions__header strong {
+  display: block;
+}
+
 .wysiwyg-surface {
   line-height: 1.7;
   min-height: 20rem;
@@ -4275,6 +4295,16 @@ article ol ol {
 .wysiwyg-surface ol ol ol,
 article ol ol ol {
   list-style-type: lower-roman;
+}
+
+.wysiwyg-surface ul ul,
+article ul ul {
+  list-style-type: circle;
+}
+
+.wysiwyg-surface ul ul ul,
+article ul ul ul {
+  list-style-type: square;
 }
 
 /* Toolbar popovers (symbol palette, keyboard shortcuts) */
