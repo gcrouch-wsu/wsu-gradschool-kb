@@ -73,7 +73,9 @@ hardening backlog (FB-38–FB-44) shipped on 2026-08-01.
 
 **Out of scope (decided, not deferred):** **WSU SSO** and a **Confluence import/export bridge**
 were both evaluated and dropped by the maintainer on 2026-08-01. Authentication stays local and
-owner-provisioned; DOCX staged import plus owner KB ZIP export remain the migration path.
+owner-provisioned; DOCX staged import plus owner KB ZIP export remain the migration path. If a
+Confluence bridge is revived later, use the FB-37 revival notes in §12 rather than treating it as
+approved backlog.
 
 **Out of scope (intentionally, for now):** self-service public signup (accounts are Owner-provisioned);
 WYSIWYG parity with Word; real-time multi-cursor co-editing (concurrency uses locks, not CRDTs).
@@ -909,6 +911,58 @@ Both were dropped by the maintainer on 2026-08-01. Authentication stays local an
 owner-provisioned (§10); DOCX staged import plus owner KB ZIP export remain the migration path
 off Confluence. Do not reopen either without maintainer direction — the write-ups are in git
 history if they are ever revived.
+
+#### FB-37 revival notes — Confluence import/export research (2026-08-12)
+
+Status remains `wontfix` unless the maintainer explicitly reopens it. The practical finding is that
+Confluence import is feasible, but a true import/export bridge is a product feature, not a parser
+tweak. Reuse the existing staged import and export foundations first: `src/lib/staged-imports.ts`,
+`src/lib/docx-import.ts`, `src/lib/import-commit.ts`, and `src/lib/kb-export.ts`.
+
+Best first build: **Confluence HTML space export ZIP import** into the existing staged-import review
+flow. Atlassian's Cloud space export supports HTML, CSV, PDF, and XML; HTML exports include page
+attachments under `download/attachments/<pageId>`, which gives a workable path to recover inline
+images/files and promote them into managed assets. Estimate: 1-2 weeks for a useful MVP for ordinary
+pages; 3-5 weeks for robust page hierarchy, link rewriting, redirect generation, attachment review,
+macro fallbacks, and bulk QA. Source:
+https://support.atlassian.com/confluence-cloud/docs/export-content-to-word-pdf-html-and-xml/
+
+API-based Confluence import is more flexible and supports repeated sync, but adds auth, rate-limit,
+pagination, and permission edge cases. Confluence REST API v2 uses cursor pagination; page endpoints
+support `body-format` on page reads, and attachment endpoints expose page attachment metadata and
+download links with OAuth scopes such as `read:page:confluence` and `read:attachment:confluence`.
+Estimate: 3-6 weeks for a reliable v1, depending on whether it needs OAuth setup or can use an
+admin-supplied API token. Sources:
+https://developer.atlassian.com/cloud/confluence/rest/v2/intro/
+https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-page/
+https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-attachment/
+
+Avoid building around Confluence Cloud XML export. Atlassian says XML Site Export and XML Space
+Export reach end of life on December 1, 2026; CSV remains supported, but CSV is a poorer fit for
+rich page layout and media preservation in this app. Source:
+https://support.atlassian.com/confluence/kb/xml-export-end-of-life-confluence-cloud/
+
+Intermediate export option: **Confluence-safe single-page DOCX export**. This is much easier than a
+true Confluence export bridge and fits Confluence Cloud's current one-file-to-one-page import path.
+Generate `.docx`, not legacy `.doc`: Atlassian's Word import path names Word document `.docx`, and
+DOCX is practical to generate with modern libraries. Keep the document intentionally plain: title,
+H2/H3 headings, paragraphs, ordered/unordered lists, simple tables, hyperlinks, and embedded PNG/JPG
+images with captions as ordinary paragraphs. Flatten app-specific blocks such as cards, procedure
+sections, excerpts, sourced blocks, notes, and videos; turn videos into links; avoid shapes,
+floating text boxes, merged table cells, custom colors, embedded objects, and complex page layout.
+Include an export report listing what was flattened or converted so editors know what to inspect
+after Confluence import. Estimate: 2-4 days for a basic one-page DOCX export from `ContentBlock[]`;
+about 1 week for a polished Confluence-safe version with images, captions, simple tables, and
+warnings; 1-2 weeks if it needs real QA against Confluence imports across representative pages.
+Source:
+https://support.atlassian.com/confluence-cloud/docs/import-content-into-confluence-cloud/
+
+Exporting **from this app back into editable Confluence pages** is harder than importing. It would
+need Confluence storage-format or ADF generation, page create/update/version handling, parent/page
+mapping, attachment upload, link rewriting, and conflict handling. Estimate: 4-8 weeks for a
+practical v1, longer if macros, permissions, comments, history, or round-trip fidelity are required.
+The current owner KB ZIP export remains the right archival/static export path unless there is a real
+requirement to republish content into Confluence.
 
 ### FB-38 — Session and auth hardening
 
