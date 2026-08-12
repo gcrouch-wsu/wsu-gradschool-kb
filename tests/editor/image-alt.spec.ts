@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { TARGET_PAGE_PUBLIC_PATH, openEditor, saveAndPublish, setDocumentHtml } from "./helpers";
 
-const TINY_GIF = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+const TEST_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='320' viewBox='0 0 640 320'%3E%3Crect width='640' height='320' fill='%23f6f3f0'/%3E%3Crect x='32' y='32' width='576' height='256' fill='%23fff' stroke='%23a60f2d' stroke-width='8'/%3E%3C/svg%3E";
 
 test.describe("image alt text workflow", () => {
   test("text can be added above an image at the top of the page", async ({ page }) => {
@@ -9,7 +10,7 @@ test.describe("image alt text workflow", () => {
     await setDocumentHtml(
       page,
       `<figure class="doc-image" data-block-id="img-top-test" data-width="100" data-align="left">` +
-        `<img src="${TINY_GIF}" alt="One-pixel test image" />` +
+        `<img src="${TEST_IMAGE}" alt="Test screenshot" />` +
         `</figure>`,
     );
 
@@ -39,7 +40,7 @@ test.describe("image alt text workflow", () => {
     await setDocumentHtml(
       page,
       `<figure class="doc-image" data-block-id="img-move-test" data-width="100" data-align="left">` +
-        `<img src="${TINY_GIF}" alt="One-pixel test image" />` +
+        `<img src="${TEST_IMAGE}" alt="Test screenshot" />` +
         `</figure>` +
         `<p>Paragraph after the image.</p>`,
     );
@@ -65,7 +66,7 @@ test.describe("image alt text workflow", () => {
     await setDocumentHtml(
       page,
       `<figure class="doc-image" data-block-id="img-width-test" data-width="100" data-align="left">` +
-        `<img src="${TINY_GIF}" alt="One-pixel test image" />` +
+        `<img src="${TEST_IMAGE}" alt="Test screenshot" />` +
         `</figure>`,
     );
 
@@ -84,8 +85,18 @@ test.describe("image alt text workflow", () => {
 
     await page.goto(TARGET_PAGE_PUBLIC_PATH);
     const publicFigure = page.locator(".article figure.content-image").first();
+    const publicImage = publicFigure.locator("img");
     await expect(publicFigure).toBeVisible();
     await expect.poll(() => publicFigure.evaluate((element) => (element as HTMLElement).style.width)).toBe("50%");
+    await expect
+      .poll(async () => {
+        const [figureWidth, imageWidth] = await Promise.all([
+          publicFigure.evaluate((element) => element.getBoundingClientRect().width),
+          publicImage.evaluate((element) => element.getBoundingClientRect().width),
+        ]);
+        return Math.abs(figureWidth - imageWidth);
+      })
+      .toBeLessThan(1);
   });
 
   test("Alt dialog updates editor image metadata and public render", async ({ page }) => {
@@ -93,7 +104,7 @@ test.describe("image alt text workflow", () => {
     await setDocumentHtml(
       page,
       `<figure class="doc-image" data-block-id="img-alt-test" data-width="100" data-align="left">` +
-        `<img src="${TINY_GIF}" alt="" />` +
+        `<img src="${TEST_IMAGE}" alt="" />` +
         `</figure>`,
     );
 

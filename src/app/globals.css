@@ -2965,7 +2965,9 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   height: auto;
+  display: block;
   max-width: 100%;
+  width: 100%;
   box-shadow: var(--shadow-sm);
 }
 
@@ -4176,6 +4178,7 @@ article li > ol {
   display: block;
   height: auto;
   max-width: 100%;
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
 }

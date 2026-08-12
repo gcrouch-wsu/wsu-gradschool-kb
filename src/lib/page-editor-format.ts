@@ -850,7 +850,8 @@ function styleImageFigure(figure: HTMLElement) {
   const align = figure.getAttribute("data-align") || "left";
   figure.setAttribute("data-width", String(width));
   figure.setAttribute("data-align", align);
-  figure.style.maxWidth = `${width}%`;
+  figure.style.width = `${width}%`;
+  figure.style.maxWidth = "100%";
   figure.style.margin = imageMargin(align);
 }
 
