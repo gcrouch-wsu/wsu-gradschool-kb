@@ -253,12 +253,14 @@ export function PageDocumentEditor({
     const next = [...sections];
     const target = moveTargetIndex(next, index, direction);
     if (target < 0) return;
+    markEditorAction();
     [next[index], next[target]] = [next[target], next[index]];
     setVisualEpoch((value) => value + 1);
     emitChange(next);
   }
 
   function removeSection(index: number) {
+    markEditorAction();
     const next = sections.filter((_, i) => i !== index);
     setVisualEpoch((value) => value + 1);
     emitChange(next);
@@ -275,6 +277,7 @@ export function PageDocumentEditor({
 
   function updateImageSection(index: number, block: ContentBlock) {
     if (block.type !== "image") return;
+    markEditorAction();
     const next = [...sections];
     next[index] = { type: "image", block };
     emitChange(next);

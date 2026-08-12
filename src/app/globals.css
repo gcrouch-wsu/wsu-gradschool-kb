@@ -6105,7 +6105,7 @@ article ul ul ul {
   position: absolute;
   right: 0;
   top: calc(100% + 0.35rem);
-  z-index: 30;
+  z-index: 120;
 }
 
 .kb-picker--scope .kb-picker__search {
@@ -6177,6 +6177,10 @@ article ul ul ul {
   background: var(--wash);
 }
 
+.kb-picker--scope .kb-picker__option:active {
+  background: var(--wash-deep);
+}
+
 .kb-picker--scope .kb-picker__option.is-selected {
   background: var(--wash-deep);
 }
@@ -6208,7 +6212,7 @@ article ul ul ul {
 
 .kb-picker__menu {
   position: absolute;
-  z-index: 30;
+  z-index: 120;
   top: calc(100% + 0.25rem);
   left: 0;
   right: 0;
@@ -6235,6 +6239,10 @@ article ul ul ul {
 
 .kb-picker__option.is-active {
   background: var(--wash);
+}
+
+.kb-picker__option:active {
+  background: var(--wash-deep);
 }
 
 .kb-picker__option-title {

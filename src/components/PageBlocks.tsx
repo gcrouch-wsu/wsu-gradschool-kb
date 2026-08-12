@@ -258,7 +258,7 @@ async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "ima
   return (
     <figure
       className={`content-image content-image--align-${block.align ?? "left"}`}
-      style={{ maxWidth: `${widthPercent}%`, ...horizontalMargin }}
+      style={{ maxWidth: "100%", width: `${widthPercent}%`, ...horizontalMargin }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img

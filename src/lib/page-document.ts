@@ -96,7 +96,7 @@ function imageFigureHtml(input: {
   const assetAttr = input.assetId ? ` data-asset-id="${escapeHtml(input.assetId)}"` : "";
   const decoAttr = input.decorative ? ` data-decorative="true"` : "";
   const needsAlt = !input.decorative && !input.alt ? ` data-needs-alt="true"` : "";
-  const figureStyle = ` style="max-width: ${input.width}%; margin: ${imageMargin(input.align)};"`;
+  const figureStyle = ` style="width: ${input.width}%; max-width: 100%; margin: ${imageMargin(input.align)};"`;
   return (
     `<figure class="doc-image" contenteditable="false" data-block-id="${escapeHtml(input.blockId)}" data-width="${input.width}" data-align="${input.align}"${assetAttr}${decoAttr}${needsAlt}${figureStyle}>` +
     imageControlsHtml() +

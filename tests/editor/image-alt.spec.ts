@@ -60,6 +60,34 @@ test.describe("image alt text workflow", () => {
     ).toBeVisible();
   });
 
+  test("selected image width persists to the public page", async ({ page }) => {
+    await openEditor(page);
+    await setDocumentHtml(
+      page,
+      `<figure class="doc-image" data-block-id="img-width-test" data-width="100" data-align="left">` +
+        `<img src="${TINY_GIF}" alt="One-pixel test image" />` +
+        `</figure>`,
+    );
+
+    const figure = page.locator(".image-section-editor figure.doc-image").first();
+    await saveAndPublish(page);
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+
+    await figure.click();
+    await page.getByRole("button", { name: "Shrink image" }).click();
+    await page.getByRole("button", { name: "Shrink image" }).click();
+
+    await expect(figure).toHaveAttribute("data-width", "50");
+    await expect(page.getByText("Unsaved changes").first()).toBeVisible();
+
+    await saveAndPublish(page);
+
+    await page.goto(TARGET_PAGE_PUBLIC_PATH);
+    const publicFigure = page.locator(".article figure.content-image").first();
+    await expect(publicFigure).toBeVisible();
+    await expect.poll(() => publicFigure.evaluate((element) => (element as HTMLElement).style.width)).toBe("50%");
+  });
+
   test("Alt dialog updates editor image metadata and public render", async ({ page }) => {
     await openEditor(page);
     await setDocumentHtml(

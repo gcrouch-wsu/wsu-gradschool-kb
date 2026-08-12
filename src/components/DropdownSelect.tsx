@@ -135,6 +135,9 @@ export function DropdownSelect({
     }
   }
 
+  const activeOptionId = matches[clampedActiveIndex]
+    ? `${listboxId}-option-${clampedActiveIndex}`
+    : undefined;
   const visibleIcon = selectedOption?.icon ?? triggerIcon;
 
   return (
@@ -177,6 +180,7 @@ export function DropdownSelect({
                 <input
                   ref={searchRef}
                   aria-autocomplete="list"
+                  aria-activedescendant={activeOptionId}
                   aria-controls={listboxId}
                   className="kb-picker__search-input"
                   disabled={disabled}
@@ -193,7 +197,13 @@ export function DropdownSelect({
               </div>
             )}
 
-            <ul className="kb-picker__menu" id={listboxId} onKeyDown={onPickerKeyDown} role="listbox">
+            <ul
+              aria-activedescendant={activeOptionId}
+              className="kb-picker__menu"
+              id={listboxId}
+              onKeyDown={onPickerKeyDown}
+              role="listbox"
+            >
               {matches.length === 0 ? (
                 <li className="kb-picker__empty" role="presentation">
                   {emptyMessage}
@@ -204,15 +214,19 @@ export function DropdownSelect({
                   return (
                     <li
                       key={option.value}
+                      id={`${listboxId}-option-${index}`}
                       aria-selected={isSelected}
                       className={`kb-picker__option${index === clampedActiveIndex ? " is-active" : ""}${
                         isSelected ? " is-selected" : ""
                       }`}
                       onMouseDown={(event) => {
                         event.preventDefault();
+                      }}
+                      onClick={() => {
                         selectValue(option.value);
                       }}
                       onMouseEnter={() => setActiveIndex(index)}
+                      onPointerEnter={() => setActiveIndex(index)}
                       role="option"
                     >
                       <span className="kb-picker__option-main">
