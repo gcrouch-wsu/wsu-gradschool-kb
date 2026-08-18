@@ -19,6 +19,7 @@ import {
   blocksToSections,
   normalizeEditorSections,
   sectionsToBlocks,
+  stampFlowClientKeys,
   type EditorSection,
 } from "@/lib/page-editor-list";
 import {
@@ -50,6 +51,7 @@ import {
   removeLink,
   removeNote,
   uploadImageBlockFromFile,
+  imageFilesFromTransfer,
   watchEditorSelectionForDebug,
   type AltEditRequest,
   type LinkEditRequest,
@@ -252,28 +254,58 @@ export function PageDocumentEditor({
     restoreViewport(scroll);
   }
 
+  function focusSectionSurface(index: number) {
+    requestAnimationFrame(() => {
+      const surface = rootRef.current?.querySelector(
+        `[data-section-index="${index}"] .wysiwyg-surface`,
+      ) as HTMLElement | null;
+      surface?.focus({ preventScroll: true });
+      surface?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
+
   function insertBlocksAt(insertIndex: number, blocksToInsert: ContentBlock[]) {
+    const index = clampInsertIndex(insertIndex);
     const next = [...sectionsRef.current];
-    next.splice(clampInsertIndex(insertIndex), 0, ...blocksToSections(blocksToInsert));
+    const imageSections = blocksToSections(blocksToInsert);
+    if (next[index]?.type === "flow" && isEmptyFlowSection(next[index])) {
+      next.splice(index, 1, ...imageSections);
+    } else {
+      next.splice(index, 0, ...imageSections);
+    }
     markEditorAction();
     withViewportPreserved(() => {
-      setVisualEpoch((value) => value + 1);
       emitChange(next);
     });
   }
 
   function insertTextAt(insertIndex: number) {
+    const index = clampInsertIndex(insertIndex);
+    const at = sectionsRef.current[index];
+    if (at?.type === "flow") {
+      setActiveSectionIndex(index);
+      focusSectionSurface(index);
+      return;
+    }
+    const previous = sectionsRef.current[index - 1];
+    if (previous?.type === "flow" && isEmptyFlowSection(previous)) {
+      setActiveSectionIndex(index - 1);
+      focusSectionSurface(index - 1);
+      return;
+    }
+
     const next = [...sectionsRef.current];
-    next.splice(clampInsertIndex(insertIndex), 0, {
+    next.splice(index, 0, {
       type: "flow",
       blocks: [],
       clientKey: `flow-${crypto.randomUUID()}`,
     });
     markEditorAction();
     withViewportPreserved(() => {
-      setVisualEpoch((value) => value + 1);
-      setEditorSections(next);
+      setEditorSections(stampFlowClientKeys(next));
+      setActiveSectionIndex(index);
     });
+    focusSectionSurface(index);
   }
 
   type SectionInsertAnchor =
@@ -924,9 +956,9 @@ export function PageDocumentEditor({
           <InsertControls insertIndex={0} onInsertMedia={openMediaPicker} onInsertText={insertTextAt} />
           {sections.map((section, index) => {
             const sectionKey =
-                section.type === "flow"
-                  ? `flow-${index}-${visualEpoch}`
-                  : `${section.block.blockId}-${visualEpoch}`;
+              section.type === "flow"
+                ? section.clientKey ?? `flow-fallback-${index}`
+                : section.block.blockId;
             return (
               <Fragment key={sectionKey}>
                 <SectionEditor
@@ -1051,14 +1083,17 @@ function ImageSectionEditor({
   kbSlug,
   onChange,
   onMove,
+  onImageFiles,
 }: {
   block: ImageBlock;
   index: number;
   kbSlug: string;
   onChange: (block: ContentBlock) => void;
   onMove: (index: number, direction: -1 | 1) => void;
+  onImageFiles?: (files: File[], source: "paste" | "drop") => void;
 }) {
   const figureRootRef = useRef<HTMLDivElement>(null);
+  const editorRootRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState(false);
 
   const selectFigure = useCallback((figure: HTMLElement) => {
@@ -1067,6 +1102,7 @@ function ImageSectionEditor({
     });
     figure.classList.add("is-selected");
     setSelected(true);
+    editorRootRef.current?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -1135,8 +1171,46 @@ function ImageSectionEditor({
     };
   }, [handleFigureClick]);
 
+  useEffect(() => {
+    const root = editorRootRef.current;
+    if (!root || !onImageFiles) {
+      return;
+    }
+    const onPaste = (event: ClipboardEvent) => {
+      const files = imageFilesFromTransfer(event.clipboardData);
+      if (files.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onImageFiles(files, "paste");
+    };
+    const onDrop = (event: DragEvent) => {
+      const files = imageFilesFromTransfer(event.dataTransfer);
+      if (files.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onImageFiles(files, "drop");
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (event.dataTransfer?.types?.includes("Files")) {
+        event.preventDefault();
+      }
+    };
+    root.addEventListener("paste", onPaste);
+    root.addEventListener("drop", onDrop);
+    root.addEventListener("dragover", onDragOver);
+    return () => {
+      root.removeEventListener("paste", onPaste);
+      root.removeEventListener("drop", onDrop);
+      root.removeEventListener("dragover", onDragOver);
+    };
+  }, [onImageFiles]);
+
   return (
-    <div className="image-section-editor">
+    <div className="image-section-editor" ref={editorRootRef} tabIndex={-1}>
       <div className="image-section-toolbar" role="group" aria-label="Image controls">
         <button
           aria-label="Edit image alt text"
@@ -1270,7 +1344,7 @@ function SectionEditor({
   onUpdateSourced: (block: ContentBlock) => void;
 }) {
   return (
-    <article className="block-editor" onFocusCapture={onActivate}>
+    <article className="block-editor" data-section-index={index} onFocusCapture={onActivate}>
       <div className="block-bar">
         <span className="block-bar__label">{section.type.replace("_", " ")}</span>
         <span className="block-bar__spacer" />
@@ -1321,6 +1395,7 @@ function SectionEditor({
           index={index}
           kbSlug={kbSlug}
           onChange={onUpdateImage}
+          onImageFiles={onImageFiles}
           onMove={onMove}
         />
       )}

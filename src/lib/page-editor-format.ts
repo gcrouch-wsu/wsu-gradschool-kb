@@ -1671,7 +1671,7 @@ export function prepareClipboardHtmlPaste(html: string): {
   };
 }
 
-function imageFilesFromTransfer(dataTransfer: DataTransfer | null): File[] {
+export function imageFilesFromTransfer(dataTransfer: DataTransfer | null): File[] {
   if (!dataTransfer) {
     return [];
   }

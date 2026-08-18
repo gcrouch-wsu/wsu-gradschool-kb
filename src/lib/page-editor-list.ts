@@ -202,7 +202,56 @@ export function normalizeEditorSections(sections: EditorSection[]): EditorSectio
       normalized.push({ type: "flow", blocks: [] });
     }
   }
-  return mergeAdjacentFlowSections(normalized);
+  return stampFlowClientKeys(mergeAdjacentFlowSections(normalized));
+}
+
+function contentFlowClientKey(blocks: ContentBlock[]): string {
+  return `flow:${blocks.map((block) => block.blockId).join(":")}`;
+}
+
+function gapFlowClientKey(sections: EditorSection[], index: number): string {
+  let left = "start";
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const section = sections[cursor];
+    if (section.type !== "flow") {
+      left = section.block.blockId;
+      break;
+    }
+    if (section.blocks.length > 0) {
+      left = section.blocks[section.blocks.length - 1]?.blockId ?? left;
+      break;
+    }
+  }
+  let right = "end";
+  for (let cursor = index + 1; cursor < sections.length; cursor += 1) {
+    const section = sections[cursor];
+    if (section.type !== "flow") {
+      right = section.block.blockId;
+      break;
+    }
+    if (section.blocks.length > 0) {
+      right = section.blocks[0]?.blockId ?? right;
+      break;
+    }
+  }
+  return `gap:${left}:${right}`;
+}
+
+/** Stable keys so inserts/moves do not remount unrelated flow editors. */
+export function stampFlowClientKeys(sections: EditorSection[]): EditorSection[] {
+  return sections.map((section, index) => {
+    if (section.type !== "flow") {
+      return section;
+    }
+    if (section.blocks.length > 0) {
+      return { ...section, clientKey: contentFlowClientKey(section.blocks) };
+    }
+    if (section.clientKey?.startsWith("flow-")) {
+      // Preserve explicitly inserted empty text slots until they gain content.
+      return section;
+    }
+    return { ...section, clientKey: gapFlowClientKey(sections, index) };
+  });
 }
 
 export function blocksToSections(blocks: ContentBlock[]): EditorSection[] {
