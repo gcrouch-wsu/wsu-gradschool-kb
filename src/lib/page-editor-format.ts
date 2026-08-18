@@ -41,6 +41,8 @@ import { movePreservedBlockFromDom, syncPreservedBlockFromDom } from "@/lib/lexi
 import { lexicalSelectionInAlert } from "@/lib/lexical/selection-context";
 import type { ContentBlock } from "@/lib/types";
 
+type ImageBlock = Extract<ContentBlock, { type: "image" }>;
+
 function runEditorCommand(command: string, value?: string): boolean {
   if (isLexicalFlowActive()) {
     const ok = lexicalRunFormatCommand(command, value);
@@ -1520,6 +1522,33 @@ export function insertEditorText(text: string): boolean {
 
 const BLOCK_LEVEL_HTML = /<\/?(p|div|h[1-6]|ul|ol|li|table|thead|tbody|tr|blockquote|section|article|figure|pre)[\s>]/i;
 
+function imageFilesFromTransfer(dataTransfer: DataTransfer | null): File[] {
+  if (!dataTransfer) {
+    return [];
+  }
+  const files: File[] = [];
+  const seen = new Set<string>();
+  const addFile = (file: File | null) => {
+    if (!file?.type.startsWith("image/")) {
+      return;
+    }
+    const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    files.push(file);
+  };
+
+  Array.from(dataTransfer.files ?? []).forEach(addFile);
+  Array.from(dataTransfer.items ?? []).forEach((item) => {
+    if (item.kind === "file") {
+      addFile(item.getAsFile());
+    }
+  });
+  return files;
+}
+
 function cleanClipboardHtml(html: string): string {
   if (BLOCK_LEVEL_HTML.test(html)) {
     return sanitizePageDocument(html);
@@ -1527,7 +1556,7 @@ function cleanClipboardHtml(html: string): string {
   return sanitizeRichText(html, { keepNotes: true });
 }
 
-async function uploadImageFigureHtml(file: File, kbId: string): Promise<string> {
+export async function uploadImageBlockFromFile(file: File, kbId: string): Promise<ImageBlock> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("kbId", kbId);
@@ -1537,14 +1566,18 @@ async function uploadImageFigureHtml(file: File, kbId: string): Promise<string> 
     throw new Error((data as { message?: string }).message ?? "Image upload failed.");
   }
   const payload = data as { asset?: { id?: string; title?: string }; url?: string };
-  const block: ContentBlock = {
+  return {
     blockId: `block-${crypto.randomUUID()}`,
     type: "image",
     assetId: payload.asset?.id,
     url: payload.url ?? undefined,
-    alt: "",
+    alt: payload.asset?.title ?? "",
     widthPercent: 100,
   };
+}
+
+async function uploadImageFigureHtml(file: File, kbId: string): Promise<string> {
+  const block = await uploadImageBlockFromFile(file, kbId);
   return blocksToDocumentHtml([block]);
 }
 
@@ -1578,15 +1611,20 @@ async function insertImagesFromFiles(files: File[], kbId: string) {
 export function handleEditorPaste(
   event: { clipboardData: DataTransfer | null; preventDefault: () => void },
   kbId: string,
+  options?: { onImageFiles?: (files: File[], source: "paste") => void },
 ): boolean {
   const clipboard = event.clipboardData;
   if (!clipboard) {
     return false;
   }
-  const imageFiles = Array.from(clipboard.files ?? []).filter((file) => file.type.startsWith("image/"));
+  const imageFiles = imageFilesFromTransfer(clipboard);
   if (imageFiles.length > 0) {
     event.preventDefault();
     saveRichTextSelection();
+    if (options?.onImageFiles) {
+      options.onImageFiles(imageFiles, "paste");
+      return true;
+    }
     void insertImagesFromFiles(imageFiles, kbId);
     return true;
   }
@@ -1628,8 +1666,9 @@ function caretRangeFromPoint(x: number, y: number): Range | null {
 export function handleEditorDrop(
   event: { dataTransfer: DataTransfer | null; clientX: number; clientY: number; preventDefault: () => void },
   kbId: string,
+  options?: { onImageFiles?: (files: File[], source: "drop") => void },
 ): boolean {
-  const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
+  const files = imageFilesFromTransfer(event.dataTransfer);
   if (files.length === 0) {
     return false;
   }
@@ -1641,6 +1680,10 @@ export function handleEditorDrop(
     selection.addRange(range);
   }
   saveRichTextSelection();
+  if (options?.onImageFiles) {
+    options.onImageFiles(files, "drop");
+    return true;
+  }
   void insertImagesFromFiles(files, kbId);
   return true;
 }

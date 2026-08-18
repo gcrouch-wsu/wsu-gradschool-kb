@@ -93,9 +93,13 @@ function HydrateOncePlugin({ initialHtml }: { initialHtml: string }) {
 
 function BridgePlugin({
   onHtmlChange,
+  onFocus,
+  onImageFiles,
   kbId,
 }: {
   onHtmlChange: (html: string, isBlur: boolean) => void;
+  onFocus?: () => void;
+  onImageFiles?: (files: File[], source: "paste" | "drop") => void;
   kbId: string;
 }) {
   const [editor] = useLexicalComposerContext();
@@ -112,6 +116,7 @@ function BridgePlugin({
       });
     };
     const activate = () => {
+      onFocus?.();
       registerLexicalFlowEditor(editor, root, emit);
       bindPageEditor(root, emit);
     };
@@ -133,7 +138,7 @@ function BridgePlugin({
       // three-level list stopped nesting at two. `hasActiveLexicalEditor()` already treats a
       // detached root as free, which is what lets the next surface claim the toolbar.
     };
-  }, [editor, onHtmlChange]);
+  }, [editor, onFocus, onHtmlChange]);
 
   useEffect(() => {
     const root = editor.getRootElement();
@@ -144,10 +149,10 @@ function BridgePlugin({
       handleEditorKeyDown(event as unknown as React.KeyboardEvent<HTMLElement>);
     };
     const onPaste = (event: ClipboardEvent) => {
-      handleEditorPaste(event as unknown as React.ClipboardEvent<HTMLElement>, kbId);
+      handleEditorPaste(event as unknown as React.ClipboardEvent<HTMLElement>, kbId, onImageFiles ? { onImageFiles } : undefined);
     };
     const onDrop = (event: DragEvent) => {
-      handleEditorDrop(event as unknown as React.DragEvent<HTMLElement>, kbId);
+      handleEditorDrop(event as unknown as React.DragEvent<HTMLElement>, kbId, onImageFiles ? { onImageFiles } : undefined);
     };
     const onClick = (event: MouseEvent) => {
       handleImageControlClick(event as unknown as React.MouseEvent<HTMLElement>);
@@ -169,7 +174,7 @@ function BridgePlugin({
       root.removeEventListener("click", onClick);
       root.removeEventListener("dragover", onDragOver);
     };
-  }, [editor, kbId]);
+  }, [editor, kbId, onImageFiles]);
 
   return null;
 }
@@ -178,10 +183,14 @@ export function LexicalFlowSurface({
   initialHtml,
   kbId,
   onHtmlChange,
+  onFocus,
+  onImageFiles,
 }: {
   initialHtml: string;
   kbId: string;
   onHtmlChange: (html: string, isBlur: boolean) => void;
+  onFocus?: () => void;
+  onImageFiles?: (files: File[], source: "paste" | "drop") => void;
 }) {
   const onHtmlChangeRef = useRef(onHtmlChange);
   useEffect(() => {
@@ -247,7 +256,7 @@ export function LexicalFlowSurface({
         <ListPlugin />
         <LinkPlugin />
         <HydrateOncePlugin initialHtml={initialHtml} />
-        <BridgePlugin kbId={kbId} onHtmlChange={stableOnChange} />
+        <BridgePlugin kbId={kbId} onFocus={onFocus} onHtmlChange={stableOnChange} onImageFiles={onImageFiles} />
         <OnChangePlugin ignoreSelectionChange onChange={handleChange} />
       </div>
     </LexicalComposer>

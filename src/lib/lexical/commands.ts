@@ -287,7 +287,7 @@ export function lexicalInsertHtml(html: string): boolean {
     return false;
   }
   let inserted = false;
-  editor.focus();
+  getActiveLexicalRoot()?.focus({ preventScroll: true });
   editor.update(() => {
     let selection = $getSelection();
     if (!$isRangeSelection(selection)) {

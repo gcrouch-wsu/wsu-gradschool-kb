@@ -1853,6 +1853,47 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   gap: 1rem;
 }
 
+.block-insert-row {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(1rem, 1fr) auto minmax(1rem, 1fr);
+  margin: -0.35rem 0;
+}
+
+.block-insert-row__line {
+  border-top: 1px dashed var(--line);
+  height: 1px;
+}
+
+.block-insert-row__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.block-insert-row__button {
+  align-items: center;
+  background: var(--paper);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  display: inline-flex;
+  gap: 0.35rem;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.block-insert-row__button:hover {
+  background: var(--wash);
+}
+
+.block-insert-row__button svg {
+  flex: none;
+}
+
 .editor-canvas {
   align-items: start;
   display: grid;
@@ -2078,6 +2119,7 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   display: grid;
   gap: 0.75rem;
   padding: 1rem;
+  scroll-margin-top: 8rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -4076,9 +4118,8 @@ article li > ol {
   gap: 0.75rem;
   margin-bottom: 1.25rem;
   padding: 0.6rem 0.85rem;
-  position: sticky;
-  top: 0;
-  z-index: 60;
+  position: static;
+  z-index: auto;
 }
 
 .editor-mode-toggle {
@@ -4167,10 +4208,23 @@ article li > ol {
   max-width: 100%;
 }
 
+.image-section-toolbar {
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.65rem;
+  padding: 0.25rem;
+}
+
 .wysiwyg-surface .doc-image,
 .image-section-editor .doc-image {
   position: relative;
   display: block;
+  scroll-margin-top: 8rem;
 }
 
 .wysiwyg-surface .doc-image img,
@@ -4222,6 +4276,7 @@ article li > ol {
   line-height: 1;
   min-width: 2rem;
   padding: 0.35rem 0.5rem;
+  scroll-margin-top: 8rem;
   color: inherit;
 }
 

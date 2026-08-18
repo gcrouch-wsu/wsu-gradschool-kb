@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   description:
     "Washington State University knowledge base platform. Browse published knowledge bases, including the Graduate School knowledge base.",
   icons: {
-    icon: [{ url: "/icon", type: "image/png", sizes: "32x32" }],
+    icon: [{ url: "/icon.svg", type: "image/svg+xml", sizes: "32x32" }],
   },
 };
 
