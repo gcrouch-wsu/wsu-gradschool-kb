@@ -155,23 +155,23 @@ export function lexicalApplyTextStyle(styles: Record<string, string | null>): bo
   if (!selectionSnapshot && !restored) {
     return false;
   }
-  editor.focus(() => {
-    editor.update(
-      () => {
-        const selection = $getSelection();
-        if (!$isRangeSelection(selection)) {
-          return;
-        }
-        $patchStyleText(selection, styles);
+  getActiveLexicalRoot()?.focus({ preventScroll: true });
+  restoreRichTextSelection();
+  editor.update(
+    () => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) {
+        return;
+      }
+      $patchStyleText(selection, styles);
+    },
+    {
+      onUpdate: () => {
+        notifyLexicalMutation();
+        restoreSnapshotAfterMutation(selectionSnapshot);
       },
-      {
-        onUpdate: () => {
-          notifyLexicalMutation();
-          restoreSnapshotAfterMutation(selectionSnapshot);
-        },
-      },
-    );
-  });
+    },
+  );
   return true;
 }
 

@@ -153,7 +153,7 @@ export function outdentListItem(li: HTMLLIElement): boolean {
 }
 
 export type EditorSection =
-  | { type: "flow"; blocks: ContentBlock[] }
+  | { type: "flow"; blocks: ContentBlock[]; clientKey?: string }
   | { type: "image"; block: Extract<ContentBlock, { type: "image" }> }
   | { type: "table"; block: Extract<ContentBlock, { type: "table" }> }
   | { type: "asset_link"; block: Extract<ContentBlock, { type: "asset_link" }> }
@@ -178,8 +178,9 @@ function mergeAdjacentFlowSections(sections: EditorSection[]): EditorSection[] {
     const previous = merged[merged.length - 1];
     if (section.type === "flow" && previous?.type === "flow") {
       previous.blocks.push(...section.blocks);
+      previous.clientKey = previous.clientKey ?? section.clientKey;
     } else if (section.type === "flow") {
-      merged.push({ type: "flow", blocks: [...section.blocks] });
+      merged.push({ type: "flow", blocks: [...section.blocks], clientKey: section.clientKey });
     } else {
       merged.push(section);
     }

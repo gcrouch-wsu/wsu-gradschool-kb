@@ -12,7 +12,8 @@ import {
   setOrderedListStart,
   suggestedOrderedListStart,
 } from "@/lib/page-editor-list";
-import { blocksToDocumentHtml, sanitizePageDocument } from "@/lib/page-document";
+import { parse, type HTMLElement as ParsedHTMLElement } from "node-html-parser";
+import { blocksToDocumentHtml, documentHtmlToBlocks, sanitizePageDocument } from "@/lib/page-document";
 import { redoStructural, snapshotStructuralChange, undoStructural } from "@/lib/page-editor-undo";
 import { escapeHtml, RICH_TEXT_FONT_FAMILIES, RICH_TEXT_FONT_SIZES, sanitizeRichText } from "@/lib/rich-text";
 import {
@@ -1522,6 +1523,154 @@ export function insertEditorText(text: string): boolean {
 
 const BLOCK_LEVEL_HTML = /<\/?(p|div|h[1-6]|ul|ol|li|table|thead|tbody|tr|blockquote|section|article|figure|pre)[\s>]/i;
 
+function fileFromDataUrl(dataUrl: string, filename: string): File | null {
+  const match = /^data:([^|,]*?),([\s\S]*)$/i.exec(dataUrl);
+  if (!match || typeof File === "undefined") {
+    return null;
+  }
+  const meta = match[1] || "application/octet-stream";
+  const data = match[2] || "";
+  const mime = meta.split(";")[0]?.trim() || "application/octet-stream";
+  const isBase64 = /(?:^|;)base64(?:;|$)/i.test(meta);
+  try {
+    let bytes: Uint8Array;
+    if (isBase64) {
+      const binary = atob(data);
+      bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+    } else {
+      bytes = new TextEncoder().encode(decodeURIComponent(data));
+    }
+    const payload = new Uint8Array(bytes);
+    return new File([payload], filename, { type: mime });
+  } catch {
+    return null;
+  }
+}
+
+function extensionForMime(mime: string): string {
+  if (mime.includes("jpeg")) return "jpg";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("gif")) return "gif";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("svg")) return "svg";
+  return "png";
+}
+
+/** Pull figures/images out of clipboard HTML so they can become standalone blocks. */
+export function partitionClipboardHtmlImages(html: string): {
+  html: string;
+  imageBlocks: ImageBlock[];
+  dataUrlFiles: File[];
+} {
+  const root = parse(html);
+  const imageBlocks: ImageBlock[] = [];
+  const dataUrlFiles: File[] = [];
+  let dataUrlIndex = 0;
+
+  const pushHttpImage = (img: ParsedHTMLElement) => {
+    const src = img.getAttribute("src")?.trim() ?? "";
+    if (!src || src.startsWith("data:")) {
+      return;
+    }
+    const alt = img.getAttribute("alt")?.trim() ?? "";
+    const wrapped =
+      `<figure class="doc-image">` +
+      `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" />` +
+      `</figure>`;
+    const parsedBlocks = documentHtmlToBlocks(wrapped);
+    const image = parsedBlocks.find((block): block is ImageBlock => block.type === "image");
+    if (image?.url) {
+      imageBlocks.push({
+        ...image,
+        blockId: `block-${crypto.randomUUID()}`,
+      });
+      return;
+    }
+    // Fallback when the document parser rejects an otherwise usable http(s)/relative src.
+    if (/^(https?:|\/)/i.test(src)) {
+      imageBlocks.push({
+        blockId: `block-${crypto.randomUUID()}`,
+        type: "image",
+        url: src,
+        alt: alt || undefined,
+        widthPercent: 100,
+      });
+    }
+  };
+
+  const takeImageFromHost = (host: ParsedHTMLElement) => {
+    const img =
+      host.tagName?.toLowerCase() === "img" ? host : (host.querySelector("img") as ParsedHTMLElement | null);
+    if (!img) {
+      return;
+    }
+    const src = img.getAttribute("src")?.trim() ?? "";
+    if (!src) {
+      host.remove();
+      return;
+    }
+    if (src.startsWith("data:image/")) {
+      const mimeMatch = /^data:([^;,]+)/i.exec(src);
+      const mime = mimeMatch?.[1] || "image/png";
+      const file = fileFromDataUrl(src, `pasted-image-${dataUrlIndex}.${extensionForMime(mime)}`);
+      dataUrlIndex += 1;
+      if (file) {
+        dataUrlFiles.push(file);
+      } else {
+        // Non-base64 or otherwise undecodable data URLs still promote as image blocks
+        // instead of being dropped on the floor.
+        imageBlocks.push({
+          blockId: `block-${crypto.randomUUID()}`,
+          type: "image",
+          url: src,
+          alt: img.getAttribute("alt")?.trim() || undefined,
+          widthPercent: 100,
+        });
+      }
+      host.remove();
+      return;
+    }
+    pushHttpImage(img);
+    host.remove();
+  };
+
+  for (const figure of root.querySelectorAll("figure") as ParsedHTMLElement[]) {
+    if (figure.querySelector("img")) {
+      takeImageFromHost(figure);
+    }
+  }
+  for (const img of root.querySelectorAll("img") as ParsedHTMLElement[]) {
+    takeImageFromHost(img);
+  }
+
+  return {
+    html: root.innerHTML,
+    imageBlocks,
+    dataUrlFiles,
+  };
+}
+
+/**
+ * Extract images from raw clipboard HTML first, then sanitize only the leftover markup.
+ * Sanitizing first would strip bare <img> / generic <figure> before promotion can run.
+ */
+export function prepareClipboardHtmlPaste(html: string): {
+  html: string;
+  imageBlocks: ImageBlock[];
+  dataUrlFiles: File[];
+} {
+  const partitioned = partitionClipboardHtmlImages(html);
+  const remaining = partitioned.html.trim() ? cleanClipboardHtml(partitioned.html) : "";
+  return {
+    html: remaining,
+    imageBlocks: partitioned.imageBlocks,
+    dataUrlFiles: partitioned.dataUrlFiles,
+  };
+}
+
 function imageFilesFromTransfer(dataTransfer: DataTransfer | null): File[] {
   if (!dataTransfer) {
     return [];
@@ -1611,7 +1760,10 @@ async function insertImagesFromFiles(files: File[], kbId: string) {
 export function handleEditorPaste(
   event: { clipboardData: DataTransfer | null; preventDefault: () => void },
   kbId: string,
-  options?: { onImageFiles?: (files: File[], source: "paste") => void },
+  options?: {
+    onImageFiles?: (files: File[], source: "paste") => void;
+    onImageBlocks?: (blocks: ImageBlock[], source: "paste") => void;
+  },
 ): boolean {
   const clipboard = event.clipboardData;
   if (!clipboard) {
@@ -1632,13 +1784,53 @@ export function handleEditorPaste(
   if (html && html.trim()) {
     event.preventDefault();
     saveRichTextSelection();
-    const clean = cleanClipboardHtml(html);
-    if (clean.trim()) {
-      snapshotStructuralChange();
-      runEditorCommand("insertHTML", clean);
-      notifyMutation();
-      recordFormat("pasteHtml", true, `${clean.length} chars sanitized`);
+    const partitioned = prepareClipboardHtmlPaste(html);
+    const hasExtractedImages =
+      partitioned.imageBlocks.length > 0 || partitioned.dataUrlFiles.length > 0;
+    const canPromote =
+      hasExtractedImages && (options?.onImageFiles || options?.onImageBlocks);
+
+    if (canPromote) {
+      if (partitioned.html.trim()) {
+        snapshotStructuralChange();
+        runEditorCommand("insertHTML", partitioned.html);
+        notifyMutation();
+        recordFormat("pasteHtml", true, `${partitioned.html.length} chars sanitized`);
+      }
+      if (partitioned.dataUrlFiles.length > 0 && options?.onImageFiles) {
+        options.onImageFiles(partitioned.dataUrlFiles, "paste");
+      } else if (partitioned.dataUrlFiles.length > 0) {
+        void insertImagesFromFiles(partitioned.dataUrlFiles, kbId);
+      }
+      if (partitioned.imageBlocks.length > 0 && options?.onImageBlocks) {
+        options.onImageBlocks(partitioned.imageBlocks, "paste");
+      } else if (partitioned.imageBlocks.length > 0) {
+        for (const block of partitioned.imageBlocks) {
+          const figureHtml = blocksToDocumentHtml([block]);
+          if (!insertEditorHtml(figureHtml)) {
+            const surface = getBoundEditorSurface();
+            if (surface) {
+              surface.insertAdjacentHTML("beforeend", figureHtml);
+              surface.dispatchEvent(new InputEvent("input", { bubbles: true }));
+            }
+          }
+        }
+      }
+      return true;
     }
+
+    if (!partitioned.html.trim() && !hasExtractedImages) {
+      return true;
+    }
+
+    const clean = partitioned.html.trim() ? partitioned.html : cleanClipboardHtml(html);
+    if (!clean.trim()) {
+      return true;
+    }
+    snapshotStructuralChange();
+    runEditorCommand("insertHTML", clean);
+    notifyMutation();
+    recordFormat("pasteHtml", true, `${clean.length} chars sanitized`);
     return true;
   }
   // Plain text: the browser's default insertion is already safe.
@@ -1666,7 +1858,10 @@ function caretRangeFromPoint(x: number, y: number): Range | null {
 export function handleEditorDrop(
   event: { dataTransfer: DataTransfer | null; clientX: number; clientY: number; preventDefault: () => void },
   kbId: string,
-  options?: { onImageFiles?: (files: File[], source: "drop") => void },
+  options?: {
+    onImageFiles?: (files: File[], source: "drop") => void;
+    onImageBlocks?: (blocks: ImageBlock[], source: "drop") => void;
+  },
 ): boolean {
   const files = imageFilesFromTransfer(event.dataTransfer);
   if (files.length === 0) {

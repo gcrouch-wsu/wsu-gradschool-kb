@@ -198,46 +198,197 @@ export function PageDocumentEditor({
     return Math.max(0, Math.min(index, sectionsRef.current.length));
   }
 
-  function insertBlocksAt(insertIndex: number, blocksToInsert: ContentBlock[]) {
-    const next = [...sectionsRef.current];
-    next.splice(clampInsertIndex(insertIndex), 0, ...blocksToSections(blocksToInsert));
-    markEditorAction();
-    setVisualEpoch((value) => value + 1);
-    emitChange(next);
-  }
-
-  function insertTextAt(insertIndex: number) {
-    const next = [...sectionsRef.current];
-    next.splice(clampInsertIndex(insertIndex), 0, { type: "flow", blocks: [] });
-    markEditorAction();
-    setVisualEpoch((value) => value + 1);
-    setEditorSections(next);
+  function scrollableAncestors(start: HTMLElement | null): HTMLElement[] {
+    const found: HTMLElement[] = [];
+    let current: HTMLElement | null = start;
+    while (current) {
+      const style = window.getComputedStyle(current);
+      const overflowY = style.overflowY;
+      const overflowX = style.overflowX;
+      const canScroll =
+        /(auto|scroll|overlay)/.test(overflowY) ||
+        /(auto|scroll|overlay)/.test(overflowX) ||
+        current === document.documentElement ||
+        current === document.body;
+      if (canScroll) {
+        found.push(current);
+      }
+      current = current.parentElement;
+    }
+    const scrolling = document.scrollingElement;
+    if (scrolling instanceof HTMLElement && !found.includes(scrolling)) {
+      found.push(scrolling);
+    }
+    return found;
   }
 
   function captureScrollSnapshot() {
-    const elements = Array.from(document.querySelectorAll<HTMLElement>("*"))
-      .filter((element) => element.scrollTop > 0 || element.scrollLeft > 0)
-      .map((element) => ({ element, x: element.scrollLeft, y: element.scrollTop }));
+    const elements = scrollableAncestors(rootRef.current).map((element) => ({
+      element,
+      x: element.scrollLeft,
+      y: element.scrollTop,
+    }));
     return { elements, x: window.scrollX, y: window.scrollY };
   }
 
   function restoreViewport(scroll: ReturnType<typeof captureScrollSnapshot>) {
-    requestAnimationFrame(() => {
+    const apply = () => {
       window.scrollTo(scroll.x, scroll.y);
       for (const item of scroll.elements) {
-        item.element.scrollTo(item.x, item.y);
-      }
-      requestAnimationFrame(() => {
-        window.scrollTo(scroll.x, scroll.y);
-        for (const item of scroll.elements) {
+        if (document.contains(item.element)) {
           item.element.scrollTo(item.x, item.y);
         }
-      });
+      }
+    };
+    requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(apply);
     });
+  }
+
+  function withViewportPreserved(run: () => void) {
+    const scroll = captureScrollSnapshot();
+    run();
+    restoreViewport(scroll);
+  }
+
+  function insertBlocksAt(insertIndex: number, blocksToInsert: ContentBlock[]) {
+    const next = [...sectionsRef.current];
+    next.splice(clampInsertIndex(insertIndex), 0, ...blocksToSections(blocksToInsert));
+    markEditorAction();
+    withViewportPreserved(() => {
+      setVisualEpoch((value) => value + 1);
+      emitChange(next);
+    });
+  }
+
+  function insertTextAt(insertIndex: number) {
+    const next = [...sectionsRef.current];
+    next.splice(clampInsertIndex(insertIndex), 0, {
+      type: "flow",
+      blocks: [],
+      clientKey: `flow-${crypto.randomUUID()}`,
+    });
+    markEditorAction();
+    withViewportPreserved(() => {
+      setVisualEpoch((value) => value + 1);
+      setEditorSections(next);
+    });
+  }
+
+  type SectionInsertAnchor =
+    | { mode: "after-block"; blockId: string }
+    | { mode: "after-flow-block"; blockId: string }
+    | { mode: "after-flow-key"; clientKey: string }
+    | { mode: "before-block"; blockId: string }
+    | { mode: "before-flow-block"; blockId: string }
+    | { mode: "nested"; blockId: string; kind: "card" | "procedure_section" }
+    | { mode: "end" };
+
+  function captureAnchorAfterSection(index: number): SectionInsertAnchor {
+    const section = sectionsRef.current[index];
+    if (!section) {
+      return { mode: "end" };
+    }
+    if (section.type !== "flow") {
+      return { mode: "after-block", blockId: section.block.blockId };
+    }
+    const last = section.blocks[section.blocks.length - 1];
+    if (last) {
+      return { mode: "after-flow-block", blockId: last.blockId };
+    }
+    if (section.clientKey) {
+      return { mode: "after-flow-key", clientKey: section.clientKey };
+    }
+    const next = sectionsRef.current[index + 1];
+    if (next) {
+      if (next.type !== "flow") {
+        return { mode: "before-block", blockId: next.block.blockId };
+      }
+      const first = next.blocks[0];
+      if (first) {
+        return { mode: "before-flow-block", blockId: first.blockId };
+      }
+    }
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      const previous = sectionsRef.current[cursor];
+      if (previous.type !== "flow") {
+        return { mode: "after-block", blockId: previous.block.blockId };
+      }
+      const previousLast = previous.blocks[previous.blocks.length - 1];
+      if (previousLast) {
+        return { mode: "after-flow-block", blockId: previousLast.blockId };
+      }
+      if (previous.clientKey) {
+        return { mode: "after-flow-key", clientKey: previous.clientKey };
+      }
+    }
+    return { mode: "end" };
+  }
+
+  function captureNestedAnchor(
+    index: number,
+    kind: "card" | "procedure_section",
+  ): SectionInsertAnchor {
+    const section = sectionsRef.current[index];
+    if (section?.type === kind) {
+      return { mode: "nested", blockId: section.block.blockId, kind };
+    }
+    return { mode: "end" };
+  }
+
+  function resolveInsertIndex(anchor: SectionInsertAnchor): number {
+    const sections = sectionsRef.current;
+    if (anchor.mode === "end") {
+      return sections.length;
+    }
+    if (anchor.mode === "after-block") {
+      const index = sections.findIndex(
+        (section) => section.type !== "flow" && section.block.blockId === anchor.blockId,
+      );
+      return index >= 0 ? index + 1 : sections.length;
+    }
+    if (anchor.mode === "after-flow-block") {
+      const index = sections.findIndex(
+        (section) =>
+          section.type === "flow" && section.blocks.some((block) => block.blockId === anchor.blockId),
+      );
+      return index >= 0 ? index + 1 : sections.length;
+    }
+    if (anchor.mode === "after-flow-key") {
+      const index = sections.findIndex(
+        (section) => section.type === "flow" && section.clientKey === anchor.clientKey,
+      );
+      return index >= 0 ? index + 1 : sections.length;
+    }
+    if (anchor.mode === "before-block") {
+      const index = sections.findIndex(
+        (section) => section.type !== "flow" && section.block.blockId === anchor.blockId,
+      );
+      return index >= 0 ? index : sections.length;
+    }
+    if (anchor.mode === "before-flow-block") {
+      const index = sections.findIndex(
+        (section) =>
+          section.type === "flow" && section.blocks.some((block) => block.blockId === anchor.blockId),
+      );
+      return index >= 0 ? index : sections.length;
+    }
+    return sections.length;
+  }
+
+  function resolveNestedSectionIndex(anchor: SectionInsertAnchor): number {
+    if (anchor.mode !== "nested") {
+      return -1;
+    }
+    return sectionsRef.current.findIndex(
+      (section) => section.type === anchor.kind && section.block.blockId === anchor.blockId,
+    );
   }
 
   async function insertImageFilesAt(insertIndex: number, files: File[], source: "paste" | "drop") {
     const scroll = captureScrollSnapshot();
+    const anchor = captureAnchorAfterSection(Math.max(0, insertIndex - 1));
     const action = source === "drop" ? "dropped" : "pasted";
     setFormatHint(files.length === 1 ? `Uploading ${action} image...` : `Uploading ${files.length} ${action} images...`);
     try {
@@ -245,7 +396,63 @@ export function PageDocumentEditor({
       for (const file of files) {
         imageBlocks.push(await uploadImageBlockFromFile(file, kbId));
       }
-      insertBlocksAt(insertIndex, imageBlocks);
+      insertBlocksAt(resolveInsertIndex(anchor), imageBlocks);
+      setFormatHint(null);
+    } catch (caught) {
+      setFormatHint(caught instanceof Error ? caught.message : "Image upload failed. Try the Insert media button instead.");
+    } finally {
+      restoreViewport(scroll);
+    }
+  }
+
+  function appendImageBlocksToNestedSection(
+    anchor: SectionInsertAnchor,
+    imageBlocks: ImageBlock[],
+  ) {
+    if (imageBlocks.length === 0) {
+      return;
+    }
+    const index = resolveNestedSectionIndex(anchor);
+    if (index < 0 || anchor.mode !== "nested") {
+      insertBlocksAt(sectionsRef.current.length, imageBlocks);
+      return;
+    }
+    const next = [...sectionsRef.current];
+    const section = next[index];
+    if (!section || section.type !== anchor.kind) {
+      insertBlocksAt(sectionsRef.current.length, imageBlocks);
+      return;
+    }
+    markEditorAction();
+    next[index] = {
+      type: anchor.kind,
+      block: {
+        ...section.block,
+        blocks: [...section.block.blocks, ...imageBlocks],
+      },
+    } as EditorSection;
+    withViewportPreserved(() => {
+      setVisualEpoch((value) => value + 1);
+      emitChange(next);
+    });
+  }
+
+  async function appendImageFilesToNestedSection(
+    index: number,
+    kind: "card" | "procedure_section",
+    files: File[],
+    source: "paste" | "drop",
+  ) {
+    const scroll = captureScrollSnapshot();
+    const anchor = captureNestedAnchor(index, kind);
+    const action = source === "drop" ? "dropped" : "pasted";
+    setFormatHint(files.length === 1 ? `Uploading ${action} image...` : `Uploading ${files.length} ${action} images...`);
+    try {
+      const imageBlocks: ImageBlock[] = [];
+      for (const file of files) {
+        imageBlocks.push(await uploadImageBlockFromFile(file, kbId));
+      }
+      appendImageBlocksToNestedSection(anchor, imageBlocks);
       setFormatHint(null);
     } catch (caught) {
       setFormatHint(caught instanceof Error ? caught.message : "Image upload failed. Try the Insert media button instead.");
@@ -274,7 +481,7 @@ export function PageDocumentEditor({
 
   function insertAssetLinkBlock(assetId: string, label: string) {
     emitChange([
-      ...sections,
+      ...sectionsRef.current,
       {
         type: "asset_link",
         block: {
@@ -289,14 +496,14 @@ export function PageDocumentEditor({
 
   function addBlockToFirstFlow(block: ContentBlock) {
     if (block.type === "image") {
-      emitChange([...sections, { type: "image", block }]);
+      emitChange([...sectionsRef.current, { type: "image", block }]);
       return;
     }
     if (block.type === "section_divider") {
-      emitChange([...sections, { type: "section_divider", block }]);
+      emitChange([...sectionsRef.current, { type: "section_divider", block }]);
       return;
     }
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     const flowIndex = next.findIndex((s) => s.type === "flow");
     const existing = flowIndex >= 0 ? next[flowIndex] : null;
     if (existing && existing.type === "flow") {
@@ -322,25 +529,29 @@ export function PageDocumentEditor({
     };
     const html = blocksToDocumentHtml([block], kbSlug);
     if (!insertEditorBlockHtml(html)) {
-      emitChange([...sections, { type: "section_divider", block }]);
+      emitChange([...sectionsRef.current, { type: "section_divider", block }]);
     }
   }
 
   function moveSection(index: number, direction: -1 | 1) {
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     const target = moveTargetIndex(next, index, direction);
     if (target < 0) return;
     markEditorAction();
     [next[index], next[target]] = [next[target], next[index]];
-    setVisualEpoch((value) => value + 1);
-    emitChange(next);
+    withViewportPreserved(() => {
+      setVisualEpoch((value) => value + 1);
+      emitChange(next);
+    });
   }
 
   function removeSection(index: number) {
     markEditorAction();
-    const next = sections.filter((_, i) => i !== index);
-    setVisualEpoch((value) => value + 1);
-    emitChange(next);
+    const next = sectionsRef.current.filter((_, i) => i !== index);
+    withViewportPreserved(() => {
+      setVisualEpoch((value) => value + 1);
+      emitChange(next);
+    });
   }
 
   function updateFlowSection(index: number, html: string, _isBlur: boolean) {
@@ -348,7 +559,12 @@ export function PageDocumentEditor({
     const flowBlocks = flowBlocksFromEditorHtml(clean);
     const next = [...sectionsRef.current];
     if (flowBlocks.length === 0) {
-      next[index] = { type: "flow", blocks: [] };
+      const existing = next[index];
+      next[index] = {
+        type: "flow",
+        blocks: [],
+        clientKey: existing?.type === "flow" ? existing.clientKey : undefined,
+      };
       setEditorSections(next);
       onChangeRef.current(cleanDocumentLayout(dedupeContentBlockIds(sectionsToBlocks(normalizeEditorSections(next)))));
       return;
@@ -365,28 +581,28 @@ export function PageDocumentEditor({
   function updateImageSection(index: number, block: ContentBlock) {
     if (block.type !== "image") return;
     markEditorAction();
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     next[index] = { type: "image", block };
     emitChange(next);
   }
 
   function updateTableSection(index: number, block: ContentBlock) {
     if (block.type !== "table") return;
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     next[index] = { type: "table", block };
     emitChange(next);
   }
 
   function updateVideoSection(index: number, block: ContentBlock) {
     if (block.type !== "video") return;
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     next[index] = { type: "video", block };
     emitChange(next);
   }
 
   function addTable() {
     const next = [
-      ...sections,
+      ...sectionsRef.current,
       {
         type: "table" as const,
         block: {
@@ -404,7 +620,7 @@ export function PageDocumentEditor({
 
   function addCard() {
     const next = [
-      ...sections,
+      ...sectionsRef.current,
       {
         type: "card" as const,
         block: {
@@ -420,14 +636,14 @@ export function PageDocumentEditor({
 
   function updateCardSection(index: number, block: ContentBlock) {
     if (block.type !== "card") return;
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     next[index] = { type: "card", block };
     emitChange(next);
   }
 
   function addProcedureSection() {
     const next = [
-      ...sections,
+      ...sectionsRef.current,
       {
         type: "procedure_section" as const,
         block: {
@@ -444,7 +660,7 @@ export function PageDocumentEditor({
 
   function updateProcedureSection(index: number, block: ContentBlock) {
     if (block.type !== "procedure_section") return;
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     next[index] = { type: "procedure_section", block };
     emitChange(next);
   }
@@ -455,7 +671,7 @@ export function PageDocumentEditor({
 
   function insertExcerptFromPicker(sourcePageId: string) {
     const next = [
-      ...sections,
+      ...sectionsRef.current,
       {
         type: "excerpt" as const,
         block: {
@@ -471,14 +687,14 @@ export function PageDocumentEditor({
 
   function updateExcerptSection(index: number, block: ContentBlock) {
     if (block.type !== "excerpt") return;
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     next[index] = { type: "excerpt", block };
     emitChange(next);
   }
 
   function addSourced() {
     const next = [
-      ...sections,
+      ...sectionsRef.current,
       {
         type: "sourced" as const,
         block: {
@@ -494,9 +710,33 @@ export function PageDocumentEditor({
 
   function updateSourcedSection(index: number, block: ContentBlock) {
     if (block.type !== "sourced") return;
-    const next = [...sections];
+    const next = [...sectionsRef.current];
     next[index] = { type: "sourced", block };
     emitChange(next);
+  }
+
+  function handleSectionImageFiles(section: EditorSection, index: number, files: File[], source: "paste" | "drop") {
+    if (section.type === "card") {
+      void appendImageFilesToNestedSection(index, "card", files, source);
+      return;
+    }
+    if (section.type === "procedure_section") {
+      void appendImageFilesToNestedSection(index, "procedure_section", files, source);
+      return;
+    }
+    void insertImageFilesAt(index + 1, files, source);
+  }
+
+  function handleSectionImageBlocks(section: EditorSection, index: number, blocks: ImageBlock[]) {
+    if (section.type === "card") {
+      appendImageBlocksToNestedSection(captureNestedAnchor(index, "card"), blocks);
+      return;
+    }
+    if (section.type === "procedure_section") {
+      appendImageBlocksToNestedSection(captureNestedAnchor(index, "procedure_section"), blocks);
+      return;
+    }
+    insertBlocksAt(resolveInsertIndex(captureAnchorAfterSection(index)), blocks);
   }
 
   const currentBlocksForQuality = useMemo(
@@ -696,7 +936,8 @@ export function PageDocumentEditor({
                   kbId={kbId}
                   kbSlug={kbSlug}
                   onActivate={() => setActiveSectionIndex(index)}
-                  onImageFiles={(files, source) => void insertImageFilesAt(index + 1, files, source)}
+                  onImageBlocks={(blocks) => handleSectionImageBlocks(section, index, blocks)}
+                  onImageFiles={(files, source) => handleSectionImageFiles(section, index, files, source)}
                   onMove={moveSection}
                   onRemove={() => removeSection(index)}
                   onUpdateFlow={(html, isBlur) => updateFlowSection(index, html, isBlur)}
@@ -832,6 +1073,9 @@ function ImageSectionEditor({
     const figure = figureRootRef.current?.querySelector("figure.doc-image");
     figure?.removeAttribute("contenteditable");
     figure?.querySelector(".doc-image__controls")?.remove();
+    figure?.querySelectorAll("[contenteditable]").forEach((node) => {
+      node.removeAttribute("contenteditable");
+    });
     figure?.classList.toggle("is-selected", selected);
   }, [block, selected]);
 
@@ -972,7 +1216,12 @@ function ImageSectionEditor({
       </div>
       <div
         className="image-section-editor__figure"
-        dangerouslySetInnerHTML={{ __html: blocksToDocumentHtml([block], kbSlug) }}
+        dangerouslySetInnerHTML={{
+          __html: blocksToDocumentHtml([block], kbSlug, {
+            imageControls: false,
+            captionEditable: false,
+          }),
+        }}
         ref={figureRootRef}
       />
     </div>
@@ -990,6 +1239,7 @@ function SectionEditor({
   onRemove,
   onActivate,
   onImageFiles,
+  onImageBlocks,
   onUpdateFlow,
   onUpdateImage,
   onUpdateTable,
@@ -1009,6 +1259,7 @@ function SectionEditor({
   onRemove: () => void;
   onActivate: () => void;
   onImageFiles: (files: File[], source: "paste" | "drop") => void;
+  onImageBlocks: (blocks: ImageBlock[], source?: "paste" | "drop") => void;
   onUpdateFlow: (html: string, isBlur: boolean) => void;
   onUpdateImage: (block: ContentBlock) => void;
   onUpdateTable: (block: ContentBlock) => void;
@@ -1059,6 +1310,7 @@ function SectionEditor({
           kbId={kbId}
           onFocus={onActivate}
           onHtmlChange={onUpdateFlow}
+          onImageBlocks={onImageBlocks}
           onImageFiles={onImageFiles}
         />
       )}
@@ -1163,6 +1415,7 @@ function SectionEditor({
                 const clean = sanitizePageDocument(html);
                 onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
               }}
+              onImageBlocks={onImageBlocks}
               onImageFiles={onImageFiles}
             />
           </div>
@@ -1224,6 +1477,7 @@ function SectionEditor({
                 const clean = sanitizePageDocument(html);
                 onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
               }}
+              onImageBlocks={onImageBlocks}
               onImageFiles={onImageFiles}
             />
           </div>

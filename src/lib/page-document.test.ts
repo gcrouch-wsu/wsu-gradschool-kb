@@ -94,6 +94,18 @@ describe("page-document", () => {
     expect(new Set(htmlIds).size).toBe(htmlIds.length);
   });
 
+  it("can omit in-figure controls and editable captions for standalone image sections", () => {
+    const html = blocksToDocumentHtml(
+      [{ blockId: "img-1", type: "image", url: "/kb/x/files/a.png", alt: "Shot", caption: "Caption" }],
+      undefined,
+      { imageControls: false, captionEditable: false },
+    );
+    expect(html).toContain('data-block-id="img-1"');
+    expect(html).toContain("Caption");
+    expect(html).not.toContain("doc-image__controls");
+    expect(html).not.toContain('contenteditable="true"');
+  });
+
   it("drops blank paragraph spacer blocks when real content exists", () => {
     const clean = sanitizePageDocument(
       '<p data-block-id="h"><strong>Create service request</strong></p>' +

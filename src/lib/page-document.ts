@@ -69,39 +69,57 @@ function imageControlsHtml(): string {
   );
 }
 
-function imageEditorCaption(caption: string, alt: string, decorative: boolean): string {
+export type DocumentHtmlOptions = {
+  /** When false, omit the in-figure control strip (standalone image sections use an external toolbar). */
+  imageControls?: boolean;
+  /** When false, captions are display-only (edit via Alt dialog). */
+  captionEditable?: boolean;
+};
+
+function imageEditorCaption(
+  caption: string,
+  alt: string,
+  decorative: boolean,
+  editable = true,
+): string {
+  const editableAttr = editable ? ` contenteditable="true"` : "";
   const text = caption.trim();
   if (text) {
-    return `<figcaption class="doc-image__caption" contenteditable="true" data-img-caption="true">${escapeHtml(text)}</figcaption>`;
+    return `<figcaption class="doc-image__caption"${editableAttr} data-img-caption="true">${escapeHtml(text)}</figcaption>`;
   }
   if (decorative) {
-    return `<figcaption class="doc-image__caption doc-image__caption--decorative" contenteditable="true" data-img-caption="true" data-placeholder="Optional visible caption">Decorative image (no alt text needed)</figcaption>`;
+    return `<figcaption class="doc-image__caption doc-image__caption--decorative"${editableAttr} data-img-caption="true" data-placeholder="Optional visible caption">Decorative image (no alt text needed)</figcaption>`;
   }
   if (alt) {
-    return `<figcaption class="doc-image__caption doc-image__caption--placeholder" contenteditable="true" data-img-caption="true" data-placeholder="Optional visible caption"></figcaption>`;
+    return `<figcaption class="doc-image__caption doc-image__caption--placeholder"${editableAttr} data-img-caption="true" data-placeholder="Optional visible caption"></figcaption>`;
   }
-  return `<figcaption class="doc-image__caption doc-image__caption--missing" contenteditable="true" data-img-caption="true" data-placeholder="Optional visible caption">No alt text - use the Alt button to add a description</figcaption>`;
+  return `<figcaption class="doc-image__caption doc-image__caption--missing"${editableAttr} data-img-caption="true" data-placeholder="Optional visible caption">No alt text - use the Alt button to add a description</figcaption>`;
 }
 
-function imageFigureHtml(input: {
-  blockId: string;
-  src: string;
-  alt: string;
-  decorative: boolean;
-  width: number;
-  align: TextAlign;
-  assetId?: string;
-  caption?: string;
-}): string {
+function imageFigureHtml(
+  input: {
+    blockId: string;
+    src: string;
+    alt: string;
+    decorative: boolean;
+    width: number;
+    align: TextAlign;
+    assetId?: string;
+    caption?: string;
+  },
+  options?: DocumentHtmlOptions,
+): string {
   const assetAttr = input.assetId ? ` data-asset-id="${escapeHtml(input.assetId)}"` : "";
   const decoAttr = input.decorative ? ` data-decorative="true"` : "";
   const needsAlt = !input.decorative && !input.alt ? ` data-needs-alt="true"` : "";
   const figureStyle = ` style="width: ${input.width}%; max-width: 100%; margin: ${imageMargin(input.align)};"`;
+  const controls = options?.imageControls === false ? "" : imageControlsHtml();
+  const captionEditable = options?.captionEditable !== false;
   return (
     `<figure class="doc-image" contenteditable="false" data-block-id="${escapeHtml(input.blockId)}" data-width="${input.width}" data-align="${input.align}"${assetAttr}${decoAttr}${needsAlt}${figureStyle}>` +
-    imageControlsHtml() +
+    controls +
     `<img alt="${escapeHtml(input.alt)}" src="${escapeHtml(input.src)}" />` +
-    imageEditorCaption(input.caption ?? "", input.alt, input.decorative) +
+    imageEditorCaption(input.caption ?? "", input.alt, input.decorative, captionEditable) +
     `</figure>`
   );
 }
@@ -302,8 +320,14 @@ function alertFields(node: HTMLElement) {
   return { html, text };
 }
 
-export function blocksToDocumentHtml(blocks: ContentBlock[], kbSlug?: string): string {
-  return dedupeContentBlockIds(blocks).map((block) => blockToHtml(block, kbSlug)).join("");
+export function blocksToDocumentHtml(
+  blocks: ContentBlock[],
+  kbSlug?: string,
+  options?: DocumentHtmlOptions,
+): string {
+  return dedupeContentBlockIds(blocks)
+    .map((block) => blockToHtml(block, kbSlug, options))
+    .join("");
 }
 
 // Readable HTML for the editor's source ("HTML") view: the same structure the
@@ -334,7 +358,7 @@ export function blocksToSourceHtml(blocks: ContentBlock[], kbSlug?: string): str
     .join("\n\n");
 }
 
-function blockToHtml(block: ContentBlock, kbSlug?: string): string {
+function blockToHtml(block: ContentBlock, kbSlug?: string, options?: DocumentHtmlOptions): string {
   const id = escapeHtml(block.blockId);
   switch (block.type) {
     case "paragraph": {
@@ -363,16 +387,19 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
     }
     case "image": {
       const align = normalizeAlign(block.align) ?? "left";
-      return imageFigureHtml({
-        blockId: block.blockId,
-        src: safeImageSrc(block.url) ?? "",
-        alt: block.alt ?? "",
-        decorative: Boolean(block.decorative),
-        width: clampWidth(block.widthPercent),
-        align,
-        assetId: block.assetId,
-        caption: block.caption,
-      });
+      return imageFigureHtml(
+        {
+          blockId: block.blockId,
+          src: safeImageSrc(block.url) ?? "",
+          alt: block.alt ?? "",
+          decorative: Boolean(block.decorative),
+          width: clampWidth(block.widthPercent),
+          align,
+          assetId: block.assetId,
+          caption: block.caption,
+        },
+        options,
+      );
     }
     case "section_divider": {
       return `<div class="doc-section-break" contenteditable="false" data-block-id="${id}" role="separator" aria-label="Section break"></div>`;
@@ -381,13 +408,13 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
       const background = normalizeCardBackground(block.background);
       const titleAttr = block.title ? ` data-title="${escapeHtml(block.title)}"` : "";
       const levelAttr = block.titleLevel === 3 ? ` data-title-level="3"` : "";
-      const inner = blocksToDocumentHtml(block.blocks, kbSlug);
+      const inner = blocksToDocumentHtml(block.blocks, kbSlug, options);
       return `<section class="doc-card doc-card--${background}" data-block-id="${id}" data-background="${background}"${titleAttr}${levelAttr}>${inner}</section>`;
     }
     case "procedure_section": {
       const level = block.level === 3 ? 3 : 2;
       const tag = level === 3 ? "h3" : "h2";
-      const inner = blocksToDocumentHtml(block.blocks, kbSlug);
+      const inner = blocksToDocumentHtml(block.blocks, kbSlug, options);
       return `<section class="doc-procedure-section" data-block-id="${id}" data-level="${level}"><${tag} class="anchor-heading doc-procedure-section__title" id="${id}" contenteditable="false">${textToRichText(block.title)}</${tag}>${inner}</section>`;
     }
     case "table": {
@@ -418,7 +445,7 @@ function blockToHtml(block: ContentBlock, kbSlug?: string): string {
       const headingAttr = block.headingText ? ` data-heading-text="${escapeHtml(block.headingText)}"` : "";
       const retrievedAttr = block.retrievedAt ? ` data-retrieved-at="${escapeHtml(block.retrievedAt)}"` : "";
       const hashAttr = block.contentHash ? ` data-content-hash="${escapeHtml(block.contentHash)}"` : "";
-      const inner = blocksToDocumentHtml(block.blocks, kbSlug);
+      const inner = blocksToDocumentHtml(block.blocks, kbSlug, options);
       return `<section class="doc-sourced" contenteditable="false" data-block-id="${id}" data-source-url="${escapeHtml(block.sourceUrl)}"${anchorAttr}${labelAttr}${newTabAttr}${headingAttr}${retrievedAttr}${hashAttr}>${inner}</section>`;
     }
     default:
