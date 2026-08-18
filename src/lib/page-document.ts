@@ -220,6 +220,47 @@ function dedupeBlockIds(html: string): string {
   return changed ? root.toString() : html;
 }
 
+function uniqueBlockId(blockId: string, seen: Set<string>): string {
+  if (blockId && !seen.has(blockId)) {
+    seen.add(blockId);
+    return blockId;
+  }
+  const fresh = newBlockId();
+  seen.add(fresh);
+  return fresh;
+}
+
+function dedupeContentBlock(block: ContentBlock, seen: Set<string>): ContentBlock {
+  const blockId = uniqueBlockId(block.blockId, seen);
+  switch (block.type) {
+    case "card": {
+      const blocks = block.blocks.map((nested) => dedupeContentBlock(nested, seen));
+      return blockId === block.blockId && blocks.every((nested, index) => nested === block.blocks[index])
+        ? block
+        : { ...block, blockId, blocks };
+    }
+    case "procedure_section": {
+      const blocks = block.blocks.map((nested) => dedupeContentBlock(nested, seen));
+      return blockId === block.blockId && blocks.every((nested, index) => nested === block.blocks[index])
+        ? block
+        : { ...block, blockId, blocks };
+    }
+    case "sourced": {
+      const blocks = block.blocks.map((nested) => dedupeContentBlock(nested, seen));
+      return blockId === block.blockId && blocks.every((nested, index) => nested === block.blocks[index])
+        ? block
+        : { ...block, blockId, blocks };
+    }
+    default:
+      return blockId === block.blockId ? block : { ...block, blockId };
+  }
+}
+
+export function dedupeContentBlockIds(blocks: ContentBlock[]): ContentBlock[] {
+  const seen = new Set<string>();
+  return blocks.map((block) => dedupeContentBlock(block, seen));
+}
+
 function isBlankParagraphElement(node: Node) {
   if (!isElement(node) || node.tagName?.toLowerCase() !== "p") {
     return false;
@@ -262,7 +303,7 @@ function alertFields(node: HTMLElement) {
 }
 
 export function blocksToDocumentHtml(blocks: ContentBlock[], kbSlug?: string): string {
-  return blocks.map((block) => blockToHtml(block, kbSlug)).join("");
+  return dedupeContentBlockIds(blocks).map((block) => blockToHtml(block, kbSlug)).join("");
 }
 
 // Readable HTML for the editor's source ("HTML") view: the same structure the
@@ -875,7 +916,7 @@ export function documentHtmlToBlocks(html: string, depth = 0): ContentBlock[] {
   if (blocks.length === 0) {
     blocks.push({ blockId: newBlockId(), type: "paragraph", text: "" });
   }
-  return blocks;
+  return dedupeContentBlockIds(blocks);
 }
 
 export function mergeDocumentAndExtraBlocks(flow: ContentBlock[], extra: ContentBlock[]) {

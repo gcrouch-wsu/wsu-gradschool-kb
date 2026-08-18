@@ -28,6 +28,7 @@ import {
   lexicalApplyBlockTag,
   lexicalApplyLink,
   lexicalApplyList,
+  lexicalApplyTextStyle,
   lexicalIndent,
   lexicalInsertHtml,
   lexicalOutdent,
@@ -136,6 +137,13 @@ export function applyInlineFormat(styles: { color?: string }): boolean {
   if (!styles.color) {
     return false;
   }
+  if (isLexicalFlowActive()) {
+    const ok = lexicalApplyTextStyle({ color: styles.color });
+    if (ok) {
+      recordFormat("foreColor", true, styles.color);
+      return true;
+    }
+  }
   const ok = applyToRichTextSelection(() => {
     document.execCommand("foreColor", false, styles.color);
   });
@@ -158,6 +166,13 @@ export function applyFontFamily(stack: string): boolean {
   if (!face) {
     return false;
   }
+  if (isLexicalFlowActive()) {
+    const ok = lexicalApplyTextStyle({ "font-family": stack });
+    if (ok) {
+      recordFormat("fontName", true, stack);
+      return true;
+    }
+  }
   const ok = applyToRichTextSelection(() => {
     document.execCommand("fontName", false, face);
   });
@@ -179,6 +194,13 @@ export function applyFontSize(rem: string): boolean {
   const size = FONT_SIZE_FOR_EXEC[rem];
   if (typeof size !== "string") {
     return false;
+  }
+  if (isLexicalFlowActive()) {
+    const ok = lexicalApplyTextStyle({ "font-size": rem || null });
+    if (ok) {
+      recordFormat("fontSize", true, rem || "default");
+      return true;
+    }
   }
   const ok = applyToRichTextSelection(() => {
     document.execCommand("fontSize", false, size || "3");

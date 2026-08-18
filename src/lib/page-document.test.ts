@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   blocksToDocumentHtml,
   blocksToSourceHtml,
+  dedupeContentBlockIds,
   documentHtmlToBlocks,
   mergeDocumentAndExtraBlocks,
   sanitizePageDocument,
@@ -65,6 +66,32 @@ describe("page-document", () => {
     expect(ids).toHaveLength(3);
     expect(new Set(ids).size).toBe(3);
     expect(ids).toContain("list-3");
+  });
+
+  it("re-mints duplicate ids in block arrays before rendering or saving", () => {
+    const blocks: ContentBlock[] = [
+      { blockId: "dup", type: "paragraph", text: "Top", html: "Top" },
+      { blockId: "dup", type: "image", url: "/kb/x/files/a", alt: "A" },
+      {
+        blockId: "card",
+        type: "card",
+        background: "paper",
+        blocks: [{ blockId: "dup", type: "paragraph", text: "Nested", html: "Nested" }],
+      },
+    ];
+
+    const deduped = dedupeContentBlockIds(blocks);
+    const ids = [
+      deduped[0]?.blockId,
+      deduped[1]?.blockId,
+      ...(deduped[2]?.type === "card" ? deduped[2].blocks.map((block) => block.blockId) : []),
+    ];
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3);
+    expect(ids).toContain("dup");
+
+    const htmlIds = [...blocksToDocumentHtml(blocks).matchAll(/data-block-id="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(htmlIds).size).toBe(htmlIds.length);
   });
 
   it("drops blank paragraph spacer blocks when real content exists", () => {

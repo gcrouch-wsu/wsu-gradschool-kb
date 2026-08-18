@@ -131,4 +131,42 @@ test.describe("image alt text workflow", () => {
     await expect(publicFigure.locator("img")).toHaveAttribute("alt", "One-pixel test image");
     await expect(publicFigure.locator("figcaption")).toHaveText("Tiny image caption");
   });
+
+  test("repeated image moves and metadata edits do not duplicate the figure", async ({ page }) => {
+    await openEditor(page);
+    await setDocumentHtml(
+      page,
+      `<p>Before image.</p>` +
+        `<figure class="doc-image" data-block-id="img-repeat-test" data-width="100" data-align="left">` +
+        `<img src="${TEST_IMAGE}" alt="Original screenshot" />` +
+        `</figure>` +
+        `<p>After image.</p>`,
+    );
+
+    const figure = page.locator(".image-section-editor figure.doc-image").first();
+    await expect(page.locator(".image-section-editor figure.doc-image")).toHaveCount(1);
+
+    await figure.click();
+    await page.getByRole("button", { name: "Move image down" }).click();
+    await figure.click();
+    await page.getByRole("button", { name: "Move image up" }).click();
+    await figure.click();
+    await page.getByRole("button", { name: "Edit image alt text" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Edit image alt text" });
+    await dialog.getByLabel("Describe the image for screen readers").fill("Updated screenshot");
+    await dialog.getByLabel("Visible caption (optional)").fill("Updated caption");
+    await dialog.getByRole("button", { name: "Save alt text" }).click();
+
+    await expect(page.locator(".image-section-editor figure.doc-image")).toHaveCount(1);
+    await expect(figure.locator("img")).toHaveAttribute("alt", "Updated screenshot");
+    await expect(figure.locator("figcaption")).toHaveText("Updated caption");
+
+    await saveAndPublish(page);
+
+    await page.goto(TARGET_PAGE_PUBLIC_PATH);
+    await expect(page.locator(".article figure.content-image")).toHaveCount(1);
+    await expect(page.locator(".article figure.content-image img")).toHaveAttribute("alt", "Updated screenshot");
+    await expect(page.locator(".article figure.content-image figcaption")).toHaveText("Updated caption");
+  });
 });

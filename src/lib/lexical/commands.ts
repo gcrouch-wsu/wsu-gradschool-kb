@@ -5,13 +5,16 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  FORMAT_ELEMENT_COMMAND,
   FORMAT_TEXT_COMMAND,
   INDENT_CONTENT_COMMAND,
   OUTDENT_CONTENT_COMMAND,
   REDO_COMMAND,
+  type ElementFormatType,
+  type TextFormatType,
   UNDO_COMMAND,
 } from "lexical";
-import { $setBlocksType } from "@lexical/selection";
+import { $forEachSelectedTextNode, $patchStyleText, $setBlocksType } from "@lexical/selection";
 import { $createHeadingNode } from "@lexical/rich-text";
 import {
   INSERT_ORDERED_LIST_COMMAND,
@@ -28,17 +31,64 @@ import {
   notifyLexicalMutation,
 } from "@/lib/lexical/toolbar-bridge";
 import { escapeHtml } from "@/lib/rich-text";
+import {
+  captureRichTextSelectionSnapshot,
+  restoreRichTextSelection,
+  restoreRichTextSelectionSnapshot,
+  saveRichTextSelection,
+} from "@/lib/rich-text-selection";
+
+const TEXT_FORMAT_COMMANDS: Record<string, TextFormatType> = {
+  bold: "bold",
+  italic: "italic",
+  strikeThrough: "strikethrough",
+  strikethrough: "strikethrough",
+  subscript: "subscript",
+  superscript: "superscript",
+  underline: "underline",
+};
+
+const ELEMENT_FORMAT_COMMANDS: Record<string, ElementFormatType> = {
+  justifyCenter: "center",
+  justifyFull: "justify",
+  justifyLeft: "left",
+  justifyRight: "right",
+};
+
+function restoreSnapshotAfterMutation(snapshot: ReturnType<typeof captureRichTextSelectionSnapshot>) {
+  if (!snapshot || typeof window === "undefined") {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    if (restoreRichTextSelectionSnapshot(snapshot)) {
+      saveRichTextSelection();
+    }
+  });
+}
 
 export function lexicalRunFormatCommand(command: string, value?: string): boolean {
   const editor = getActiveLexicalEditor();
   if (!editor) {
     return false;
   }
+  const selectionSnapshot = captureRichTextSelectionSnapshot();
+  restoreRichTextSelection();
 
-  if (command === "bold" || command === "italic" || command === "underline") {
-    editor.dispatchCommand(FORMAT_TEXT_COMMAND, command);
+  const textFormat = TEXT_FORMAT_COMMANDS[command];
+  if (textFormat) {
+    editor.dispatchCommand(FORMAT_TEXT_COMMAND, textFormat);
+    notifyLexicalMutation();
+    restoreSnapshotAfterMutation(selectionSnapshot);
+    return true;
+  }
+  const elementFormat = ELEMENT_FORMAT_COMMANDS[command];
+  if (elementFormat !== undefined) {
+    editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, elementFormat);
     notifyLexicalMutation();
     return true;
+  }
+  if (command === "removeFormat") {
+    return lexicalClearTextFormatting();
   }
   if (command === "insertUnorderedList") {
     editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
@@ -93,6 +143,65 @@ export function lexicalRunFormatCommand(command: string, value?: string): boolea
   void INSERT_CHECK_LIST_COMMAND;
   void REMOVE_LIST_COMMAND;
   return false;
+}
+
+export function lexicalApplyTextStyle(styles: Record<string, string | null>): boolean {
+  const editor = getActiveLexicalEditor();
+  if (!editor) {
+    return false;
+  }
+  const selectionSnapshot = captureRichTextSelectionSnapshot();
+  const restored = restoreRichTextSelection();
+  if (!selectionSnapshot && !restored) {
+    return false;
+  }
+  editor.focus(() => {
+    editor.update(
+      () => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+        $patchStyleText(selection, styles);
+      },
+      {
+        onUpdate: () => {
+          notifyLexicalMutation();
+          restoreSnapshotAfterMutation(selectionSnapshot);
+        },
+      },
+    );
+  });
+  return true;
+}
+
+export function lexicalClearTextFormatting(): boolean {
+  const editor = getActiveLexicalEditor();
+  if (!editor) {
+    return false;
+  }
+  const selectionSnapshot = captureRichTextSelectionSnapshot();
+  restoreRichTextSelection();
+  let cleared = false;
+  editor.update(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) {
+      return;
+    }
+    selection.setFormat(0);
+    $patchStyleText(selection, { color: null, "font-family": null, "font-size": null });
+    $forEachSelectedTextNode((textNode) => {
+      textNode.setFormat(0);
+      textNode.setStyle("");
+    });
+    cleared = true;
+  });
+  if (!cleared) {
+    return false;
+  }
+  notifyLexicalMutation();
+  restoreSnapshotAfterMutation(selectionSnapshot);
+  return true;
 }
 
 export function lexicalApplyBlockTag(tag: "p" | "h2" | "h3"): boolean {

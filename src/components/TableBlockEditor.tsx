@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { LexicalTableCellSurface } from "@/components/LexicalTableCellSurface";
 import { textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
@@ -19,11 +20,15 @@ export function TableBlockEditor({
   kbId: string;
   onChange: (block: ContentBlock) => void;
 }) {
+  const [selectedCell, setSelectedCell] = useState({ rowIndex: 0, columnIndex: 0 });
+  const [structureEpoch, setStructureEpoch] = useState(0);
   const normalizedRows = block.rows.length > 0 ? block.rows : [[""]];
   const columnCount = Math.max(
     1,
     ...normalizedRows.map((row, rowIndex) => logicalWidth(row, block.colSpans?.[rowIndex])),
   );
+  const selectedRowIndex = Math.min(selectedCell.rowIndex, normalizedRows.length - 1);
+  const selectedColumnIndex = Math.min(selectedCell.columnIndex, columnCount - 1);
   const hasSpans = Boolean(
     block.colSpans?.some((row) => row.some((span) => span > 1)) ||
       block.rowSpans?.some((row) => row.some((span) => span > 1)) ||
@@ -34,6 +39,18 @@ export function TableBlockEditor({
     return block.rowsHtml?.[rowIndex]?.[columnIndex] ?? textToRichText(text);
   }
 
+  function tableRows() {
+    return normalizedRows.map((row) => Array.from({ length: columnCount }, (_, columnIndex) => row[columnIndex] ?? ""));
+  }
+
+  function tableRowsHtml() {
+    return normalizedRows.map((row, rowIndex) =>
+      Array.from({ length: columnCount }, (_, columnIndex) =>
+        cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
+      ),
+    );
+  }
+
   function withoutSpans(next: Partial<TableBlock>): TableBlock {
     const {
       colSpans: _colSpans,
@@ -42,6 +59,12 @@ export function TableBlockEditor({
       ...rest
     } = { ...block, ...next };
     return rest;
+  }
+
+  function emitStructureChange(next: Partial<TableBlock>, nextSelectedCell = selectedCell) {
+    setSelectedCell(nextSelectedCell);
+    setStructureEpoch((value) => value + 1);
+    onChange(withoutSpans(next));
   }
 
   function updateCell(rowIndex: number, columnIndex: number, value: string, html: string) {
@@ -72,18 +95,12 @@ export function TableBlockEditor({
   }
 
   function addRow() {
-    onChange(
-      withoutSpans({
-        rows: [...normalizedRows, Array.from({ length: columnCount }, () => "")],
-        rowsHtml: [
-          ...normalizedRows.map((row, rowIndex) =>
-            Array.from({ length: columnCount }, (_, columnIndex) =>
-              cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
-            ),
-          ),
-          Array.from({ length: columnCount }, () => ""),
-        ],
-      }),
+    emitStructureChange(
+      {
+        rows: [...tableRows(), Array.from({ length: columnCount }, () => "")],
+        rowsHtml: [...tableRowsHtml(), Array.from({ length: columnCount }, () => "")],
+      },
+      { rowIndex: normalizedRows.length, columnIndex: selectedColumnIndex },
     );
   }
 
@@ -91,37 +108,26 @@ export function TableBlockEditor({
     if (normalizedRows.length <= 1) {
       return;
     }
-    onChange(
-      withoutSpans({
-        rows: normalizedRows.slice(0, -1),
-        rowsHtml: normalizedRows.slice(0, -1).map((row, rowIndex) =>
-          Array.from({ length: columnCount }, (_, columnIndex) =>
-            cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
-          ),
-        ),
-      }),
+    const rows = tableRows();
+    const rowsHtml = tableRowsHtml();
+    rows.splice(selectedRowIndex, 1);
+    rowsHtml.splice(selectedRowIndex, 1);
+    emitStructureChange(
+      {
+        rows,
+        rowsHtml,
+      },
+      { rowIndex: Math.max(0, Math.min(selectedRowIndex, rows.length - 1)), columnIndex: selectedColumnIndex },
     );
   }
 
   function addColumn() {
-    onChange(
-      withoutSpans({
-        rows: normalizedRows.map((row) => {
-          const next = [...row];
-          while (next.length < columnCount) {
-            next.push("");
-          }
-          next.push("");
-          return next;
-        }),
-        rowsHtml: normalizedRows.map((row, rowIndex) => {
-          const next = Array.from({ length: columnCount }, (_, columnIndex) =>
-            cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
-          );
-          next.push("");
-          return next;
-        }),
-      }),
+    emitStructureChange(
+      {
+        rows: tableRows().map((row) => [...row, ""]),
+        rowsHtml: tableRowsHtml().map((row) => [...row, ""]),
+      },
+      { rowIndex: selectedRowIndex, columnIndex: columnCount },
     );
   }
 
@@ -129,23 +135,68 @@ export function TableBlockEditor({
     if (columnCount <= 1) {
       return;
     }
-    onChange(
-      withoutSpans({
-        rows: normalizedRows.map((row) => {
-          const next = [...row];
-          while (next.length < columnCount) {
-            next.push("");
-          }
-          return next.slice(0, -1);
-        }),
-        rowsHtml: normalizedRows.map((row, rowIndex) =>
-          Array.from({ length: columnCount }, (_, columnIndex) =>
-            cellHtml(rowIndex, columnIndex, row[columnIndex] ?? ""),
-          ).slice(0, -1),
-        ),
-      }),
+    const rows = tableRows().map((row) => {
+      const next = [...row];
+      next.splice(selectedColumnIndex, 1);
+      return next;
+    });
+    const rowsHtml = tableRowsHtml().map((row) => {
+      const next = [...row];
+      next.splice(selectedColumnIndex, 1);
+      return next;
+    });
+    emitStructureChange(
+      {
+        rows,
+        rowsHtml,
+      },
+      { rowIndex: selectedRowIndex, columnIndex: Math.max(0, Math.min(selectedColumnIndex, columnCount - 2)) },
     );
   }
+
+  function moveRow(direction: -1 | 1) {
+    const targetIndex = selectedRowIndex + direction;
+    if (targetIndex < 0 || targetIndex >= normalizedRows.length) {
+      return;
+    }
+    const rows = tableRows();
+    const rowsHtml = tableRowsHtml();
+    [rows[selectedRowIndex], rows[targetIndex]] = [rows[targetIndex], rows[selectedRowIndex]];
+    [rowsHtml[selectedRowIndex], rowsHtml[targetIndex]] = [rowsHtml[targetIndex], rowsHtml[selectedRowIndex]];
+    emitStructureChange(
+      {
+        rows,
+        rowsHtml,
+      },
+      { rowIndex: targetIndex, columnIndex: selectedColumnIndex },
+    );
+  }
+
+  function moveColumn(direction: -1 | 1) {
+    const targetIndex = selectedColumnIndex + direction;
+    if (targetIndex < 0 || targetIndex >= columnCount) {
+      return;
+    }
+    const rows = tableRows().map((row) => {
+      const next = [...row];
+      [next[selectedColumnIndex], next[targetIndex]] = [next[targetIndex], next[selectedColumnIndex]];
+      return next;
+    });
+    const rowsHtml = tableRowsHtml().map((row) => {
+      const next = [...row];
+      [next[selectedColumnIndex], next[targetIndex]] = [next[targetIndex], next[selectedColumnIndex]];
+      return next;
+    });
+    emitStructureChange(
+      {
+        rows,
+        rowsHtml,
+      },
+      { rowIndex: selectedRowIndex, columnIndex: targetIndex },
+    );
+  }
+
+  const renderRows = hasSpans ? normalizedRows : tableRows();
 
   return (
     <div className="table-editor">
@@ -177,14 +228,14 @@ export function TableBlockEditor({
       </div>
       {hasSpans && (
         <p className="meta">
-          This table keeps merged cells and alignment from its source. Cell text is editable; adding
-          or removing rows/columns clears those source layouts.
+          This table keeps merged cells and alignment from its source. Cell text is editable; changing
+          rows/columns clears those source layouts.
         </p>
       )}
       <div className="table-wrap">
         <table className="admin-table table-editor__table">
           <tbody>
-            {normalizedRows.map((row, rowIndex) => (
+            {renderRows.map((row, rowIndex) => (
               <tr key={rowIndex}>
                 {row.map((cell, columnIndex) => {
                   const colSpan = block.colSpans?.[rowIndex]?.[columnIndex] ?? 1;
@@ -193,7 +244,7 @@ export function TableBlockEditor({
                   return (
                     <td
                       colSpan={colSpan > 1 ? colSpan : undefined}
-                      key={`${rowIndex}-${columnIndex}`}
+                      key={`${structureEpoch}-${rowIndex}-${columnIndex}`}
                       rowSpan={rowSpan > 1 ? rowSpan : undefined}
                       style={align && align !== "left" ? { textAlign: align } : undefined}
                     >
@@ -201,6 +252,7 @@ export function TableBlockEditor({
                         initialHtml={cellHtml(rowIndex, columnIndex, cell)}
                         kbId={kbId}
                         onChange={(html, text) => updateCell(rowIndex, columnIndex, text, html)}
+                        onFocus={() => setSelectedCell({ rowIndex, columnIndex })}
                       />
                     </td>
                   );
@@ -222,6 +274,24 @@ export function TableBlockEditor({
         >
           Remove row
         </button>
+        <button
+          aria-label="Move selected row up"
+          className="button button--ghost button--small"
+          disabled={selectedRowIndex <= 0}
+          onClick={() => moveRow(-1)}
+          type="button"
+        >
+          Row up
+        </button>
+        <button
+          aria-label="Move selected row down"
+          className="button button--ghost button--small"
+          disabled={selectedRowIndex >= normalizedRows.length - 1}
+          onClick={() => moveRow(1)}
+          type="button"
+        >
+          Row down
+        </button>
         <button className="button button--ghost button--small" onClick={addColumn} type="button">
           Add column
         </button>
@@ -232,6 +302,24 @@ export function TableBlockEditor({
           type="button"
         >
           Remove column
+        </button>
+        <button
+          aria-label="Move selected column left"
+          className="button button--ghost button--small"
+          disabled={selectedColumnIndex <= 0}
+          onClick={() => moveColumn(-1)}
+          type="button"
+        >
+          Column left
+        </button>
+        <button
+          aria-label="Move selected column right"
+          className="button button--ghost button--small"
+          disabled={selectedColumnIndex >= columnCount - 1}
+          onClick={() => moveColumn(1)}
+          type="button"
+        >
+          Column right
         </button>
       </div>
     </div>

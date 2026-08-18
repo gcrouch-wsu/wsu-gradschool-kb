@@ -12,6 +12,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from "@lexical/html";
 import { $createParagraphNode, $getRoot, type EditorState, type LexicalEditor } from "lexical";
+import { lexicalHtmlConfig } from "@/lib/lexical/html-export";
 import {
   hasActiveLexicalEditor,
   registerLexicalFlowEditor,
@@ -147,10 +148,12 @@ export function LexicalTableCellSurface({
   initialHtml,
   kbId,
   onChange,
+  onFocus,
 }: {
   initialHtml: string;
   kbId: string;
   onChange: (html: string, text: string) => void;
+  onFocus?: () => void;
 }) {
   const reactId = useId();
   const onChangeRef = useRef(onChange);
@@ -162,6 +165,7 @@ export function LexicalTableCellSurface({
     () => ({
       namespace: `kb-table-cell-${reactId}`,
       theme: theme(),
+      html: lexicalHtmlConfig,
       onError(error: Error) {
         console.error(error);
       },
@@ -201,6 +205,7 @@ export function LexicalTableCellSurface({
                 noteEditorInput(event.nativeEvent as InputEvent);
                 refreshEditorFormatting();
               }}
+              onFocus={onFocus}
               onKeyUp={() => refreshEditorFormatting()}
               onMouseUp={() => refreshEditorFormatting()}
             />

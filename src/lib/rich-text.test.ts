@@ -100,6 +100,14 @@ describe("sanitizeRichText", () => {
       expect(sanitizeRichText("<b><em>both</em></b>")).toBe("<strong><em>both</em></strong>");
     });
 
+    it("converts Lexical theme classes and inline styles to semantic rich text", () => {
+      expect(
+        sanitizeRichText(
+          '<strong class="doc-strong doc-em" style="color: rgb(152, 30, 50)">Format me</strong>',
+        ),
+      ).toBe('<strong><em><span style="color: #981e32">Format me</span></em></strong>');
+    });
+
     it("keeps separate sibling runs intact", () => {
       expect(sanitizeRichText("<b>one</b> plain <b>two</b>")).toBe(
         "<strong>one</strong> plain <strong>two</strong>",

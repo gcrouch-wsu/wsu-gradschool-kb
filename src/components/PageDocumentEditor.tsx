@@ -24,6 +24,7 @@ import {
 import {
   blocksToDocumentHtml,
   blocksToSourceHtml,
+  dedupeContentBlockIds,
   documentHtmlToBlocks,
   sanitizePageDocument,
 } from "@/lib/page-document";
@@ -110,7 +111,7 @@ export function PageDocumentEditor({
   onChange: (blocks: ContentBlock[]) => void;
   pageUrl?: string;
 }) {
-  const initialSections = blocksToSections(cleanDocumentLayout(blocks));
+  const initialSections = blocksToSections(cleanDocumentLayout(dedupeContentBlockIds(blocks)));
   // Always present at least one editable flow surface — otherwise an empty
   // document (e.g. fresh Home Page Rich Content) renders just the toolbar with
   // nowhere to type.
@@ -136,9 +137,12 @@ export function PageDocumentEditor({
   onChangeRef.current = onChange;
 
   const emitChange = useCallback((nextSections: EditorSection[]) => {
-    const normalized = normalizeEditorSections(nextSections);
-    setSections(normalized);
-    onChangeRef.current(sectionsToBlocks(normalized));
+    const normalizedBlocks = cleanDocumentLayout(
+      dedupeContentBlockIds(sectionsToBlocks(normalizeEditorSections(nextSections))),
+    );
+    const normalizedSections = blocksToSections(normalizedBlocks);
+    setSections(normalizedSections.length > 0 ? normalizedSections : [{ type: "flow", blocks: [] }]);
+    onChangeRef.current(normalizedBlocks);
   }, []);
 
   function switchToHtml() {

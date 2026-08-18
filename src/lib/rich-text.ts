@@ -297,6 +297,30 @@ function serializeStyledSpan(node: HTMLElement, style: string, mode: RichTextMod
   return `<span style="${escapeHtml(style)}">${serializeChildren(node, mode)}</span>`;
 }
 
+function lexicalThemeTags(node: HTMLElement, primaryTag?: string): string[] {
+  const cls = node.getAttribute("class") ?? "";
+  const tags: string[] = [];
+  if (/\bdoc-strong\b/.test(cls) && primaryTag !== "strong" && !activeEmphasis.includes("strong")) {
+    tags.push("strong");
+  }
+  if (/\bdoc-em\b/.test(cls) && primaryTag !== "em" && !activeEmphasis.includes("em")) {
+    tags.push("em");
+  }
+  if (/\bdoc-u\b/.test(cls) && primaryTag !== "u" && !activeEmphasis.includes("u")) {
+    tags.push("u");
+  }
+  return tags;
+}
+
+function wrapSemanticTags(inner: string, tags: string[]) {
+  let out = inner;
+  for (let index = tags.length - 1; index >= 0; index -= 1) {
+    const tag = tags[index];
+    out = `<${tag}>${out}</${tag}>`;
+  }
+  return out;
+}
+
 function tagAllowed(tag: string, mode: RichTextMode): boolean {
   if (ALLOWED_TAGS.has(tag)) {
     return true;
@@ -389,10 +413,12 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
       return `<span class="doc-note${pointClass}"${idAttr} data-note-body="${body}">${inner}</span>`;
     }
     const style = safeStyleAttribute(node.getAttribute("style"));
-    if (!style) {
-      return serializeChildren(node, mode);
+    const inner = serializeChildren(node, mode);
+    if (!inner) {
+      return "";
     }
-    return serializeStyledSpan(node, style, mode);
+    const styled = style ? `<span style="${escapeHtml(style)}">${inner}</span>` : inner;
+    return wrapSemanticTags(styled, lexicalThemeTags(node));
   }
 
   if (tag === "a") {
@@ -416,7 +442,12 @@ function serializeNode(node: Node, mode: RichTextMode = "inline"): string {
     activeEmphasis.push(tag);
     const inner = serializeChildren(node, mode);
     activeEmphasis.pop();
-    return inner ? `<${tag}>${inner}</${tag}>` : "";
+    if (!inner) {
+      return "";
+    }
+    const style = safeStyleAttribute(node.getAttribute("style"));
+    const styled = style ? `<span style="${escapeHtml(style)}">${inner}</span>` : inner;
+    return `<${tag}>${wrapSemanticTags(styled, lexicalThemeTags(node, tag))}</${tag}>`;
   }
 
   return `<${tag}>${serializeChildren(node, mode)}</${tag}>`;

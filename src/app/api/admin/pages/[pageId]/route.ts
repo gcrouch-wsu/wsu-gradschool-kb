@@ -15,6 +15,7 @@ import {
   excerptSourceCheckerFor,
 } from "@/lib/excerpts";
 import { logError } from "@/lib/log";
+import { dedupeContentBlockIds } from "@/lib/page-document";
 import { normalizePageTags } from "@/lib/page-tags";
 import { validatePageForPublish } from "@/lib/publish-gate";
 import { requireAdminMutation, requireKbAccess } from "@/lib/security";
@@ -108,7 +109,7 @@ export async function PATCH(
   const parentPath = Array.isArray(body.parentPath)
     ? body.parentPath.filter((segment): segment is string => typeof segment === "string")
     : [];
-  const blocks = Array.isArray(body.blocks) ? (body.blocks as ContentBlock[]) : [];
+  const blocks = Array.isArray(body.blocks) ? dedupeContentBlockIds(body.blocks as ContentBlock[]) : [];
 
   const nodeKind = existingPage?.nodeKind ?? "page";
   const linkUrl =

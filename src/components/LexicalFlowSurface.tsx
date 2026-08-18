@@ -22,6 +22,7 @@ import {
 } from "@/lib/lexical/editor-boundary-paragraph-node";
 import { AlertNode } from "@/lib/lexical/alert-node";
 import { NoteNode } from "@/lib/lexical/note-node";
+import { lexicalHtmlConfig } from "@/lib/lexical/html-export";
 import {
   hasActiveLexicalEditor,
   registerLexicalFlowEditor,
@@ -191,6 +192,7 @@ export function LexicalFlowSurface({
     () => ({
       namespace: "kb-flow",
       theme: theme(),
+      html: lexicalHtmlConfig,
       onError(error: Error) {
         console.error(error);
       },

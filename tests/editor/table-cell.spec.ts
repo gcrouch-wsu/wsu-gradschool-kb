@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { TARGET_PAGE_PUBLIC_PATH, clickUntil, openEditor, resetDocument, saveAndPublish } from "./helpers";
+import { TARGET_PAGE_PUBLIC_PATH, clickUntil, openEditor, resetDocument, saveAndPublish, setDocumentHtml } from "./helpers";
 
 // FB-25/FB-26 table-cell authoring: text formatting and link insertion bind to
 // the shared toolbar, page-structure/list controls stay hidden, and the cell
@@ -81,5 +81,43 @@ test.describe("table cell workflows", () => {
     await expect(publicCell.locator("a")).toHaveCount(1);
     await expect(publicCell.locator("a")).toHaveAttribute("href", "https://wsu.edu");
     await expect(publicCell).toHaveText("Linktext");
+  });
+
+  test("focused table rows and columns can be reordered", async ({ page }) => {
+    await openEditor(page);
+    await setDocumentHtml(
+      page,
+      `<p>Table intro.</p>` +
+        `<table class="doc-table" data-block-id="table-move-test" data-header-row="true" data-header-column="false">` +
+        `<tbody><tr><th>A1</th><th>B1</th></tr><tr><td>A2</td><td>B2</td></tr></tbody>` +
+        `</table>`,
+    );
+
+    const cells = page.locator(".wysiwyg-table-cell");
+    await expect(cells.nth(0)).toHaveText("A1");
+    await expect(cells.nth(2)).toHaveText("A2");
+
+    await cells.nth(2).click();
+    await page.getByRole("button", { name: "Move selected row up" }).click();
+
+    await expect(cells.nth(0)).toHaveText("A2");
+    await expect(cells.nth(1)).toHaveText("B2");
+    await expect(cells.nth(2)).toHaveText("A1");
+    await expect(cells.nth(3)).toHaveText("B1");
+
+    await page.getByRole("button", { name: "Move selected column right" }).click();
+
+    await expect(cells.nth(0)).toHaveText("B2");
+    await expect(cells.nth(1)).toHaveText("A2");
+    await expect(cells.nth(2)).toHaveText("B1");
+    await expect(cells.nth(3)).toHaveText("A1");
+
+    await saveAndPublish(page);
+
+    await page.goto(TARGET_PAGE_PUBLIC_PATH);
+    await expect(page.locator(".article table tr").nth(0)).toContainText("B2");
+    await expect(page.locator(".article table tr").nth(0)).toContainText("A2");
+    await expect(page.locator(".article table tr").nth(1)).toContainText("B1");
+    await expect(page.locator(".article table tr").nth(1)).toContainText("A1");
   });
 });
