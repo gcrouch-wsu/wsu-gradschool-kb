@@ -4113,6 +4113,20 @@ article li > ol {
   border-color: var(--wsu-gray);
 }
 
+/*
+ * Keep scrolled-to content clear of the sticky toolbar. Without this, anything
+ * scrolled into view (a figure, an insert row, a focused surface) parks under
+ * the toolbar and the toolbar intercepts the click meant for it.
+ * --editor-toolbar-height is measured and published by PageDocumentEditor.
+ */
+.page-document-editor .block-editor,
+.page-document-editor .block-insert-row,
+.page-document-editor .wysiwyg-surface,
+.page-document-editor .image-section-editor,
+.page-document-editor figure.doc-image {
+  scroll-margin-block-start: calc(var(--editor-toolbar-height, 0px) + 1rem);
+}
+
 .editor-toolbar-sticky {
   align-items: center;
   background: var(--paper);

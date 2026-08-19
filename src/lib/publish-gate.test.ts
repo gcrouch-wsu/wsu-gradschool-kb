@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { validatePageForPublish, validateRevisionForRestore, type PublishablePage } from "@/lib/publish-gate";
+import {
+  countEmptyImageBoxes,
+  validatePageForPublish,
+  validateRevisionForRestore,
+  type PublishablePage,
+} from "@/lib/publish-gate";
 import type { ContentBlock } from "@/lib/types";
 
 const activeResolver = async () => "active";
@@ -173,6 +178,24 @@ describe("validatePageForPublish", () => {
     page.blocks = [{ blockId: "img", type: "image", widthPercent: 100, align: "left" }];
     const issues = await validatePageForPublish(page, activeResolver);
     expect(issues.some((i) => i.includes("image box is empty"))).toBe(true);
+  });
+
+  // The editor readiness panel counts empty boxes with this same helper. A
+  // separate client-side walk is what lets a page report "ready" and then 422.
+  it("counts empty image boxes the readiness panel shares", () => {
+    expect(
+      countEmptyImageBoxes([
+        { blockId: "empty", type: "image", widthPercent: 100, align: "left" },
+        { blockId: "filled", type: "image", url: "/kb/x/a.png", alt: "a" },
+        {
+          blockId: "card",
+          type: "card",
+          background: "wash",
+          blocks: [{ blockId: "nested", type: "image", widthPercent: 100, align: "left" }],
+        },
+      ]),
+    ).toBe(2);
+    expect(countEmptyImageBoxes([])).toBe(0);
   });
 
   it("flags tables without headers", async () => {

@@ -140,6 +140,34 @@ function collectHtml(block: ContentBlock): string[] {
   }
 }
 
+export const EMPTY_IMAGE_BOX_ISSUE =
+  "An image box is empty. Paste or upload an image, or remove the box.";
+
+/**
+ * Paste-slot image boxes (`!assetId && !url`) waiting to be filled.
+ *
+ * Shared with `AdminPageEditorForm`'s readiness panel for the same reason
+ * `hasHeadingOrderSkip` is: a client-side reimplementation is what lets a page
+ * report "ready" and then 422 on publish.
+ */
+export function countEmptyImageBoxes(blocks: ContentBlock[]): number {
+  let count = 0;
+  for (const block of blocks) {
+    if (block.type === "image") {
+      if (!block.assetId && !block.url) {
+        count += 1;
+      }
+    } else if (
+      block.type === "card" ||
+      block.type === "procedure_section" ||
+      block.type === "sourced"
+    ) {
+      count += countEmptyImageBoxes(block.blocks);
+    }
+  }
+  return count;
+}
+
 export async function validatePageForPublish(
   page: PublishablePage,
   resolveAssetStatus: AssetStatusResolver,
@@ -167,7 +195,7 @@ export async function validatePageForPublish(
     if (block.type === "image") {
       const hasImage = Boolean(block.assetId || block.url);
       if (!hasImage) {
-        issues.push("An image box is empty. Paste or upload an image, or remove the box.");
+        issues.push(EMPTY_IMAGE_BOX_ISSUE);
       }
       if (hasImage && !block.decorative && !(block.alt ?? "").trim()) {
         issues.push("An image is missing alt text. Add a description or mark it decorative.");

@@ -290,80 +290,98 @@ export function stampFlowClientKeys(sections: EditorSection[]): EditorSection[] 
 /**
  * Keep flow identities stable across emit/normalize cycles so Lexical surfaces
  * are not remounted (and crashed) when paragraph block IDs are re-minted.
+ *
+ * Matching is by identity, never by position: a purely positional pass hands the
+ * key of the box that *used to* sit at index N to whatever now sits there, so a
+ * move up/down re-labelled both boxes, React kept both surfaces exactly where they
+ * already were, and the reorder appeared not to happen at all.
+ *
+ * Resolution order per flow:
+ *  1. its own clientKey, when a previous flow carried the same one — moves, plus
+ *     the key `updateFlowSection` deliberately carries over;
+ *  2. a previous flow sharing a block id (content survived a partial id re-mint);
+ *  3. the next unclaimed previous flow in document order — a whole-flow re-mint,
+ *     which is what every Lexical emit produces because Lexical's HTML export
+ *     drops `data-block-id`;
+ *  4. a freshly derived key.
  */
 export function preserveFlowClientKeys(
   previous: EditorSection[],
   next: EditorSection[],
 ): EditorSection[] {
-  if (
-    previous.length === next.length &&
-    previous.every((section, index) => section.type === next[index]?.type)
-  ) {
-    return next.map((section, index) => {
-      if (section.type !== "flow") {
-        return section;
-      }
-      const prior = previous[index];
-      if (prior?.type === "flow" && prior.clientKey) {
-        return { ...section, clientKey: prior.clientKey };
-      }
-      return section.clientKey
-        ? section
-        : {
-            ...section,
-            clientKey:
-              section.blocks.length > 0
-                ? `flow:${section.blocks.map((block) => block.blockId).join(":")}`
-                : `${gapFlowClientKey(next, index)}:${index}`,
-          };
-    });
-  }
-
-  const used = new Set<string>();
   const prevFlows = previous.filter(
     (section): section is Extract<EditorSection, { type: "flow" }> => section.type === "flow",
   );
-  let prevFlowCursor = 0;
+  const prevKeys = new Set(
+    prevFlows.map((flow) => flow.clientKey).filter((key): key is string => Boolean(key)),
+  );
 
-  return next.map((section, index) => {
-    if (section.type !== "flow") {
-      return section;
+  const nextFlows: { index: number; section: Extract<EditorSection, { type: "flow" }> }[] = [];
+  next.forEach((section, index) => {
+    if (section.type === "flow") {
+      nextFlows.push({ index, section });
     }
-    if (section.clientKey && !used.has(section.clientKey)) {
-      used.add(section.clientKey);
-      return section;
+  });
+
+  const used = new Set<string>();
+  const resolved = new Map<number, string>();
+
+  for (const { index, section } of nextFlows) {
+    const key = section.clientKey;
+    if (key && prevKeys.has(key) && !used.has(key)) {
+      used.add(key);
+      resolved.set(index, key);
+    }
+  }
+
+  for (const { index, section } of nextFlows) {
+    if (resolved.has(index) || section.blocks.length === 0) {
+      continue;
     }
     const nextIds = new Set(section.blocks.map((block) => block.blockId));
-    const overlapIndex = prevFlows.findIndex((candidate) => {
-      if (!candidate.clientKey || used.has(candidate.clientKey)) {
-        return false;
-      }
-      if (section.blocks.length === 0 || candidate.blocks.length === 0) {
-        return false;
-      }
-      return candidate.blocks.some((block) => nextIds.has(block.blockId));
-    });
-    if (overlapIndex >= 0) {
-      const overlap = prevFlows[overlapIndex];
-      if (overlap?.clientKey) {
-        used.add(overlap.clientKey);
-        return { ...section, clientKey: overlap.clientKey };
-      }
+    const match = prevFlows.find(
+      (candidate) =>
+        candidate.clientKey &&
+        !used.has(candidate.clientKey) &&
+        candidate.blocks.length > 0 &&
+        candidate.blocks.some((block) => nextIds.has(block.blockId)),
+    );
+    if (match?.clientKey) {
+      used.add(match.clientKey);
+      resolved.set(index, match.clientKey);
+    }
+  }
+
+  let prevFlowCursor = 0;
+  for (const { index } of nextFlows) {
+    if (resolved.has(index)) {
+      continue;
     }
     while (prevFlowCursor < prevFlows.length) {
       const prior = prevFlows[prevFlowCursor];
       prevFlowCursor += 1;
       if (prior?.clientKey && !used.has(prior.clientKey)) {
         used.add(prior.clientKey);
-        return { ...section, clientKey: prior.clientKey };
+        resolved.set(index, prior.clientKey);
+        break;
       }
     }
+  }
+
+  return next.map((section, index) => {
+    if (section.type !== "flow") {
+      return section;
+    }
+    const inherited = resolved.get(index);
     const key =
-      section.blocks.length > 0
-        ? `flow:${section.blocks.map((block) => block.blockId).join(":")}`
-        : `${gapFlowClientKey(next, index)}:${index}`;
+      inherited ??
+      (section.clientKey && !used.has(section.clientKey)
+        ? section.clientKey
+        : section.blocks.length > 0
+          ? `flow:${section.blocks.map((block) => block.blockId).join(":")}`
+          : `${gapFlowClientKey(next, index)}:${index}`);
     used.add(key);
-    return { ...section, clientKey: key };
+    return section.clientKey === key ? section : { ...section, clientKey: key };
   });
 }
 

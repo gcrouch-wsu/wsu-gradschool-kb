@@ -132,3 +132,66 @@ describe("separate text flows", () => {
     ]);
   });
 });
+
+describe("preserveFlowClientKeys", () => {
+  it("keeps keys with their sections when two text boxes swap places", () => {
+    const previous: EditorSection[] = [
+      { type: "flow", blocks: [paragraph("a", "First")], clientKey: "flow-a" },
+      { type: "flow", blocks: [paragraph("b", "Second")], clientKey: "flow-b" },
+    ];
+    const moved = moveEditorSection(previous, 1, -1)!;
+    const next = preserveFlowClientKeys(previous, stampFlowClientKeys(moved));
+    const flows = next.filter(
+      (section): section is Extract<EditorSection, { type: "flow" }> => section.type === "flow",
+    );
+    expect(flows.map((flow) => flow.clientKey)).toEqual(["flow-b", "flow-a"]);
+    expect(flows.map((flow) => (flow.blocks[0] as { text?: string } | undefined)?.text)).toEqual([
+      "Second",
+      "First",
+    ]);
+  });
+
+  // A positional pass re-labelled both boxes after a move, so React kept both
+  // surfaces exactly where they were and the reorder appeared not to happen.
+  it("does not hand one box's key to whatever now sits at its index", () => {
+    const previous: EditorSection[] = [
+      { type: "flow", blocks: [paragraph("a", "First")], clientKey: "flow-a" },
+      { type: "flow", blocks: [paragraph("b", "Second")], clientKey: "flow-b" },
+    ];
+    const next = preserveFlowClientKeys(previous, [
+      { type: "flow", blocks: [paragraph("b", "Second")], clientKey: "flow-b" },
+      { type: "flow", blocks: [paragraph("a", "First")], clientKey: "flow-a" },
+    ]);
+    expect(next[0]).toMatchObject({ clientKey: "flow-b" });
+    expect(next[1]).toMatchObject({ clientKey: "flow-a" });
+  });
+
+  it("still inherits a key when every block id in the flow was re-minted", () => {
+    const previous: EditorSection[] = [
+      { type: "flow", blocks: [paragraph("old", "Hello")], clientKey: "flow-stable" },
+    ];
+    const next = preserveFlowClientKeys(previous, [
+      { type: "flow", blocks: [paragraph("new", "Hello there")], clientKey: "flow:new" },
+    ]);
+    expect(next[0]).toMatchObject({ clientKey: "flow-stable" });
+  });
+
+  it("gives every flow a distinct, non-empty key", () => {
+    const previous: EditorSection[] = [
+      { type: "flow", blocks: [paragraph("a", "First")], clientKey: "flow-a" },
+    ];
+    const next = preserveFlowClientKeys(
+      previous,
+      stampFlowClientKeys([
+        { type: "flow", blocks: [paragraph("a", "First")] },
+        { type: "flow", blocks: [paragraph("b", "Second")] },
+        { type: "flow", blocks: [] },
+      ]),
+    );
+    const keys = next
+      .filter((section): section is Extract<EditorSection, { type: "flow" }> => section.type === "flow")
+      .map((section) => section.clientKey);
+    expect(keys.every(Boolean)).toBe(true);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});

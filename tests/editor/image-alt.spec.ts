@@ -227,7 +227,10 @@ test.describe("image alt text workflow", () => {
     await expect(page.locator(".article figure.content-image figcaption")).toHaveText("Updated caption");
   });
 
-  test("pasted image files become one standalone image section without jumping to the top", async ({ page }) => {
+  test("pasted image files become one standalone image section without jumping to the top", async ({ page, browserName }) => {
+    // Firefox does not expose files added to a constructed DataTransfer on a
+    // synthesized ClipboardEvent, so this flow cannot be driven there at all.
+    test.skip(browserName === "firefox", "Synthesized clipboard files are not delivered in Firefox.");
     await openEditor(page);
     await setDocumentHtml(
       page,

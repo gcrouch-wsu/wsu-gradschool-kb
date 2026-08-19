@@ -18,7 +18,7 @@ import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import { normalizePageTags } from "@/lib/page-tags";
 import { assessPageReadyForSummaryDraft } from "@/lib/summary-draft-core";
 import type { PageReviewSuggestion } from "@/lib/page-review-core";
-import { hasHeadingOrderSkip } from "@/lib/publish-gate";
+import { countEmptyImageBoxes, EMPTY_IMAGE_BOX_ISSUE, hasHeadingOrderSkip } from "@/lib/publish-gate";
 import { diffLines, revisionPlainDocument } from "@/lib/revision-diff";
 import type { ContentBlock, KbPage, KnowledgeBase, PageRevisionSnapshot, PageStatus, PageVisibility } from "@/lib/types";
 
@@ -827,6 +827,14 @@ export function AdminPageEditorForm({
     const blockIssues = countBlockIssues(blocks);
     if (hasHeadingOrderSkip(blocks)) {
       next.push("Fix heading order: use an H2 before any H3 (offending headings are outlined in the editor).");
+    }
+    const emptyImageBoxes = countEmptyImageBoxes(blocks);
+    if (emptyImageBoxes > 0) {
+      next.push(
+        emptyImageBoxes === 1
+          ? EMPTY_IMAGE_BOX_ISSUE
+          : `${emptyImageBoxes} image boxes are empty. Paste or upload an image, or remove the boxes.`,
+      );
     }
     if (blockIssues.imagesMissingAlt > 0) {
       next.push(

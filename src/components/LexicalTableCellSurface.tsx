@@ -16,6 +16,7 @@ import { lexicalHtmlConfig } from "@/lib/lexical/html-export";
 import {
   hasActiveLexicalEditor,
   registerLexicalFlowEditor,
+  trackLexicalFlowSurface,
   unregisterLexicalFlowEditor,
 } from "@/lib/lexical/toolbar-bridge";
 import {
@@ -81,46 +82,64 @@ function BridgePlugin({
 }) {
   const [editor] = useLexicalComposerContext();
 
+  const onHtmlChangeRef = useRef(onHtmlChange);
   useEffect(() => {
-    const root = editor.getRootElement();
-    if (!root) {
-      return;
-    }
+    onHtmlChangeRef.current = onHtmlChange;
+  }, [onHtmlChange]);
+
+  useEffect(() => {
     const emit = () => {
       editor.getEditorState().read(() => {
         const html = sanitizeRichText($generateHtmlFromNodes(editor, null));
-        onHtmlChange(html, false);
+        onHtmlChangeRef.current(html, false);
       });
     };
+    let currentRoot: HTMLElement | null = null;
+    let untrack: (() => void) | null = null;
     const activate = () => {
-      registerLexicalFlowEditor(editor, root, emit);
-      bindPageEditor(root, emit);
+      if (!currentRoot) {
+        return;
+      }
+      registerLexicalFlowEditor(editor, currentRoot, emit);
+      bindPageEditor(currentRoot, emit);
     };
-    // Claim the shared toolbar on mount only when no live surface holds it; focus is what
-    // hands ownership over after that. Binding unconditionally here let a surface that
-    // mounted later steal the target from the one the caret was in (FB-39).
-    if (!hasActiveLexicalEditor()) {
-      activate();
-    }
-    root.addEventListener("focusin", activate);
+    const detach = (root: HTMLElement | null) => {
+      root?.removeEventListener("focusin", activate);
+      untrack?.();
+      untrack = null;
+    };
+    const removeRootListener = editor.registerRootListener((rootElement, prevRootElement) => {
+      if (prevRootElement) {
+        detach(prevRootElement);
+      }
+      currentRoot = rootElement;
+      if (!rootElement) {
+        return;
+      }
+      untrack = trackLexicalFlowSurface(editor, { root: rootElement, onMutate: emit, claim: activate });
+      // Claim the shared toolbar on mount only when no live surface holds it; focus is what
+      // hands ownership over after that. Binding unconditionally here let a surface that
+      // mounted later steal the target from the one the caret was in (FB-39).
+      if (!hasActiveLexicalEditor()) {
+        activate();
+      }
+      rootElement.addEventListener("focusin", activate);
+    });
     return () => {
-      root.removeEventListener("focusin", activate);
+      removeRootListener();
+      detach(currentRoot);
       unregisterLexicalFlowEditor(editor);
       // Deliberately does NOT clear the shared selection binding. Doing so looked like tidy
       // defence-in-depth and caused an intermittent editor bug: DOM surgery (list indent)
       // restructures blocks and unmounts a surface while the caret stays inside a surviving
       // one. `focusin` only fires when focus *enters* an element, so focus never leaving means
       // nothing rebinds — the next Tab found no bound surface and silently did nothing, so a
-      // three-level list stopped nesting at two. `hasActiveLexicalEditor()` already treats a
-      // detached root as free, which is what lets the next surface claim the toolbar.
+      // three-level list stopped nesting at two. Ownership is re-derived from DOM focus by
+      // the bridge, which is what lets the surviving surface take over.
     };
-  }, [editor, onHtmlChange]);
+  }, [editor]);
 
   useEffect(() => {
-    const root = editor.getRootElement();
-    if (!root) {
-      return;
-    }
     const onKeyDown = (event: KeyboardEvent) => {
       handleEditorKeyDown(event as unknown as React.KeyboardEvent<HTMLElement>);
     };
@@ -130,13 +149,31 @@ function BridgePlugin({
     const onClick = (event: MouseEvent) => {
       handleImageControlClick(event as unknown as React.MouseEvent<HTMLElement>);
     };
-    root.addEventListener("keydown", onKeyDown);
-    root.addEventListener("paste", onPaste);
-    root.addEventListener("click", onClick);
-    return () => {
+    const attach = (root: HTMLElement) => {
+      root.addEventListener("keydown", onKeyDown);
+      root.addEventListener("paste", onPaste);
+      root.addEventListener("click", onClick);
+    };
+    const detach = (root: HTMLElement) => {
       root.removeEventListener("keydown", onKeyDown);
       root.removeEventListener("paste", onPaste);
       root.removeEventListener("click", onClick);
+    };
+    let currentRoot: HTMLElement | null = null;
+    const removeRootListener = editor.registerRootListener((rootElement, prevRootElement) => {
+      if (prevRootElement) {
+        detach(prevRootElement);
+      }
+      currentRoot = rootElement;
+      if (rootElement) {
+        attach(rootElement);
+      }
+    });
+    return () => {
+      removeRootListener();
+      if (currentRoot) {
+        detach(currentRoot);
+      }
     };
   }, [editor, kbId]);
 

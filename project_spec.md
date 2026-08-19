@@ -540,6 +540,38 @@ manual redirect persistence, and the single-active-version DB invariant.
   cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
   binding the active surface makes toolbar commands fail because the selection is treated as outside
   the editor.
+- **Toolbar ownership is derived from DOM focus, never from mount or render order.**
+  `lexical/toolbar-bridge.ts` tracks every mounted surface and re-resolves the active editor on each
+  read (`syncActiveFromFocus`), because `focusin` alone is not enough: re-renders and DOM surgery
+  happen while focus never leaves the surface, so no event fires to re-claim the toolbar. The
+  surfaces' registration effects therefore depend on `editor` alone and keep every callback behind a
+  ref, attaching through `editor.registerRootListener`. When they depended on callback identity
+  instead, React's "destroy every effect, then create every effect" order meant each re-render
+  unregistered all surfaces and then re-registered them in tree order — so the *first* flow on the
+  page silently took the toolbar back on every keystroke. Bold/italic/underline then dispatched into
+  an editor the caret was not in: the click appeared to do nothing and the view jumped to the top.
+  Adding a surface? Track it through the bridge and keep its effect deps free of render-scoped
+  closures, or the same class of bug returns.
+- **`preserveFlowClientKeys` matches flows by identity, never by position.** Flow `clientKey`s are
+  React keys for the Lexical surfaces, and Lexical's HTML export drops `data-block-id`, so block ids
+  are re-minted on every emit — hence the inheritance passes (own key → shared block id → next
+  unclaimed previous flow). A purely positional pass handed the key of whatever *used to* sit at
+  index N to whatever sits there now, so moving a text box up re-labelled both boxes, React kept both
+  surfaces exactly where they were, and the reorder appeared not to happen at all. Because identity
+  is preserved, a wholesale document replacement (HTML→Visual, "Clean spacing") must go through
+  `replaceDocument`, which prefixes an epoch to force the remount — do not rely on the new keys
+  happening to differ from the old ones.
+- **The empty-image-box rule is shared with the readiness panel.** `countEmptyImageBoxes` /
+  `EMPTY_IMAGE_BOX_ISSUE` in `publish-gate.ts` are imported by `AdminPageEditorForm`, for the same
+  reason `hasHeadingOrderSkip` is: paste-slot boxes are publish-blocked, so a panel that omits them
+  reports "ready" and then 422s.
+- **The editor toolbar is sticky, so programmatic scrolling needs `scroll-margin`.**
+  `PageDocumentEditor` measures the toolbar with a `ResizeObserver` and publishes
+  `--editor-toolbar-height`; `globals.css` spends it as `scroll-margin-block-start` on block
+  editors, insert rows, surfaces, and figures. Without it, anything scrolled into view parks under
+  the toolbar and the toolbar intercepts the click meant for it. The height is measured rather than
+  hard-coded because the toolbar wraps to two or three rows at narrow widths (and goes `position:
+  static` below the mobile breakpoint).
 - **Nested list items may contain block children.** `itemHtml` can include nested `<ul>`/`<ol>` markup.
   Public rendering must not wrap that HTML in an inline-only element (`<span>`), or nested lists become
   invalid/misleading. Use the `list-item-rich-text` block wrapper path when nested lists are present.

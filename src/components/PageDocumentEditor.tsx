@@ -128,13 +128,14 @@ export function PageDocumentEditor({
   const [formatHint, setFormatHint] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"visual" | "html">("visual");
   const [htmlDraft, setHtmlDraft] = useState("");
-  const [visualEpoch, setVisualEpoch] = useState(0);
   const [excerptPickerOpen, setExcerptPickerOpen] = useState(false);
   const [activeSectionIndex, setActiveSectionIndex] = useState<number | null>(null);
   const [mediaInsertIndex, setMediaInsertIndex] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const stickyToolbarRef = useRef<HTMLDivElement>(null);
   const sectionsRef = useRef(sections);
   const onChangeRef = useRef(onChange);
+  const documentEpochRef = useRef(0);
 
   useEffect(() => {
     sectionsRef.current = sections;
@@ -143,6 +144,10 @@ export function PageDocumentEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  const activateSection = useCallback((index: number) => {
+    setActiveSectionIndex(index);
+  }, []);
 
   const setEditorSections = useCallback((nextSections: EditorSection[]) => {
     sectionsRef.current = nextSections;
@@ -197,6 +202,29 @@ export function PageDocumentEditor({
     onChangeRef.current(sectionsToBlocks(next));
   }, [setEditorSections]);
 
+  /**
+   * Replace the whole document, forcing every flow surface to remount.
+   *
+   * `emitChange` deliberately keeps flow identities stable so Lexical is not torn
+   * down on every keystroke — which also means it would happily keep a mounted
+   * surface showing its old content after the source view rewrote the document.
+   * The epoch prefix makes the remount explicit instead of depending on whether
+   * the new keys happen to collide with the old ones.
+   */
+  const replaceDocument = useCallback((nextBlocks: ContentBlock[]) => {
+    documentEpochRef.current += 1;
+    const epoch = documentEpochRef.current;
+    const next = blocksToSections(nextBlocks).map((section) =>
+      section.type === "flow"
+        ? { ...section, clientKey: `doc${epoch}:${section.clientKey ?? "flow"}` }
+        : section,
+    );
+    setEditorSections(
+      next.length > 0 ? next : [{ type: "flow", blocks: [], clientKey: `doc${epoch}:empty-root` }],
+    );
+    onChangeRef.current(sectionsToBlocks(next));
+  }, [setEditorSections]);
+
   function switchToHtml() {
     if (viewMode === "html") return;
     setHtmlDraft(blocksToSourceHtml(sectionsToBlocks(sections), kbSlug));
@@ -205,9 +233,7 @@ export function PageDocumentEditor({
 
   function switchToVisual() {
     if (viewMode === "visual") return;
-    const nextBlocks = documentHtmlToBlocks(htmlDraft);
-    emitChange(blocksToSections(nextBlocks));
-    setVisualEpoch((value) => value + 1);
+    replaceDocument(documentHtmlToBlocks(htmlDraft));
     setViewMode("visual");
   }
 
@@ -215,6 +241,26 @@ export function PageDocumentEditor({
     setHtmlDraft(value);
     onChangeRef.current(documentHtmlToBlocks(value));
   }
+
+  // The toolbar is sticky, so anything scrolled to the top of the viewport lands
+  // underneath it and the toolbar swallows the click. Publishing its measured
+  // height lets `scroll-margin` park content clear of it — the toolbar wraps to
+  // two or three rows at narrow widths, so a fixed offset would be wrong.
+  useEffect(() => {
+    const toolbar = stickyToolbarRef.current;
+    const root = rootRef.current;
+    if (!toolbar || !root || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const apply = () => {
+      const height = Math.round(toolbar.getBoundingClientRect().height);
+      root.style.setProperty("--editor-toolbar-height", `${height}px`);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     registerFormatIssueReporter(setFormatHint);
@@ -504,7 +550,6 @@ export function PageDocumentEditor({
       },
     } as EditorSection;
     withViewportPreserved(() => {
-      setVisualEpoch((value) => value + 1);
       emitChange(next);
     });
   }
@@ -610,7 +655,6 @@ export function PageDocumentEditor({
     if (!moved) return;
     markEditorAction();
     withViewportPreserved(() => {
-      setVisualEpoch((value) => value + 1);
       emitChange(moved);
     });
   }
@@ -619,7 +663,6 @@ export function PageDocumentEditor({
     markEditorAction();
     const next = sectionsRef.current.filter((_, i) => i !== index);
     withViewportPreserved(() => {
-      setVisualEpoch((value) => value + 1);
       emitChange(next);
     });
   }
@@ -654,9 +697,6 @@ export function PageDocumentEditor({
             ? existing.clientKey
             : nextReplacement[0].clientKey ?? `flow:${flowBlocks.map((block) => block.blockId).join(":")}`,
       };
-    }
-    if (nextReplacement.length !== 1 || nextReplacement[0]?.type !== "flow") {
-      setVisualEpoch((value) => value + 1);
     }
     next.splice(index, 1, ...nextReplacement);
     emitChange(next);
@@ -876,13 +916,12 @@ export function PageDocumentEditor({
       onChangeRef.current(cleaned);
       return;
     }
-    setVisualEpoch((value) => value + 1);
-    emitChange(blocksToSections(cleaned));
+    replaceDocument(cleaned);
   }
 
   return (
     <div className="page-document-editor" ref={rootRef}>
-      <div className="editor-toolbar-sticky">
+      <div className="editor-toolbar-sticky" ref={stickyToolbarRef}>
         <div className="seg editor-mode-toggle" role="group" aria-label="Editor mode">
           <button
             aria-pressed={viewMode === "visual"}
@@ -1050,7 +1089,7 @@ export function PageDocumentEditor({
                   isLast={moveTargetIndex(sections, index, 1) < 0}
                   kbId={kbId}
                   kbSlug={kbSlug}
-                  onActivate={() => setActiveSectionIndex(index)}
+                  onActivate={activateSection}
                   onImageBlocks={(blocks) => handleSectionImageBlocks(section, index, blocks)}
                   onImageFiles={(files, source) => handleSectionImageFiles(section, index, files, source)}
                   onMove={moveSection}
@@ -1469,7 +1508,7 @@ function SectionEditor({
   kbSlug: string;
   onMove: (index: number, direction: -1 | 1) => void;
   onRemove: () => void;
-  onActivate: () => void;
+  onActivate: (index: number) => void;
   onImageFiles: (files: File[], source: "paste" | "drop") => void;
   onImageBlocks: (blocks: ImageBlock[], source?: "paste" | "drop") => void;
   onUpdateFlow: (html: string, isBlur: boolean) => void;
@@ -1481,8 +1520,10 @@ function SectionEditor({
   onUpdateExcerpt: (block: ContentBlock) => void;
   onUpdateSourced: (block: ContentBlock) => void;
 }) {
+  const handleActivate = useCallback(() => onActivate(index), [index, onActivate]);
+
   return (
-    <article className="block-editor" data-section-index={index} onFocusCapture={onActivate}>
+    <article className="block-editor" data-section-index={index} onFocusCapture={handleActivate}>
       <div className="block-bar">
         <span className="block-bar__label">{section.type.replace("_", " ")}</span>
         <span className="block-bar__spacer" />
@@ -1520,7 +1561,7 @@ function SectionEditor({
         <LexicalFlowSurface
           initialHtml={blocksToDocumentHtml(section.blocks, kbSlug)}
           kbId={kbId}
-          onFocus={onActivate}
+          onFocus={handleActivate}
           onHtmlChange={onUpdateFlow}
           onImageBlocks={onImageBlocks}
           onImageFiles={onImageFiles}
@@ -1625,7 +1666,7 @@ function SectionEditor({
             <LexicalFlowSurface
               initialHtml={blocksToDocumentHtml(section.block.blocks, kbSlug)}
               kbId={kbId}
-              onFocus={onActivate}
+              onFocus={handleActivate}
               onHtmlChange={(html) => {
                 const clean = sanitizePageDocument(html);
                 onUpdateProcedureSection({ ...section.block, blocks: documentHtmlToBlocks(clean) });
@@ -1687,7 +1728,7 @@ function SectionEditor({
             <LexicalFlowSurface
               initialHtml={blocksToDocumentHtml(section.block.blocks, kbSlug)}
               kbId={kbId}
-              onFocus={onActivate}
+              onFocus={handleActivate}
               onHtmlChange={(html) => {
                 const clean = sanitizePageDocument(html);
                 onUpdateCard({ ...section.block, blocks: documentHtmlToBlocks(clean) });
