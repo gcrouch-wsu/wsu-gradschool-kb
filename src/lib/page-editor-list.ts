@@ -205,10 +205,6 @@ export function normalizeEditorSections(sections: EditorSection[]): EditorSectio
   return stampFlowClientKeys(mergeAdjacentFlowSections(normalized));
 }
 
-function contentFlowClientKey(blocks: ContentBlock[]): string {
-  return `flow:${blocks.map((block) => block.blockId).join(":")}`;
-}
-
 function gapFlowClientKey(sections: EditorSection[], index: number): string {
   let left = "start";
   for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
@@ -237,20 +233,91 @@ function gapFlowClientKey(sections: EditorSection[], index: number): string {
   return `gap:${left}:${right}`;
 }
 
-/** Stable keys so inserts/moves do not remount unrelated flow editors. */
+/** Assign clientKeys only when missing — never rewrite keys from parsed block IDs. */
 export function stampFlowClientKeys(sections: EditorSection[]): EditorSection[] {
   return sections.map((section, index) => {
     if (section.type !== "flow") {
       return section;
     }
-    if (section.blocks.length > 0) {
-      return { ...section, clientKey: contentFlowClientKey(section.blocks) };
-    }
-    if (section.clientKey?.startsWith("flow-")) {
-      // Preserve explicitly inserted empty text slots until they gain content.
+    if (section.clientKey) {
       return section;
     }
-    return { ...section, clientKey: gapFlowClientKey(sections, index) };
+    if (section.blocks.length > 0) {
+      return { ...section, clientKey: `flow-${crypto.randomUUID()}` };
+    }
+    return { ...section, clientKey: `${gapFlowClientKey(sections, index)}:${index}` };
+  });
+}
+
+/**
+ * Keep flow identities stable across emit/normalize cycles so Lexical surfaces
+ * are not remounted (and crashed) when paragraph block IDs are re-minted.
+ */
+export function preserveFlowClientKeys(
+  previous: EditorSection[],
+  next: EditorSection[],
+): EditorSection[] {
+  if (
+    previous.length === next.length &&
+    previous.every((section, index) => section.type === next[index]?.type)
+  ) {
+    return next.map((section, index) => {
+      if (section.type !== "flow") {
+        return section;
+      }
+      const prior = previous[index];
+      if (prior?.type === "flow" && prior.clientKey) {
+        return { ...section, clientKey: prior.clientKey };
+      }
+      return section.clientKey ? section : { ...section, clientKey: `flow-${crypto.randomUUID()}` };
+    });
+  }
+
+  const used = new Set<string>();
+  const prevFlows = previous.filter(
+    (section): section is Extract<EditorSection, { type: "flow" }> => section.type === "flow",
+  );
+  let prevFlowCursor = 0;
+
+  return next.map((section, index) => {
+    if (section.type !== "flow") {
+      return section;
+    }
+    if (section.clientKey && !used.has(section.clientKey)) {
+      used.add(section.clientKey);
+      return section;
+    }
+    const nextIds = new Set(section.blocks.map((block) => block.blockId));
+    const overlapIndex = prevFlows.findIndex((candidate) => {
+      if (!candidate.clientKey || used.has(candidate.clientKey)) {
+        return false;
+      }
+      if (section.blocks.length === 0 || candidate.blocks.length === 0) {
+        return false;
+      }
+      return candidate.blocks.some((block) => nextIds.has(block.blockId));
+    });
+    if (overlapIndex >= 0) {
+      const overlap = prevFlows[overlapIndex];
+      if (overlap?.clientKey) {
+        used.add(overlap.clientKey);
+        return { ...section, clientKey: overlap.clientKey };
+      }
+    }
+    while (prevFlowCursor < prevFlows.length) {
+      const prior = prevFlows[prevFlowCursor];
+      prevFlowCursor += 1;
+      if (prior?.clientKey && !used.has(prior.clientKey)) {
+        used.add(prior.clientKey);
+        return { ...section, clientKey: prior.clientKey };
+      }
+    }
+    const key =
+      section.blocks.length > 0
+        ? `flow-${crypto.randomUUID()}`
+        : `${gapFlowClientKey(next, index)}:${index}`;
+    used.add(key);
+    return { ...section, clientKey: key };
   });
 }
 

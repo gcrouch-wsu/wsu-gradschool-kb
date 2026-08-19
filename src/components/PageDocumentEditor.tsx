@@ -18,6 +18,7 @@ import { LexicalFlowSurface } from "@/components/LexicalFlowSurface";
 import {
   blocksToSections,
   normalizeEditorSections,
+  preserveFlowClientKeys,
   sectionsToBlocks,
   stampFlowClientKeys,
   type EditorSection,
@@ -118,8 +119,10 @@ export function PageDocumentEditor({
   // Always present at least one editable flow surface — otherwise an empty
   // document (e.g. fresh Home Page Rich Content) renders just the toolbar with
   // nowhere to type.
-  const [sections, setSections] = useState<EditorSection[]>(
-    initialSections.length > 0 ? initialSections : [{ type: "flow", blocks: [] }],
+  const [sections, setSections] = useState<EditorSection[]>(() =>
+    stampFlowClientKeys(
+      initialSections.length > 0 ? initialSections : [{ type: "flow", blocks: [], clientKey: `flow-${crypto.randomUUID()}` }],
+    ),
   );
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaPickerSelection, setMediaPickerSelection] = useState({
@@ -154,11 +157,15 @@ export function PageDocumentEditor({
   }, []);
 
   const emitChange = useCallback((nextSections: EditorSection[]) => {
+    const previous = sectionsRef.current;
     const normalizedBlocks = cleanDocumentLayout(
       dedupeContentBlockIds(sectionsToBlocks(normalizeEditorSections(nextSections))),
     );
-    const normalizedSections = blocksToSections(normalizedBlocks);
-    setEditorSections(normalizedSections.length > 0 ? normalizedSections : [{ type: "flow", blocks: [] }]);
+    const normalizedSections = preserveFlowClientKeys(
+      previous,
+      blocksToSections(normalizedBlocks),
+    );
+    setEditorSections(normalizedSections.length > 0 ? normalizedSections : [{ type: "flow", blocks: [], clientKey: `flow-${crypto.randomUUID()}` }]);
     onChangeRef.current(normalizedBlocks);
   }, [setEditorSections]);
 
@@ -590,19 +597,31 @@ export function PageDocumentEditor({
     const clean = sanitizePageDocument(html);
     const flowBlocks = flowBlocksFromEditorHtml(clean);
     const next = [...sectionsRef.current];
+    const existing = next[index];
     if (flowBlocks.length === 0) {
-      const existing = next[index];
+      if (existing?.type === "flow" && existing.blocks.length === 0) {
+        return;
+      }
       next[index] = {
         type: "flow",
         blocks: [],
-        clientKey: existing?.type === "flow" ? existing.clientKey : undefined,
+        clientKey: existing?.type === "flow" ? existing.clientKey : `flow-${crypto.randomUUID()}`,
       };
       setEditorSections(next);
       onChangeRef.current(cleanDocumentLayout(dedupeContentBlockIds(sectionsToBlocks(normalizeEditorSections(next)))));
       return;
     }
     const replacement = blocksToSections(flowBlocks);
-    const nextReplacement = replacement.length > 0 ? replacement : [{ type: "flow" as const, blocks: [] }];
+    const nextReplacement = replacement.length > 0 ? replacement : [{ type: "flow" as const, blocks: [] as ContentBlock[] }];
+    if (nextReplacement.length === 1 && nextReplacement[0]?.type === "flow") {
+      nextReplacement[0] = {
+        ...nextReplacement[0],
+        clientKey:
+          existing?.type === "flow" && existing.clientKey
+            ? existing.clientKey
+            : nextReplacement[0].clientKey ?? `flow-${crypto.randomUUID()}`,
+      };
+    }
     if (nextReplacement.length !== 1 || nextReplacement[0]?.type !== "flow") {
       setVisualEpoch((value) => value + 1);
     }
