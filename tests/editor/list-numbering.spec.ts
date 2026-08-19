@@ -54,9 +54,10 @@ test.describe("list numbering and nesting display", () => {
     await expect(secondList).not.toHaveAttribute("start", /.+/);
     await secondList.locator("li").first().click();
 
-    await page.getByRole("button", { name: "Numbered list settings" }).click();
-    const continueButton = page.getByRole("button", { name: /Continue from previous list/ });
-    await expect(continueButton).toContainText("start at 4");
+    // Visible in the toolbar itself: no popover to discover first.
+    const continueButton = page.getByRole("button", { name: /Continue numbering from the previous list/ });
+    await expect(continueButton).toBeVisible();
+    await expect(continueButton).toHaveText("Continue 4");
     await continueButton.click();
 
     await expect(secondList).toHaveAttribute("start", "4");
@@ -72,8 +73,7 @@ test.describe("list numbering and nesting display", () => {
     await setDocumentHtml(page, '<ol data-block-id="only-1"><li>Only one</li><li>Only two</li></ol>');
 
     await page.locator(".wysiwyg-surface ol li").first().click();
-    await page.getByRole("button", { name: "Numbered list settings" }).click();
-    await expect(page.getByRole("button", { name: /Continue from previous list/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Continue numbering/ })).toHaveCount(0);
   });
 
   // The "Starts at" box wrote the attribute straight onto the <ol>. Lexical renders that

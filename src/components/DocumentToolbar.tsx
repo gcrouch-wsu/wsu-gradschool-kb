@@ -177,20 +177,6 @@ export function DocumentToolbar({
                   type="number"
                 />
               </label>
-              {formatting.continueOrderedListStart !== null && (
-                <button
-                  className="button button--small button--ghost toolbar-popover__action"
-                  onMouseDown={(event) => toolbarPrepare(event)}
-                  onClick={() => {
-                    continueOrderedListNumbering();
-                    setListSettingsOpen(false);
-                  }}
-                  title="Renumber this list so it continues the previous numbered list, even across an image or another block"
-                  type="button"
-                >
-                  Continue from previous list (start at {formatting.continueOrderedListStart})
-                </button>
-              )}
               {formatting.inList && (
                 <p className="toolbar-popover__note">
                   Tab indents item 2 or later. Shift+Tab moves nested items back out.
@@ -199,6 +185,22 @@ export function DocumentToolbar({
             </div>
           )}
         </span>
+      )}
+      {/* Sits in the toolbar rather than inside the "#" popover: continuing a procedure
+          past a screenshot is a routine step here, and buried three clicks deep behind an
+          unlabelled glyph it may as well not exist. Only rendered when there is actually
+          an earlier list to continue, so it never adds noise. */}
+      {formatting.continueOrderedListStart !== null && (
+        <button
+          aria-label={`Continue numbering from the previous list, starting at ${formatting.continueOrderedListStart}`}
+          className={`${buttonClass} rich-text-toolbar__button--accent`}
+          onMouseDown={(event) => toolbarPrepare(event)}
+          onClick={() => continueOrderedListNumbering()}
+          title={`Renumber this list to continue the previous numbered list (start at ${formatting.continueOrderedListStart}), even across an image or other block`}
+          type="button"
+        >
+          Continue {formatting.continueOrderedListStart}
+        </button>
       )}
       <button
         disabled={indentDisabled}

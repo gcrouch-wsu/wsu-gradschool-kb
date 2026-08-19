@@ -3194,6 +3194,19 @@ html.admin-app .status-modal--error .status-modal__button:focus-visible {
   padding: 0.35rem 0.5rem;
 }
 
+/* Appears only when the caret is in a list that can continue an earlier one, so it
+   should read as an offer rather than another permanent glyph in the row. */
+.rich-text-toolbar__button--accent {
+  background: var(--info-wash, var(--wash));
+  border-color: var(--info, var(--line-strong));
+  color: var(--ink);
+}
+
+.rich-text-toolbar__button--accent:hover {
+  background: var(--info, var(--wash));
+  color: var(--paper);
+}
+
 .rich-text-toolbar__field {
   align-items: center;
   display: inline-flex;
