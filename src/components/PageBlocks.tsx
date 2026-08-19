@@ -5,6 +5,7 @@ import { excerptAttributionLabel, resolveExcerptForRead } from "@/lib/excerpts";
 import { formatDate } from "@/lib/format";
 import { getAssetById, getKbById } from "@/lib/kb-store";
 import { formatBytes } from "@/lib/format";
+import { buildManagedImageSrcSet } from "@/lib/image-srcset";
 import { isBlankParagraphBlock } from "@/lib/page-document-quality";
 import { sanitizeCalloutHtml, sanitizeListItemHtml, sanitizeRichText, textToRichText } from "@/lib/rich-text";
 import type { ContentBlock } from "@/lib/types";
@@ -246,7 +247,6 @@ async function ImageBlock({ block }: { block: Extract<ContentBlock, { type: "ima
   }
 
   const widthPercent = Math.min(100, Math.max(25, block.widthPercent ?? 100));
-  const { buildManagedImageSrcSet } = await import("@/lib/image-variants");
   const srcSet = src.startsWith("/kb/") ? buildManagedImageSrcSet(src) : undefined;
 
   const horizontalMargin =

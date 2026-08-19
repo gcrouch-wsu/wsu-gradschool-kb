@@ -233,7 +233,7 @@ function gapFlowClientKey(sections: EditorSection[], index: number): string {
   return `gap:${left}:${right}`;
 }
 
-/** Assign clientKeys only when missing — never rewrite keys from parsed block IDs. */
+/** Assign clientKeys only when missing — deterministic for SSR/hydration safety. */
 export function stampFlowClientKeys(sections: EditorSection[]): EditorSection[] {
   return sections.map((section, index) => {
     if (section.type !== "flow") {
@@ -243,7 +243,10 @@ export function stampFlowClientKeys(sections: EditorSection[]): EditorSection[] 
       return section;
     }
     if (section.blocks.length > 0) {
-      return { ...section, clientKey: `flow-${crypto.randomUUID()}` };
+      return {
+        ...section,
+        clientKey: `flow:${section.blocks.map((block) => block.blockId).join(":")}`,
+      };
     }
     return { ...section, clientKey: `${gapFlowClientKey(sections, index)}:${index}` };
   });
@@ -269,7 +272,15 @@ export function preserveFlowClientKeys(
       if (prior?.type === "flow" && prior.clientKey) {
         return { ...section, clientKey: prior.clientKey };
       }
-      return section.clientKey ? section : { ...section, clientKey: `flow-${crypto.randomUUID()}` };
+      return section.clientKey
+        ? section
+        : {
+            ...section,
+            clientKey:
+              section.blocks.length > 0
+                ? `flow:${section.blocks.map((block) => block.blockId).join(":")}`
+                : `${gapFlowClientKey(next, index)}:${index}`,
+          };
     });
   }
 
@@ -314,7 +325,7 @@ export function preserveFlowClientKeys(
     }
     const key =
       section.blocks.length > 0
-        ? `flow-${crypto.randomUUID()}`
+        ? `flow:${section.blocks.map((block) => block.blockId).join(":")}`
         : `${gapFlowClientKey(next, index)}:${index}`;
     used.add(key);
     return { ...section, clientKey: key };

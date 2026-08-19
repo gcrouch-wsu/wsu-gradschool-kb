@@ -1,4 +1,4 @@
-import sharp from "sharp";
+export { buildManagedImageSrcSet, IMAGE_SRCSET_WIDTHS } from "@/lib/image-srcset";
 
 const ALLOWED_WIDTHS = new Set([320, 640, 960, 1280, 1600]);
 
@@ -37,6 +37,8 @@ export async function resizeImageBuffer(
     return null;
   }
   try {
+    // Load sharp only in the file delivery route — never from public page SSR.
+    const sharp = (await import("sharp")).default;
     const body = await sharp(input, { failOn: "none" })
       .rotate()
       .resize({ width, withoutEnlargement: true })
@@ -46,14 +48,4 @@ export async function resizeImageBuffer(
   } catch {
     return null;
   }
-}
-
-export const IMAGE_SRCSET_WIDTHS = [640, 1280] as const;
-
-export function buildManagedImageSrcSet(baseSrc: string): string {
-  return IMAGE_SRCSET_WIDTHS.map((width) => {
-    const url = new URL(baseSrc, "https://kb.local");
-    url.searchParams.set("w", String(width));
-    return `${url.pathname}${url.search} ${width}w`;
-  }).join(", ");
 }

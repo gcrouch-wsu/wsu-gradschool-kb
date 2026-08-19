@@ -121,7 +121,9 @@ export function PageDocumentEditor({
   // nowhere to type.
   const [sections, setSections] = useState<EditorSection[]>(() =>
     stampFlowClientKeys(
-      initialSections.length > 0 ? initialSections : [{ type: "flow", blocks: [], clientKey: `flow-${crypto.randomUUID()}` }],
+      initialSections.length > 0
+        ? initialSections
+        : [{ type: "flow", blocks: [], clientKey: "flow-empty-root" }],
     ),
   );
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
@@ -165,7 +167,11 @@ export function PageDocumentEditor({
       previous,
       blocksToSections(normalizedBlocks),
     );
-    setEditorSections(normalizedSections.length > 0 ? normalizedSections : [{ type: "flow", blocks: [], clientKey: `flow-${crypto.randomUUID()}` }]);
+    setEditorSections(
+      normalizedSections.length > 0
+        ? normalizedSections
+        : [{ type: "flow", blocks: [], clientKey: "flow-empty-root" }],
+    );
     onChangeRef.current(normalizedBlocks);
   }, [setEditorSections]);
 
@@ -605,7 +611,10 @@ export function PageDocumentEditor({
       next[index] = {
         type: "flow",
         blocks: [],
-        clientKey: existing?.type === "flow" ? existing.clientKey : `flow-${crypto.randomUUID()}`,
+        clientKey:
+          existing?.type === "flow" && existing.clientKey
+            ? existing.clientKey
+            : `gap-empty:${index}`,
       };
       setEditorSections(next);
       onChangeRef.current(cleanDocumentLayout(dedupeContentBlockIds(sectionsToBlocks(normalizeEditorSections(next)))));
@@ -619,7 +628,7 @@ export function PageDocumentEditor({
         clientKey:
           existing?.type === "flow" && existing.clientKey
             ? existing.clientKey
-            : nextReplacement[0].clientKey ?? `flow-${crypto.randomUUID()}`,
+            : nextReplacement[0].clientKey ?? `flow:${flowBlocks.map((block) => block.blockId).join(":")}`,
       };
     }
     if (nextReplacement.length !== 1 || nextReplacement[0]?.type !== "flow") {

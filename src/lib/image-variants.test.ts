@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildManagedImageSrcSet, parseImageWidthParam } from "@/lib/image-variants";
+import { buildManagedImageSrcSet } from "@/lib/image-srcset";
+import { parseImageWidthParam } from "@/lib/image-variants";
 
 describe("image-variants", () => {
   it("accepts only allow-listed widths", () => {

@@ -6,7 +6,9 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  serverExternalPackages: ["word-extractor", "mammoth"],
+  // sharp must stay external so its native bindings resolve on Vercel; do not
+  // pull it into SSR page bundles (see image-variants dynamic import).
+  serverExternalPackages: ["word-extractor", "mammoth", "sharp"],
   // Playwright drives the dev server via 127.0.0.1 while `next dev` reports its
   // origin as localhost, which trips Next 16's cross-origin dev-request warning.
   // Allow just that one loopback host (not a broad wildcard) to silence it.
@@ -18,8 +20,8 @@ const nextConfig: NextConfig = {
     // Browsers probe these by default; map them to the App Router icon so deploys
     // don't log harmless 404s for missing static favicon files.
     return [
-      { source: "/favicon.ico", destination: "/icon" },
-      { source: "/favicon.png", destination: "/icon" },
+      { source: "/favicon.ico", destination: "/icon.svg" },
+      { source: "/favicon.png", destination: "/icon.svg" },
     ];
   },
   async headers() {
