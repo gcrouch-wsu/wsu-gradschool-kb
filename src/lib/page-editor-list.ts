@@ -39,7 +39,38 @@ export function orderedListStartFromSelection(surface: HTMLElement): number | nu
 
 function orderedListEnd(list: HTMLOListElement): number {
   const start = Number(list.getAttribute("start")) || 1;
-  return start + Math.max(0, list.querySelectorAll(":scope > li").length - 1);
+  // `doc-li--nested` is Lexical's structural wrapper around a sub-list. It carries no
+  // number of its own, so counting it would overshoot the next list's start.
+  const numbered = list.querySelectorAll(":scope > li:not(.doc-li--nested)").length;
+  return start + Math.max(0, numbered - 1);
+}
+
+/**
+ * End number of the nearest top-level ordered list before `list` anywhere in `scope`.
+ *
+ * `suggestedOrderedListStart` only walks previous *siblings*, so it cannot see past an
+ * image: images are their own editor section with their own Lexical surface, which is a
+ * different DOM root entirely. Procedures that interleave steps and screenshots — the
+ * common shape here — therefore always restarted at 1.
+ */
+export function precedingOrderedListEnd(list: HTMLOListElement, scope: HTMLElement): number | null {
+  const lists = Array.from(scope.querySelectorAll("ol"));
+  const index = lists.indexOf(list);
+  if (index <= 0) {
+    return null;
+  }
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const candidate = lists[cursor];
+    if (!candidate || candidate.contains(list) || list.contains(candidate)) {
+      continue;
+    }
+    // Sub-lists number a./i., so continuing from one would be meaningless.
+    if (candidate.closest("li")) {
+      continue;
+    }
+    return orderedListEnd(candidate);
+  }
+  return null;
 }
 
 export function suggestedOrderedListStart(list: HTMLOListElement): number | null {

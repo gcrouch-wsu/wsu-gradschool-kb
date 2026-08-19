@@ -21,7 +21,9 @@ import {
   INSERT_UNORDERED_LIST_COMMAND,
   REMOVE_LIST_COMMAND,
   INSERT_CHECK_LIST_COMMAND,
+  ListNode,
 } from "@lexical/list";
+import { $getNearestNodeOfType } from "@lexical/utils";
 import { $generateNodesFromDOM } from "@lexical/html";
 import { TOGGLE_LINK_COMMAND } from "@lexical/link";
 import {
@@ -226,6 +228,40 @@ export function lexicalApplyBlockTag(tag: "p" | "h2" | "h3"): boolean {
 
 export function lexicalApplyList(command: "insertUnorderedList" | "insertOrderedList"): boolean {
   return lexicalRunFormatCommand(command);
+}
+
+/**
+ * Set an ordered list's first number through Lexical's model.
+ *
+ * Writing `start` onto the `<ol>` element does not work on a Lexical surface: the DOM is
+ * rendered from the editor state and saving serializes that state, so the attribute was
+ * visible until the next reconcile and never reached the saved page. That is why
+ * "Starts at" appeared to do nothing once you saved.
+ */
+export function lexicalSetOrderedListStart(start: number): boolean {
+  const editor = getActiveLexicalEditor();
+  if (!editor || !Number.isFinite(start) || start < 1) {
+    return false;
+  }
+  const value = Math.max(1, Math.floor(start));
+  let applied = false;
+  editor.update(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) {
+      return;
+    }
+    const list = $getNearestNodeOfType(selection.anchor.getNode(), ListNode);
+    if (!list || list.getListType() !== "number") {
+      return;
+    }
+    list.setStart(value);
+    applied = true;
+  });
+  if (!applied) {
+    return false;
+  }
+  notifyLexicalMutation();
+  return true;
 }
 
 export function lexicalIndent(): boolean {

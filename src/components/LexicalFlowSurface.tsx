@@ -14,7 +14,16 @@ import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { ListItemNode, ListNode } from "@lexical/list";
 import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from "@lexical/html";
-import { $createParagraphNode, $getRoot, type EditorState, type LexicalEditor, type LexicalNode } from "lexical";
+import {
+  $createParagraphNode,
+  $getRoot,
+  COMMAND_PRIORITY_CRITICAL,
+  DROP_COMMAND,
+  PASTE_COMMAND,
+  type EditorState,
+  type LexicalEditor,
+  type LexicalNode,
+} from "lexical";
 import { $isPreservedBlockNode, PreservedBlockNode } from "@/lib/lexical/preserved-block-node";
 import {
   $createEditorBoundaryParagraphNode,
@@ -47,7 +56,12 @@ function theme() {
       ul: "doc-ul",
       ol: "doc-ol",
       listitem: "doc-li",
-      nested: { listitem: "doc-li" },
+      // Additive, not a replacement: Lexical adds this class to the structural <li>
+      // that only wraps a nested list. It must hide its own marker, or the editor
+      // paints an empty numbered/bulleted item before every indented group — which
+      // the public renderer never shows, because it nests sub-lists inside the parent
+      // item's content instead of using a wrapper.
+      nested: { listitem: "doc-li--nested" },
     },
     link: "doc-a",
     text: { bold: "doc-strong", italic: "doc-em", underline: "doc-u" },
@@ -195,12 +209,6 @@ function BridgePlugin({
       const onBlocks = onImageBlocksRef.current;
       return onFiles || onBlocks ? { onImageFiles: onFiles, onImageBlocks: onBlocks } : undefined;
     };
-    const onPaste = (event: ClipboardEvent) => {
-      handleEditorPaste(event as unknown as React.ClipboardEvent<HTMLElement>, kbId, pasteOptions());
-    };
-    const onDrop = (event: DragEvent) => {
-      handleEditorDrop(event as unknown as React.DragEvent<HTMLElement>, kbId, pasteOptions());
-    };
     const onClick = (event: MouseEvent) => {
       handleImageControlClick(event as unknown as React.MouseEvent<HTMLElement>);
     };
@@ -211,15 +219,11 @@ function BridgePlugin({
     };
     const attach = (root: HTMLElement) => {
       root.addEventListener("keydown", onKeyDown);
-      root.addEventListener("paste", onPaste);
-      root.addEventListener("drop", onDrop);
       root.addEventListener("click", onClick);
       root.addEventListener("dragover", onDragOver);
     };
     const detach = (root: HTMLElement) => {
       root.removeEventListener("keydown", onKeyDown);
-      root.removeEventListener("paste", onPaste);
-      root.removeEventListener("drop", onDrop);
       root.removeEventListener("click", onClick);
       root.removeEventListener("dragover", onDragOver);
     };
@@ -233,8 +237,29 @@ function BridgePlugin({
         attach(rootElement);
       }
     });
+    // Paste and drop go through Lexical's commands, NOT a DOM listener on the root.
+    // Lexical attaches its own paste listener to that same element and reads the
+    // clipboard itself; `preventDefault()` does not stop a sibling listener, so a DOM
+    // handler here meant rich paste was inserted twice — once by us and once by
+    // Lexical. Claiming the command at CRITICAL priority and returning true is what
+    // suppresses Lexical's default. Returning false (plain text, no images) lets
+    // Lexical handle it normally.
+    const removePaste = editor.registerCommand(
+      PASTE_COMMAND,
+      (event: ClipboardEvent) =>
+        handleEditorPaste(event as unknown as React.ClipboardEvent<HTMLElement>, kbId, pasteOptions()),
+      COMMAND_PRIORITY_CRITICAL,
+    );
+    const removeDrop = editor.registerCommand(
+      DROP_COMMAND,
+      (event: DragEvent) =>
+        handleEditorDrop(event as unknown as React.DragEvent<HTMLElement>, kbId, pasteOptions()),
+      COMMAND_PRIORITY_CRITICAL,
+    );
     return () => {
       removeRootListener();
+      removePaste();
+      removeDrop();
       if (currentRoot) {
         detach(currentRoot);
       }

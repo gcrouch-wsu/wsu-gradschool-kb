@@ -3787,6 +3787,18 @@ article li > ol {
   margin-top: 0.5rem;
 }
 
+/* Lexical wraps a nested list in a structural <li> of its own. It carries no text and
+   must not paint a marker, or the editor shows an empty "2." before every indented
+   group and the numbering disagrees with the published page. */
+.wysiwyg-surface li.doc-li--nested {
+  list-style: none;
+  margin-top: 0;
+}
+
+.wysiwyg-surface li.doc-li--nested::marker {
+  content: "";
+}
+
 .wysiwyg-surface .doc-alert {
   border-left: 4px solid var(--info);
   background: var(--info-wash);
@@ -4454,6 +4466,13 @@ article ul ul ul {
   font-size: 0.82rem;
   line-height: 1.35;
   margin: 0.55rem 0 0;
+}
+
+.toolbar-popover__action {
+  margin-top: 0.55rem;
+  text-align: left;
+  white-space: normal;
+  width: 100%;
 }
 
 .symbol-palette {

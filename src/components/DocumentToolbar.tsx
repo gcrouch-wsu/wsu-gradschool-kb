@@ -10,6 +10,7 @@ import {
   applyList,
   applyOrderedListStart,
   applyOutdent,
+  continueOrderedListNumbering,
   copyHeadingAnchor,
   EMPTY_EDITOR_FORMATTING,
   performEditorRedo,
@@ -63,6 +64,14 @@ export function DocumentToolbar({
 
   useEffect(() => {
     const updateFormatting = () => {
+      // Typing in the "Starts at" box moves the document selection into that input, so the
+      // caret is no longer in a list and this recompute reported "not in an ordered list"
+      // — which closed the popover out from under the user mid-edit. While focus is inside
+      // the popover the only selection changes are its own, so ignore them; clicking away
+      // still closes it via the outside-mousedown listener below.
+      if (listSettingsRef.current?.contains(document.activeElement)) {
+        return;
+      }
       const nextFormatting = queryEditorFormatting();
       setFormatting(nextFormatting);
       if (nextFormatting.orderedListStart === null) {
@@ -168,6 +177,20 @@ export function DocumentToolbar({
                   type="number"
                 />
               </label>
+              {formatting.continueOrderedListStart !== null && (
+                <button
+                  className="button button--small button--ghost toolbar-popover__action"
+                  onMouseDown={(event) => toolbarPrepare(event)}
+                  onClick={() => {
+                    continueOrderedListNumbering();
+                    setListSettingsOpen(false);
+                  }}
+                  title="Renumber this list so it continues the previous numbered list, even across an image or another block"
+                  type="button"
+                >
+                  Continue from previous list (start at {formatting.continueOrderedListStart})
+                </button>
+              )}
               {formatting.inList && (
                 <p className="toolbar-popover__note">
                   Tab indents item 2 or later. Shift+Tab moves nested items back out.

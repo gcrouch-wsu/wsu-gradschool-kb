@@ -11,7 +11,14 @@ import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from "@lexical/html";
-import { $createParagraphNode, $getRoot, type EditorState, type LexicalEditor } from "lexical";
+import {
+  $createParagraphNode,
+  $getRoot,
+  COMMAND_PRIORITY_CRITICAL,
+  PASTE_COMMAND,
+  type EditorState,
+  type LexicalEditor,
+} from "lexical";
 import { lexicalHtmlConfig } from "@/lib/lexical/html-export";
 import {
   hasActiveLexicalEditor,
@@ -143,20 +150,15 @@ function BridgePlugin({
     const onKeyDown = (event: KeyboardEvent) => {
       handleEditorKeyDown(event as unknown as React.KeyboardEvent<HTMLElement>);
     };
-    const onPaste = (event: ClipboardEvent) => {
-      handleEditorPaste(event as unknown as React.ClipboardEvent<HTMLElement>, kbId);
-    };
     const onClick = (event: MouseEvent) => {
       handleImageControlClick(event as unknown as React.MouseEvent<HTMLElement>);
     };
     const attach = (root: HTMLElement) => {
       root.addEventListener("keydown", onKeyDown);
-      root.addEventListener("paste", onPaste);
       root.addEventListener("click", onClick);
     };
     const detach = (root: HTMLElement) => {
       root.removeEventListener("keydown", onKeyDown);
-      root.removeEventListener("paste", onPaste);
       root.removeEventListener("click", onClick);
     };
     let currentRoot: HTMLElement | null = null;
@@ -169,8 +171,18 @@ function BridgePlugin({
         attach(rootElement);
       }
     });
+    // Paste goes through Lexical's command, not a DOM listener on the root: Lexical
+    // listens on that same element, so a DOM handler here inserted rich content twice.
+    // See the longer note in LexicalFlowSurface.
+    const removePaste = editor.registerCommand(
+      PASTE_COMMAND,
+      (event: ClipboardEvent) =>
+        handleEditorPaste(event as unknown as React.ClipboardEvent<HTMLElement>, kbId),
+      COMMAND_PRIORITY_CRITICAL,
+    );
     return () => {
       removeRootListener();
+      removePaste();
       if (currentRoot) {
         detach(currentRoot);
       }

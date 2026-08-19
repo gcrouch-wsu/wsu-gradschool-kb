@@ -7,6 +7,25 @@ const SECTION_BREAK_HTML =
 // Largest scrollTop across the document and any scrolling container. The admin
 // shell has scrolled ancestors, so `window.scrollY` alone can read 0 while the
 // editor pane is scrolled well down the page.
+// Select a paragraph's contents the way a user drags across it. Playwright's synthetic
+// mouse drag produces a range that ends outside the paragraph, which Lexical (correctly)
+// refuses to act on, so mouse gestures cannot drive this.
+async function selectParagraph(page: Page, text: string) {
+  await page.evaluate((needle) => {
+    const paragraph = Array.from(document.querySelectorAll(".wysiwyg-surface p")).find((node) =>
+      (node.textContent ?? "").includes(needle),
+    );
+    if (!paragraph) throw new Error(`no paragraph containing ${needle}`);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    (paragraph.closest(".wysiwyg-surface") as HTMLElement).focus();
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, text);
+  await page.waitForTimeout(150);
+}
+
 async function editorScrollTop(page: Page) {
   return page.evaluate(() => {
     const values = [document.scrollingElement?.scrollTop ?? 0];
@@ -44,6 +63,37 @@ test.describe("rich text formatting", () => {
     await expect(publicParagraph.locator("strong")).toHaveText("Format me");
     await expect(publicParagraph.locator("em")).toHaveText("Format me");
     await expect(publicParagraph.locator('span[style*="color"]')).toHaveText("Format me");
+  });
+
+  // Colour and bold are stored differently — bold is a Lexical text format, colour is an
+  // inline style — and the editor had a custom HTML *export* for inline style with no
+  // matching import. So colour applied, saved, and rendered publicly, but was gone the
+  // next time the page was opened in the editor: "you can have colour or bold, not both".
+  test("colour and bold together survive save, reload, and the public page", async ({ page }) => {
+    await openEditor(page);
+    await setDocumentHtml(page, '<p data-block-id="combo">ComboWord</p>');
+
+    await selectParagraph(page, "ComboWord");
+    await page.getByRole("button", { name: "Bold" }).click();
+    await selectParagraph(page, "ComboWord");
+    await page.getByRole("button", { name: "Text color: Crimson" }).click();
+
+    const inEditor = page.locator(".wysiwyg-surface p").filter({ hasText: "ComboWord" }).first();
+    await expect(inEditor.locator("strong, b")).toHaveCount(1);
+    await expect(inEditor.locator('[style*="color"]')).toHaveCount(1);
+
+    await saveAndPublish(page);
+
+    // Reopening is where the colour used to vanish.
+    await openEditor(page);
+    const reopened = page.locator(".wysiwyg-surface p").filter({ hasText: "ComboWord" }).first();
+    await expect(reopened.locator("strong, b")).toHaveCount(1);
+    await expect(reopened.locator('[style*="color"]')).toHaveCount(1);
+
+    await page.goto(TARGET_PAGE_PUBLIC_PATH);
+    const published = page.locator(".article p").filter({ hasText: "ComboWord" }).first();
+    await expect(published.locator("strong")).toHaveText("ComboWord");
+    await expect(published.locator('span[style*="color"]')).toHaveText("ComboWord");
   });
 
   // A document with more than one flow surface is the case that broke: every

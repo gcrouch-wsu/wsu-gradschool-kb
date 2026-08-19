@@ -8,6 +8,7 @@ import {
   listMarkerLabelForItem,
   orderedListFromSelection,
   orderedListStartFromSelection,
+  precedingOrderedListEnd,
   outdentListItem,
   setOrderedListStart,
   suggestedOrderedListStart,
@@ -36,6 +37,7 @@ import {
   lexicalRedo,
   lexicalRemoveLink,
   lexicalRunFormatCommand,
+  lexicalSetOrderedListStart,
   lexicalUndo,
 } from "@/lib/lexical/commands";
 import { movePreservedBlockFromDom, syncPreservedBlockFromDom } from "@/lib/lexical/sync-preserved-block";
@@ -1047,9 +1049,12 @@ export function applyList(command: "insertUnorderedList" | "insertOrderedList"):
       const surface = getBoundEditorSurface();
       const list = surface ? orderedListFromSelection(surface) : null;
       if (list) {
+        // Deliberately the conservative sibling walk: continuing automatically across a
+        // whole document would silently renumber unrelated lists. Continuing across an
+        // image (a separate section) is the explicit "Continue from previous list" action.
         const suggested = suggestedOrderedListStart(list);
         if (suggested && suggested > 1) {
-          setOrderedListStart(list, suggested);
+          lexicalSetOrderedListStart(suggested);
         }
       }
     }
@@ -1082,6 +1087,50 @@ export function markProblemLinks(): number {
   return count;
 }
 
+/**
+ * The whole editor canvas, so numbering can continue across sections.
+ *
+ * Every text run is its own Lexical surface and an image between two lists is its own
+ * section, so anything scoped to one surface cannot see the earlier list at all.
+ */
+function editorSectionScope(surface: HTMLElement): HTMLElement {
+  return (surface.closest(".block-list") as HTMLElement | null) ?? surface;
+}
+
+function continuedOrderedListStart(surface: HTMLElement): number | null {
+  const list = orderedListFromSelection(surface);
+  if (!list) {
+    return null;
+  }
+  const end = precedingOrderedListEnd(list, editorSectionScope(surface));
+  if (end === null) {
+    return null;
+  }
+  const next = end + 1;
+  const current = Number(list.getAttribute("start")) || 1;
+  return next === current ? null : next;
+}
+
+/** Renumber the caret's list so it continues the previous one, across sections. */
+export function continueOrderedListNumbering(): boolean {
+  const surface = getBoundEditorSurface();
+  if (!surface) {
+    return false;
+  }
+  restoreRichTextSelection();
+  const start = continuedOrderedListStart(surface);
+  if (start === null) {
+    recordFormat(
+      "listContinue",
+      false,
+      "no-previous-list",
+      "There is no earlier numbered list to continue from.",
+    );
+    return false;
+  }
+  return applyOrderedListStart(start);
+}
+
 export function applyOrderedListStart(start: number): boolean {
   const surface = getBoundEditorSurface();
   if (!surface) {
@@ -1092,6 +1141,13 @@ export function applyOrderedListStart(start: number): boolean {
   if (!list) {
     recordFormat("listStart", false, "not-in-ordered-list", "Place the cursor in a numbered list first.");
     return false;
+  }
+  // Lexical renders the <ol> from its own state, so the attribute has to be set on the
+  // ListNode; a DOM write survives only until the next reconcile and never gets saved.
+  if (isLexicalFlowActive() && lexicalSetOrderedListStart(start)) {
+    notifyMutation();
+    recordFormat("listStart", true, String(start));
+    return true;
   }
   snapshotStructuralChange();
   if (!setOrderedListStart(list, start)) {
@@ -1941,6 +1997,8 @@ export interface EditorFormatting {
   listLevel: number | null;
   listMarkerLabel: string | null;
   orderedListStart: number | null;
+  /** Number this list would start at to continue the previous one, or null. */
+  continueOrderedListStart: number | null;
   surfaceKind: "callout" | "document" | "none" | "table-cell";
 }
 
@@ -1963,6 +2021,7 @@ export const EMPTY_EDITOR_FORMATTING: EditorFormatting = {
   listLevel: null,
   listMarkerLabel: null,
   orderedListStart: null,
+  continueOrderedListStart: null,
   surfaceKind: "none",
 };
 
@@ -2016,6 +2075,7 @@ export function queryEditorFormatting(): EditorFormatting {
     listLevel: li && surface ? listLevelForItem(li, surface) : null,
     listMarkerLabel: li && surface ? listMarkerLabelForItem(li, surface) : null,
     orderedListStart: surface ? orderedListStartFromSelection(surface) : null,
+    continueOrderedListStart: surface ? continuedOrderedListStart(surface) : null,
     surfaceKind,
   };
 }

@@ -540,6 +540,46 @@ manual redirect persistence, and the single-active-version DB invariant.
   cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
   binding the active surface makes toolbar commands fail because the selection is treated as outside
   the editor.
+- **Paste and drop on a Lexical surface go through commands, never a DOM listener.**
+  Lexical attaches its own `paste` listener to the editor root and reads the clipboard
+  itself. A second listener on that same element cannot suppress it — `preventDefault()`
+  does not stop a sibling listener, and `stopImmediatePropagation()` would be too late
+  because Lexical registers first — so rich paste was inserted **twice**, once by each
+  handler, interleaved at the same caret. Plain text was unaffected (our handler returns
+  early and never preventDefaults), which is the tell. `LexicalFlowSurface` /
+  `LexicalTableCellSurface` claim `PASTE_COMMAND` / `DROP_COMMAND` at
+  `COMMAND_PRIORITY_CRITICAL`; returning `true` suppresses Lexical's default and returning
+  `false` lets it handle the event normally.
+- **Anything Lexical renders must be written through Lexical's model, not the DOM.**
+  `applyOrderedListStart` set `start` on the `<ol>` element; the surface is rendered from
+  editor state and saved from editor state, so the number survived until the next reconcile
+  and never reached the saved page — "Starts at" looked like it did nothing. It now routes
+  through `lexicalSetOrderedListStart` (`ListNode.setStart`) when a Lexical surface is
+  active. The same applies to any future attribute-level editor control.
+- **`lexicalHtmlConfig` needs an import for every custom export.** The editor exports inline
+  colour/font styles through a custom `export` map; with no matching `import` map, Lexical's
+  importer silently dropped the `style` attribute when re-hydrating. The result was that
+  colour applied, saved, and rendered correctly on the public page but vanished from the
+  editor on reopen, while bold (a Lexical text *format*) survived — reported as "you can
+  have colour or bold, not both". Keep the two halves symmetric.
+- **Lexical wraps nested lists in a structural `<li>` that must hide its own marker.**
+  `theme.list.nested.listitem` is *additive* to `theme.list.listitem`, so pointing both at
+  the same class made the wrapper paint an empty numbered item in the editor that the
+  published page never showed. It is `doc-li--nested` with `list-style: none`. The public
+  renderer never has this problem because it nests sub-lists inside the parent item's
+  content (`ListItemRichText`) rather than using a wrapper. Lexical sets explicit `value`
+  attributes, so the hidden wrapper does not consume a number.
+- **Toolbar popovers must not recompute formatting while focus is inside them.** The
+  "Starts at" number input takes the document selection out of the editor, so the next
+  `selectionchange` reported "not in an ordered list" and closed the popover mid-edit.
+  `DocumentToolbar` skips the recompute while `document.activeElement` is inside the
+  popover; clicking away still closes it through the outside-mousedown listener.
+- **Playwright's synthetic mouse cannot make a usable editor selection.** A scripted drag
+  produces a range that ends *outside* the paragraph (`commonAncestorContainer` is the
+  surface root) and a scripted double-click produces an empty one; Lexical correctly
+  refuses both, and even typing does not replace them. Select text with
+  `Range.selectNodeContents` or Shift+Arrow in editor specs. A formatting test that "fails"
+  only under a mouse gesture is measuring the harness, not the editor.
 - **Toolbar ownership is derived from DOM focus, never from mount or render order.**
   `lexical/toolbar-bridge.ts` tracks every mounted surface and re-resolves the active editor on each
   read (`syncActiveFromFocus`), because `focusin` alone is not enough: re-renders and DOM surgery
