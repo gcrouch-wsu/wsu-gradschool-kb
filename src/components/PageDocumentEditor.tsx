@@ -10,13 +10,16 @@ import { SourcedSectionEditor } from "@/components/SourcedSectionEditor";
 import { LinkDialog } from "@/components/LinkDialog";
 import { NoteDialog } from "@/components/NoteDialog";
 import { EditorNotesRail } from "@/components/EditorNotesRail";
-import { MediaPicker } from "@/components/MediaPicker";
+import { MediaPicker, isPlaceholderImageBlock } from "@/components/MediaPicker";
 import type { MediaPickerInsert } from "@/components/MediaPicker";
 import { PageEditorDebugPanel } from "@/components/PageEditorDebugPanel";
 import { TableBlockEditor } from "@/components/TableBlockEditor";
 import { LexicalFlowSurface } from "@/components/LexicalFlowSurface";
 import {
   blocksToSections,
+  isEmptyFlowSection,
+  moveEditorSection,
+  moveTargetIndex,
   normalizeEditorSections,
   preserveFlowClientKeys,
   sectionsToBlocks,
@@ -88,18 +91,6 @@ function imageBlockFromFigure(figure: HTMLElement, fallback: ImageBlock): ImageB
   return block ?? fallback;
 }
 
-function isEmptyFlowSection(section: EditorSection): boolean {
-  return section.type === "flow" && section.blocks.length === 0;
-}
-
-function moveTargetIndex(sections: EditorSection[], index: number, direction: -1 | 1): number {
-  let target = index + direction;
-  while (target >= 0 && target < sections.length && isEmptyFlowSection(sections[target])) {
-    target += direction;
-  }
-  return target >= 0 && target < sections.length ? target : -1;
-}
-
 export function PageDocumentEditor({
   blocks,
   editorPalette,
@@ -160,19 +151,50 @@ export function PageDocumentEditor({
 
   const emitChange = useCallback((nextSections: EditorSection[]) => {
     const previous = sectionsRef.current;
-    const normalizedBlocks = cleanDocumentLayout(
-      dedupeContentBlockIds(sectionsToBlocks(normalizeEditorSections(nextSections))),
-    );
-    const normalizedSections = preserveFlowClientKeys(
-      previous,
-      blocksToSections(normalizedBlocks),
-    );
+    // Keep section boundaries (including adjacent non-empty flows). Round-tripping
+    // through blocksToSections would merge separate text boxes back into one flow.
+    const normalized = normalizeEditorSections(nextSections).map((section): EditorSection => {
+      if (section.type === "flow") {
+        const cleaned = cleanDocumentLayout(dedupeContentBlockIds(section.blocks));
+        if (cleaned.length === 1 && isBlankParagraphBlock(cleaned[0]!)) {
+          return { ...section, blocks: [] };
+        }
+        return { ...section, blocks: cleaned };
+      }
+      if (section.type === "card") {
+        return {
+          ...section,
+          block: {
+            ...section.block,
+            blocks: cleanDocumentLayout(dedupeContentBlockIds(section.block.blocks)),
+          },
+        };
+      }
+      if (section.type === "procedure_section") {
+        return {
+          ...section,
+          block: {
+            ...section.block,
+            blocks: cleanDocumentLayout(dedupeContentBlockIds(section.block.blocks)),
+          },
+        };
+      }
+      if (section.type === "sourced") {
+        return {
+          ...section,
+          block: {
+            ...section.block,
+            blocks: cleanDocumentLayout(dedupeContentBlockIds(section.block.blocks)),
+          },
+        };
+      }
+      return section;
+    });
+    const next = preserveFlowClientKeys(previous, stampFlowClientKeys(normalized));
     setEditorSections(
-      normalizedSections.length > 0
-        ? normalizedSections
-        : [{ type: "flow", blocks: [], clientKey: "flow-empty-root" }],
+      next.length > 0 ? next : [{ type: "flow", blocks: [], clientKey: "flow-empty-root" }],
     );
-    onChangeRef.current(normalizedBlocks);
+    onChangeRef.current(sectionsToBlocks(next));
   }, [setEditorSections]);
 
   function switchToHtml() {
@@ -281,7 +303,11 @@ export function PageDocumentEditor({
     const index = clampInsertIndex(insertIndex);
     const next = [...sectionsRef.current];
     const imageSections = blocksToSections(blocksToInsert);
-    if (next[index]?.type === "flow" && isEmptyFlowSection(next[index])) {
+    const at = next[index];
+    if (
+      (at?.type === "flow" && isEmptyFlowSection(at)) ||
+      (at?.type === "image" && isPlaceholderImageBlock(at.block))
+    ) {
       next.splice(index, 1, ...imageSections);
     } else {
       next.splice(index, 0, ...imageSections);
@@ -295,7 +321,9 @@ export function PageDocumentEditor({
   function insertTextAt(insertIndex: number) {
     const index = clampInsertIndex(insertIndex);
     const at = sectionsRef.current[index];
-    if (at?.type === "flow") {
+    // Reuse an empty gap at the insert point; do not steal focus from a filled
+    // text box (that blocked creating a new top-level flow).
+    if (at?.type === "flow" && isEmptyFlowSection(at)) {
       setActiveSectionIndex(index);
       focusSectionSurface(index);
       return;
@@ -311,7 +339,6 @@ export function PageDocumentEditor({
     next.splice(index, 0, {
       type: "flow",
       blocks: [],
-      clientKey: `flow-${crypto.randomUUID()}`,
     });
     markEditorAction();
     withViewportPreserved(() => {
@@ -579,14 +606,12 @@ export function PageDocumentEditor({
   }
 
   function moveSection(index: number, direction: -1 | 1) {
-    const next = [...sectionsRef.current];
-    const target = moveTargetIndex(next, index, direction);
-    if (target < 0) return;
+    const moved = moveEditorSection(sectionsRef.current, index, direction);
+    if (!moved) return;
     markEditorAction();
-    [next[index], next[target]] = [next[target], next[index]];
     withViewportPreserved(() => {
       setVisualEpoch((value) => value + 1);
-      emitChange(next);
+      emitChange(moved);
     });
   }
 
@@ -616,8 +641,7 @@ export function PageDocumentEditor({
             ? existing.clientKey
             : `gap-empty:${index}`,
       };
-      setEditorSections(next);
-      onChangeRef.current(cleanDocumentLayout(dedupeContentBlockIds(sectionsToBlocks(normalizeEditorSections(next)))));
+      emitChange(next);
       return;
     }
     const replacement = blocksToSections(flowBlocks);
@@ -775,6 +799,33 @@ export function PageDocumentEditor({
     emitChange(next);
   }
 
+  async function replaceImageSectionWithFiles(index: number, files: File[], source: "paste" | "drop") {
+    const scroll = captureScrollSnapshot();
+    const action = source === "drop" ? "dropped" : "pasted";
+    setFormatHint(files.length === 1 ? `Uploading ${action} image...` : `Uploading ${files.length} ${action} images...`);
+    try {
+      const imageBlocks: ContentBlock[] = [];
+      for (const file of files) {
+        imageBlocks.push(await uploadImageBlockFromFile(file, kbId));
+      }
+      const next = [...sectionsRef.current];
+      const existing = next[index];
+      const first = imageBlocks[0];
+      if (existing?.type === "image" && first?.type === "image") {
+        next.splice(index, 1, ...imageBlocks.map((block) => ({ type: "image" as const, block: block as ImageBlock })));
+        markEditorAction();
+        emitChange(next);
+      } else {
+        insertBlocksAt(index, imageBlocks);
+      }
+      setFormatHint(null);
+    } catch (caught) {
+      setFormatHint(caught instanceof Error ? caught.message : "Image upload failed. Try the Insert media button instead.");
+    } finally {
+      restoreViewport(scroll);
+    }
+  }
+
   function handleSectionImageFiles(section: EditorSection, index: number, files: File[], source: "paste" | "drop") {
     if (section.type === "card") {
       void appendImageFilesToNestedSection(index, "card", files, source);
@@ -782,6 +833,10 @@ export function PageDocumentEditor({
     }
     if (section.type === "procedure_section") {
       void appendImageFilesToNestedSection(index, "procedure_section", files, source);
+      return;
+    }
+    if (section.type === "image" && isPlaceholderImageBlock(section.block)) {
+      void replaceImageSectionWithFiles(index, files, source);
       return;
     }
     void insertImageFilesAt(index + 1, files, source);
@@ -1108,6 +1163,8 @@ function clampImageWidth(value: number | undefined): number {
 function ImageSectionEditor({
   block,
   index,
+  isFirst,
+  isLast,
   kbSlug,
   onChange,
   onMove,
@@ -1115,6 +1172,8 @@ function ImageSectionEditor({
 }: {
   block: ImageBlock;
   index: number;
+  isFirst: boolean;
+  isLast: boolean;
   kbSlug: string;
   onChange: (block: ContentBlock) => void;
   onMove: (index: number, direction: -1 | 1) => void;
@@ -1123,6 +1182,7 @@ function ImageSectionEditor({
   const figureRootRef = useRef<HTMLDivElement>(null);
   const editorRootRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState(false);
+  const isPasteSlot = isPlaceholderImageBlock(block);
 
   const selectFigure = useCallback((figure: HTMLElement) => {
     figureRootRef.current?.querySelectorAll("figure.doc-image.is-selected").forEach((element) => {
@@ -1134,6 +1194,9 @@ function ImageSectionEditor({
   }, []);
 
   useEffect(() => {
+    if (isPasteSlot) {
+      return;
+    }
     const figure = figureRootRef.current?.querySelector("figure.doc-image");
     figure?.removeAttribute("contenteditable");
     figure?.querySelector(".doc-image__controls")?.remove();
@@ -1141,7 +1204,7 @@ function ImageSectionEditor({
       node.removeAttribute("contenteditable");
     });
     figure?.classList.toggle("is-selected", selected);
-  }, [block, selected]);
+  }, [block, isPasteSlot, selected]);
 
   const handleFigureClick = useCallback((event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
@@ -1237,6 +1300,51 @@ function ImageSectionEditor({
     };
   }, [onImageFiles]);
 
+  useEffect(() => {
+    if (!isPasteSlot) {
+      return;
+    }
+    editorRootRef.current?.focus({ preventScroll: true });
+  }, [isPasteSlot]);
+
+  if (isPasteSlot) {
+    return (
+      <div
+        aria-label="Paste or drop an image here"
+        className="image-section-editor image-section-editor--paste-slot"
+        ref={editorRootRef}
+        tabIndex={0}
+      >
+        <div className="image-section-toolbar" role="group" aria-label="Image controls">
+          <button
+            aria-label="Move image up"
+            className="doc-image__control"
+            disabled={isFirst}
+            onClick={() => onMove(index, -1)}
+            title="Move up"
+            type="button"
+          >
+            ↑
+          </button>
+          <button
+            aria-label="Move image down"
+            className="doc-image__control"
+            disabled={isLast}
+            onClick={() => onMove(index, 1)}
+            title="Move down"
+            type="button"
+          >
+            ↓
+          </button>
+        </div>
+        <div className="image-paste-slot">
+          <strong>Paste or drop an image here</strong>
+          <p className="meta">Press Ctrl+V / ⌘V with a screenshot on the clipboard, or drag an image file onto this box.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="image-section-editor" ref={editorRootRef} tabIndex={-1}>
       <div className="image-section-toolbar" role="group" aria-label="Image controls">
@@ -1300,6 +1408,7 @@ function ImageSectionEditor({
         <button
           aria-label="Move image up"
           className="doc-image__control"
+          disabled={isFirst}
           onClick={() => handleImageAction("move-up")}
           title="Move up"
           type="button"
@@ -1309,6 +1418,7 @@ function ImageSectionEditor({
         <button
           aria-label="Move image down"
           className="doc-image__control"
+          disabled={isLast}
           onClick={() => handleImageAction("move-down")}
           title="Move down"
           type="button"
@@ -1421,6 +1531,8 @@ function SectionEditor({
         <ImageSectionEditor
           block={section.block}
           index={index}
+          isFirst={isFirst}
+          isLast={isLast}
           kbSlug={kbSlug}
           onChange={onUpdateImage}
           onImageFiles={onImageFiles}

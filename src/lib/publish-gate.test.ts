@@ -168,6 +168,13 @@ describe("validatePageForPublish", () => {
     expect(issues.some((i) => i.includes("missing alt text"))).toBe(true);
   });
 
+  it("flags empty paste-slot image boxes", async () => {
+    const page = validPage();
+    page.blocks = [{ blockId: "img", type: "image", widthPercent: 100, align: "left" }];
+    const issues = await validatePageForPublish(page, activeResolver);
+    expect(issues.some((i) => i.includes("image box is empty"))).toBe(true);
+  });
+
   it("flags tables without headers", async () => {
     const page = validPage();
     page.blocks = [

@@ -166,6 +166,9 @@ export async function validatePageForPublish(
     }
     if (block.type === "image") {
       const hasImage = Boolean(block.assetId || block.url);
+      if (!hasImage) {
+        issues.push("An image box is empty. Paste or upload an image, or remove the box.");
+      }
       if (hasImage && !block.decorative && !(block.alt ?? "").trim()) {
         issues.push("An image is missing alt text. Add a description or mark it decorative.");
       }

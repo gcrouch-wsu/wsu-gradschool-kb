@@ -87,13 +87,23 @@ test.describe("image alt text workflow", () => {
     const figure = page.locator(".image-section-editor figure.doc-image").first();
     const imageEditor = page.locator(".image-section-editor").first();
     await figure.click();
+    await expect(imageEditor.getByRole("button", { name: "Move image down" })).toBeEnabled();
     await imageEditor.getByRole("button", { name: "Move image down" }).click();
 
-    const paragraphBlock = page.locator(".block-editor").filter({ hasText: "Paragraph after the image." }).first();
-    await expect(paragraphBlock).toBeVisible();
-    await expect(
-      paragraphBlock.locator("xpath=following-sibling::article[.//figure[contains(@class, 'doc-image')]][1]"),
-    ).toBeVisible();
+    await expect
+      .poll(async () => {
+        const order = await page.locator(".block-editor").evaluateAll((nodes) =>
+          nodes.map((node) => {
+            if (node.querySelector("figure.doc-image")) return "image";
+            const text = node.textContent ?? "";
+            if (text.includes("Paragraph after the image.")) return "paragraph";
+            return "other";
+          }),
+        );
+        const meaningful = order.filter((item) => item === "image" || item === "paragraph");
+        return meaningful.join(",");
+      })
+      .toBe("paragraph,image");
 
     await saveAndPublish(page);
 

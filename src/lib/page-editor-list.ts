@@ -172,13 +172,24 @@ function isEditableGapTarget(section: EditorSection): boolean {
   return section.type === "image" || section.type === "section_divider";
 }
 
+export function isEmptyFlowSection(section: EditorSection): boolean {
+  return section.type === "flow" && section.blocks.length === 0;
+}
+
+/**
+ * Collapse only consecutive empty gap flows. Non-empty flows stay separate so the
+ * editor can move/insert text boxes without silently merging them on the next emit.
+ */
 function mergeAdjacentFlowSections(sections: EditorSection[]): EditorSection[] {
   const merged: EditorSection[] = [];
   for (const section of sections) {
     const previous = merged[merged.length - 1];
     if (section.type === "flow" && previous?.type === "flow") {
-      previous.blocks.push(...section.blocks);
-      previous.clientKey = previous.clientKey ?? section.clientKey;
+      if (isEmptyFlowSection(previous) && isEmptyFlowSection(section)) {
+        previous.clientKey = previous.clientKey ?? section.clientKey;
+        continue;
+      }
+      merged.push({ type: "flow", blocks: [...section.blocks], clientKey: section.clientKey });
     } else if (section.type === "flow") {
       merged.push({ type: "flow", blocks: [...section.blocks], clientKey: section.clientKey });
     } else {
@@ -186,6 +197,30 @@ function mergeAdjacentFlowSections(sections: EditorSection[]): EditorSection[] {
     }
   }
   return merged;
+}
+
+/** Skip empty gap flows when choosing a move neighbor. */
+export function moveTargetIndex(sections: EditorSection[], index: number, direction: -1 | 1): number {
+  let target = index + direction;
+  while (target >= 0 && target < sections.length && isEmptyFlowSection(sections[target]!)) {
+    target += direction;
+  }
+  return target >= 0 && target < sections.length ? target : -1;
+}
+
+/** Swap a section with the next non-gap neighbor (used by section ↑/↓ controls). */
+export function moveEditorSection(
+  sections: EditorSection[],
+  index: number,
+  direction: -1 | 1,
+): EditorSection[] | null {
+  const target = moveTargetIndex(sections, index, direction);
+  if (target < 0) {
+    return null;
+  }
+  const next = [...sections];
+  [next[index], next[target]] = [next[target]!, next[index]!];
+  return normalizeEditorSections(next);
 }
 
 export function normalizeEditorSections(sections: EditorSection[]): EditorSection[] {

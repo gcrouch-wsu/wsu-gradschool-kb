@@ -21,13 +21,17 @@ interface LibraryAsset {
   url: string | null;
 }
 
-type Tab = "library" | "upload" | "video";
+type Tab = "library" | "upload" | "paste" | "video";
 type UsageFilter = "all" | "used" | "unused";
 
 export type MediaPickerInsert = { type: "block"; block: ContentBlock };
 
 function newBlockId() {
   return `block-${crypto.randomUUID()}`;
+}
+
+export function isPlaceholderImageBlock(block: ContentBlock): block is Extract<ContentBlock, { type: "image" }> {
+  return block.type === "image" && !block.assetId && !block.url;
 }
 
 export function MediaPicker({
@@ -152,6 +156,18 @@ export function MediaPicker({
     }
   }
 
+  function insertPasteSlot() {
+    onInsert({
+      type: "block",
+      block: {
+        blockId: newBlockId(),
+        type: "image",
+        widthPercent: 100,
+        align: "left",
+      },
+    });
+  }
+
   async function embedVideo() {
     if (!videoUrl.trim()) {
       setError("Enter a video URL.");
@@ -226,6 +242,15 @@ export function MediaPicker({
             type="button"
           >
             Upload image
+          </button>
+          <button
+            aria-selected={tab === "paste"}
+            className={`media-picker__tab ${tab === "paste" ? "is-active" : ""}`}
+            onClick={() => setTab("paste")}
+            role="tab"
+            type="button"
+          >
+            Paste image
           </button>
           <button
             aria-selected={tab === "video"}
@@ -328,6 +353,17 @@ export function MediaPicker({
                   type="file"
                 />
               </label>
+            </div>
+          )}
+          {tab === "paste" && (
+            <div className="media-picker__paste">
+              <p>
+                Insert an empty image box in the page, then paste a screenshot or drop an image file onto that box.
+              </p>
+              <p className="meta">Useful when you already have the image on the clipboard and want to place it first.</p>
+              <button className="button" onClick={insertPasteSlot} type="button">
+                Add paste box
+              </button>
             </div>
           )}
           {tab === "video" && (

@@ -1,18 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
   blocksToSections,
+  isEmptyFlowSection,
+  moveEditorSection,
+  moveTargetIndex,
+  normalizeEditorSections,
   preserveFlowClientKeys,
+  sectionsToBlocks,
   stampFlowClientKeys,
   type EditorSection,
 } from "@/lib/page-editor-list";
 import type { ContentBlock } from "@/lib/types";
+
+function paragraph(id: string, text: string): ContentBlock {
+  return { blockId: id, type: "paragraph", text, html: text };
+}
+
+function image(id: string): Extract<ContentBlock, { type: "image" }> {
+  return { blockId: id, type: "image", url: `/kb/x/${id}.png`, alt: id };
+}
 
 describe("flow client keys", () => {
   it("does not rewrite existing flow clientKeys from block ids", () => {
     const sections: EditorSection[] = [
       {
         type: "flow",
-        blocks: [{ blockId: "p1", type: "paragraph", text: "Hello", html: "Hello" }],
+        blocks: [paragraph("p1", "Hello")],
         clientKey: "flow-stable",
       },
     ];
@@ -21,10 +34,7 @@ describe("flow client keys", () => {
   });
 
   it("stamps deterministic keys so SSR and hydration match", () => {
-    const blocks: ContentBlock[] = [
-      { blockId: "p1", type: "paragraph", text: "Hello", html: "Hello" },
-      { blockId: "img-1", type: "image", url: "/kb/x/a.png", alt: "A" },
-    ];
+    const blocks: ContentBlock[] = [paragraph("p1", "Hello"), image("img-1")];
     const first = blocksToSections(blocks);
     const second = blocksToSections(blocks);
     expect(first.map((section) => (section.type === "flow" ? section.clientKey : section.block.blockId))).toEqual(
@@ -34,18 +44,12 @@ describe("flow client keys", () => {
   });
 
   it("preserves flow keys across emit cycles when block ids are re-minted", () => {
-    const previous = blocksToSections([
-      { blockId: "old-1", type: "paragraph", text: "Hello", html: "Hello" },
-      { blockId: "img-1", type: "image", url: "/kb/x/a.png", alt: "A" },
-    ]).map((section) =>
+    const previous = blocksToSections([paragraph("old-1", "Hello"), image("img-1")]).map((section) =>
       section.type === "flow" && section.blocks.some((block) => block.blockId === "old-1")
         ? { ...section, clientKey: "flow-stable" }
         : section,
     );
-    const remintedBlocks: ContentBlock[] = [
-      { blockId: "new-1", type: "paragraph", text: "Hello", html: "Hello" },
-      { blockId: "img-1", type: "image", url: "/kb/x/a.png", alt: "A" },
-    ];
+    const remintedBlocks: ContentBlock[] = [paragraph("new-1", "Hello"), image("img-1")];
     const next = preserveFlowClientKeys(previous, blocksToSections(remintedBlocks));
     const contentFlow = next.find(
       (section) =>
@@ -53,5 +57,78 @@ describe("flow client keys", () => {
         section.blocks.some((block) => block.type === "paragraph" && block.text === "Hello"),
     );
     expect(contentFlow).toMatchObject({ type: "flow", clientKey: "flow-stable" });
+  });
+});
+
+describe("separate text flows", () => {
+  it("does not merge adjacent non-empty flows", () => {
+    const sections = normalizeEditorSections([
+      { type: "flow", blocks: [paragraph("a", "Top")], clientKey: "flow-a" },
+      { type: "flow", blocks: [paragraph("b", "Bottom")], clientKey: "flow-b" },
+    ]);
+    const flows = sections.filter((section) => section.type === "flow" && !isEmptyFlowSection(section));
+    expect(flows).toHaveLength(2);
+    expect(flows[0]).toMatchObject({ clientKey: "flow-a" });
+    expect(flows[1]).toMatchObject({ clientKey: "flow-b" });
+    expect(sectionsToBlocks(sections).map((block) => block.blockId)).toEqual(["a", "b"]);
+  });
+
+  it("keeps an empty text slot before a filled flow (top-level insert)", () => {
+    const sections = normalizeEditorSections([
+      { type: "flow", blocks: [], clientKey: "gap-top" },
+      { type: "flow", blocks: [paragraph("a", "Existing")], clientKey: "flow-a" },
+    ]);
+    expect(sections[0]).toMatchObject({ type: "flow", blocks: [], clientKey: "gap-top" });
+    expect(sections[1]).toMatchObject({ type: "flow", clientKey: "flow-a" });
+  });
+
+  it("moves a recreated flow above an earlier flow without collapsing it", () => {
+    let sections = normalizeEditorSections([
+      { type: "flow", blocks: [paragraph("a", "First")], clientKey: "flow-a" },
+      { type: "image", block: image("img-1") },
+      { type: "flow", blocks: [paragraph("b", "Recreated")], clientKey: "flow-b" },
+    ]);
+
+    const recreatedIndex = sections.findIndex(
+      (section) => section.type === "flow" && section.clientKey === "flow-b",
+    );
+    expect(recreatedIndex).toBeGreaterThan(0);
+    expect(moveTargetIndex(sections, recreatedIndex, -1)).toBeGreaterThanOrEqual(0);
+
+    sections = moveEditorSection(sections, recreatedIndex, -1)!;
+    const afterPastImage = sections.findIndex(
+      (section) => section.type === "flow" && section.clientKey === "flow-b",
+    );
+    expect(afterPastImage).toBeGreaterThanOrEqual(0);
+    expect(sections.some((section) => section.type === "flow" && section.clientKey === "flow-a")).toBe(true);
+
+    sections = moveEditorSection(sections, afterPastImage, -1)!;
+    const flows = sections.filter(
+      (section): section is Extract<EditorSection, { type: "flow" }> =>
+        section.type === "flow" && !isEmptyFlowSection(section),
+    );
+    expect(flows.map((section) => section.clientKey)).toEqual(["flow-b", "flow-a"]);
+    expect(sectionsToBlocks(sections).map((block) => ("text" in block ? block.text : block.blockId))).toEqual([
+      "Recreated",
+      "First",
+      "img-1",
+    ]);
+  });
+
+  it("moves an image below the following text flow", () => {
+    let sections = normalizeEditorSections([
+      { type: "image", block: image("img-1") },
+      { type: "flow", blocks: [paragraph("p1", "Paragraph after the image.")], clientKey: "flow-a" },
+    ]);
+    const imageIndex = sections.findIndex((section) => section.type === "image");
+    expect(imageIndex).toBeGreaterThanOrEqual(0);
+    sections = moveEditorSection(sections, imageIndex, 1)!;
+
+    const meaningful = sections.filter((section) => !(section.type === "flow" && isEmptyFlowSection(section)));
+    expect(meaningful.map((section) => section.type)).toEqual(["flow", "image"]);
+    expect(sectionsToBlocks(sections).map((block) => ("text" in block ? block.text : block.blockId))).toEqual([
+      "Paragraph after the image.",
+      "img-1",
+    ]);
   });
 });
