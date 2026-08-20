@@ -109,6 +109,8 @@ function TreeItems({
   expandedIds,
   onToggle,
   idPrefix,
+  depth,
+  maxDepth,
 }: {
   nodes: PageTreeNode[];
   kbSlug: string;
@@ -119,11 +121,14 @@ function TreeItems({
   expandedIds: Set<string>;
   onToggle: (id: string) => void;
   idPrefix: string;
+  depth: number;
+  /** Deepest level rendered to readers; deeper branches are hidden, not collapsed. */
+  maxDepth: number;
 }) {
   return (
     <ul>
       {nodes.map((node) => {
-        const hasChildren = node.children.length > 0;
+        const hasChildren = node.children.length > 0 && depth + 1 < maxDepth;
         const isExpanded = !collapsible || expandedIds.has(node.page.id);
         const isCurrent = isCurrentNode(node, currentPageId, currentPath);
         const groupId = `${idPrefix}-${node.page.id}`;
@@ -175,10 +180,12 @@ function TreeItems({
                   collapsible={collapsible}
                   currentPageId={currentPageId}
                   currentPath={currentPath}
+                  depth={depth + 1}
                   expandedIds={expandedIds}
                   homepagePageId={homepagePageId}
                   idPrefix={idPrefix}
                   kbSlug={kbSlug}
+                  maxDepth={maxDepth}
                   nodes={node.children}
                   onToggle={onToggle}
                 />
@@ -198,6 +205,7 @@ export function PageTree({
   currentPageId,
   currentPath,
   collapsible = false,
+  maxDepth = 6,
 }: {
   nodes: PageTreeNode[];
   kbSlug: string;
@@ -206,6 +214,8 @@ export function PageTree({
   currentPath?: string;
   /** When true, nested branches can expand/collapse (theme / Manage Styles). */
   collapsible?: boolean;
+  /** Deepest level shown to readers (per KB, Manage Styles). */
+  maxDepth?: number;
 }) {
   const idPrefix = useId().replace(/:/g, "");
   const requiredExpanded = useMemo(
@@ -248,10 +258,12 @@ export function PageTree({
       collapsible={collapsible}
       currentPageId={currentPageId}
       currentPath={currentPath}
+      depth={0}
       expandedIds={expandedIds}
       homepagePageId={homepagePageId}
       idPrefix={idPrefix}
       kbSlug={kbSlug}
+      maxDepth={maxDepth}
       nodes={nodes}
       onToggle={onToggle}
     />

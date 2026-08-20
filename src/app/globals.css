@@ -3800,6 +3800,17 @@ article li > ol {
   margin-top: 0.5rem;
 }
 
+/* Number/bullet styling, per KB via Manage Styles. ::marker takes only a small set of
+   properties (colour, font, content), which is exactly what is exposed. Applied to the
+   editor surface as well so the WYSIWYG matches what readers get. */
+.flow li::marker,
+.article li::marker,
+.wysiwyg-surface li::marker {
+  color: var(--list-marker-color, currentColor);
+  font-size: var(--list-marker-size, 1em);
+  font-weight: var(--list-marker-weight, 400);
+}
+
 /* Lexical wraps a nested list in a structural <li> of its own. It carries no text and
    must not paint a marker, or the editor shows an empty "2." before every indented
    group and the numbering disagrees with the published page. */

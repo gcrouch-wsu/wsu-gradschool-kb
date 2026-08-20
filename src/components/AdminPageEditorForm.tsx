@@ -31,6 +31,9 @@ const visibilityOptions = [
 ];
 
 const tocDepthOptions = [
+  // 0 defers to the KB's Manage Styles setting, so a whole KB can be changed at once
+  // instead of page by page. Existing pages keep their explicit 2 or 3.
+  { label: "Use knowledge base default", value: "0" },
   { label: "H2 only", value: "2" },
   { label: "H2 + H3", value: "3" },
 ];

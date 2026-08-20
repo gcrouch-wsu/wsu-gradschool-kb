@@ -144,12 +144,15 @@ export default async function KbArticlePage({
       href: `/kb/${kb.slug}/${related.path.join("/")}`,
     }));
 
-  const showTocRail = page.showToc && hasTocEntries(page.blocks, page.tocDepth);
   const pageTags = normalizePageTags(page.tags);
-  
+
   const baseTheme = mergeTheme(settings.globalTheme || DEFAULT_THEME);
   const effectiveTheme = resolvePublicTheme(kb.theme, baseTheme);
   const themeVars = themeToCssVars(effectiveTheme) as CSSProperties;
+
+  // 0 means "use the knowledge base default" (Manage Styles → Navigation depth).
+  const effectiveTocDepth = page.tocDepth > 0 ? page.tocDepth : effectiveTheme.layout.tocDepth;
+  const showTocRail = page.showToc && hasTocEntries(page.blocks, effectiveTocDepth);
   
   const verifiedLabel = page.verifiedAt
     ? `Verified${page.verifiedBy ? ` by ${page.verifiedBy}` : ""} on ${formatTimestamp(page.verifiedAt)}`       
@@ -163,6 +166,7 @@ export default async function KbArticlePage({
           <strong>{kb.title}</strong>
           <PageTree
             collapsible={effectiveTheme.layout.pageTreeCollapsible}
+            maxDepth={effectiveTheme.layout.pageTreeMaxDepth}
             currentPageId={page.id}
             currentPath={currentPath}
             homepagePageId={kb.homepagePageId}
@@ -275,7 +279,7 @@ export default async function KbArticlePage({
         </article>
         {showTocRail && (
           <aside className="toc-rail">
-            <TableOfContents blocks={page.blocks} showToc={page.showToc} tocDepth={page.tocDepth} />
+            <TableOfContents blocks={page.blocks} showToc={page.showToc} tocDepth={effectiveTocDepth} />
           </aside>
         )}
       </div>

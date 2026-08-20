@@ -66,6 +66,15 @@ export interface ThemeTypography {
   measure: string; // ch; max reading line length in the article column ("0ch" = no cap, fill the column)
 }
 
+/** Styling for the number/bullet a list item renders, i.e. the CSS ::marker. */
+export interface ThemeListMarkers {
+  /** Empty inherits the item's own text colour. */
+  color: string;
+  /** em, relative to the list item's text so it scales with reader zoom. */
+  size: string;
+  weight: string;
+}
+
 export interface ThemeLayout {
   navWidth: string; // px; max width of the page-tree column on KB pages
   tocWidth: string; // px; max width of the table-of-contents rail on KB pages
@@ -85,6 +94,10 @@ export interface ThemeLayout {
   pageTreeGroupTracking: string;
   /** Group-heading text case in the public page tree (global chrome). */
   pageTreeGroupTransform: HeadingTextTransform;
+  /** Deepest page-tree level rendered to readers (1 = top level only). */
+  pageTreeMaxDepth: number;
+  /** Default "On this page" depth for pages that do not set their own (2 = H2, 3 = H2+H3). */
+  tocDepth: number;
 }
 
 export interface ThemeOption {
@@ -104,6 +117,7 @@ export interface KbTheme {
   scale: ThemeScale;
   headingStyles: ThemeHeadingStyles;
   typography: ThemeTypography;
+  listMarkers: ThemeListMarkers;
   layout: ThemeLayout;
   editor: ThemeEditorAllowlist;
 }
@@ -175,6 +189,7 @@ export const DEFAULT_THEME: KbTheme = {
     listIndent: "1.75rem",
     measure: "0ch",
   },
+  listMarkers: { color: "", size: "1em", weight: "400" },
   layout: {
     navWidth: "260px",
     tocWidth: "240px",
@@ -186,6 +201,8 @@ export const DEFAULT_THEME: KbTheme = {
     pageTreeGroupWeight: "700",
     pageTreeGroupTracking: "0em",
     pageTreeGroupTransform: "none",
+    pageTreeMaxDepth: 6,
+    tocDepth: 3,
   },
   editor: {
     fonts: [
@@ -322,6 +339,7 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
   const s = (t.scale ?? {}) as Partial<ThemeScale>;
   const hs = (t.headingStyles ?? {}) as Partial<ThemeHeadingStyles>;
   const ty = (t.typography ?? {}) as Partial<ThemeTypography>;
+  const lm = (t.listMarkers ?? {}) as Partial<ThemeListMarkers>;
   const l = (t.layout ?? {}) as Partial<ThemeLayout>;
   const e = (t.editor ?? {}) as Partial<ThemeEditorAllowlist>;
   return {
@@ -381,6 +399,21 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       listIndent: safeUnit(ty.listIndent, "rem", REM, base.typography.listIndent, 0, 4),
       measure: safeMeasure(ty.measure, base.typography.measure),
     },
+    listMarkers: {
+      // Empty is a real value here, meaning "inherit the list item's own colour", so an
+      // absent key must fall back to the base rather than being read as a bad colour.
+      color:
+        lm.color === undefined
+          ? base.listMarkers.color
+          : lm.color === ""
+            ? ""
+            : safeHex(lm.color, base.listMarkers.color || "#000000"),
+      size: safeUnit(lm.size, "em", EM, base.listMarkers.size, 0.6, 2),
+      weight:
+        typeof lm.weight === "string" && (HEADING_WEIGHTS as readonly string[]).includes(lm.weight)
+          ? lm.weight
+          : base.listMarkers.weight,
+    },
     layout: {
       navWidth: safeUnit(l.navWidth, "px", PX, base.layout.navWidth, 160, 480),
       tocWidth: safeUnit(l.tocWidth, "px", PX, base.layout.tocWidth, 160, 420),
@@ -408,6 +441,8 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       pageTreeGroupTransform: HEADING_TEXT_TRANSFORMS.includes(l.pageTreeGroupTransform as HeadingTextTransform)
         ? (l.pageTreeGroupTransform as HeadingTextTransform)
         : base.layout.pageTreeGroupTransform,
+      pageTreeMaxDepth: safeCount(l.pageTreeMaxDepth, base.layout.pageTreeMaxDepth, 1, 6),
+      tocDepth: safeCount(l.tocDepth, base.layout.tocDepth, 2, 3),
     },
     editor: {
       fonts: safeOptions(e.fonts, "font", base.editor.fonts),
@@ -415,6 +450,15 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
       colors: safeOptions(e.colors, "color", base.editor.colors),
     },
   };
+}
+
+/** Whole number within [min, max]; anything unusable falls back to the base value. */
+function safeCount(raw: unknown, fallback: number, min: number, max: number): number {
+  const value = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -539,6 +583,9 @@ export function themeToCssVars(theme: KbTheme): Record<string, string> {
     "--space-after-heading": theme.typography.spaceAfterHeading,
     "--space-list-item": theme.typography.listItemSpacing,
     "--indent-list": theme.typography.listIndent,
+    "--list-marker-color": theme.listMarkers.color || "currentColor",
+    "--list-marker-size": theme.listMarkers.size,
+    "--list-marker-weight": theme.listMarkers.weight,
     "--measure": theme.typography.measure === "0ch" ? "100%" : theme.typography.measure,
     "--nav-width": theme.layout.navWidth,
     "--toc-width": theme.layout.tocWidth,

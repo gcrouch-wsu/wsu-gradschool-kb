@@ -262,6 +262,14 @@ export function ThemeEditor({
   function setScale(key: keyof KbTheme["scale"], rem: number) {
     setTheme((t) => ({ ...t, scale: { ...t.scale, [key]: `${rem}rem` } }));
   }
+  function setListMarker(key: keyof KbTheme["listMarkers"], value: string) {
+    setTheme((t) => ({ ...t, listMarkers: { ...t.listMarkers, [key]: value } }));
+  }
+
+  function setLayoutCount(key: "pageTreeMaxDepth" | "tocDepth", value: number) {
+    setTheme((t) => ({ ...t, layout: { ...t.layout, [key]: value } }));
+  }
+
   function setTypography(key: keyof KbTheme["typography"], num: number, unit: string) {
     setTheme((t) => ({ ...t, typography: { ...t.typography, [key]: `${num}${unit}` } }));
   }
@@ -627,6 +635,100 @@ export function ThemeEditor({
             </label>
           ))}
           <p className="meta">“Space after heading” controls the gap between a heading and the list or text below it.</p>
+        </fieldset>
+
+        <fieldset className="fieldset">
+          <legend>List numbers &amp; bullets</legend>
+          <p className="meta">
+            Styling for the number or bullet itself, separately from the list text. Size is relative
+            to the item&apos;s text so it scales with reader zoom.
+          </p>
+          <div className="theme-color">
+            <span className="meta">Marker colour</span>
+            <div className="theme-color__row">
+              <input
+                aria-label="List marker colour"
+                onChange={(event) => setListMarker("color", event.target.value)}
+                type="color"
+                value={theme.listMarkers.color || "#000000"}
+              />
+              <button
+                className="button button--small button--ghost"
+                onClick={() => setListMarker("color", "")}
+                type="button"
+              >
+                Match text
+              </button>
+            </div>
+            <span className="theme-color__help">
+              {theme.listMarkers.color
+                ? `Markers use ${theme.listMarkers.color}.`
+                : "Markers use the same colour as the list text."}
+            </span>
+          </div>
+          <label className="theme-scale" title="Marker size relative to the list item text">
+            <span className="meta">Marker size</span>
+            <input
+              max={2}
+              min={0.6}
+              onChange={(event) => setListMarker("size", `${Number(event.target.value)}em`)}
+              step={0.05}
+              type="range"
+              value={parseFloat(theme.listMarkers.size) || 1}
+            />
+            <span className="theme-scale__value">{theme.listMarkers.size}</span>
+          </label>
+          <label className="theme-scale" title="Marker weight">
+            <span className="meta">Marker weight</span>
+            <select
+              className="input"
+              onChange={(event) => setListMarker("weight", event.target.value)}
+              value={theme.listMarkers.weight}
+            >
+              {HEADING_WEIGHTS.map((weight) => (
+                <option key={weight} value={weight}>
+                  {weight === "400" ? "400 (normal)" : weight === "700" ? "700 (bold)" : weight}
+                </option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset className="fieldset">
+          <legend>Navigation depth</legend>
+          <p className="meta">
+            How much of the page hierarchy readers see, and how many heading levels the
+            &ldquo;On this page&rdquo; rail lists.
+          </p>
+          <label className="theme-scale" title="Deepest page-tree level shown to readers">
+            <span className="meta">Page tree depth</span>
+            <input
+              max={6}
+              min={1}
+              onChange={(event) => setLayoutCount("pageTreeMaxDepth", Number(event.target.value))}
+              step={1}
+              type="range"
+              value={theme.layout.pageTreeMaxDepth}
+            />
+            <span className="theme-scale__value">
+              {theme.layout.pageTreeMaxDepth >= 6 ? "All levels" : `${theme.layout.pageTreeMaxDepth} levels`}
+            </span>
+          </label>
+          <label className="theme-scale" title="Default heading levels in the On this page rail">
+            <span className="meta">On this page</span>
+            <select
+              className="input"
+              onChange={(event) => setLayoutCount("tocDepth", Number(event.target.value))}
+              value={String(theme.layout.tocDepth)}
+            >
+              <option value="2">H2 only</option>
+              <option value="3">H2 + H3</option>
+            </select>
+          </label>
+          <p className="meta">
+            Pages set to &ldquo;Use knowledge base default&rdquo; follow this; a page can still
+            override it.
+          </p>
         </fieldset>
 
         <fieldset className="fieldset">

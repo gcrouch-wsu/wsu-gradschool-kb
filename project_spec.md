@@ -540,6 +540,19 @@ manual redirect persistence, and the single-active-version DB invariant.
   cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
   binding the active surface makes toolbar commands fail because the selection is treated as outside
   the editor.
+- **`tocDepth: 0` means "inherit the KB default", and is the default for new pages.**
+  The per-page value used to be 2 or 3 with no way to change a whole KB at once. The public
+  routes resolve `page.tocDepth > 0 ? page.tocDepth : effectiveTheme.layout.tocDepth` before
+  calling `buildToc`/`hasTocEntries` — passing 0 straight through yields an empty TOC, so
+  resolve it at every new call site. Pages saved before this keep their explicit 2 or 3.
+- **An empty string is a real value in `listMarkers.color`** (inherit the list item's own
+  colour), so `mergeTheme` must distinguish "absent" from "empty" — reading an absent key as
+  a malformed colour turned the default into black. `::marker` accepts only a small set of
+  properties (colour, font, content); the theme exposes exactly those, and the rule is
+  applied to `.wysiwyg-surface` as well so the editor matches the published page.
+- **`pageTreeMaxDepth` hides deeper branches, it does not collapse them.** It is a reader
+  presentation limit only: nothing about the stored hierarchy, the admin tree, or the URLs
+  changes, and pages below the cut are still reachable by link and by search.
 - **A batch layout save must be validated against the layout it produces, not the one it
   replaces.** `updatePageLayout` receives the whole intended arrangement from the tree
   manager, so a child's new `parentPath` routinely names a location its parent only reaches

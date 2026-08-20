@@ -1931,7 +1931,8 @@ export async function createPage(input: CreatePageInput): Promise<KbPage> {
     relatedPageIds: [],
     relatedAssetIds: [],
     showToc: input.showToc ?? true,
-    tocDepth: input.tocDepth ?? 3,
+    // 0 = inherit the KB's Manage Styles default, so changing a KB changes new pages too.
+    tocDepth: input.tocDepth ?? 0,
     showSummary: input.showSummary ?? true,
     showPrintButton: input.showPrintButton ?? true,
     nodeKind: input.nodeKind ?? "page",

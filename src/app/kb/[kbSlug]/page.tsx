@@ -80,7 +80,10 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
         return { asset, href: homeKb ? `/kb/${homeKb.slug}/files/${asset.slug}` : "#" };
       }),
     );
-    const showTocRail = homepagePage.showToc && hasTocEntries(homepagePage.blocks, homepagePage.tocDepth);
+    // 0 means "use the knowledge base default" (Manage Styles → Navigation depth).
+    const homepageTocDepth =
+      homepagePage.tocDepth > 0 ? homepagePage.tocDepth : effectiveTheme.layout.tocDepth;
+    const showTocRail = homepagePage.showToc && hasTocEntries(homepagePage.blocks, homepageTocDepth);
     const verifiedLabel = homepagePage.verifiedAt
       ? `Verified${homepagePage.verifiedBy ? ` by ${homepagePage.verifiedBy}` : ""} on ${formatTimestamp(homepagePage.verifiedAt)}`
       : "";
@@ -93,6 +96,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <strong>{kb.title}</strong>
             <PageTree
               collapsible={effectiveTheme.layout.pageTreeCollapsible}
+            maxDepth={effectiveTheme.layout.pageTreeMaxDepth}
               currentPageId={homepagePage.id}
               homepagePageId={kb.homepagePageId}
               kbSlug={kb.slug}
@@ -160,7 +164,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
           </article>
           {showTocRail && (
             <aside className="toc-rail">
-              <TableOfContents blocks={homepagePage.blocks} showToc={homepagePage.showToc} tocDepth={homepagePage.tocDepth} />
+              <TableOfContents blocks={homepagePage.blocks} showToc={homepagePage.showToc} tocDepth={homepageTocDepth} />
             </aside>
           )}
         </div>
@@ -185,6 +189,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <strong>Browse {kb.title}</strong>
             <PageTree
               collapsible={effectiveTheme.layout.pageTreeCollapsible}
+            maxDepth={effectiveTheme.layout.pageTreeMaxDepth}
               homepagePageId={kb.homepagePageId}
               kbSlug={kb.slug}
               nodes={tree}

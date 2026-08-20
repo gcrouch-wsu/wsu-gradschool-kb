@@ -186,3 +186,43 @@ describe("kb-theme", () => {
     expect(arial?.value).toContain("Arial");
   });
 });
+
+describe("list markers and navigation depth", () => {
+  it("defaults markers to inheriting the text colour", () => {
+    const theme = mergeTheme({});
+    expect(theme.listMarkers).toEqual({ color: "", size: "1em", weight: "400" });
+    expect(themeToCssVars(theme)["--list-marker-color"]).toBe("currentColor");
+  });
+
+  it("keeps an explicit marker colour and emits it", () => {
+    const theme = mergeTheme({ listMarkers: { color: "#a60f2d", size: "1.25em", weight: "700" } });
+    const vars = themeToCssVars(theme);
+    expect(vars["--list-marker-color"]).toBe("#a60f2d");
+    expect(vars["--list-marker-size"]).toBe("1.25em");
+    expect(vars["--list-marker-weight"]).toBe("700");
+  });
+
+  it("clamps an out-of-range marker size and rejects a bogus weight", () => {
+    const theme = mergeTheme({
+      listMarkers: { color: "not-a-colour", size: "40em", weight: "ultra" },
+    });
+    expect(theme.listMarkers.size).toBe("2em");
+    expect(theme.listMarkers.weight).toBe("400");
+    // A malformed colour falls back rather than emitting garbage into the stylesheet.
+    expect(theme.listMarkers.color).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
+  it("defaults navigation depth to all levels and H2+H3", () => {
+    const theme = mergeTheme({});
+    expect(theme.layout.pageTreeMaxDepth).toBe(6);
+    expect(theme.layout.tocDepth).toBe(3);
+  });
+
+  it("clamps navigation depth into range", () => {
+    expect(mergeTheme({ layout: { pageTreeMaxDepth: 0 } }).layout.pageTreeMaxDepth).toBe(1);
+    expect(mergeTheme({ layout: { pageTreeMaxDepth: 99 } }).layout.pageTreeMaxDepth).toBe(6);
+    expect(mergeTheme({ layout: { tocDepth: 9 } }).layout.tocDepth).toBe(3);
+    expect(mergeTheme({ layout: { tocDepth: 1 } }).layout.tocDepth).toBe(2);
+    expect(mergeTheme({ layout: { pageTreeMaxDepth: "3" } }).layout.pageTreeMaxDepth).toBe(3);
+  });
+});
