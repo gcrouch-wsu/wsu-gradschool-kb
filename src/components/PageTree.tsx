@@ -29,8 +29,26 @@ export function initialExpandedIds(
   nodes: PageTreeNode[],
   currentPageId?: string,
   currentPath?: string,
+  expandDepth = 6,
 ): Set<string> {
   const expanded = new Set<string>();
+
+  // Open every branch down to expandDepth, whether or not the reader is on a page in it.
+  // This used to run only when no current page matched, and only over the top-level nodes,
+  // so anything nested two levels deep was invisible on the KB landing page — the tree
+  // showed the first heading and nothing under it.
+  function openToDepth(list: PageTreeNode[], depth: number) {
+    if (depth >= expandDepth) {
+      return;
+    }
+    for (const node of list) {
+      if (node.children.length > 0) {
+        expanded.add(node.page.id);
+        openToDepth(node.children, depth + 1);
+      }
+    }
+  }
+  openToDepth(nodes, 0);
 
   function walk(list: PageTreeNode[], ancestors: string[]): boolean {
     for (const node of list) {
@@ -51,14 +69,9 @@ export function initialExpandedIds(
     return false;
   }
 
-  const found = walk(nodes, []);
-  if (!found) {
-    for (const node of nodes) {
-      if (node.children.length > 0) {
-        expanded.add(node.page.id);
-      }
-    }
-  }
+  // The current page's chain opens regardless of expandDepth: a reader who navigated to a
+  // deep page must be able to see where they are.
+  walk(nodes, []);
   return expanded;
 }
 
@@ -216,6 +229,7 @@ export function PageTree({
   currentPath,
   collapsible = false,
   maxDepth = 6,
+  expandDepth = 6,
 }: {
   nodes: PageTreeNode[];
   kbSlug: string;
@@ -226,11 +240,13 @@ export function PageTree({
   collapsible?: boolean;
   /** Deepest level shown to readers (per KB, Manage Styles). */
   maxDepth?: number;
+  /** How many levels start open when the tree is collapsible (per KB, Manage Styles). */
+  expandDepth?: number;
 }) {
   const idPrefix = useId().replace(/:/g, "");
   const requiredExpanded = useMemo(
-    () => initialExpandedIds(nodes, currentPageId, currentPath),
-    [nodes, currentPageId, currentPath],
+    () => initialExpandedIds(nodes, currentPageId, currentPath, expandDepth),
+    [nodes, currentPageId, currentPath, expandDepth],
   );
   const [expandedIds, setExpandedIds] = useState<Set<string>>(requiredExpanded);
 

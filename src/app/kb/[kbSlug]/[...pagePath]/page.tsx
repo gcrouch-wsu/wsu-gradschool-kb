@@ -167,6 +167,7 @@ export default async function KbArticlePage({
           <PageTree
             collapsible={effectiveTheme.layout.pageTreeCollapsible}
             maxDepth={effectiveTheme.layout.pageTreeMaxDepth}
+            expandDepth={effectiveTheme.layout.pageTreeExpandDepth}
             currentPageId={page.id}
             currentPath={currentPath}
             homepagePageId={kb.homepagePageId}

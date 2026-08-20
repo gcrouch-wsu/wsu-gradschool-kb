@@ -58,12 +58,30 @@ describe("initialExpandedIds", () => {
     expect(expanded.has("managing")).toBe(true);
   });
 
-  it("does not expand unrelated branches", () => {
-    const expanded = initialExpandedIds(tree(), "managing");
-    expect(expanded.has("policies")).toBe(false);
+  it("opens every branch by default so nested pages are visible while browsing", () => {
+    // The KB landing page passes no current page. This used to open only the top level, so
+    // anything two levels deep was invisible: "the first header but not the next nested".
+    const expanded = initialExpandedIds(tree());
+    expect(expanded.has("admissions")).toBe(true);
+    expect(expanded.has("managing")).toBe(true);
+    expect(expanded.has("policies")).toBe(true);
   });
 
-  it("does not expand a current page that has no children", () => {
+  it("honours a shallower expand depth", () => {
+    const expanded = initialExpandedIds(tree(), undefined, undefined, 1);
+    expect(expanded.has("admissions")).toBe(true);
+    expect(expanded.has("policies")).toBe(true);
+    expect(expanded.has("managing")).toBe(false);
+  });
+
+  it("still opens the current page's chain below the expand depth", () => {
+    const expanded = initialExpandedIds(tree(), "apply", undefined, 1);
+    expect(expanded.has("admissions")).toBe(true);
+    // Beyond expandDepth, but the reader is inside it, so it must be visible.
+    expect(expanded.has("managing")).toBe(true);
+  });
+
+  it("never marks a childless node as expanded", () => {
     const expanded = initialExpandedIds(tree(), "ita");
     expect(expanded.has("admissions")).toBe(true);
     expect(expanded.has("ita")).toBe(false);
@@ -75,10 +93,10 @@ describe("initialExpandedIds", () => {
     expect(expanded.has("managing")).toBe(true);
   });
 
-  it("falls back to opening every root with children when browsing", () => {
+  it("opens branches even when the current page id matches nothing", () => {
     const expanded = initialExpandedIds(tree(), "not-in-this-tree");
     expect(expanded.has("policies")).toBe(true);
     expect(expanded.has("admissions")).toBe(true);
-    expect(expanded.has("managing")).toBe(false);
+    expect(expanded.has("managing")).toBe(true);
   });
 });

@@ -550,12 +550,17 @@ manual redirect persistence, and the single-active-version DB invariant.
   a malformed colour turned the default into black. `::marker` accepts only a small set of
   properties (colour, font, content); the theme exposes exactly those, and the rule is
   applied to `.wysiwyg-surface` as well so the editor matches the published page.
-- **A collapsible page tree must open the current page's own branch.** `initialExpandedIds`
-  expanded a node only when the current page was somewhere *below* it, so standing on a
-  parent left its children collapsed behind a chevron — which is exactly where an editor
-  looks to confirm a page was nested, so it read as the child missing from the tree
-  entirely. The node itself is expanded whenever it has children. This only shows up with
-  `pageTreeCollapsible` on; with it off every branch renders open.
+- **A collapsible page tree opens to `pageTreeExpandDepth`, not to one level.**
+  `initialExpandedIds` had two gaps that both read as "nested pages are missing from the
+  tree", and only bite with `pageTreeCollapsible` on (with it off every branch renders open,
+  which is why neither reproduces under the default theme):
+  (1) a node was expanded only when the current page sat *below* it, so standing on a parent
+  left its own children collapsed — exactly where you look to confirm a page was nested;
+  (2) when no current page matched — which is every visit to the generated KB landing page,
+  since it passes no `currentPageId` — the fallback iterated the **top-level nodes only**, so
+  anything two levels deep was invisible: the first heading showed and nothing under it.
+  Branches now open to `pageTreeExpandDepth` (default: all levels) regardless of the current
+  page, and the current page's own chain always opens even when it is deeper than that.
 - **`pageTreeMaxDepth` hides deeper branches, it does not collapse them.** It is a reader
   presentation limit only: nothing about the stored hierarchy, the admin tree, or the URLs
   changes, and pages below the cut are still reachable by link and by search.

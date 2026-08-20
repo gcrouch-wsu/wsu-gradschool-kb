@@ -97,6 +97,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <PageTree
               collapsible={effectiveTheme.layout.pageTreeCollapsible}
             maxDepth={effectiveTheme.layout.pageTreeMaxDepth}
+            expandDepth={effectiveTheme.layout.pageTreeExpandDepth}
               currentPageId={homepagePage.id}
               homepagePageId={kb.homepagePageId}
               kbSlug={kb.slug}
@@ -190,6 +191,7 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
             <PageTree
               collapsible={effectiveTheme.layout.pageTreeCollapsible}
             maxDepth={effectiveTheme.layout.pageTreeMaxDepth}
+            expandDepth={effectiveTheme.layout.pageTreeExpandDepth}
               homepagePageId={kb.homepagePageId}
               kbSlug={kb.slug}
               nodes={tree}

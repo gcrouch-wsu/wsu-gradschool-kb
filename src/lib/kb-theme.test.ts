@@ -226,3 +226,14 @@ describe("list markers and navigation depth", () => {
     expect(mergeTheme({ layout: { pageTreeMaxDepth: "3" } }).layout.pageTreeMaxDepth).toBe(3);
   });
 });
+
+describe("page tree expand depth", () => {
+  it("defaults to opening every level", () => {
+    expect(mergeTheme({}).layout.pageTreeExpandDepth).toBe(6);
+  });
+
+  it("clamps into range", () => {
+    expect(mergeTheme({ layout: { pageTreeExpandDepth: 0 } }).layout.pageTreeExpandDepth).toBe(1);
+    expect(mergeTheme({ layout: { pageTreeExpandDepth: 42 } }).layout.pageTreeExpandDepth).toBe(6);
+  });
+});

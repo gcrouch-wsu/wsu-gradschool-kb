@@ -266,7 +266,10 @@ export function ThemeEditor({
     setTheme((t) => ({ ...t, listMarkers: { ...t.listMarkers, [key]: value } }));
   }
 
-  function setLayoutCount(key: "pageTreeMaxDepth" | "tocDepth", value: number) {
+  function setLayoutCount(
+    key: "pageTreeMaxDepth" | "pageTreeExpandDepth" | "tocDepth",
+    value: number,
+  ) {
     setTheme((t) => ({ ...t, layout: { ...t.layout, [key]: value } }));
   }
 
@@ -714,6 +717,26 @@ export function ThemeEditor({
               {theme.layout.pageTreeMaxDepth >= 6 ? "All levels" : `${theme.layout.pageTreeMaxDepth} levels`}
             </span>
           </label>
+          <label className="theme-scale" title="How many levels start open when the tree collapses">
+            <span className="meta">Levels open by default</span>
+            <input
+              max={6}
+              min={1}
+              onChange={(event) => setLayoutCount("pageTreeExpandDepth", Number(event.target.value))}
+              step={1}
+              type="range"
+              value={theme.layout.pageTreeExpandDepth}
+            />
+            <span className="theme-scale__value">
+              {theme.layout.pageTreeExpandDepth >= 6
+                ? "All open"
+                : `${theme.layout.pageTreeExpandDepth} levels`}
+            </span>
+          </label>
+          <p className="meta">
+            Only applies when the page tree is collapsible. At 1, readers see the top level
+            only and everything nested stays hidden until they expand it.
+          </p>
           <label className="theme-scale" title="Default heading levels in the On this page rail">
             <span className="meta">On this page</span>
             <select

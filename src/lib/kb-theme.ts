@@ -96,6 +96,12 @@ export interface ThemeLayout {
   pageTreeGroupTransform: HeadingTextTransform;
   /** Deepest page-tree level rendered to readers (1 = top level only). */
   pageTreeMaxDepth: number;
+  /**
+   * How many levels of a collapsible page tree start open (1 = only the top level, which
+   * hides everything nested). Ignored when the tree is not collapsible — then every branch
+   * renders open anyway.
+   */
+  pageTreeExpandDepth: number;
   /** Default "On this page" depth for pages that do not set their own (2 = H2, 3 = H2+H3). */
   tocDepth: number;
 }
@@ -202,6 +208,7 @@ export const DEFAULT_THEME: KbTheme = {
     pageTreeGroupTracking: "0em",
     pageTreeGroupTransform: "none",
     pageTreeMaxDepth: 6,
+    pageTreeExpandDepth: 6,
     tocDepth: 3,
   },
   editor: {
@@ -442,6 +449,7 @@ export function mergeTheme(input: unknown, base: KbTheme = DEFAULT_THEME): KbThe
         ? (l.pageTreeGroupTransform as HeadingTextTransform)
         : base.layout.pageTreeGroupTransform,
       pageTreeMaxDepth: safeCount(l.pageTreeMaxDepth, base.layout.pageTreeMaxDepth, 1, 6),
+      pageTreeExpandDepth: safeCount(l.pageTreeExpandDepth, base.layout.pageTreeExpandDepth, 1, 6),
       tocDepth: safeCount(l.tocDepth, base.layout.tocDepth, 2, 3),
     },
     editor: {
