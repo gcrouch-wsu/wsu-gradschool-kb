@@ -550,6 +550,12 @@ manual redirect persistence, and the single-active-version DB invariant.
   a malformed colour turned the default into black. `::marker` accepts only a small set of
   properties (colour, font, content); the theme exposes exactly those, and the rule is
   applied to `.wysiwyg-surface` as well so the editor matches the published page.
+- **A collapsible page tree must open the current page's own branch.** `initialExpandedIds`
+  expanded a node only when the current page was somewhere *below* it, so standing on a
+  parent left its children collapsed behind a chevron — which is exactly where an editor
+  looks to confirm a page was nested, so it read as the child missing from the tree
+  entirely. The node itself is expanded whenever it has children. This only shows up with
+  `pageTreeCollapsible` on; with it off every branch renders open.
 - **`pageTreeMaxDepth` hides deeper branches, it does not collapse them.** It is a reader
   presentation limit only: nothing about the stored hierarchy, the admin tree, or the URLs
   changes, and pages below the cut are still reachable by link and by search.

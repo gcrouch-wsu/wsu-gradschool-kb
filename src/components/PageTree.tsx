@@ -16,8 +16,16 @@ function isCurrentNode(
   return Boolean(currentPath && currentPath === node.page.path.join("/"));
 }
 
-/** IDs that should start expanded: ancestors of the current page, or all roots when browsing. */
-function initialExpandedIds(
+/**
+ * IDs that should start expanded: the current page and its ancestors, or all roots when
+ * browsing.
+ *
+ * The current page's *own* children used to stay collapsed — only nodes with a matching
+ * descendant were expanded — so standing on a parent page hid the pages beneath it behind a
+ * chevron. That is exactly where you look to confirm a page was nested, so it read as the
+ * child being missing from the tree entirely.
+ */
+export function initialExpandedIds(
   nodes: PageTreeNode[],
   currentPageId?: string,
   currentPath?: string,
@@ -32,7 +40,9 @@ function initialExpandedIds(
         for (const id of ancestors) {
           expanded.add(id);
         }
-        if (childHit) {
+        // childHit implies children exist, so this covers both the ancestor case and the
+        // current page's own branch.
+        if (node.children.length > 0) {
           expanded.add(node.page.id);
         }
         return true;
