@@ -26,6 +26,7 @@ interface UpdateBody {
   title?: unknown;
   slug?: unknown;
   parentPath?: unknown;
+  parentPageId?: unknown;
   summary?: unknown;
   tags?: unknown;
   visibility?: unknown;
@@ -106,6 +107,13 @@ export async function PATCH(
   const status: PageStatus =
     body.status === "published" ? "published" : body.status === "proposed" ? "proposed" : "draft";
   const sortOrder = typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : undefined;
+  // Prefer an id: it survives a reorganisation that rewrote every descendant path.
+  const parentPageId =
+    body.parentPageId === null
+      ? null
+      : typeof body.parentPageId === "string"
+        ? body.parentPageId
+        : undefined;
   const parentPath = Array.isArray(body.parentPath)
     ? body.parentPath.filter((segment): segment is string => typeof segment === "string")
     : [];
@@ -189,6 +197,7 @@ export async function PATCH(
       tags,
       visibility,
       parentPath,
+      parentPageId,
       status,
       sortOrder,
       blocks,

@@ -1960,6 +1960,13 @@ export interface UpdatePageInput {
   title: string;
   slug?: string;
   parentPath?: string[];
+  /**
+   * Preferred over parentPath. A path goes stale the moment anything above the page is
+   * reorganised — every descendant path is rewritten — so an editor tab opened before a
+   * move sent a path that no longer resolved and the save failed with "Parent page not
+   * found". A page id survives moves.
+   */
+  parentPageId?: string | null;
   summary?: string;
   tags?: unknown;
   visibility?: PageVisibility;
@@ -2086,7 +2093,24 @@ export async function updatePage(
 
   const oldPath = existing.path;
   const pathBefore = new Map(dataset.pages.map((page) => [page.id, [...page.path]]));
-  const parentPath = input.parentPath ?? oldPath.slice(0, -1);
+  let parentPath: string[];
+  if (input.parentPageId !== undefined) {
+    if (input.parentPageId === null || input.parentPageId === "") {
+      parentPath = [];
+    } else {
+      const parent = dataset.pages.find(
+        (page) => page.id === input.parentPageId && page.kbId === existing.kbId,
+      );
+      if (!parent) {
+        throw new Error(
+          "Parent page not found. If this page was moved to another knowledge base or reorganized, reload the editor and save again.",
+        );
+      }
+      parentPath = [...parent.path];
+    }
+  } else {
+    parentPath = input.parentPath ?? oldPath.slice(0, -1);
+  }
   if (parentPath.length > 0) {
     if (hasPathPrefix(parentPath, oldPath)) {
       throw new Error("A page cannot be nested under itself or one of its child pages.");
@@ -2402,16 +2426,6 @@ export async function updatePageLayout(
     if (item.parentPath.length > 0 && hasPathPrefix(item.parentPath, page.path)) {
       throw new Error("A page cannot be nested under itself or one of its child pages.");
     }
-    if (item.parentPath.length > 0) {
-      const parentExists = pages.some(
-        (candidate) => candidate.path.join("/") === item.parentPath.join("/"),
-      );
-      if (!parentExists) {
-        throw new Error(
-          "Parent page not found. If this page was moved to another knowledge base or reorganized, reload the editor and save again.",
-        );
-      }
-    }
     const next = nextById.get(page.id)!;
     next.path = [...item.parentPath, page.slug];
     next.sortOrder = item.sortOrder;
@@ -2430,6 +2444,21 @@ export async function updatePageLayout(
       }
       const descendant = nextById.get(page.id)!;
       descendant.path = [...nextRoot.path, ...page.path.slice(oldPath.length)];
+    }
+  }
+
+  // Validate against the layout this save produces, not the one it replaces. The tree
+  // manager submits the whole intended arrangement in one batch, so a child's new
+  // parentPath routinely names a location its parent is only moving to in this same
+  // request. Checking the pre-move paths rejected every such batch with "Parent page not
+  // found" — the intermittent failure editors hit right after reorganising.
+  const finalPaths = new Set([...nextById.values()].map((page) => pathKey(page.path)));
+  for (const page of changedRoots) {
+    const item = itemByPageId.get(page.id)!;
+    if (item.parentPath.length > 0 && !finalPaths.has(pathKey(item.parentPath))) {
+      throw new Error(
+        "Parent page not found. If this page was moved to another knowledge base or reorganized, reload the editor and save again.",
+      );
     }
   }
 

@@ -160,6 +160,13 @@ function TreeItems({
                 {node.page.visibility === "staff" && (
                   <span className="badge badge--staff">Staff</span>
                 )}
+                {/* Drafts reach this tree only when the reader is signed-in staff
+                    (buildPageTree's includeStaff), so this never leaks to the public.
+                    Without it a draft is indistinguishable from a published page. */}
+                {node.page.status === "draft" && <span className="badge badge--draft">Draft</span>}
+                {node.page.status === "proposed" && (
+                  <span className="badge badge--draft">In review</span>
+                )}
               </div>
             </div>
             {hasChildren && isExpanded && (

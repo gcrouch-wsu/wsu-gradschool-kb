@@ -36,6 +36,7 @@ const tocDepthOptions = [
 ];
 
 interface ParentOption {
+  id: string;
   path: string;
   title: string;
   depth: number;
@@ -321,7 +322,23 @@ export function AdminPageEditorForm({
   const [summary, setSummary] = useState(page.summary);
   const [tagsText, setTagsText] = useState(normalizePageTags(page.tags).join(", "));
   const [visibility, setVisibility] = useState<PageVisibility>(page.visibility);
-  const [parentPath, setParentPath] = useState(page.path.slice(0, -1).join("/"));
+  // Tracked by id, not path: a reorganisation elsewhere rewrites descendant paths, and a
+  // stale path made the save fail with "Parent page not found".
+  const [parentPageId, setParentPageId] = useState(
+    () => parentOptions.find((option) => option.path === page.path.slice(0, -1).join("/"))?.id ?? "",
+  );
+  // Snapshots, revisions, and the public path still speak in paths; the id is the source
+  // of truth and the path is derived from it.
+  const parentPath = useMemo(
+    () => parentOptions.find((option) => option.id === parentPageId)?.path ?? "",
+    [parentOptions, parentPageId],
+  );
+  const setParentFromPath = useCallback(
+    (path: string) => {
+      setParentPageId(parentOptions.find((option) => option.path === path)?.id ?? "");
+    },
+    [parentOptions],
+  );
   const [ownerLabel, setOwnerLabel] = useState(page.ownerLabel);
   const [contactEmail, setContactEmail] = useState(page.contactEmail);
   const [lastReviewedDate, setLastReviewedDate] = useState(page.lastReviewedDate);
@@ -431,7 +448,7 @@ export function AdminPageEditorForm({
         description: `${option.status} page`,
         label: option.title,
         searchText: `${option.title} ${option.status} ${option.path}`,
-        value: option.path,
+        value: option.id,
       })),
     ],
     [kb.title, parentOptions],
@@ -512,9 +529,9 @@ export function AdminPageEditorForm({
     }
     if (data.visibility === "public" || data.visibility === "staff") setVisibility(data.visibility);
     if (Array.isArray(data.path)) {
-      setParentPath(data.path.slice(0, -1).join("/"));
+      setParentFromPath(data.path.slice(0, -1).join("/"));
     } else if (typeof data.parentPath === "string") {
-      setParentPath(data.parentPath);
+      setParentFromPath(data.parentPath);
     }
     if (typeof data.ownerLabel === "string") setOwnerLabel(data.ownerLabel);
     if (typeof data.contactEmail === "string") setContactEmail(data.contactEmail);
@@ -1046,6 +1063,8 @@ export function AdminPageEditorForm({
           visibility,
           status,
           parentPath: parentPath ? parentPath.split("/") : [],
+          // Authoritative: the server resolves the parent from this and ignores the path.
+          parentPageId: parentPageId || null,
           sortOrder: page.sortOrder,
           ownerLabel,
           contactEmail,
@@ -1536,11 +1555,11 @@ export function AdminPageEditorForm({
           <DropdownSelect
             disabled={isLocked}
             label="Nest under"
-            onChange={setParentPath}
+            onChange={setParentPageId}
             options={parentSelectOptions}
             searchLabel="Search parent pages"
             searchPlaceholder="Search parent pages..."
-            value={parentPath}
+            value={parentPageId}
           />
           <div className="field-row field-row--toc-settings">
             <DropdownSelect

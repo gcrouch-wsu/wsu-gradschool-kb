@@ -540,6 +540,30 @@ manual redirect persistence, and the single-active-version DB invariant.
   cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
   binding the active surface makes toolbar commands fail because the selection is treated as outside
   the editor.
+- **A batch layout save must be validated against the layout it produces, not the one it
+  replaces.** `updatePageLayout` receives the whole intended arrangement from the tree
+  manager, so a child's new `parentPath` routinely names a location its parent only reaches
+  in that same request. Checking each `parentPath` against the *pre-move* page list rejected
+  every such batch with "Parent page not found" — an intermittent failure right after
+  reorganising, which looked like data corruption rather than a validation order bug.
+  Compute all resulting paths first (roots, then propagated descendants), then validate.
+  The self/descendant cycle check still runs against the pre-move paths, which is correct.
+- **Re-parenting is addressed by page id, not path.** Moving anything rewrites every
+  descendant path, so a path held by an already-open editor tab goes stale and its save
+  failed. `UpdatePageInput.parentPageId` takes precedence over `parentPath`; the editor
+  form tracks the parent by id and derives the path for snapshots. Prefer ids for any new
+  cross-page reference.
+- **"Indent under the previous page" cannot express "move under X".** It nests a node one
+  level under whatever precedes it, and is disabled for an only child — the state right
+  after nesting the first page under a heading, which made deeper nesting look impossible.
+  The tree manager's "Move under…" dialog is the general control, and the only way to
+  re-parent a group heading at all: `/admin/pages/[pageId]` bails early for `group`/`link`
+  nodes into `TreeNodeSettingsForm`, which has no parent selector.
+- **Drafts are already in the reader tree for signed-in staff; the badge is what was
+  missing.** `visiblePages(includeStaff)` admits `draft` and `proposed`, so `PageTree`
+  labels them. This never leaks publicly because those statuses never enter an anonymous
+  reader's tree. Descendants of an *archived* ancestor are still dropped for everyone
+  (`isStaffVisiblePageStatus` excludes archived).
 - **A new KB runtime override must be added to BOTH `getDataset` short-circuits.**
   `kb-store.ts` has two fast paths (`mergeRuntimeIntoDataset` and the no-DB `getDataset`)
   that return the untouched seed when every override map is empty — and each one lists the

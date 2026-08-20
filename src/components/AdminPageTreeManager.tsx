@@ -403,6 +403,7 @@ interface PageTreeOverflowMenuProps {
   onHomepage: () => void;
   onPublishToggle: () => void;
   onRelocate: () => void;
+  onReparent: () => void;
   page: PageItem;
   statusBusy: boolean;
 }
@@ -418,6 +419,7 @@ function PageTreeOverflowMenu({
   onHomepage,
   onPublishToggle,
   onRelocate,
+  onReparent,
   page,
   statusBusy,
 }: PageTreeOverflowMenuProps) {
@@ -434,6 +436,11 @@ function PageTreeOverflowMenu({
     }
 
     if (page.status !== "archived") {
+      entries.push({
+        icon: <FolderInput aria-hidden size={16} strokeWidth={1.75} />,
+        label: "Move under…",
+        onSelect: onReparent,
+      });
       entries.push({
         icon: <FolderInput aria-hidden size={16} strokeWidth={1.75} />,
         label: "Copy / move to KB…",
@@ -480,6 +487,7 @@ function PageTreeOverflowMenu({
     onHomepage,
     onPublishToggle,
     onRelocate,
+    onReparent,
     page.nodeKind,
     page.status,
     statusBusy,
@@ -492,6 +500,105 @@ function PageTreeOverflowMenu({
       triggerContent="⋯"
       triggerLabel={`More actions for ${page.title}`}
     />
+  );
+}
+
+/**
+ * Move a node directly under any other node.
+ *
+ * The only other re-parenting control is "Indent under the previous page", which nests a
+ * node one level under whatever happens to precede it. That cannot express "put this under
+ * X" unless X is already the immediately preceding sibling, and it is disabled outright for
+ * an only child — the state you land in right after nesting the first page under a heading.
+ * Group headings have no parent control at all in their settings form, so this is the only
+ * way to nest one heading under another.
+ */
+function MoveUnderDialog({
+  page,
+  pages,
+  onCancel,
+  onConfirm,
+}: {
+  page: PageItem;
+  pages: PageItem[];
+  onCancel: () => void;
+  onConfirm: (parentPath: string[]) => void;
+}) {
+  const dialogRef = useModalA11y<HTMLDivElement>(onCancel);
+  const headingId = useId();
+  const currentParent = pathKey(page.path.slice(0, -1));
+  const [selected, setSelected] = useState(currentParent);
+
+  // Everything except the node itself and its own descendants (which would detach the
+  // subtree from the tree entirely).
+  const candidates = useMemo(
+    () =>
+      sortedPages(pages).filter(
+        (candidate) =>
+          candidate.id !== page.id &&
+          candidate.status !== "archived" &&
+          !hasPathPrefix(candidate.path, page.path),
+      ),
+    [page, pages],
+  );
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="media-picker__overlay" onClick={onCancel} role="presentation">
+      <div
+        aria-labelledby={headingId}
+        aria-modal="true"
+        className="media-picker link-dialog"
+        onClick={(event) => event.stopPropagation()}
+        ref={dialogRef}
+        role="dialog"
+        tabIndex={-1}
+      >
+        <div className="media-picker__head">
+          <strong id={headingId}>Move under</strong>
+          <button aria-label="Cancel move" className="icon-button" onClick={onCancel} type="button">
+            ✕
+          </button>
+        </div>
+        <div className="media-picker__body form">
+          <p className="meta">
+            Choose a new parent for &ldquo;{page.title}&rdquo;. Its own child pages move with it.
+          </p>
+          <label>
+            <span className="meta">New parent</span>
+            <select
+              className="input"
+              onChange={(event) => setSelected(event.target.value)}
+              value={selected}
+            >
+              <option value="">Top level</option>
+              {candidates.map((candidate) => (
+                <option key={candidate.id} value={pathKey(candidate.path)}>
+                  {`${"— ".repeat(Math.max(0, candidate.path.length - 1))}${candidate.title}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="admin-inline-actions">
+            <button className="button button--ghost" onClick={onCancel} type="button">
+              Cancel
+            </button>
+            <button
+              className="button"
+              disabled={selected === currentParent}
+              onClick={() => onConfirm(selected ? selected.split("/") : [])}
+              type="button"
+            >
+              Move
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -651,6 +758,7 @@ export function AdminPageTreeManager({
   const [deleteTarget, setDeleteTarget] = useState<PageItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PageItem | null>(null);
   const [relocateTarget, setRelocateTarget] = useState<PageItem | null>(null);
+  const [reparentTarget, setReparentTarget] = useState<PageItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
@@ -822,6 +930,25 @@ export function AdminPageTreeManager({
       movePage(current, pageId, parent.path, Math.max(0, ...childOrders) + 10),
     );
     announceMove(`${page.title} nested under ${parent.title}.`);
+  }
+
+  function movePageUnder(pageId: string, parentPath: string[]) {
+    const page = pages.find((entry) => entry.id === pageId);
+    if (!page) return;
+    const childOrders = pages
+      .filter(
+        (entry) => entry.id !== pageId && pathKey(entry.path.slice(0, -1)) === pathKey(parentPath),
+      )
+      .map((entry) => entry.sortOrder);
+    setPages((current) =>
+      movePage(current, pageId, parentPath, Math.max(0, ...childOrders) + 10),
+    );
+    const parent = pages.find((entry) => pathKey(entry.path) === pathKey(parentPath));
+    announceMove(
+      parentPath.length === 0
+        ? `${page.title} moved to the top level.`
+        : `${page.title} nested under ${parent?.title ?? parentPath.join("/")}.`,
+    );
   }
 
   function movePageOut(pageId: string) {
@@ -1319,6 +1446,7 @@ export function AdminPageTreeManager({
                     onHomepage={() => setHomepage(page.id)}
                     onPublishToggle={() => setPageStatus(page.id, nextStatusForToggle(page.status, canManagePublishPolicy))}
                     onRelocate={() => setRelocateTarget(page)}
+                    onReparent={() => setReparentTarget(page)}
                     page={page}
                     statusBusy={statusBusyId === page.id}
                   />
@@ -1345,6 +1473,18 @@ export function AdminPageTreeManager({
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => handleDelete(deleteTarget.id)}
           pageTitle={deleteTarget.title}
+        />
+      )}
+
+      {reparentTarget && (
+        <MoveUnderDialog
+          onCancel={() => setReparentTarget(null)}
+          onConfirm={(parentPath) => {
+            movePageUnder(reparentTarget.id, parentPath);
+            setReparentTarget(null);
+          }}
+          page={reparentTarget}
+          pages={pages}
         />
       )}
 

@@ -62,6 +62,7 @@ export default async function AdminEditPage({
         !hasPathPrefix(candidate.path, page.path),
     )
     .map((candidate) => ({
+      id: candidate.id,
       path: candidate.path.join("/"),
       title: candidate.title,
       depth: candidate.path.length,
