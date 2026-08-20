@@ -6,6 +6,7 @@ import {
   getPageByPath,
   publishDueDraftPages,
   searchKb,
+  setKbShowPageNav,
   verifyPage,
 } from "./kb-store";
 
@@ -91,6 +92,35 @@ describe("KI-1 live-DB integration", () => {
       if (isTempKb) {
         await sql`DELETE FROM knowledge_bases WHERE id = ${kb.id}`;
       }
+    }
+  });
+
+  // Previous/next links must stay off unless a KB opts in, so the column defaults to
+  // FALSE and the round-trip has to preserve an explicit true.
+  it("defaults showPageNav to false and round-trips an opt-in", async () => {
+    const sql = getSql();
+    const kbId = `kb-nav-${crypto.randomUUID()}`;
+    const slug = `nav-${crypto.randomUUID().slice(0, 8)}`;
+    await sql`
+      INSERT INTO knowledge_bases (id, title, slug, description, status, visibility, updated_on)
+      VALUES (${kbId}, ${"Nav Test"}, ${slug}, ${""}, ${"published"}, ${"public"}, ${"2026-01-01"})
+    `;
+    try {
+      expect((await getKbBySlug(slug))?.showPageNav).toBe(false);
+
+      await setKbShowPageNav(kbId, true);
+      const [row] = (await sql`
+        SELECT show_page_nav FROM knowledge_bases WHERE id = ${kbId}
+      `) as unknown as Array<{ show_page_nav: boolean }>;
+      expect(row.show_page_nav).toBe(true);
+
+      await setKbShowPageNav(kbId, false);
+      const [off] = (await sql`
+        SELECT show_page_nav FROM knowledge_bases WHERE id = ${kbId}
+      `) as unknown as Array<{ show_page_nav: boolean }>;
+      expect(off.show_page_nav).toBe(false);
+    } finally {
+      await sql`DELETE FROM knowledge_bases WHERE id = ${kbId}`;
     }
   });
 

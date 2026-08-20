@@ -29,6 +29,7 @@ import {
   updateAssetRecord,
   updateKbHomepagePageId,
   updateKbRequireSummary,
+  updateKbShowPageNav,
   updateKbAiPrompts,
   updatePages,
   updatePageStatusColumn,
@@ -86,6 +87,7 @@ const globalForRuntime = globalThis as unknown as {
   __kbRuntimeRedirects?: KbRedirect[];
   __kbRuntimeKbHomepages?: Map<string, string | null>;
   __kbRuntimeKbRequireSummary?: Map<string, boolean>;
+  __kbRuntimeKbShowPageNav?: Map<string, boolean>;
   __kbRuntimeKbAiPrompts?: Map<string, { aiSummaryPrompt: string; aiPagePrompt: string }>;
   __kbRuntimePageRevisions?: PageRevision[];
   __kbDeletedAssetIds?: Set<string>;
@@ -127,6 +129,13 @@ function runtimeKbRequireSummary(): Map<string, boolean> {
   return globalForRuntime.__kbRuntimeKbRequireSummary;
 }
 
+function runtimeKbShowPageNav(): Map<string, boolean> {
+  if (!globalForRuntime.__kbRuntimeKbShowPageNav) {
+    globalForRuntime.__kbRuntimeKbShowPageNav = new Map();
+  }
+  return globalForRuntime.__kbRuntimeKbShowPageNav;
+}
+
 function runtimeKbAiPrompts(): Map<string, { aiSummaryPrompt: string; aiPagePrompt: string }> {
   if (!globalForRuntime.__kbRuntimeKbAiPrompts) {
     globalForRuntime.__kbRuntimeKbAiPrompts = new Map();
@@ -137,10 +146,12 @@ function runtimeKbAiPrompts(): Map<string, { aiSummaryPrompt: string; aiPageProm
 function applyKbRuntimeOverrides(kbs: KnowledgeBase[]): KnowledgeBase[] {
   const homepageOverrides = runtimeKbHomepages();
   const requireSummaryOverrides = runtimeKbRequireSummary();
+  const showPageNavOverrides = runtimeKbShowPageNav();
   const aiPromptOverrides = runtimeKbAiPrompts();
   if (
     homepageOverrides.size === 0 &&
     requireSummaryOverrides.size === 0 &&
+    showPageNavOverrides.size === 0 &&
     aiPromptOverrides.size === 0
   ) {
     return kbs;
@@ -152,6 +163,9 @@ function applyKbRuntimeOverrides(kbs: KnowledgeBase[]): KnowledgeBase[] {
     }
     if (requireSummaryOverrides.has(kb.id)) {
       next = { ...next, requireSummary: requireSummaryOverrides.get(kb.id) !== false };
+    }
+    if (showPageNavOverrides.has(kb.id)) {
+      next = { ...next, showPageNav: showPageNavOverrides.get(kb.id) === true };
     }
     if (aiPromptOverrides.has(kb.id)) {
       const prompts = aiPromptOverrides.get(kb.id)!;
@@ -228,6 +242,7 @@ function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
   const extraAssets = runtimeAssets();
   const homepageOverrides = runtimeKbHomepages();
   const requireSummaryOverrides = runtimeKbRequireSummary();
+  const showPageNavOverrides = runtimeKbShowPageNav();
   const aiPromptOverrides = runtimeKbAiPrompts();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
@@ -236,6 +251,7 @@ function mergeRuntimeIntoDataset(dbDataset: KbDataset): KbDataset {
     extraAssets.length === 0 &&
     homepageOverrides.size === 0 &&
     requireSummaryOverrides.size === 0 &&
+    showPageNavOverrides.size === 0 &&
     aiPromptOverrides.size === 0 &&
     deletedPages.size === 0 &&
     deletedAssets.size === 0
@@ -268,6 +284,7 @@ const getDataset = cache(async (): Promise<KbDataset> => {
   const extraAssets = runtimeAssets();
   const homepageOverrides = runtimeKbHomepages();
   const requireSummaryOverrides = runtimeKbRequireSummary();
+  const showPageNavOverrides = runtimeKbShowPageNav();
   const aiPromptOverrides = runtimeKbAiPrompts();
   const deletedPages = deletedPageIds();
   const deletedAssets = deletedAssetIds();
@@ -276,6 +293,7 @@ const getDataset = cache(async (): Promise<KbDataset> => {
     extraAssets.length === 0 &&
     homepageOverrides.size === 0 &&
     requireSummaryOverrides.size === 0 &&
+    showPageNavOverrides.size === 0 &&
     aiPromptOverrides.size === 0 &&
     deletedPages.size === 0 &&
     deletedAssets.size === 0
@@ -519,6 +537,28 @@ export async function setKbRequireSummary(kbId: string, requireSummary: boolean)
     await updateKbRequireSummary(kbId, requireSummary);
   } else {
     runtimeKbRequireSummary().set(kbId, requireSummary);
+  }
+
+  return updated;
+}
+
+export async function setKbShowPageNav(kbId: string, showPageNav: boolean): Promise<KnowledgeBase> {
+  const dataset = await getDataset();
+  const kb = dataset.knowledgeBases.find((candidate) => candidate.id === kbId);
+  if (!kb) {
+    throw new Error("Knowledge base not found.");
+  }
+
+  const updated: KnowledgeBase = {
+    ...kb,
+    showPageNav,
+    updatedOn: new Date().toISOString().slice(0, 10),
+  };
+
+  if (isDatabaseEnabled()) {
+    await updateKbShowPageNav(kbId, showPageNav);
+  } else {
+    runtimeKbShowPageNav().set(kbId, showPageNav);
   }
 
   return updated;

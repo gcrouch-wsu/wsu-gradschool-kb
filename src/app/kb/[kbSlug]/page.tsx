@@ -149,12 +149,14 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
               </>
             )}
 
-            <ArticlePageNav
-              currentPageId={homepagePage.id}
-              homepagePageId={kb.homepagePageId}
-              kbSlug={kb.slug}
-              nodes={tree}
-            />
+            {kb.showPageNav === true && (
+              <ArticlePageNav
+                currentPageId={homepagePage.id}
+                homepagePageId={kb.homepagePageId}
+                kbSlug={kb.slug}
+                nodes={tree}
+              />
+            )}
           </article>
           {showTocRail && (
             <aside className="toc-rail">

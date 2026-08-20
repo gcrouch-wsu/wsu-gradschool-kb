@@ -191,6 +191,7 @@ interface KbRow {
   search_widget_scope?: string;
   search_widget_label?: string;
   require_summary?: boolean;
+  show_page_nav?: boolean;
   ai_summary_prompt?: string;
   ai_page_prompt?: string;
   theme?: unknown;
@@ -269,6 +270,7 @@ function mapKb(row: KbRow): KnowledgeBase {
     searchWidgetScope: row.search_widget_scope === "all" ? "all" : "kb",
     searchWidgetLabel: row.search_widget_label ?? "",
     requireSummary: row.require_summary !== false,
+    showPageNav: row.show_page_nav === true,
     aiSummaryPrompt: row.ai_summary_prompt ?? "",
     aiPagePrompt: row.ai_page_prompt ?? "",
     theme: row.theme ? mergeTheme(row.theme) : undefined,
@@ -449,6 +451,16 @@ export async function updateKbRequireSummary(kbId: string, requireSummary: boole
   await sql`
     UPDATE knowledge_bases
     SET require_summary = ${requireSummary}, updated_on = ${new Date().toISOString().slice(0, 10)}
+    WHERE id = ${kbId}
+  `;
+}
+
+export async function updateKbShowPageNav(kbId: string, showPageNav: boolean): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE knowledge_bases
+    SET show_page_nav = ${showPageNav}, updated_on = ${new Date().toISOString().slice(0, 10)}
     WHERE id = ${kbId}
   `;
 }

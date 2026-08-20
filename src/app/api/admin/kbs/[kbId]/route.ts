@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isDatabaseEnabled, getSql, ensureSchema, deleteKb } from "@/lib/db";
-import { setKbRequireSummary, setKbAiPrompts } from "@/lib/kb-store";
+import { setKbRequireSummary, setKbShowPageNav, setKbAiPrompts } from "@/lib/kb-store";
 import { normalizeAiPrompt } from "@/lib/ai-prompts";
 import { logError } from "@/lib/log";
 import { requireAdminMutation } from "@/lib/security";
@@ -39,6 +39,12 @@ export async function PATCH(
   try {
     if (body.requireSummary !== undefined) {
       await setKbRequireSummary(kbId, body.requireSummary !== false);
+    }
+
+    if (body.showPageNav !== undefined) {
+      // Works without a database (runtime override), like requireSummary, so the
+      // hermetic test suites and no-DB local runs can exercise it.
+      await setKbShowPageNav(kbId, body.showPageNav === true);
     }
 
     if (body.aiSummaryPrompt !== undefined || body.aiPagePrompt !== undefined) {

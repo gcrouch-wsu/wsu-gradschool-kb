@@ -48,6 +48,12 @@ export interface KnowledgeBase {
   searchWidgetLabel?: string;
   /** When false, publish does not require a page summary. Default true. */
   requireSummary?: boolean;
+  /**
+   * Show previous/next links at the foot of article pages. Default **false**:
+   * prev/next implies a linear reading order, which reference KBs do not have —
+   * the page tree and in-page rail already carry navigation.
+   */
+  showPageNav?: boolean;
   /** KB override for Draft with AI summary system prompt. Empty inherits site → built-in. */
   aiSummaryPrompt?: string;
   /** KB override for AI page review system prompt. Empty inherits site → built-in. */

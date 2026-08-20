@@ -1074,6 +1074,19 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE page_server_drafts DROP COLUMN IF EXISTS base_hash`;
     },
   },
+  {
+    id: "047_kb_show_page_nav",
+    async up(sql) {
+      // Previous/next links at the foot of an article used to render unconditionally, with
+      // no way to turn them off. They imply a linear reading order that a reference KB does
+      // not have, and the page tree plus the in-page rail already cover navigation — so the
+      // column defaults to FALSE and existing KBs opt in rather than out.
+      await sql`
+        ALTER TABLE knowledge_bases
+        ADD COLUMN IF NOT EXISTS show_page_nav BOOLEAN NOT NULL DEFAULT FALSE
+      `;
+    },
+  },
 ];
 
 export async function runMigrations(sql: Sql): Promise<void> {

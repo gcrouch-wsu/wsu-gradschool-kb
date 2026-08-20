@@ -264,12 +264,14 @@ export default async function KbArticlePage({
             <ReaderFeedbackWidget pageId={page.id} />
           )}
 
-          <ArticlePageNav
-            currentPageId={page.id}
-            homepagePageId={kb.homepagePageId}
-            kbSlug={kb.slug}
-            nodes={tree}
-          />
+          {kb.showPageNav === true && (
+            <ArticlePageNav
+              currentPageId={page.id}
+              homepagePageId={kb.homepagePageId}
+              kbSlug={kb.slug}
+              nodes={tree}
+            />
+          )}
         </article>
         {showTocRail && (
           <aside className="toc-rail">

@@ -404,11 +404,11 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   there is no manual migration step. Versioned migrations live in `src/lib/migrations/index.ts`
   (tracked in `_schema_migrations`); `ensureSchema()` runs migrations → seeds (if empty) →
   app-side backfills.
-- **Current head: `046_drop_page_server_drafts_base`.** Notable recent migrations: page-tree node
+- **Current head: `047_kb_show_page_nav`.** Notable recent migrations: page-tree node
   kinds (`032`), per-KB summary requirement (`033`), scheduled publish (`034`), reader feedback
   (`035`), persisted asset-usage index (`036`), site AI summary prompt (`037`), site + per-KB AI
   summary/page prompts (`038`), page tags/tag-aware FTS (`039`), asset tags/tag-aware FTS (`040`),
-  platform features (`041`), curated next-step copy (`042`), per-user server drafts (`043`), AI token metering (`044`), and the server-draft base marker added then removed (`045`, `046`).
+  platform features (`041`), curated next-step copy (`042`), per-user server drafts (`043`), AI token metering (`044`), the server-draft base marker added then removed (`045`, `046`), and the per-KB previous/next opt-in (`047`).
   Earlier migrations cover FTS, edit locks, revisions, page views, KB visibility, search widget,
   branding, and rate limits — see
   `src/lib/migrations/index.ts` for the full sequence.
@@ -540,6 +540,16 @@ manual redirect persistence, and the single-active-version DB invariant.
   cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
   binding the active surface makes toolbar commands fail because the selection is treated as outside
   the editor.
+- **A new KB runtime override must be added to BOTH `getDataset` short-circuits.**
+  `kb-store.ts` has two fast paths (`mergeRuntimeIntoDataset` and the no-DB `getDataset`)
+  that return the untouched seed when every override map is empty — and each one lists the
+  maps *by name*. Adding `runtimeKbShowPageNav` without extending those two conditions meant
+  the flag was written and then silently ignored on read: the API returned 200 and the public
+  page never changed. `applyKbRuntimeOverrides` alone is not enough.
+- **A new `knowledge_bases` column has to be added to the hand-written row maps too.**
+  `GET /api/admin/kbs` builds its `KnowledgeBase` objects field by field rather than reusing
+  `db.ts`'s `mapKb`, so a column added only to `mapKb` reaches the public site but not the
+  admin screen — the toggle renders permanently unchecked. Update both.
 - **Paste and drop on a Lexical surface go through commands, never a DOM listener.**
   Lexical attaches its own `paste` listener to the editor root and reads the clipboard
   itself. A second listener on that same element cannot suppress it — `preventDefault()`
@@ -752,7 +762,8 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 **Shipped product surfaces**
 - Multi-KB public/private reader: 3-column docs layout, hierarchical page tree (pages, group
   headings, links), depth-controlled TOC, KB homepage pages, home KB filter/pagination,
-  previous/next article nav, heading copy-link, print-to-PDF (browser print over semantic HTML).
+  previous/next article nav (**off by default**; per-KB opt-in via `showPageNav`), heading
+  copy-link, print-to-PDF (browser print over semantic HTML).
 - Block editor: rich text, alignment, links, media picker, cards, tables, video, info boxes,
   procedure sections, excerpts, P&P sourced blocks, editor notes (inline + margin rail), captions
   vs alt text, continued numbering, draft backup/restore, draft preview, publish readiness panel.
@@ -1183,7 +1194,7 @@ curl -sS https://YOUR_HOST/api/health
 
 - Probe `GET /api/health` — expect `{ "ok": true }` (no auth).
 - Confirm schema head applied: `SELECT id FROM _schema_migrations ORDER BY id DESC LIMIT 5;`
-  should include `046_drop_page_server_drafts_base` (and earlier ids such as `043_page_server_drafts_per_author`,
+  should include `047_kb_show_page_nav` (and earlier ids such as `043_page_server_drafts_per_author`,
   `040_asset_tags`, and `029_kb_visibility`). Existing public
   KBs should show `visibility = 'public'` via
   `SELECT slug, visibility FROM knowledge_bases ORDER BY slug;`.

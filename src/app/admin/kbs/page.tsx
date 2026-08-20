@@ -289,6 +289,16 @@ export default function AdminKbsPage() {
                       />
                       <span className="meta">Require a page summary before publish</span>
                     </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <input
+                        checked={editData.showPageNav ?? kb.showPageNav === true}
+                        onChange={(e) => setEditData({ ...editData, showPageNav: e.target.checked })}
+                        type="checkbox"
+                      />
+                      <span className="meta">
+                        Show previous/next links at the bottom of article pages
+                      </span>
+                    </label>
                     <select
                       aria-label="Search box scope"
                       className="input"
@@ -386,6 +396,11 @@ export default function AdminKbsPage() {
                   {kb.requireSummary === false && (
                     <div className="meta" style={{ marginTop: "0.5rem" }}>
                       Summary optional for publish
+                    </div>
+                  )}
+                  {kb.showPageNav === true && (
+                    <div className="meta" style={{ marginTop: "0.5rem" }}>
+                      Previous/next links shown on articles
                     </div>
                   )}
                 </>
