@@ -141,14 +141,14 @@ Non-obvious points, all learned by hitting them:
 | Maintain myWSU Faculty List | 1,487 and 596 chars |
 | Faculty Appointment Decision Tree | 309 chars |
 
-`style.md` targets 1–3 sentences per item and one action per step.
+`style/style.md` targets 1–3 sentences per item and one action per step.
 
 **The 4+1 page reads as student-facing** — "this myWSU pathway lets you apply…". Left alone
 deliberately: the page carries explicit *Student* and *Graduate coordinator* sections, so the
 voice may be intended. Needs a maintainer decision, not an edit.
 
 **Nested `<a>` inside `<a>`** in the P&P sourced block on *Faculty of the Graduate School*.
-Invalid HTML, but it came from the imported source — `style.md` forbids editing sourced content
+Invalid HTML, but it came from the imported source — `style/style.md` forbids editing sourced content
 because a refresh overwrites local edits. Fix belongs upstream or in the import normalizer.
 
 **A link checker.** See §2.

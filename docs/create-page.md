@@ -44,6 +44,10 @@ Use this when the source is a live URL (for example a Grad School public page).
 4. Nest under the correct **parent** (e.g. Admissions).
 5. Create → you land in the editor with a placeholder draft.
 
+To re-parent a page (or a group heading) later, use **Pages → ⋯ → Move under…**, which puts a node
+under any other node regardless of where it currently sits. The Indent/Outdent arrows only nudge a
+node one level under the row immediately above it, and are disabled when it is an only child.
+
 ### 2. Bring the content in
 
 Pick the approach that matches the source:

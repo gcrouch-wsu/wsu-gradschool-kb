@@ -1,8 +1,17 @@
 # WSU Graduate School Knowledge Base
 
 Deployable Next.js (16 / React 19 / App Router) platform for accessible public and private
-multi-KB knowledge bases with a focused admin editor. See `project_spec.md` for the full spec and
-current implementation status.
+multi-KB knowledge bases with a focused admin editor.
+
+**Which document do you want?**
+
+| | |
+|---|---|
+| **This file** | What the platform does, how to run/test/deploy it, and how the admin surfaces work |
+| `AGENTS.md` | Start here if you are changing code — five-minute orientation and a task → section map |
+| `project_spec.md` | Canonical reference: architecture, data model, **§8 conventions & gotchas**, backlog, runbook |
+| `docs/create-page.md` | Operator guide: taking a link or .docx to a published page |
+| `style/style.md` | Authoritative style guide for KB page HTML |
 
 ## Highlights
 

@@ -8,16 +8,24 @@ Graduate School. It exists to retire Confluence content and deliver something me
 place: faster, cleaner, easier to navigate, and accessible to the right audience — paired with a
 focused admin for pages, managed assets (images/docs/video), DOCX imports, redirects, and review.
 
-**This document is the canonical reference.** The source tree is intentionally comment-free, so the
-rationale, architecture, gotchas, and roadmap live here rather than inline. It is written to get a
-new contributor — human or AI agent — up to speed quickly: the goal, the scope, how it's built, how
-to run/test it, the non-obvious gotchas, and the prioritized backlog. Resolved-issue history lives in
-git, not here.
+**This document is the canonical reference, not an onboarding doc.** The source tree is
+intentionally comment-free, so the rationale, architecture, gotchas, and roadmap live here rather
+than inline. Resolved-issue history lives in git, not here.
 
-> Quick map: §1–2 (goal & scope) → §3 (roles) → §4 (stack) → §5 (architecture) → §6 (data) →
-> §7 (run/test) → **§8 (gotchas — read before editing core areas)** → §9–10 (status & limits) →
-> §11–12 (future work + tagged backlog) → §13 (operations runbook).
-> Delivered-work history lives in git; this document stays current-state.
+> **New to the repo? Read `AGENTS.md` first** — it orients you in five minutes and maps your task
+> to the sections below. Come here for the section you need; do not read this file end to end.
+
+**How this document is laid out**
+
+| Sections | What they answer | When you need them |
+|----------|------------------|--------------------|
+| §1–2 | Goal and scope: what is in, what was deliberately dropped | Deciding whether something belongs here at all |
+| §3 | Roles, the authorization matrix, and read-access surfaces | Touching any admin route or public read path |
+| §4–6 | Stack, architecture and key modules, data model and migrations | Finding where a behaviour lives |
+| **§7–8** | **Running/testing, then the conventions & gotchas** | **Before changing code — §8 is grouped by area** |
+| §9–10 | Current feature status and honest limitations | Reporting state, or checking a claim before repeating it |
+| §11–12 | Future work and the tagged backlog (`[AI-AGENT-TASK]`) | Picking up planned work |
+| §13–14 | Operations runbook and historical notes | Deploying, or asking "why is it like this?" |
 
 ---
 
@@ -524,35 +532,23 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 8. Conventions & gotchas (read before changing these areas)
 
-- **Admin ↔ public shell is pathname-driven on the client.** Root layout SSR picks `admin-app`
-  classes from `x-pathname`, but soft navigations do not re-run that layout. `AdminAppClassSync`
-  keeps the classes in sync; `PublicSiteChrome` / `PublicSiteFooter` follow `usePathname()` so the
-  public header (including the **Admin** full-load link) appears after leaving `/admin` without a
-  reload. Prefer plain `<a>` / `location.assign` when intentionally crossing the boundary (View
-  page, View public, top-bar Knowledge bases).
-- **Postgres folds constant expressions at plan time.** The edit-lock abort guard divides by the
-  *non-constant* updated-row count — `SELECT 1 / (SELECT count(*) FROM updated)`. A literal `1 / 0`
-  is folded and raises on **every** save, not just conflicts. Keep the divisor runtime-evaluated.
-- **`sanitizeRichText` is used for both storage and public render.** Notes survive only with
-  `{ keepNotes: true }` (editor storage paths in `page-document.ts`); the default strips them. Don't
-  flip the default on, or note bodies leak to the public page/search.
-- **The sanitizer normalizes emphasis; don't re-add `<b>`/`<i>` on the way out.**
-  `sanitizeRichText` rewrites `b`→`strong` and `i`→`em`, and drops an emphasis tag nested
-  inside the same emphasis. Both tags stay in `ALLOWED_TAGS` because they arrive constantly
-  (`document.execCommand("bold")` emits `<b>`, as does pasted Word HTML) — the normalization
-  happens at serialization. Before this, a run formatted through both the execCommand path and
-  Lexical saved as `<b><strong>text</strong></b>`, and every save handed it back, so
-  `style/style.md`'s "use `<strong>`, never `<b>`" rule could not be honoured through the UI.
-  Because the public renderer shares the sanitizer, stored content is normalized at render
-  time — no content migration is needed.
-- **`getDataset()` in `kb-store.ts` is wrapped in React `cache()`.** Within a request it memoizes;
-  raw SQL writes won't be reflected by a cached read in the same request. Tests that need the real
-  write path use the lower-level `db.ts` functions directly.
-- **`@next/env` skips `.env.local` when `NODE_ENV=test`.** The DB test setup
-  (`vitest.db.setup.ts`) parses `.env.local` manually for that reason.
-- **In-memory vs Neon**: everything works without a DB via the seed dataset, but locks, FTS, users,
-  assignments, theming persistence, audit log, and site settings only do something real with
-  `DATABASE_URL`.
+Each entry is a trap that has already cost someone a debugging session; the *why* is
+part of the rule. Grouped by area so you can read only what your change touches:
+
+- [Editor — Lexical surfaces, toolbar, and selection](#editor--lexical-surfaces-toolbar-and-selection)
+- [Editor — blocks, sanitizing, and the HTML round-trip](#editor--blocks-sanitizing-and-the-html-round-trip)
+- [Editor — drafts, recovery, and work protection](#editor--drafts-recovery-and-work-protection)
+- [Publish gate and readiness parity](#publish-gate-and-readiness-parity)
+- [Page tree and hierarchy](#page-tree-and-hierarchy)
+- [Theming, CSS, and reading rhythm](#theming-css-and-reading-rhythm)
+- [Data access, KB settings, and migrations](#data-access-kb-settings-and-migrations)
+- [Security, CSP, and request guards](#security-csp-and-request-guards)
+- [AI gateway](#ai-gateway)
+- [Public shell and rendering](#public-shell-and-rendering)
+- [Testing and CI](#testing-and-ci)
+
+### Editor — Lexical surfaces, toolbar, and selection
+
 - **Each editor surface binds itself once, from its own `registerRootListener`.**
   `LexicalFlowSurface` / `LexicalTableCellSurface` call `bindPageEditor(root, emit)` there;
   `PageDocumentEditor` no longer owns that binding. Re-binding on every render thrashes
@@ -570,16 +566,160 @@ manual redirect persistence, and the single-active-version DB invariant.
   cell surfaces all route through `bindPageEditor` / `rich-text-selection.ts`. Saving a range without
   binding the active surface makes toolbar commands fail because the selection is treated as outside
   the editor.
-- **`tocDepth: 0` means "inherit the KB default", and is the default for new pages.**
-  The per-page value used to be 2 or 3 with no way to change a whole KB at once. The public
-  routes resolve `page.tocDepth > 0 ? page.tocDepth : effectiveTheme.layout.tocDepth` before
-  calling `buildToc`/`hasTocEntries` — passing 0 straight through yields an empty TOC, so
-  resolve it at every new call site. Pages saved before this keep their explicit 2 or 3.
-- **An empty string is a real value in `listMarkers.color`** (inherit the list item's own
-  colour), so `mergeTheme` must distinguish "absent" from "empty" — reading an absent key as
-  a malformed colour turned the default into black. `::marker` accepts only a small set of
-  properties (colour, font, content); the theme exposes exactly those, and the rule is
-  applied to `.wysiwyg-surface` as well so the editor matches the published page.
+- **Paste and drop on a Lexical surface go through commands, never a DOM listener.**
+  Lexical attaches its own `paste` listener to the editor root and reads the clipboard
+  itself. A second listener on that same element cannot suppress it — `preventDefault()`
+  does not stop a sibling listener, and `stopImmediatePropagation()` would be too late
+  because Lexical registers first — so rich paste was inserted **twice**, once by each
+  handler, interleaved at the same caret. Plain text was unaffected (our handler returns
+  early and never preventDefaults), which is the tell. `LexicalFlowSurface` /
+  `LexicalTableCellSurface` claim `PASTE_COMMAND` / `DROP_COMMAND` at
+  `COMMAND_PRIORITY_CRITICAL`; returning `true` suppresses Lexical's default and returning
+  `false` lets it handle the event normally.
+- **Anything Lexical renders must be written through Lexical's model, not the DOM.**
+  `applyOrderedListStart` set `start` on the `<ol>` element; the surface is rendered from
+  editor state and saved from editor state, so the number survived until the next reconcile
+  and never reached the saved page — "Starts at" looked like it did nothing. It now routes
+  through `lexicalSetOrderedListStart` (`ListNode.setStart`) when a Lexical surface is
+  active. The same applies to any future attribute-level editor control.
+- **`lexicalHtmlConfig` needs an import for every custom export.** The editor exports inline
+  colour/font styles through a custom `export` map; with no matching `import` map, Lexical's
+  importer silently dropped the `style` attribute when re-hydrating. The result was that
+  colour applied, saved, and rendered correctly on the public page but vanished from the
+  editor on reopen, while bold (a Lexical text *format*) survived — reported as "you can
+  have colour or bold, not both". Keep the two halves symmetric.
+- **Lexical wraps nested lists in a structural `<li>` that must hide its own marker.**
+  `theme.list.nested.listitem` is *additive* to `theme.list.listitem`, so pointing both at
+  the same class made the wrapper paint an empty numbered item in the editor that the
+  published page never showed. It is `doc-li--nested` with `list-style: none`. The public
+  renderer never has this problem because it nests sub-lists inside the parent item's
+  content (`ListItemRichText`) rather than using a wrapper. Lexical sets explicit `value`
+  attributes, so the hidden wrapper does not consume a number.
+- **Toolbar popovers must not recompute formatting while focus is inside them.** The
+  "Starts at" number input takes the document selection out of the editor, so the next
+  `selectionchange` reported "not in an ordered list" and closed the popover mid-edit.
+  `DocumentToolbar` skips the recompute while `document.activeElement` is inside the
+  popover; clicking away still closes it through the outside-mousedown listener.
+- **Toolbar ownership is derived from DOM focus, never from mount or render order.**
+  `lexical/toolbar-bridge.ts` tracks every mounted surface and re-resolves the active editor on each
+  read (`syncActiveFromFocus`), because `focusin` alone is not enough: re-renders and DOM surgery
+  happen while focus never leaves the surface, so no event fires to re-claim the toolbar. The
+  surfaces' registration effects therefore depend on `editor` alone and keep every callback behind a
+  ref, attaching through `editor.registerRootListener`. When they depended on callback identity
+  instead, React's "destroy every effect, then create every effect" order meant each re-render
+  unregistered all surfaces and then re-registered them in tree order — so the *first* flow on the
+  page silently took the toolbar back on every keystroke. Bold/italic/underline then dispatched into
+  an editor the caret was not in: the click appeared to do nothing and the view jumped to the top.
+  Adding a surface? Track it through the bridge and keep its effect deps free of render-scoped
+  closures, or the same class of bug returns.
+- **`preserveFlowClientKeys` matches flows by identity, never by position.** Flow `clientKey`s are
+  React keys for the Lexical surfaces, and Lexical's HTML export drops `data-block-id`, so block ids
+  are re-minted on every emit — hence the inheritance passes (own key → shared block id → next
+  unclaimed previous flow). A purely positional pass handed the key of whatever *used to* sit at
+  index N to whatever sits there now, so moving a text box up re-labelled both boxes, React kept both
+  surfaces exactly where they were, and the reorder appeared not to happen at all. Because identity
+  is preserved, a wholesale document replacement (HTML→Visual, "Clean spacing") must go through
+  `replaceDocument`, which prefixes an epoch to force the remount — do not rely on the new keys
+  happening to differ from the old ones.
+- **The editor toolbar is sticky, so programmatic scrolling needs `scroll-margin`.**
+  `PageDocumentEditor` measures the toolbar with a `ResizeObserver` and publishes
+  `--editor-toolbar-height`; `globals.css` spends it as `scroll-margin-block-start` on block
+  editors, insert rows, surfaces, and figures. Without it, anything scrolled into view parks under
+  the toolbar and the toolbar intercepts the click meant for it. The height is measured rather than
+  hard-coded because the toolbar wraps to two or three rows at narrow widths (and goes `position:
+  static` below the mobile breakpoint).
+- **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
+
+### Editor — blocks, sanitizing, and the HTML round-trip
+
+- **`sanitizeRichText` is used for both storage and public render.** Notes survive only with
+  `{ keepNotes: true }` (editor storage paths in `page-document.ts`); the default strips them. Don't
+  flip the default on, or note bodies leak to the public page/search.
+- **The sanitizer normalizes emphasis; don't re-add `<b>`/`<i>` on the way out.**
+  `sanitizeRichText` rewrites `b`→`strong` and `i`→`em`, and drops an emphasis tag nested
+  inside the same emphasis. Both tags stay in `ALLOWED_TAGS` because they arrive constantly
+  (`document.execCommand("bold")` emits `<b>`, as does pasted Word HTML) — the normalization
+  happens at serialization. Before this, a run formatted through both the execCommand path and
+  Lexical saved as `<b><strong>text</strong></b>`, and every save handed it back, so
+  `style/style.md`'s "use `<strong>`, never `<b>`" rule could not be honoured through the UI.
+  Because the public renderer shares the sanitizer, stored content is normalized at render
+  time — no content migration is needed.
+- **Nested list items may contain block children.** `itemHtml` can include nested `<ul>`/`<ol>` markup.
+  Public rendering must not wrap that HTML in an inline-only element (`<span>`), or nested lists become
+  invalid/misleading. Use the `list-item-rich-text` block wrapper path when nested lists are present.
+- **Info-box content is simple rich text, not inline-only text.** Use `sanitizeCalloutHtml` for alert
+  storage/rendering so nested `<ul>/<ol>/<li>` survive, but headings/tables/media/sections are flattened
+  or dropped. Public rendering must use the `callout-rich-text` block wrapper, not the inline `RichText`
+  span path.
+- **Excerpt blocks are live references, resolved per reader at render time.** An `excerpt` block
+  stores only `sourcePageId` (+ optional heading block id); `resolveExcerptForRead`
+  (`src/lib/excerpts.ts`) applies `getKbReadAccess` + the article route's status/staff rules and
+  collapses every failure to one indistinguishable "unavailable" callout. Never render excerpt
+  content through a path that skips this resolver, never index it into the target's FTS vector,
+  and keep excerpts top-level only (`documentHtmlToBlocks` drops nested ones; demotion replaces
+  nested excerpts with a note, which is what makes cycles impossible). The publish gate's excerpt
+  checks are injected (`checkExcerptSourceForPublish`) — pass the checker at any new gate call
+  site or excerpt problems silently stop blocking publish.
+- **Sourced blocks are snapshots; their server fetch is allowlist-gated.** A `sourced` block's
+  content is stored on the page (indexed in FTS, validated by the gate) and changes only via an
+  explicit editor refresh — never at reader render time. The import/check APIs fetch external
+  HTML server-side: keep `parseAllowedSourceUrl` (https + host allowlist, default
+  `gradschool.wsu.edu`, env `SOURCED_CONTENT_ALLOWED_HOSTS`) in front of every fetch, or the
+  route becomes an SSRF proxy. The allowlist is hostname-only; reject userinfo, non-default ports,
+  query strings, malformed anchors, and redirects before reading the response body. Reader-facing
+  routes must never fetch the source.
+- **`style/style.md` hand-mirrors the publish gate and editor block contract.** The agent style
+  pipeline in `style/` (see `style/README.md`) checks pages against a prose copy of
+  `validatePageForPublish` rules and the `documentHtmlToBlocks` allowed-block list. If you change
+  publish-gate rules or the block contract, update `style/style.md` to match or the content
+  pipeline silently drifts.
+
+### Editor — drafts, recovery, and work protection
+
+- **`userEditedRef` is a ref, never state.** Calling `setState` from the capture listener
+  re-renders the editor mid HTML→Visual transition and drops in-flight content — it lost an
+  editor note outright. Nothing needs to re-render when the flag flips: the work-protection
+  effects already re-run on every snapshot change and read the ref then. The capture listener
+  runs before React processes the same event, so the ref is set before the effect sees the
+  resulting snapshot.
+- **The listeners are native and capture-phase, not React props.** React's synthetic `onInput`
+  on the form does not see edits inside the Lexical contentEditable, so gating on it silently
+  disabled work protection for body edits while leaving it working for metadata fields.
+- **Work protection is armed by a real edit, not by `dirty`.** `dirty` compares serialized
+  snapshots, and the editor re-serializes on benign actions (opening the HTML source view,
+  Lexical normalizing markup on first focus), so it goes true on pages nobody edited. The
+  server draft, the localStorage backup, and the `beforeunload` warning all additionally require
+  `userEdited`, set from `input`/`change`/`paste`/`drop`/`cut` on the form. Do not re-gate any of
+  them on `dirty` alone — spurious "Server draft available" banners train editors to dismiss the
+  banner on sight, which is the opposite of what a recovery feature needs.
+- **Draft staleness is answered server-side, against `kb_page_revisions.created_at`.** The
+  editor must warn before restoring a draft over a page that has been saved since, or the
+  restore silently reverts that save. Do not compute this on the client by hashing editor state
+  — `045` tried that and `046` removed it: the hash was taken over the saved snapshot, which
+  becomes the editor's *normalized* content after an in-session save, so it reported "the page
+  has been saved since" for drafts that were perfectly current. `kb_pages` only carries a
+  day-granularity display date, so revisions are the only precise record of a save. An unknown
+  answer (no revisions, no database) must surface as *unknown*, never as current.
+- **Saving clears `userEditedRef`.** It previously stayed armed for the rest of the session, so
+  the first benign re-serialization after a save wrote a fresh recovery draft — the user saved,
+  discarded the banners, and watched them come straight back.
+- **One recovery notice, not two.** The localStorage backup and the server draft both cover the
+  same edits in the same browser; the local banner renders only when there is no server draft,
+  which says strictly more (what changed, whether the page moved on).
+
+### Publish gate and readiness parity
+
+- **The empty-image-box rule is shared with the readiness panel.** `countEmptyImageBoxes` /
+  `EMPTY_IMAGE_BOX_ISSUE` in `publish-gate.ts` are imported by `AdminPageEditorForm`, for the same
+  reason `hasHeadingOrderSkip` is: paste-slot boxes are publish-blocked, so a panel that omits them
+  reports "ready" and then 422s.
+- **The publish gate's heading walk is shared with the editor's readiness panel.**
+  `hasHeadingOrderSkip` / `collectHeadingLevels` in `publish-gate.ts` are the single source of
+  truth, and `AdminPageEditorForm` imports them. Reimplementing the walk client-side is what let a
+  page report "ready" and then 422 on publish. Card titles and procedure titles count as headings.
+
+### Page tree and hierarchy
+
 - **A collapsible page tree opens to `pageTreeExpandDepth`, not to one level.**
   `initialExpandedIds` had two gaps that both read as "nested pages are missing from the
   tree", and only bite with `pageTreeCollapsible` on (with it off every branch renders open,
@@ -618,6 +758,39 @@ manual redirect persistence, and the single-active-version DB invariant.
   labels them. This never leaks publicly because those statuses never enter an anonymous
   reader's tree. Descendants of an *archived* ancestor are still dropped for everyone
   (`isStaffVisiblePageStatus` excludes archived).
+
+### Theming, CSS, and reading rhythm
+
+- **`tocDepth: 0` means "inherit the KB default", and is the default for new pages.**
+  The per-page value used to be 2 or 3 with no way to change a whole KB at once. The public
+  routes resolve `page.tocDepth > 0 ? page.tocDepth : effectiveTheme.layout.tocDepth` before
+  calling `buildToc`/`hasTocEntries` — passing 0 straight through yields an empty TOC, so
+  resolve it at every new call site. Pages saved before this keep their explicit 2 or 3.
+- **An empty string is a real value in `listMarkers.color`** (inherit the list item's own
+  colour), so `mergeTheme` must distinguish "absent" from "empty" — reading an absent key as
+  a malformed colour turned the default into black. `::marker` accepts only a small set of
+  properties (colour, font, content); the theme exposes exactly those, and the rule is
+  applied to `.wysiwyg-surface` as well so the editor matches the published page.
+- **Vertical rhythm lives in the `.flow` container, not per-block margins.** Public reading surfaces
+  (`.article`, the home content wrapper, `.card__blocks`, `.procedure-section__blocks`) carry the
+  `flow` class. `.flow` zeroes each direct child's `margin-block` and adds spacing between siblings via
+  the theme-driven `--space-block` / `--space-after-heading` / list vars. Don't add ad-hoc top/bottom
+  margins to content blocks — set the theme typography values (or the CSS var fallbacks in `:root`)
+  instead, or content drifts out of the shared rhythm. The editor surface (`.wysiwyg-surface`) keeps
+  its own spacing and is intentionally **not** a `.flow` container. Line-heights are unitless and sizes
+  are rem/ch so everything scales with reader zoom (WCAG 1.4.4/1.4.8/1.4.12).
+
+### Data access, KB settings, and migrations
+
+- **Postgres folds constant expressions at plan time.** The edit-lock abort guard divides by the
+  *non-constant* updated-row count — `SELECT 1 / (SELECT count(*) FROM updated)`. A literal `1 / 0`
+  is folded and raises on **every** save, not just conflicts. Keep the divisor runtime-evaluated.
+- **`getDataset()` in `kb-store.ts` is wrapped in React `cache()`.** Within a request it memoizes;
+  raw SQL writes won't be reflected by a cached read in the same request. Tests that need the real
+  write path use the lower-level `db.ts` functions directly.
+- **In-memory vs Neon**: everything works without a DB via the seed dataset, but locks, FTS, users,
+  assignments, theming persistence, audit log, and site settings only do something real with
+  `DATABASE_URL`.
 - **A new KB runtime override must be added to BOTH `getDataset` short-circuits.**
   `kb-store.ts` has two fast paths (`mergeRuntimeIntoDataset` and the no-DB `getDataset`)
   that return the untouched seed when every override map is empty — and each one lists the
@@ -628,100 +801,6 @@ manual redirect persistence, and the single-active-version DB invariant.
   `GET /api/admin/kbs` builds its `KnowledgeBase` objects field by field rather than reusing
   `db.ts`'s `mapKb`, so a column added only to `mapKb` reaches the public site but not the
   admin screen — the toggle renders permanently unchecked. Update both.
-- **Paste and drop on a Lexical surface go through commands, never a DOM listener.**
-  Lexical attaches its own `paste` listener to the editor root and reads the clipboard
-  itself. A second listener on that same element cannot suppress it — `preventDefault()`
-  does not stop a sibling listener, and `stopImmediatePropagation()` would be too late
-  because Lexical registers first — so rich paste was inserted **twice**, once by each
-  handler, interleaved at the same caret. Plain text was unaffected (our handler returns
-  early and never preventDefaults), which is the tell. `LexicalFlowSurface` /
-  `LexicalTableCellSurface` claim `PASTE_COMMAND` / `DROP_COMMAND` at
-  `COMMAND_PRIORITY_CRITICAL`; returning `true` suppresses Lexical's default and returning
-  `false` lets it handle the event normally.
-- **Anything Lexical renders must be written through Lexical's model, not the DOM.**
-  `applyOrderedListStart` set `start` on the `<ol>` element; the surface is rendered from
-  editor state and saved from editor state, so the number survived until the next reconcile
-  and never reached the saved page — "Starts at" looked like it did nothing. It now routes
-  through `lexicalSetOrderedListStart` (`ListNode.setStart`) when a Lexical surface is
-  active. The same applies to any future attribute-level editor control.
-- **`lexicalHtmlConfig` needs an import for every custom export.** The editor exports inline
-  colour/font styles through a custom `export` map; with no matching `import` map, Lexical's
-  importer silently dropped the `style` attribute when re-hydrating. The result was that
-  colour applied, saved, and rendered correctly on the public page but vanished from the
-  editor on reopen, while bold (a Lexical text *format*) survived — reported as "you can
-  have colour or bold, not both". Keep the two halves symmetric.
-- **Lexical wraps nested lists in a structural `<li>` that must hide its own marker.**
-  `theme.list.nested.listitem` is *additive* to `theme.list.listitem`, so pointing both at
-  the same class made the wrapper paint an empty numbered item in the editor that the
-  published page never showed. It is `doc-li--nested` with `list-style: none`. The public
-  renderer never has this problem because it nests sub-lists inside the parent item's
-  content (`ListItemRichText`) rather than using a wrapper. Lexical sets explicit `value`
-  attributes, so the hidden wrapper does not consume a number.
-- **Toolbar popovers must not recompute formatting while focus is inside them.** The
-  "Starts at" number input takes the document selection out of the editor, so the next
-  `selectionchange` reported "not in an ordered list" and closed the popover mid-edit.
-  `DocumentToolbar` skips the recompute while `document.activeElement` is inside the
-  popover; clicking away still closes it through the outside-mousedown listener.
-- **Playwright's synthetic mouse cannot make a usable editor selection.** A scripted drag
-  produces a range that ends *outside* the paragraph (`commonAncestorContainer` is the
-  surface root) and a scripted double-click produces an empty one; Lexical correctly
-  refuses both, and even typing does not replace them. Select text with
-  `Range.selectNodeContents` or Shift+Arrow in editor specs. A formatting test that "fails"
-  only under a mouse gesture is measuring the harness, not the editor.
-- **Toolbar ownership is derived from DOM focus, never from mount or render order.**
-  `lexical/toolbar-bridge.ts` tracks every mounted surface and re-resolves the active editor on each
-  read (`syncActiveFromFocus`), because `focusin` alone is not enough: re-renders and DOM surgery
-  happen while focus never leaves the surface, so no event fires to re-claim the toolbar. The
-  surfaces' registration effects therefore depend on `editor` alone and keep every callback behind a
-  ref, attaching through `editor.registerRootListener`. When they depended on callback identity
-  instead, React's "destroy every effect, then create every effect" order meant each re-render
-  unregistered all surfaces and then re-registered them in tree order — so the *first* flow on the
-  page silently took the toolbar back on every keystroke. Bold/italic/underline then dispatched into
-  an editor the caret was not in: the click appeared to do nothing and the view jumped to the top.
-  Adding a surface? Track it through the bridge and keep its effect deps free of render-scoped
-  closures, or the same class of bug returns.
-- **`preserveFlowClientKeys` matches flows by identity, never by position.** Flow `clientKey`s are
-  React keys for the Lexical surfaces, and Lexical's HTML export drops `data-block-id`, so block ids
-  are re-minted on every emit — hence the inheritance passes (own key → shared block id → next
-  unclaimed previous flow). A purely positional pass handed the key of whatever *used to* sit at
-  index N to whatever sits there now, so moving a text box up re-labelled both boxes, React kept both
-  surfaces exactly where they were, and the reorder appeared not to happen at all. Because identity
-  is preserved, a wholesale document replacement (HTML→Visual, "Clean spacing") must go through
-  `replaceDocument`, which prefixes an epoch to force the remount — do not rely on the new keys
-  happening to differ from the old ones.
-- **The empty-image-box rule is shared with the readiness panel.** `countEmptyImageBoxes` /
-  `EMPTY_IMAGE_BOX_ISSUE` in `publish-gate.ts` are imported by `AdminPageEditorForm`, for the same
-  reason `hasHeadingOrderSkip` is: paste-slot boxes are publish-blocked, so a panel that omits them
-  reports "ready" and then 422s.
-- **The editor toolbar is sticky, so programmatic scrolling needs `scroll-margin`.**
-  `PageDocumentEditor` measures the toolbar with a `ResizeObserver` and publishes
-  `--editor-toolbar-height`; `globals.css` spends it as `scroll-margin-block-start` on block
-  editors, insert rows, surfaces, and figures. Without it, anything scrolled into view parks under
-  the toolbar and the toolbar intercepts the click meant for it. The height is measured rather than
-  hard-coded because the toolbar wraps to two or three rows at narrow widths (and goes `position:
-  static` below the mobile breakpoint).
-- **Nested list items may contain block children.** `itemHtml` can include nested `<ul>`/`<ol>` markup.
-  Public rendering must not wrap that HTML in an inline-only element (`<span>`), or nested lists become
-  invalid/misleading. Use the `list-item-rich-text` block wrapper path when nested lists are present.
-- **Info-box content is simple rich text, not inline-only text.** Use `sanitizeCalloutHtml` for alert
-  storage/rendering so nested `<ul>/<ol>/<li>` survive, but headings/tables/media/sections are flattened
-  or dropped. Public rendering must use the `callout-rich-text` block wrapper, not the inline `RichText`
-  span path.
-- **CSP is per-request in `src/proxy.ts`, not `next.config.ts`** — Next emits inline bootstrap
-  scripts that need a per-request nonce + `strict-dynamic`. Don't move CSP to static headers, and
-  don't add inline `<script>` without the nonce.
-- **CSP `frame-src` must list every embeddable video host.** Public video blocks render YouTube/Vimeo
-  `<iframe>`s; the CSP in `src/proxy.ts` allowlists those hosts. If you add a provider in
-  `src/components/PageBlocks.tsx` (or `src/lib/video.ts`), add its host to `frame-src` too, or the
-  embed silently fails to load. Do **not** add hosts to `script-src`.
-- **Print-to-PDF image loading is deliberate.** `PrintPdfButton` eagerly waits for `.article img`
-  elements to finish loading/decoding, with a bounded timeout, before calling `window.print()`. Keep
-  that preparation path if the button or print flow moves; otherwise browser PDF export can capture
-  before lazy/managed images have painted, producing PDFs with missing screenshots.
-- **Apply a KB-scope guard on every new editor-reachable route AND page.** Scoping is per-route, not
-  global middleware: API routes use `requireKbAccess`, admin list views use `filterKbsForSession` /
-  `accessibleKbIds`, and detail/edit server components use `canAccessKb(...) → notFound()`. A new admin
-  surface is unscoped until you add one. Per-KB enforcement is real only with `DATABASE_URL`.
 - **Do not route anonymous DB reads through full-corpus `getDataset()`.** Public KB/article/tree/asset
   reads use targeted loaders in `src/lib/db.ts` behind the stable `kb-store.ts` API. `getDataset()` may
   remain for admin/write paths that genuinely need broad state, but every new `isDatabaseEnabled()`
@@ -736,83 +815,20 @@ manual redirect persistence, and the single-active-version DB invariant.
   (2) the applied-check runs *before* the lock is taken, so two racing cold starts can both execute
   the same migration — every statement must be individually idempotent, and the `_schema_migrations`
   insert uses `ON CONFLICT DO NOTHING` for that reason.
-- **`userEditedRef` is a ref, never state.** Calling `setState` from the capture listener
-  re-renders the editor mid HTML→Visual transition and drops in-flight content — it lost an
-  editor note outright. Nothing needs to re-render when the flag flips: the work-protection
-  effects already re-run on every snapshot change and read the ref then. The capture listener
-  runs before React processes the same event, so the ref is set before the effect sees the
-  resulting snapshot.
-- **The listeners are native and capture-phase, not React props.** React's synthetic `onInput`
-  on the form does not see edits inside the Lexical contentEditable, so gating on it silently
-  disabled work protection for body edits while leaving it working for metadata fields.
-- **Work protection is armed by a real edit, not by `dirty`.** `dirty` compares serialized
-  snapshots, and the editor re-serializes on benign actions (opening the HTML source view,
-  Lexical normalizing markup on first focus), so it goes true on pages nobody edited. The
-  server draft, the localStorage backup, and the `beforeunload` warning all additionally require
-  `userEdited`, set from `input`/`change`/`paste`/`drop`/`cut` on the form. Do not re-gate any of
-  them on `dirty` alone — spurious "Server draft available" banners train editors to dismiss the
-  banner on sight, which is the opposite of what a recovery feature needs.
-- **Draft staleness is answered server-side, against `kb_page_revisions.created_at`.** The
-  editor must warn before restoring a draft over a page that has been saved since, or the
-  restore silently reverts that save. Do not compute this on the client by hashing editor state
-  — `045` tried that and `046` removed it: the hash was taken over the saved snapshot, which
-  becomes the editor's *normalized* content after an in-session save, so it reported "the page
-  has been saved since" for drafts that were perfectly current. `kb_pages` only carries a
-  day-granularity display date, so revisions are the only precise record of a save. An unknown
-  answer (no revisions, no database) must surface as *unknown*, never as current.
-- **Saving clears `userEditedRef`.** It previously stayed armed for the rest of the session, so
-  the first benign re-serialization after a save wrote a fresh recovery draft — the user saved,
-  discarded the banners, and watched them come straight back.
-- **One recovery notice, not two.** The localStorage backup and the server draft both cover the
-  same edits in the same browser; the local banner renders only when there is no server draft,
-  which says strictly more (what changed, whether the page moved on).
-- **Editor debug panel** is opt-in only (`?editorDebug=1` or `localStorage["kb-editor-debug"]="1"`).
-- **Vertical rhythm lives in the `.flow` container, not per-block margins.** Public reading surfaces
-  (`.article`, the home content wrapper, `.card__blocks`, `.procedure-section__blocks`) carry the
-  `flow` class. `.flow` zeroes each direct child's `margin-block` and adds spacing between siblings via
-  the theme-driven `--space-block` / `--space-after-heading` / list vars. Don't add ad-hoc top/bottom
-  margins to content blocks — set the theme typography values (or the CSS var fallbacks in `:root`)
-  instead, or content drifts out of the shared rhythm. The editor surface (`.wysiwyg-surface`) keeps
-  its own spacing and is intentionally **not** a `.flow` container. Line-heights are unitless and sizes
-  are rem/ch so everything scales with reader zoom (WCAG 1.4.4/1.4.8/1.4.12).
-- **Excerpt blocks are live references, resolved per reader at render time.** An `excerpt` block
-  stores only `sourcePageId` (+ optional heading block id); `resolveExcerptForRead`
-  (`src/lib/excerpts.ts`) applies `getKbReadAccess` + the article route's status/staff rules and
-  collapses every failure to one indistinguishable "unavailable" callout. Never render excerpt
-  content through a path that skips this resolver, never index it into the target's FTS vector,
-  and keep excerpts top-level only (`documentHtmlToBlocks` drops nested ones; demotion replaces
-  nested excerpts with a note, which is what makes cycles impossible). The publish gate's excerpt
-  checks are injected (`checkExcerptSourceForPublish`) — pass the checker at any new gate call
-  site or excerpt problems silently stop blocking publish.
-- **Sourced blocks are snapshots; their server fetch is allowlist-gated.** A `sourced` block's
-  content is stored on the page (indexed in FTS, validated by the gate) and changes only via an
-  explicit editor refresh — never at reader render time. The import/check APIs fetch external
-  HTML server-side: keep `parseAllowedSourceUrl` (https + host allowlist, default
-  `gradschool.wsu.edu`, env `SOURCED_CONTENT_ALLOWED_HOSTS`) in front of every fetch, or the
-  route becomes an SSRF proxy. The allowlist is hostname-only; reject userinfo, non-default ports,
-  query strings, malformed anchors, and redirects before reading the response body. Reader-facing
-  routes must never fetch the source.
-- **Gateway credentials live in `*-gateway.ts`, never in `*-core.ts`.** `summary-draft-core.ts`
-  and `page-review-core.ts` are imported by client components (the editor readiness panel, the
-  settings prompt screen), so they must stay free of `process.env.AI_*` reads and provider
-  `fetch`. Those live in `ai-gateway.ts`, `summary-draft-gateway.ts`, and `page-review-gateway.ts`,
-  which throw if evaluated in a browser. Server callers use the `summary-draft.ts` barrel. After
-  touching this boundary, rebuild and confirm `.next/static` has no gateway symbols.
-- **A billed AI call that fails afterwards still has to be metered.** Provider requests that
-  return 200 and then fail post-processing (empty draft, truncated prose, unparseable review) have
-  already been charged. Throw `AiGatewayError` with the accumulated usage so the route records it;
-  a plain `Error` silently drops the tokens from `/admin/usage`.
-- **The publish gate's heading walk is shared with the editor's readiness panel.**
-  `hasHeadingOrderSkip` / `collectHeadingLevels` in `publish-gate.ts` are the single source of
-  truth, and `AdminPageEditorForm` imports them. Reimplementing the walk client-side is what let a
-  page report "ready" and then 422 on publish. Card titles and procedure titles count as headings.
-- **Playwright suites run on their own ports and never reuse a server.** `test:a11y` uses 3100 and
-  `test:editor` uses 3101 (`A11Y_PORT` / `EDITOR_PORT` to override), both with
-  `reuseExistingServer: false`. They configure a hermetic server with `DATABASE_URL` forced empty,
-  and attaching to a dev server on 3000 instead — typically pointed at real Neon — produced a wall
-  of seed-data failures that read exactly like regressions. Specs derive their absolute base URL
-  from those env vars; do not hardcode a port, or the `Origin` header will not match the host and
-  the same-origin guard will 403 the sign-in setup.
+
+### Security, CSP, and request guards
+
+- **CSP is per-request in `src/proxy.ts`, not `next.config.ts`** — Next emits inline bootstrap
+  scripts that need a per-request nonce + `strict-dynamic`. Don't move CSP to static headers, and
+  don't add inline `<script>` without the nonce.
+- **CSP `frame-src` must list every embeddable video host.** Public video blocks render YouTube/Vimeo
+  `<iframe>`s; the CSP in `src/proxy.ts` allowlists those hosts. If you add a provider in
+  `src/components/PageBlocks.tsx` (or `src/lib/video.ts`), add its host to `frame-src` too, or the
+  embed silently fails to load. Do **not** add hosts to `script-src`.
+- **Apply a KB-scope guard on every new editor-reachable route AND page.** Scoping is per-route, not
+  global middleware: API routes use `requireKbAccess`, admin list views use `filterKbsForSession` /
+  `accessibleKbIds`, and detail/edit server components use `canAccessKb(...) → notFound()`. A new admin
+  surface is unscoped until you add one. Per-KB enforcement is real only with `DATABASE_URL`.
 - **Same-origin checks use `APP_PUBLIC_HOST` and nothing else.** When set, `isSameOrigin` trusts
   only those hosts; unset, it compares against the request's own headers. Do **not** reintroduce an
   inferred allowlist: `VERCEL_PROJECT_PRODUCTION_URL` was tried and is set on preview deployments
@@ -823,11 +839,50 @@ manual redirect persistence, and the single-active-version DB invariant.
   checks the target at registration and re-resolves it at delivery. Any new feature that POSTs or
   GETs a user-supplied address needs the same guard, or it becomes an SSRF pivot; the
   sourced-content importer solves the same problem with a host allowlist instead.
-- **`style/style.md` hand-mirrors the publish gate and editor block contract.** The agent style
-  pipeline in `style/` (see `style/README.md`) checks pages against a prose copy of
-  `validatePageForPublish` rules and the `documentHtmlToBlocks` allowed-block list. If you change
-  publish-gate rules or the block contract, update `style/style.md` to match or the content
-  pipeline silently drifts.
+
+### AI gateway
+
+- **Gateway credentials live in `*-gateway.ts`, never in `*-core.ts`.** `summary-draft-core.ts`
+  and `page-review-core.ts` are imported by client components (the editor readiness panel, the
+  settings prompt screen), so they must stay free of `process.env.AI_*` reads and provider
+  `fetch`. Those live in `ai-gateway.ts`, `summary-draft-gateway.ts`, and `page-review-gateway.ts`,
+  which throw if evaluated in a browser. Server callers use the `summary-draft.ts` barrel. After
+  touching this boundary, rebuild and confirm `.next/static` has no gateway symbols.
+- **A billed AI call that fails afterwards still has to be metered.** Provider requests that
+  return 200 and then fail post-processing (empty draft, truncated prose, unparseable review) have
+  already been charged. Throw `AiGatewayError` with the accumulated usage so the route records it;
+  a plain `Error` silently drops the tokens from `/admin/usage`.
+
+### Public shell and rendering
+
+- **Admin ↔ public shell is pathname-driven on the client.** Root layout SSR picks `admin-app`
+  classes from `x-pathname`, but soft navigations do not re-run that layout. `AdminAppClassSync`
+  keeps the classes in sync; `PublicSiteChrome` / `PublicSiteFooter` follow `usePathname()` so the
+  public header (including the **Admin** full-load link) appears after leaving `/admin` without a
+  reload. Prefer plain `<a>` / `location.assign` when intentionally crossing the boundary (View
+  page, View public, top-bar Knowledge bases).
+- **Print-to-PDF image loading is deliberate.** `PrintPdfButton` eagerly waits for `.article img`
+  elements to finish loading/decoding, with a bounded timeout, before calling `window.print()`. Keep
+  that preparation path if the button or print flow moves; otherwise browser PDF export can capture
+  before lazy/managed images have painted, producing PDFs with missing screenshots.
+
+### Testing and CI
+
+- **`@next/env` skips `.env.local` when `NODE_ENV=test`.** The DB test setup
+  (`vitest.db.setup.ts`) parses `.env.local` manually for that reason.
+- **Playwright's synthetic mouse cannot make a usable editor selection.** A scripted drag
+  produces a range that ends *outside* the paragraph (`commonAncestorContainer` is the
+  surface root) and a scripted double-click produces an empty one; Lexical correctly
+  refuses both, and even typing does not replace them. Select text with
+  `Range.selectNodeContents` or Shift+Arrow in editor specs. A formatting test that "fails"
+  only under a mouse gesture is measuring the harness, not the editor.
+- **Playwright suites run on their own ports and never reuse a server.** `test:a11y` uses 3100 and
+  `test:editor` uses 3101 (`A11Y_PORT` / `EDITOR_PORT` to override), both with
+  `reuseExistingServer: false`. They configure a hermetic server with `DATABASE_URL` forced empty,
+  and attaching to a dev server on 3000 instead — typically pointed at real Neon — produced a wall
+  of seed-data failures that read exactly like regressions. Specs derive their absolute base URL
+  from those env vars; do not hardcode a port, or the `Origin` header will not match the host and
+  the same-origin guard will 403 the sign-in setup.
 
 ---
 
