@@ -266,7 +266,10 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
   sanitize (split lists used to share an id → flaky saves); inline `font-size` spans are stripped
   from headings so theme control wins.
 - Toolbar extras: **symbol palette** (Ω), **Copy anchor** button when the caret is in a heading,
-  keyboard-shortcuts popover, "Starts at" ordered-list control. Nested `<ol>`s stay semantic ordered
+  keyboard-shortcuts popover, "Starts at" ordered-list control, and a **Continue *n*** button that
+  appears when the caret is in a numbered list with an earlier list to continue — it renumbers
+  across an intervening image or other block, which the sibling-only auto-continue cannot see.
+  Both write through `ListNode.setStart` so the value survives the save (see §8). Nested `<ol>`s stay semantic ordered
   lists and render 1./a./i.; the public renderer emits block-level list-item content when a list item
   contains nested lists so the HTML is valid. Offending H3-before-H2 headings are outlined by
   `markHeadingOrderProblems` (like missing alt).
@@ -352,6 +355,12 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
     covers body/heading line-height, body/heading letter-spacing, block spacing, the heading→content
     gap (`spaceAfterHeading`), list item spacing, list indent, and the article reading measure — all
     emitted as CSS variables by `themeToCssVars` and consumed by the `.flow` rhythm system (see §8).
+    Two further groups sit alongside it: **List numbers & bullets** (`listMarkers` — colour, size in
+    `em`, weight, applied to `::marker` on both the public page and the editor surface; an empty
+    colour inherits the item's text) and **Navigation depth** (`pageTreeMaxDepth` — deepest tree
+    level shown to readers; `pageTreeExpandDepth` — how many levels start open when the tree is
+    collapsible; `tocDepth` — the KB's default "On this page" depth, used by pages whose own
+    `tocDepth` is 0).
   - **AI Prompt** — site defaults for **Draft with AI** (`aiSummaryPrompt`) and **Review with AI**
     page checks (`aiPagePrompt`). Blank uses built-in defaults. Each knowledge base may override both
     prompts (KB → site → built-in). Page review returns structured suggestions (prose/alt/etc.) that
@@ -385,6 +394,24 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 - Public article breadcrumbs were intentionally removed: the left page tree handles cross-page
   hierarchy and the right rail handles in-page headings, so a third navigation layer at the top of
   the article was redundant and created alignment clutter.
+- Previous/next links at the foot of an article are **off by default** and opt-in per KB
+  (`showPageNav`): they imply a linear reading order a reference KB does not have.
+- The left page tree renders to `pageTreeMaxDepth` and, when `pageTreeCollapsible` is on, opens to
+  `pageTreeExpandDepth` plus the current page's own chain. With `pageTreeCollapsible` off there are
+  no chevrons and every branch renders open — that is the "always expanded" mode, not a restricted
+  one, which the label does not make obvious.
+
+### Page tree editing (`/admin/pages`, `src/components/AdminPageTreeManager.tsx`)
+- The tree editor reorders and re-parents pages, group headings, and links, then commits the whole
+  intended arrangement in one `PATCH /api/admin/pages/layout` batch (see the §8 gotcha about
+  validating that batch against the layout it *produces*).
+- Two re-parenting controls, deliberately: **Indent/Outdent** for one-level nudges relative to the
+  previous sibling, and **Move under…** for "put this under X" regardless of sibling position.
+  Indent alone cannot express the latter and is disabled for an only child, so Move under… is the
+  general control — and the only way to re-parent a group heading, since `/admin/pages/[pageId]`
+  routes `group`/`link` nodes to `TreeNodeSettingsForm`, which has no parent selector.
+- Nesting depth is not capped anywhere in the model, the admin tree, or the reader tree; only
+  `pageTreeMaxDepth` limits what readers are shown.
 
 ### Page archive/delete policy
 - Archive = hidden from the public site, not deleted. Editors can archive pages in their assigned
@@ -526,8 +553,11 @@ manual redirect persistence, and the single-active-version DB invariant.
 - **In-memory vs Neon**: everything works without a DB via the seed dataset, but locks, FTS, users,
   assignments, theming persistence, audit log, and site settings only do something real with
   `DATABASE_URL`.
-- **The editor surface binds once** (stable ref callback in `PageDocumentEditor`); re-creating the
-  ref each render previously thrashed selection/caret. Keep callbacks stable / behind refs.
+- **Each editor surface binds itself once, from its own `registerRootListener`.**
+  `LexicalFlowSurface` / `LexicalTableCellSurface` call `bindPageEditor(root, emit)` there;
+  `PageDocumentEditor` no longer owns that binding. Re-binding on every render thrashes
+  selection/caret, so keep those effects keyed on `editor` alone and callbacks behind refs — see
+  the toolbar-ownership entry below for what happens when they are not.
 - **The Tab path reads two selection sources; keep them in sync.** `handleEditorTabKey` decides
   whether to act from `window.getSelection()` (via `listItemFromSelection`), then `applyIndent`
   delegates to `lexicalIndent()`, which acts on **Lexical's own selection**. Lexical syncs from
@@ -803,18 +833,20 @@ manual redirect persistence, and the single-active-version DB invariant.
 
 ## 9. Current feature status
 
-**As of 2026-07-26:** the public/private multi-KB platform is on `main` and in active Grad School
+**As of 2026-08-21:** the public/private multi-KB platform is on `main` and in active Grad School
 content use. CI covers type-check, lint, unit tests, production build, public/private-viewer axe
 smoke, authenticated Chromium editor regressions, and live-DB suites when `DATABASE_URL` is set.
 
 **Shipped product surfaces**
 - Multi-KB public/private reader: 3-column docs layout, hierarchical page tree (pages, group
-  headings, links), depth-controlled TOC, KB homepage pages, home KB filter/pagination,
-  previous/next article nav (**off by default**; per-KB opt-in via `showPageNav`), heading
-  copy-link, print-to-PDF (browser print over semantic HTML).
-- Block editor: rich text, alignment, links, media picker, cards, tables, video, info boxes,
-  procedure sections, excerpts, P&P sourced blocks, editor notes (inline + margin rail), captions
-  vs alt text, continued numbering, draft backup/restore, draft preview, publish readiness panel.
+  headings, links) with per-KB render/expand depth, depth-controlled TOC (per-KB default, per-page
+  override), KB homepage pages, home KB filter/pagination, previous/next article nav (**off by
+  default**; per-KB opt-in via `showPageNav`), heading copy-link, print-to-PDF (browser print over
+  semantic HTML).
+- Block editor: rich text, alignment, links, media picker (library / upload / paste-slot / video),
+  cards, tables, video, info boxes, procedure sections, excerpts, P&P sourced blocks, editor notes
+  (inline + margin rail), captions vs alt text, list numbering continued across intervening blocks,
+  draft backup/restore, draft preview, publish readiness panel.
 - Optional **Draft with AI** for page summaries and **Review with AI** for style/readability/grammar/
   alt suggestions (Gateway env vars; never auto-saves). System prompts are editable under
   **Admin → Settings → AI Prompt**, with per-KB overrides on the knowledge base edit form
@@ -827,6 +859,8 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 - Governance: publish gate, owner/admin/KB-manager publish approval, proposed-edits workflow, review dashboard
   (feedback + propose actions), content health dashboard, revision history with side-by-side
   compare/restore, trash, audit log, weekly review digest cron, reader "Was this helpful?" feedback.
+- Per-KB theming: colours, fonts, type scale, heading styles, typography/spacing, list marker
+  (number/bullet) styling, navigation depth, and the editor's font/size/colour allowlist.
 - Auth & admin: Owner/Admin/Manager/Editor/Viewer, per-KB scoping, edit locks, site settings/branding,
   KB starter templates, cross-KB copy/move, DOCX import, redirects, KaaS read + limited-write API, owner KB ZIP
   export, usage analytics.

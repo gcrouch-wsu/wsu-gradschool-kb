@@ -1,10 +1,9 @@
 # Editor framework migration plan (FB-09 / FB-29 / FB-26)
 
-Status: **Phases 1–4 + FB-26 landed on development**. Chromium `test:editor`
-green after toolbar/insert/image-alt fixes (2026-07-27). Main flow, cards,
-procedure, and table-cell surfaces use Lexical. Spike route retained for manual
-checks. Release-gate Firefox/mobile checklist still required before calling
-editor close-out complete (FB-25).
+Status: **Phases 1–4 + FB-26 landed**. Main flow, cards, procedure, and
+table-cell surfaces use Lexical; the spike route was removed once the migration
+completed (see Phase 0). Release-gate Firefox/mobile checklist still required
+before calling editor close-out complete (FB-25).
 
 ## Phase 0 findings
 
@@ -29,7 +28,9 @@ editor close-out complete (FB-25).
 - **Phase 3:** `NoteNode` preserves `.doc-note` markers for the notes rail; HistoryPlugin
   provides undo/redo on Lexical surfaces.
 - **Phase 4:** Card and procedure nested surfaces also use `LexicalFlowSurface`.
-  HTML↔Visual remounts Lexical via `visualEpoch`. Legacy flow contentEditable mount
+  HTML↔Visual remounts Lexical via `replaceDocument`, which stamps an epoch onto the
+  flow `clientKey`s (it replaced a `visualEpoch` counter that had stopped being read).
+  Legacy flow contentEditable mount
   path removed from `PageDocumentEditor`. Image alt/align/width DOM edits sync back
   into `PreservedBlockNode` via `syncPreservedBlockFromDom`.
 - **FB-26:** Table cells use nested `LexicalTableCellSurface` (unique Lexical namespace

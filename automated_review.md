@@ -7,6 +7,14 @@ Written so a later session can pick the work up without re-deriving any of it.
 Scope that day: hardening backlog FB-38–FB-44 (shipped separately, see git), then a content
 pass over every public page for readability, consistent voice, and accessibility.
 
+> **Editor behaviour has changed since this session (2026-08-21).** Several defects that would
+> have shaped a content pass are fixed: rich paste no longer inserts everything twice; text colour
+> survives save + reopen (it was rendering correctly to readers but vanishing from the editor);
+> toolbar formatting applies to the box holding the caret rather than the first one on the page;
+> numbered lists can continue across an intervening image; nested lists no longer show a phantom
+> empty marker; and the page tree gained a "Move under…" control plus draft badges. If a workaround
+> below assumes one of those, it is obsolete — see `project_spec.md` §8.
+
 ---
 
 ## 1. State at the end of the session

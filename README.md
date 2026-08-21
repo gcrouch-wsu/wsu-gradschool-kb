@@ -259,8 +259,9 @@ Page form and edited through a dedicated settings form (no block editor).
 
 The document editor is a WYSIWYG surface with a wrapping toolbar:
 
-- **Blocks**: paragraphs, H2/H3 headings, ordered/unordered lists (with Tab/Shift+Tab nesting and
-  contextual "Starts at" control), reader-visible info boxes, **Procedure sections** (top-level
+- **Blocks**: paragraphs, H2/H3 headings, ordered/unordered lists (with Tab/Shift+Tab nesting, a
+  contextual "Starts at" control, and a **Continue *n*** button that resumes numbering across an
+  intervening image or other block), reader-visible info boxes, **Procedure sections** (top-level
   structural sections that default to H2 and can be H3), editable tables, section dividers, cards
   (visual emphasis blocks), videos, **Excerpts** (live includes of another page's section, chosen
   with a KB → page → section picker), **P&P source** blocks (sections imported from the Policies &
@@ -357,7 +358,10 @@ set; in-memory mode uses seed data for local parity checks.
 Public articles use a responsive 3-column layout (KB page tree · article · sticky "On this page"
 rail) that collapses on tablet/mobile. The page tree provides hierarchy and cross-page navigation;
 the right rail covers headings within the current page, so public article breadcrumbs are intentionally
-omitted. Tables scroll horizontally on narrow screens. Article and KB-homepage pages can show a
+omitted. Each knowledge base controls how deep the tree renders, how many levels start open when it
+is collapsible, and the default "On this page" depth (Manage Styles → Navigation depth); the same
+screen styles list numbers and bullets. Previous/next links at the foot of an article are off by
+default and opt-in per KB. Tables scroll horizontally on narrow screens. Article and KB-homepage pages can show a
 default-on **PDF export** button, which uses the browser's print-to-PDF over semantic,
 print-styled HTML. (This relies on the browser's print engine; it is not a server-side tagged/PDF-UA
 generator — see `project_spec.md` §10).
