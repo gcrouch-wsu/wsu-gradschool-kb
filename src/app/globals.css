@@ -7090,6 +7090,25 @@ html.admin-app body.admin-app-body {
   color: #fff;
 }
 
+.admin-shell__sign-in {
+  background: var(--admin-crimson);
+  border: 1px solid var(--admin-crimson);
+  border-radius: 10px;
+  color: #fff;
+  display: inline-block;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 400;
+  padding: 0.45rem 0.85rem;
+  text-decoration: none;
+}
+
+.admin-shell__sign-in:hover {
+  background: var(--admin-crimson-dark);
+  border-color: var(--admin-crimson-dark);
+  color: #fff;
+}
+
 .admin-shell__content {
   flex: 1;
   min-height: 0;

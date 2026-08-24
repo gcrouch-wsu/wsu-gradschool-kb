@@ -1754,6 +1754,36 @@ export function imageFilesFromTransfer(dataTransfer: DataTransfer | null): File[
   return files;
 }
 
+/**
+ * Excel, Sheets, Word, and many desktop apps put a bitmap preview on the clipboard
+ * alongside the real HTML/text. Prefer textual formats whenever they carry usable content
+ * so a cell copy does not become an uploaded screenshot.
+ */
+export function clipboardHasTextualContent(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) {
+    return false;
+  }
+  const html = dataTransfer.getData("text/html")?.trim() ?? "";
+  if (html) {
+    const hasStructure = /<(table|tr|td|th|ul|ol|li|p|h[1-6]|div|span|br|pre|blockquote)\b/i.test(html);
+    const textOnly = html
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (hasStructure && (textOnly.length > 0 || /<table\b/i.test(html))) {
+      return true;
+    }
+    if (textOnly.length > 0) {
+      return true;
+    }
+  }
+  return (dataTransfer.getData("text/plain")?.trim() ?? "").length > 0;
+}
+
 function cleanClipboardHtml(html: string): string {
   if (BLOCK_LEVEL_HTML.test(html)) {
     return sanitizePageDocument(html);
@@ -1826,7 +1856,8 @@ export function handleEditorPaste(
     return false;
   }
   const imageFiles = imageFilesFromTransfer(clipboard);
-  if (imageFiles.length > 0) {
+  // Prefer HTML/plain text when apps (Excel, Word, Sheets) also attach a bitmap preview.
+  if (imageFiles.length > 0 && !clipboardHasTextualContent(clipboard)) {
     event.preventDefault();
     saveRichTextSelection();
     if (options?.onImageFiles) {

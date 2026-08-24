@@ -29,7 +29,7 @@ function isAdminShellPath(pathname: string) {
 /**
  * Public header/footer must follow the client pathname. The root layout does not
  * re-render on soft navigations, so a server-only `{!isAdminShell && …}` gate
- * strands viewers who leave admin without a full page load (no Admin link).
+ * strands viewers who leave admin without a full page load (no public chrome).
  */
 export function PublicSiteChrome({
   session,
@@ -66,15 +66,6 @@ export function PublicSiteChrome({
                 {link.label}
               </a>
             ))}
-            {session?.role !== "viewer" && (
-              // Plain anchor: entering the admin shell needs a full page load.
-              // Signing in from an article returns to that article rather than dumping the
-              // editor on the admin dashboard — they were reading a page and wanted to act on
-              // it, and the "Edit page" button is waiting for them once the session exists.
-              <a href={session ? "/admin" : `/admin/sign-in?next=${encodeURIComponent(pathname || "/admin")}`}>
-                Admin
-              </a>
-            )}
             {session && (
               <span className="nav-user" title={`Signed in as ${session.email}`}>
                 <span className="nav-user__name">{session.email}</span>
@@ -95,11 +86,23 @@ export function PublicSiteChrome({
   );
 }
 
-export function PublicSiteFooter({ settings }: { settings: PublicChromeSettings }) {
+export function PublicSiteFooter({
+  session,
+  settings,
+}: {
+  session?: PublicChromeSession;
+  settings: PublicChromeSettings;
+}) {
   const pathname = usePathname() ?? "";
   if (isAdminShellPath(pathname)) {
     return null;
   }
+
+  const canUseAdmin = session?.role !== "viewer";
+  // Keep admin entry out of the primary header — this is mainly a public reader.
+  // Signed-out: "Admin Sign in" → dashboard after auth. Signed-in staff: "Admin" → dashboard.
+  const adminFooterHref = session && canUseAdmin ? "/admin" : "/admin/sign-in?next=%2Fadmin";
+  const adminFooterLabel = session && canUseAdmin ? "Admin" : "Admin Sign in";
 
   return (
     <footer className="site-footer">
@@ -108,15 +111,17 @@ export function PublicSiteFooter({ settings }: { settings: PublicChromeSettings 
           {settings.footerText && <p className="meta">{settings.footerText}</p>}
           {settings.contactInfo && <p className="meta">{settings.contactInfo}</p>}
         </div>
-        {settings.footerLinks.length > 0 && (
-          <nav className="footer-nav" aria-label="Footer">
-            {settings.footerLinks.map((link, i) => (
-              <a key={i} href={link.url}>
-                {link.label}
-              </a>
-            ))}
-          </nav>
-        )}
+        <nav className="footer-nav" aria-label="Footer">
+          {settings.footerLinks.map((link, i) => (
+            <a key={i} href={link.url}>
+              {link.label}
+            </a>
+          ))}
+          {canUseAdmin && (
+            // Plain anchor: entering the admin shell needs a full page load.
+            <a href={adminFooterHref}>{adminFooterLabel}</a>
+          )}
+        </nav>
       </div>
     </footer>
   );

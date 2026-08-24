@@ -6,9 +6,9 @@ import { useState } from "react";
 /**
  * Where to land after a successful sign-in.
  *
- * Previously restricted to `/admin*`, which meant signing in from an article always dumped
- * you on the admin dashboard with your place lost. Any same-origin path is now allowed so you
- * return to the page you were reading.
+ * The public footer links to `/admin/sign-in?next=/admin` so casual sign-in lands on the
+ * admin dashboard. Other entry points (session timeout on an editor page, deep links) may
+ * still pass a same-origin `next` path.
  *
  * This stays an open-redirect guard: the value must be a site-relative path. `//evil.test` and
  * `/\evil.test` are protocol-relative URLs that browsers resolve to another origin, and a

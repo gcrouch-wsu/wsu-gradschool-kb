@@ -68,7 +68,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <main className={isAdminShell ? "admin-app-main" : undefined} id="main">
           {children}
         </main>
-        <PublicSiteFooter settings={chromeSettings} />
+        <PublicSiteFooter session={chromeSession} settings={chromeSettings} />
       </body>
     </html>
   );

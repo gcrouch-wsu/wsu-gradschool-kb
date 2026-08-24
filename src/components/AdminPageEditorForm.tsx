@@ -13,6 +13,7 @@ import { StatusModal } from "@/components/StatusModal";
 import { markHeadingOrderProblems, markMissingAltImages, markProblemLinks } from "@/lib/page-editor-format";
 import { dedupeContentBlockIds } from "@/lib/page-document";
 import { cleanDocumentLayout } from "@/lib/page-document-quality";
+import { publishAdminClientSession } from "@/lib/admin-client-session";
 import { formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, themeToEditorPalette } from "@/lib/kb-theme";
 import { normalizePageTags } from "@/lib/page-tags";
@@ -384,10 +385,29 @@ export function AdminPageEditorForm({
   const [expiryNoticeOpen, setExpiryNoticeOpen] = useState(false);
   const wasExpired = useRef(false);
   const missedHeartbeats = useRef(0);
+  // A ref, deliberately not state: calling setState from the edit listener re-rendered the editor
+  // mid HTML->Visual transition and dropped in-flight content. Declared early so session-expiry
+  // can flush a local draft before Sign in navigates away.
+  const userEditedRef = useRef(false);
+  // Kept in sync below so session-expiry can flush a local draft before Sign in navigates away.
+  const latestSnapshotRef = useRef("");
+  const backupKeyRef = useRef(`kb-editor-backup:${page.id}`);
   const signInHref = `/admin/sign-in?next=${encodeURIComponent(`/admin/pages/${page.id}`)}`;
   const canPublish = canApproveProposed;
 
   function markSessionExpired() {
+    // Top bar still shows the server-rendered email until we push this; Sign in returns here via next=.
+    publishAdminClientSession(false);
+    if (userEditedRef.current && latestSnapshotRef.current) {
+      try {
+        localStorage.setItem(
+          backupKeyRef.current,
+          JSON.stringify({ savedAt: new Date().toISOString(), snapshot: latestSnapshotRef.current }),
+        );
+      } catch {
+        // Storage full or unavailable; the restore banner simply will not appear.
+      }
+    }
     setSessionExpired(true);
     if (!wasExpired.current) {
       wasExpired.current = true;
@@ -396,6 +416,7 @@ export function AdminPageEditorForm({
   }
 
   function markSessionActive() {
+    publishAdminClientSession(true);
     if (wasExpired.current) {
       wasExpired.current = false;
       setSessionExpired(false);
@@ -556,9 +577,11 @@ export function AdminPageEditorForm({
   const currentSnapshot = buildSnapshot();
   const [savedSnapshot, setSavedSnapshot] = useState(currentSnapshot);
   const dirty = currentSnapshot !== savedSnapshot;
+  latestSnapshotRef.current = currentSnapshot;
+  backupKeyRef.current = `kb-editor-backup:${page.id}`;
 
   // ----- Work protection: leave-page warning + local draft backup -----
-  const backupKey = `kb-editor-backup:${page.id}`;
+  const backupKey = backupKeyRef.current;
   const [backupNotice, setBackupNotice] = useState<{ savedAt: string } | null>(null);
   const [serverDraftNotice, setServerDraftNotice] = useState<{
     updatedAt: string;
@@ -575,13 +598,10 @@ export function AdminPageEditorForm({
   // benign actions — opening the HTML source view, or Lexical normalizing markup on first
   // focus — which produced "drafts" for pages nobody had edited. Those trained editors to
   // dismiss the banner on sight, which is exactly the wrong reflex for a recovery feature.
-  // A ref, deliberately not state: calling setState from this listener re-rendered the editor
-  // in the middle of the HTML->Visual transition and dropped in-flight content (it lost an
-  // editor note outright). Nothing needs to re-render when this flips — the effects below
-  // already re-run whenever the snapshot changes, and they read the ref at that point. The
-  // capture listener runs before React processes the same event, so the ref is always set
-  // before the effect sees the resulting snapshot.
-  const userEditedRef = useRef(false);
+  // userEditedRef is declared with the session refs above. Nothing needs to re-render when
+  // it flips — the effects below already re-run whenever the snapshot changes, and they read
+  // the ref at that point. The capture listener runs before React processes the same event,
+  // so the ref is always set before the effect sees the resulting snapshot.
   const formRef = useRef<HTMLFormElement>(null);
   // UI mirror of the ref. Updated from an effect so the state change lands after render —
   // setting it inside the capture listener re-rendered the editor mid HTML->Visual transition
@@ -1318,16 +1338,15 @@ export function AdminPageEditorForm({
       {sessionExpired && (
         <div className="alert alert--error" role="alert" style={{ marginBottom: "2rem" }}>
           <strong>Signed out:</strong> your session has timed out, so changes cannot be saved right now.{" "}
-          <a href={signInHref} rel="noopener" target="_blank">
-            Sign in again in a new tab
-          </a>
-          , then return here and save — your edits are still in this window.
+          <a href={signInHref}>Sign in</a>
+          {" "}
+          to continue — you will return to this page, and any unsaved edits are kept in a local draft you can restore.
         </div>
       )}
 
       <StatusModal
         confirmLabel="Got it"
-        message="Your sign-in session has timed out, so this page can no longer be saved. Sign in again in a new tab (use the link in the red banner), then come back to this window and save — your edits have not been lost."
+        message="Your sign-in session has timed out, so this page can no longer be saved. Use Sign in in the top bar (or the link in the red banner). After you sign in you will return here; if the editor reloads, choose Restore draft to bring your edits back."
         onClose={() => setExpiryNoticeOpen(false)}
         open={expiryNoticeOpen}
         title="Session expired"
