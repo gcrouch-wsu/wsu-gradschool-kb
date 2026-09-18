@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { getKbReadAccess } from "@/lib/auth";
 import { excerptAudienceFor, excerptSourceCheckerFor } from "@/lib/excerpts";
-import { requireKaasAuth } from "@/lib/kaas-auth";
+import { authenticateKaasRequest, kaasCanAccessKb } from "@/lib/kaas-auth";
 import { getAssetStatusById, getKbBySlug, getPageByPath, updatePage } from "@/lib/kb-store";
 import type { ContentBlock } from "@/lib/types";
 import { logError } from "@/lib/log";
@@ -26,16 +25,17 @@ function normalizeKaasBlocks(input: unknown, kbSlug: string): ContentBlock[] | n
 }
 
 /**
- * KaaS: public published article JSON for integrations (read + limited write).
- * Auth: Authorization: Bearer <key> where key is listed in KAAS_API_KEYS.
+ * KaaS article JSON (read).
+ * Auth: Authorization: Bearer <key> from KAAS_API_KEYS.
+ * Scoped keys (`kb-slug:secret`) may read that published KB even when private.
  */
 export async function GET(
   request: Request,
   context: { params: Promise<{ kbSlug: string; pagePath: string[] }> },
 ) {
-  const unauthorized = await requireKaasAuth(request);
-  if (unauthorized) {
-    return unauthorized;
+  const authResult = await authenticateKaasRequest(request);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { kbSlug, pagePath } = await context.params;
@@ -49,12 +49,7 @@ export async function GET(
 
   try {
     const kb = await getKbBySlug(kbSlug, false);
-    if (!kb || kb.visibility !== "public" || kb.status !== "published") {
-      return NextResponse.json({ message: "Not found." }, { status: 404 });
-    }
-
-    const access = await getKbReadAccess(null, kb);
-    if (!access.canRead) {
+    if (!kb || !kaasCanAccessKb(authResult.auth, kb)) {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
 
@@ -68,6 +63,7 @@ export async function GET(
         id: kb.id,
         slug: kb.slug,
         title: kb.title,
+        visibility: kb.visibility,
       },
       page: {
         id: page.id,
@@ -86,14 +82,14 @@ export async function GET(
   }
 }
 
-/** Limited write: update summary and/or blocks on a published public page. */
+/** Limited write: update summary and/or blocks on a published page the key can access. */
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ kbSlug: string; pagePath: string[] }> },
 ) {
-  const unauthorized = await requireKaasAuth(request);
-  if (unauthorized) {
-    return unauthorized;
+  const authResult = await authenticateKaasRequest(request);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { kbSlug, pagePath } = await context.params;
@@ -121,7 +117,7 @@ export async function PATCH(
 
   try {
     const kb = await getKbBySlug(kbSlug, false);
-    if (!kb || kb.visibility !== "public" || kb.status !== "published") {
+    if (!kb || !kaasCanAccessKb(authResult.auth, kb)) {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
     const page = await getPageByPath(kb.id, pagePath, false);

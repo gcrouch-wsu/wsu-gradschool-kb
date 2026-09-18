@@ -70,7 +70,7 @@ describe("GET /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     expect(Array.isArray(data.page.blocks)).toBe(true);
   });
 
-  it("hides private KBs, draft KBs, staff pages, groups, and links", async () => {
+  it("hides private KBs from global keys, and draft/staff/group/link content", async () => {
     vi.stubEnv("DATABASE_URL", "");
     vi.stubEnv("KAAS_API_KEYS", "test-key");
 
@@ -79,6 +79,36 @@ describe("GET /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     expect((await getPage("graduate-school", ["templates", "graduate-program-handbooks"])).status).toBe(404);
     expect((await getPage("graduate-school", ["reference"])).status).toBe(404);
     expect((await getPage("graduate-school", ["reference", "policies-and-procedures"])).status).toBe(404);
+  });
+
+  it("lets a scoped key read a published private KB and blocks other KBs", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("KAAS_API_KEYS", "graduate-school-staff:staff-only-key");
+
+    const { GET } = await import("@/app/api/v1/kb/[kbSlug]/pages/[...pagePath]/route");
+    const allowed = await GET(
+      new Request("http://localhost/api/v1/kb/graduate-school-staff/pages/private-staff-orientation", {
+        headers: { Authorization: "Bearer staff-only-key" },
+      }),
+      {
+        params: Promise.resolve({
+          kbSlug: "graduate-school-staff",
+          pagePath: ["private-staff-orientation"],
+        }),
+      },
+    );
+    expect(allowed.status).toBe(200);
+    const data = await allowed.json();
+    expect(data.kb.slug).toBe("graduate-school-staff");
+    expect(data.page.slug).toBe("private-staff-orientation");
+
+    const blocked = await GET(
+      new Request("http://localhost/api/v1/kb/graduate-school/pages/procedures", {
+        headers: { Authorization: "Bearer staff-only-key" },
+      }),
+      { params: Promise.resolve({ kbSlug: "graduate-school", pagePath: ["procedures"] }) },
+    );
+    expect(blocked.status).toBe(404);
   });
 });
 

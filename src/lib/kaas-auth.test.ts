@@ -1,7 +1,13 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { isValidKaasApiKey, requireKaasAuth } from "@/lib/kaas-auth";
+import {
+  isValidKaasApiKey,
+  kaasCanAccessKb,
+  parseKaasCredentials,
+  requireKaasAuth,
+  resolveKaasAuth,
+} from "@/lib/kaas-auth";
 
-describe("isValidKaasApiKey", () => {
+describe("parseKaasCredentials / resolveKaasAuth", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -9,13 +15,51 @@ describe("isValidKaasApiKey", () => {
   it("rejects when no keys are configured", () => {
     vi.stubEnv("KAAS_API_KEYS", "");
     expect(isValidKaasApiKey("Bearer secret")).toBe(false);
+    expect(resolveKaasAuth("Bearer secret")).toBeNull();
   });
 
-  it("accepts a matching bearer key", () => {
+  it("treats bare secrets as global public-only credentials", () => {
     vi.stubEnv("KAAS_API_KEYS", "alpha,beta");
-    expect(isValidKaasApiKey("Bearer beta")).toBe(true);
-    expect(isValidKaasApiKey("Bearer nope")).toBe(false);
-    expect(isValidKaasApiKey(null)).toBe(false);
+    expect(parseKaasCredentials()).toEqual([
+      { secret: "alpha", kbSlugs: null },
+      { secret: "beta", kbSlugs: null },
+    ]);
+    expect(resolveKaasAuth("Bearer beta")).toEqual({ kbSlugs: null });
+    expect(resolveKaasAuth("Bearer nope")).toBeNull();
+    expect(resolveKaasAuth(null)).toBeNull();
+  });
+
+  it("parses kb-slug:secret as a scoped credential", () => {
+    vi.stubEnv("KAAS_API_KEYS", "wsu-reporting:orange-tiger-42,global-key");
+    expect(parseKaasCredentials()).toEqual([
+      { secret: "orange-tiger-42", kbSlugs: ["wsu-reporting"] },
+      { secret: "global-key", kbSlugs: null },
+    ]);
+    expect(resolveKaasAuth("Bearer orange-tiger-42")).toEqual({ kbSlugs: ["wsu-reporting"] });
+    expect(resolveKaasAuth("Bearer global-key")).toEqual({ kbSlugs: null });
+  });
+});
+
+describe("kaasCanAccessKb", () => {
+  it("lets global keys read published public KBs only", () => {
+    const auth = { kbSlugs: null };
+    expect(kaasCanAccessKb(auth, { slug: "graduate-school", visibility: "public", status: "published" })).toBe(
+      true,
+    );
+    expect(
+      kaasCanAccessKb(auth, { slug: "graduate-school-staff", visibility: "private", status: "published" }),
+    ).toBe(false);
+    expect(kaasCanAccessKb(auth, { slug: "draft-preview", visibility: "public", status: "draft" })).toBe(false);
+  });
+
+  it("lets scoped keys read only their slug, including private published KBs", () => {
+    const auth = { kbSlugs: ["wsu-reporting"] };
+    expect(kaasCanAccessKb(auth, { slug: "wsu-reporting", visibility: "private", status: "published" })).toBe(
+      true,
+    );
+    expect(kaasCanAccessKb(auth, { slug: "graduate-school", visibility: "public", status: "published" })).toBe(
+      false,
+    );
   });
 });
 
@@ -49,7 +93,6 @@ describe("requireKaasAuth", () => {
       statuses.push(response!.status);
     }
 
-    // The budget allows a handful of 401s, then holds the client off with 429.
     expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
     expect(statuses.slice(10)).toEqual([429, 429]);
   });

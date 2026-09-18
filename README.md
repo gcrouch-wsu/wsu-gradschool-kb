@@ -98,6 +98,25 @@ Cleaned AI summary drafts are capped at 2,500 characters; typed summaries have n
 with AI** in the page editor returns accept/dismiss suggestions for style, readability, grammar, and
 alt text.
 
+**Agent / machine API (KaaS):** set `KAAS_API_KEYS` in Vercel. Prefer a **scoped** key so the agent
+only sees one KB:
+
+```text
+KAAS_API_KEYS=wsu-reporting:your-long-random-secret
+```
+
+Give the agent the base URL, the secret (not the env var name), and instruct it to send header
+`Authorization: Bearer your-long-random-secret` on every request.
+
+Useful endpoints:
+
+- `GET /api/v1/kb/{kbSlug}/pages` — list published pages
+- `GET /api/v1/kb/{kbSlug}/pages/{path...}` — read one page as JSON
+- `PATCH /api/v1/kb/{kbSlug}/pages/{path...}` — update summary/blocks
+- `POST /api/v1/kb/{kbSlug}/pages` — create a published page (`title`, `blocks`, optional `summary` / `slug` / `parentPath` / `contactEmail`)
+
+A bare key without `kb-slug:` still works for published **public** KBs only (legacy).
+
 Test suite: the Vitest unit suite (`npm test`), `npm run test:a11y` (public-page and private-viewer
 axe smoke tests), and `npm run test:editor` (authenticated Chromium editor regressions; optionally
 Firefox + mobile-width with `EDITOR_CROSS_BROWSER=1`). Type-check: `npm run check`.

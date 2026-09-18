@@ -505,6 +505,10 @@ share the page lock and the process-global in-memory store.
   deliveries instead of failing.
 - `SOURCED_CONTENT_ALLOWED_HOSTS` — optional comma-separated https hosts the "P&P source" import
   may fetch from; defaults to `gradschool.wsu.edu` when unset.
+- `KAAS_API_KEYS` — comma-separated bearer secrets for the machine KaaS API (`/api/v1/kb/...`).
+  Use `kb-slug:secret` to limit a key to one knowledge base (including published private KBs).
+  A bare `secret` remains a legacy global key for published **public** KBs only. When unset, the
+  API rejects all callers.
 - `AI_PROVIDER_ENDPOINT` / `AI_API_KEY` / `AI_MODEL` — optional Vercel AI Gateway (OpenAI-compatible
   chat completions) for editor **Draft with AI** summaries and **Review with AI** page suggestions.
   When unset, those routes return 501. Recommended model: `inclusionai/ling-3.0-flash-free`. System
@@ -1250,8 +1254,9 @@ requirement to republish content into Confluence.
   registration *and* re-checked with DNS resolution at delivery. `requireKaasAuth` throttles failed
   KaaS authentication per client (10/minute, then 429). Covered by `src/lib/net-guard.test.ts` and
   `src/lib/kaas-auth.test.ts`.
-- **Residual:** DNS rebinding between the resolution check and the socket connect is not closed;
-  per-KB KaaS key scoping is still not implemented.
+- **Residual:** DNS rebinding between the resolution check and the socket connect is not closed.
+  Per-KB KaaS key scoping shipped later: `KAAS_API_KEYS` entries of the form `kb-slug:secret`
+  authorize only that published KB (public or private); bare secrets stay global public-only.
 
 ### FB-44 — Client publish-readiness parity
 
