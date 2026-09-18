@@ -1,4 +1,5 @@
 export { KbNotFoundPage } from "@/components/route-states/KbNotFoundPage";
+export { PrivateKbGatePage } from "@/components/route-states/PrivateKbGatePage";
 export { RouteErrorPage } from "@/components/route-states/RouteErrorPage";
 export { RouteLoadingPage } from "@/components/route-states/RouteLoadingPage";
 export type { RouteLoadingPreset, RouteLoadingVariant } from "@/components/route-states/RouteLoadingPage";

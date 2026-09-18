@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getKbReadAccess, type AdminSession } from "@/lib/auth";
+import { getKbReadAccess, isPrivateKbSignInGate, type AdminSession } from "@/lib/auth";
 import {
   assetHasPublicPublishedUsage,
   getAssetById,
@@ -37,6 +37,20 @@ describe("private KB read access (in-memory)", () => {
     expect(await getKbReadAccess(session("viewer", "unassigned-viewer"), privateKb!)).toMatchObject({
       canRead: false,
     });
+  });
+
+  it("offers a sign-in gate for published private KBs without inventing one for drafts", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const privateKb = await getKbBySlug("graduate-school-staff");
+    expect(privateKb).not.toBeNull();
+    const denied = await getKbReadAccess(null, privateKb!);
+    expect(isPrivateKbSignInGate(privateKb!, denied)).toBe(true);
+
+    const allowed = await getKbReadAccess(session("viewer", "seed-viewer-private-staff"), privateKb!);
+    expect(isPrivateKbSignInGate(privateKb!, allowed)).toBe(false);
+
+    const draftPrivateKb = { id: "kb-private-staff", visibility: "private" as const, status: "draft" as const };
+    expect(isPrivateKbSignInGate(draftPrivateKb, { canRead: false, canReadStaffContent: false })).toBe(false);
   });
 
   it("treats unpublished KBs as unreadable for anonymous users and viewers", async () => {

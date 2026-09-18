@@ -7,8 +7,9 @@ import { KbSearchWidget } from "@/components/KbSearchWidget";
 import { PageBlocks } from "@/components/PageBlocks";
 import { PageTree } from "@/components/PageTree";
 import { PrintPdfButton } from "@/components/PrintPdfButton";
+import { PrivateKbGatePage } from "@/components/route-states/PrivateKbGatePage";
 import { TableOfContents } from "@/components/TableOfContents";
-import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
+import { getCurrentAdminSession, getKbReadAccess, isPrivateKbSignInGate } from "@/lib/auth";
 import { buildPageTree, getAssetById, getKbById, getKbBySlug, getKbHomepagePage } from "@/lib/kb-store";
 import { formatBytes, formatDate, formatTimestamp } from "@/lib/format";
 import { DEFAULT_THEME, mergeTheme, resolvePublicTheme, themeToCssVars } from "@/lib/kb-theme";
@@ -29,6 +30,12 @@ export async function generateMetadata({
     notFound();
   }
   const access = await getKbReadAccess(session, kb);
+  if (isPrivateKbSignInGate(kb, access)) {
+    return {
+      title: `Private knowledge base · WSU Knowledge Base`,
+      robots: { index: false, follow: false },
+    };
+  }
   if (!access.canRead) {
     notFound();
   }
@@ -46,6 +53,9 @@ export default async function KbHomePage({ params }: { params: Promise<{ kbSlug:
     notFound();
   }
   const access = await getKbReadAccess(session, kb);
+  if (isPrivateKbSignInGate(kb, access)) {
+    return <PrivateKbGatePage kbTitle={kb.title} returnPath={`/kb/${kb.slug}`} signedIn={Boolean(session)} />;
+  }
   if (!access.canRead) {
     notFound();
   }

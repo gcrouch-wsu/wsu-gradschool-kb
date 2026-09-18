@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { getCurrentAdminSession, getKbReadAccess } from "@/lib/auth";
+import { PrivateKbGatePage } from "@/components/route-states/PrivateKbGatePage";
+import { getCurrentAdminSession, getKbReadAccess, isPrivateKbSignInGate } from "@/lib/auth";
 import { getAssetById, getKbById, getKbBySlug, getVisiblePagesForKb, searchKb } from "@/lib/kb-store";
 import { getPopularSearchTags } from "@/lib/popular-search-tags";
 import { suggestDidYouMean } from "@/lib/search-suggest";
@@ -19,6 +20,12 @@ export async function generateMetadata({ params }: { params: Promise<{ kbSlug: s
     notFound();
   }
   const access = await getKbReadAccess(session, kb);
+  if (isPrivateKbSignInGate(kb, access)) {
+    return {
+      title: `Private knowledge base · WSU Knowledge Base`,
+      robots: { index: false, follow: false },
+    };
+  }
   if (!access.canRead) {
     notFound();
   }
@@ -42,6 +49,19 @@ export default async function SearchPage({
     notFound();
   }
   const access = await getKbReadAccess(session, kb);
+  if (isPrivateKbSignInGate(kb, access)) {
+    const nextQuery = new URLSearchParams();
+    if (q) nextQuery.set("q", q);
+    for (const tag of tagFacets) nextQuery.append("tag", tag);
+    const query = nextQuery.toString();
+    return (
+      <PrivateKbGatePage
+        kbTitle={kb.title}
+        returnPath={`/kb/${kb.slug}/search${query ? `?${query}` : ""}`}
+        signedIn={Boolean(session)}
+      />
+    );
+  }
   if (!access.canRead) {
     notFound();
   }

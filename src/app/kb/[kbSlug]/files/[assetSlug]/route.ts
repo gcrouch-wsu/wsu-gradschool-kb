@@ -84,6 +84,11 @@ export async function GET(
   }
   const access = await getKbReadAccess(session, kb);
   if (!access.canRead) {
+    if (kb.visibility === "private" && kb.status === "published" && !session) {
+      const url = new URL(request.url);
+      const next = `${url.pathname}${url.search}`;
+      return NextResponse.redirect(new URL(`/admin/sign-in?next=${encodeURIComponent(next)}`, request.url));
+    }
     notFound();
   }
 

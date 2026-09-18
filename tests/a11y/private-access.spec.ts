@@ -35,34 +35,40 @@ async function addViewerCookie(context: BrowserContext) {
 }
 
 // Page routes stream behind the root loading boundary, so the HTTP status is
-// committed before authorization runs: not-found pages render the 404 boundary
-// UI with a 200 status, identically for nonexistent, private, and draft KBs.
-// The security-relevant invariants are (a) the 404 UI renders, (b) no gated
-// content appears, and (c) an unreadable KB is indistinguishable from a
-// nonexistent one. Asset delivery is a route handler and returns a real 404.
+// committed before authorization runs (often 200 even for not-found UI).
 async function expectNotFoundUi(page: import("@playwright/test").Page, path: string, hiddenText: string) {
   await page.goto(path);
   await expect(page.getByRole("heading", { level: 1, name: /not found/i })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(hiddenText);
 }
 
-test("anonymous visitors get the not-found page for private KB routes and a 404 for assets", async ({
+async function expectPrivateGateUi(page: import("@playwright/test").Page, path: string, hiddenText: string) {
+  await page.goto(path);
+  await expect(page.getByRole("heading", { level: 1, name: /private knowledge base/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^sign in$/i })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(hiddenText);
+}
+
+test("anonymous visitors get a sign-in gate for private KB routes and a sign-in redirect for assets", async ({
   context,
   page,
 }) => {
-  await expectNotFoundUi(page, "/kb/graduate-school-staff/private-staff-orientation", "Orientation");
-  await expectNotFoundUi(page, "/kb/graduate-school-staff", "Staff Knowledge Base");
+  await expectPrivateGateUi(page, "/kb/graduate-school-staff/private-staff-orientation", "Orientation");
+  await expectPrivateGateUi(page, "/kb/graduate-school-staff", "Private operational guidance");
 
-  const [privateResponse, nonexistentResponse] = await Promise.all([
-    context.request.get(`${BASE}/kb/graduate-school-staff`),
-    context.request.get(`${BASE}/kb/no-such-kb-parity-check`),
-  ]);
-  expect(privateResponse.status()).toBe(nonexistentResponse.status());
+  const signIn = page.getByRole("link", { name: /^sign in$/i });
+  await expect(signIn).toHaveAttribute("href", /\/admin\/sign-in\?next=/);
+
+  const nonexistent = await context.request.get(`${BASE}/kb/no-such-kb-parity-check`);
+  expect(nonexistent.status()).toBe(200);
+  // Private published KBs deliberately disclose existence via the gate; drafts/missing stay 404 UI.
 
   const asset = await context.request.get(
     `${BASE}/kb/graduate-school-staff/files/private-staff-orientation-checklist`,
+    { maxRedirects: 0 },
   );
-  expect(asset.status()).toBe(404);
+  expect(asset.status()).toBe(307);
+  expect(asset.headers().location).toMatch(/\/admin\/sign-in\?next=/);
 });
 
 test("anonymous visitors and viewers get the not-found page for draft KBs", async ({ browser, page }) => {

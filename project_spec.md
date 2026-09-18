@@ -156,8 +156,10 @@ For APIs, `requireAdminMutation` means "valid admin session plus same-origin `Or
 add it to any new state-changing admin route and keep viewers out of every mutation path. For
 editor-reachable data access, add one of the KB scope guards: `requireKbAccess` for API routes,
 `filterKbsForSession`/`accessibleKbIds` for list queries, and `canAccessKb(...) -> notFound()` for
-server-rendered detail pages. For public/private read access after Phase 1, anonymous users and
-signed-in users without access must get `notFound()` rather than a private-KB existence signal.
+server-rendered detail pages. For public/private read access, published private KBs show a
+sign-in gate (with `next=` back to the shared URL) when the visitor cannot read them. Draft and
+nonexistent KBs still soft-404 with no existence signal. Search, KB lists, and machine APIs must
+still never leak private/staff results to unauthorized callers.
 
 **Public/private read-access enforcement surfaces:**
 
@@ -165,10 +167,10 @@ signed-in users without access must get `notFound()` rather than a private-KB ex
 |---------|-----------|-------------|--------|--------|-------------------|----------------------|
 | `/` KB list | published public KBs only | all KBs | published public + assigned KBs | published public + assigned published KBs | Hide private KBs without read access. | `src/app/page.tsx`, `src/lib/auth.ts` |
 | `/search` global search | published public KBs only | all KBs | published public + assigned KBs | published public + assigned published KBs | Group results by readable KB; never leak private/staff results. | `src/app/search/page.tsx`, `src/lib/kb-store.ts` |
-| `/kb/[kbSlug]` | published public KBs only | all KBs | published public + assigned KBs | published public + assigned published KBs | `notFound()` for private KBs without access. | `src/app/kb/[kbSlug]/page.tsx` |
-| `/kb/[kbSlug]/[...pagePath]` | public pages in published public KBs | all readable pages | published public + assigned KB pages | published public + assigned published, non-staff pages | Staff-only pages require KB read access; viewers never see drafts. | `src/app/kb/[kbSlug]/[...pagePath]/page.tsx` |
-| `/kb/[kbSlug]/search` | public pages in published public KBs | all readable pages | published public + assigned KB pages | published public + assigned published, non-staff pages | Search must never leak private/staff results. | `src/app/kb/[kbSlug]/search/page.tsx`, `src/lib/kb-store.ts` |
-| `/kb/[kbSlug]/files/[assetSlug]` | assets with published, non-staff usage in published public KBs | all readable assets | published public + assigned KB assets | assets with published, non-staff usage in readable KBs | Authorized responses use `Cache-Control: private, no-store`; private bytes are streamed through this route instead of redirecting to public Blob URLs. | `src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`, `src/lib/kb-store.ts` |
+| `/kb/[kbSlug]` | published public KBs only; published private KBs show a sign-in gate | all KBs | published public + assigned KBs | published public + assigned published KBs | Sign-in gate for published private KBs without access; `notFound()` for draft/missing. | `src/app/kb/[kbSlug]/page.tsx` |
+| `/kb/[kbSlug]/[...pagePath]` | public pages in published public KBs; published private KBs show a sign-in gate | all readable pages | published public + assigned KB pages | published public + assigned published, non-staff pages | Staff-only pages require KB read access; viewers never see drafts; private gate before page lookup. | `src/app/kb/[kbSlug]/[...pagePath]/page.tsx` |
+| `/kb/[kbSlug]/search` | public pages in published public KBs; published private KBs show a sign-in gate | all readable pages | published public + assigned KB pages | published public + assigned published, non-staff pages | Search must never leak private/staff results; private gate before search. | `src/app/kb/[kbSlug]/search/page.tsx`, `src/lib/kb-store.ts` |
+| `/kb/[kbSlug]/files/[assetSlug]` | assets with published, non-staff usage in published public KBs; anonymous private KB assets redirect to sign-in | all readable assets | published public + assigned KB assets | assets with published, non-staff usage in readable KBs | Authorized responses use `Cache-Control: private, no-store`; private bytes are streamed through this route instead of redirecting to public Blob URLs. | `src/app/kb/[kbSlug]/files/[assetSlug]/route.ts`, `src/lib/kb-store.ts` |
 
 > ✅ **The matrix is enforced at the API, list-view, detail-page, and owner-only-page levels.**
 > - **Editor KB scoping** — `requireKbAccess` on the redirects `GET`, the staged-import collection
@@ -940,26 +942,27 @@ smoke, authenticated Chromium editor regressions, and live-DB suites when `DATAB
 - **Accessibility coverage is gate + smoke, not a full WCAG 2.1 AA audit** (§1, §9). Do not describe
   the product as ADA/WCAG certified until a manual audit passes. Public article tables now emit
   `scope="col"` / `scope="row"` on header cells, but this does not replace the manual audit.
-- **Private KB reads are intentionally dynamic and auth-gated.** Do not add static caching,
-  public redirects, sitemap exposure, or "sign in to view" affordances for private KB
-  landing/article/search/asset URLs. Unauthorized private content returns `notFound()` so KB
-  existence is not distinguishable, and authorized private asset responses use
-  `Cache-Control: private, no-store`. Cross-KB **moves into a private KB therefore do not write**
-  a public redirect at the old URL (a `Location: /kb/{private-slug}/…` would disclose the private
-  KB). Old public bookmarks for a page moved into a private KB will 404 / soft-404 instead.
+- **Private KB reads are auth-gated with a shareable sign-in gate.** Published private KB
+  landing/article/search URLs show a private gate (Sign in with `next=` back to the shared URL)
+  instead of a soft 404 when the visitor cannot read them. Draft and nonexistent KBs still
+  `notFound()` so unpublished work stays hidden. Do not add static caching or sitemap exposure for
+  private KB URLs. Authorized private asset responses use `Cache-Control: private, no-store`;
+  anonymous requests for assets in a published private KB redirect to sign-in. Cross-KB **moves into
+  a private KB therefore do not write** a public redirect at the old URL (a
+  `Location: /kb/{private-slug}/…` would disclose the private KB from a previously public path).
+  Old public bookmarks for a page moved into a private KB will hit the private gate or soft-404
+  depending on whether the destination KB is published.
 - **Cross-KB copy/move remints block ids and rewrites absolute `/kb/{source-slug}/…` body
   links** to the destination slug. `relatedAssetIds` are preserved; assets remain on their home KB
   and the file route still gates on that home KB's read access, so a reader of the destination KB who
   cannot read the source KB may still see broken images/files.
 - **Not-found page responses carry HTTP 200, by framework design.** Page routes stream behind the
   root `loading.tsx` boundary, so the status code is committed before authorization or existence
-  checks run; the 404 boundary UI then streams into a 200 response. This applies identically to
-  nonexistent, private, and draft KB URLs (verified parity — no existence signal) and predates
-  Phase 1. Asset delivery is a route handler and returns genuine 404/status codes.
-  `generateMetadata` on KB landing/article/search routes also calls `notFound()` so gated pages
-  never emit real titles/descriptions, but empirical probes (common bot user agents against a
-  production server) still received HTTP 200 with the not-found UI — do not claim crawler-visible
-  404s. Status-code fidelity for streamed `notFound()` routes remains a known framework limit.
+  checks run; the 404 boundary UI then streams into a 200 response. This applies to nonexistent
+  and draft KB URLs (and predates Phase 1). Published private KB URLs render the sign-in gate
+  instead of the 404 UI. Asset delivery is a route handler and returns genuine status codes
+  (including a sign-in redirect for anonymous private-KB assets). Status-code fidelity for streamed
+  `notFound()` routes remains a known framework limit.
 - **Authentication is local by decision, not by deferral**: owner-provisioned accounts use scrypt
   password hashes and signed HMAC cookies. SSO/OIDC/SAML was dropped on 2026-08-01 and is not
   planned. There is still no server-side idle-session table or sliding idle timeout beyond the
@@ -1340,8 +1343,8 @@ curl -sS https://YOUR_HOST/api/health
 - Asset delivery works for a known image/document asset.
 - Private KB smoke check: create a private KB, add a published public-visibility page with an
   attached file, create a Viewer assigned only to that KB, then confirm in an incognito window that
-  the Viewer can read the KB/page/file while an anonymous window gets 404 for the same KB, article,
-  search, and file URLs.
+  the Viewer can read the KB/page/file while an anonymous window gets the private sign-in gate for
+  the KB/article/search URLs and a sign-in redirect for the file URL.
 - Test owner KB export on a media-heavy KB after deploy. The ZIP response is streamed and asset bytes are loaded one entry at a time; if an asset fetch fails mid-stream the download is truncated and a structured `kb-export` error is logged, so verify the downloaded ZIP opens cleanly.
 - Admin users can sign in, edit a draft page, and see audit-log entries.
 - If webhook endpoints are configured under `/admin/webhooks`, confirm a test publish (or overdue/stale cron) delivers to at least one HTTPS subscriber with `x-kb-signature` / `x-kb-event`.

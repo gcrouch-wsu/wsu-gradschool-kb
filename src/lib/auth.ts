@@ -270,6 +270,17 @@ export interface KbReadAccess {
   canReadStaffContent: boolean;
 }
 
+/**
+ * Published private KBs are shareable: unauthorized visitors get a sign-in gate, not a soft 404.
+ * Draft / nonexistent KBs still use notFound() so unpublished work stays hidden.
+ */
+export function isPrivateKbSignInGate(
+  kb: Pick<KnowledgeBase, "visibility" | "status">,
+  access: KbReadAccess,
+): boolean {
+  return !access.canRead && kb.visibility === "private" && kb.status === "published";
+}
+
 export async function getKbReadAccess(
   session: AdminSession | null,
   kb: Pick<KnowledgeBase, "id" | "visibility" | "status">,
