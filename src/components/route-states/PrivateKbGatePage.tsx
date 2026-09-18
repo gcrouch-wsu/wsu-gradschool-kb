@@ -31,7 +31,6 @@ export function PrivateKbGatePage({
     >
       <div className="route-status__actions">
         {/* Plain anchor: entering the admin shell needs a full page load. */}
-        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- intentional hard nav */}
         <a className="button" href={signInHref}>
           {signedIn ? "Sign in with a different account" : "Sign in"}
         </a>
