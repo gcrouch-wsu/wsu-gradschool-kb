@@ -21,6 +21,8 @@ import {
   loadPageByPathFromDb,
   loadPagesForKbFromDb,
   loadPagesForKbWithoutBlocksFromDb,
+  loadDueScheduledPagesFromDb,
+  loadAdminCountsFromDb,
   loadVersionsForAsset,
   replaceVersionsForAsset,
   deleteAsset as deleteAssetFromDb,
@@ -594,7 +596,8 @@ export async function setKbAiPrompts(
 
 export async function getVisiblePagesForKb(kbId: string, includeStaff: boolean): Promise<KbPage[]> {
   if (isDatabaseEnabled()) {
-    return visiblePageList(await getDbPagesForKb(kbId), kbId, includeStaff);
+    // Summaries only — callers need titles/paths/tags/visibility, not blocks JSON (Neon egress).
+    return visiblePageList(await getDbPageSummariesForKb(kbId), kbId, includeStaff);
   }
   const dataset = await getDataset();
   return visiblePages(dataset, kbId, includeStaff);
@@ -1658,6 +1661,10 @@ export async function searchKb(
 }
 
 export async function getAdminCounts() {
+  if (isDatabaseEnabled()) {
+    const counts = await loadAdminCountsFromDb();
+    return { ...counts, storageMode: "neon" as const };
+  }
   const dataset = await getDataset();
   return {
     publishedKbs: dataset.knowledgeBases.filter((kb) => kb.status === "published").length,
@@ -1666,7 +1673,7 @@ export async function getAdminCounts() {
     archivedPages: dataset.pages.filter((page) => page.status === "archived").length,
     activeAssets: dataset.assets.filter((asset) => asset.status === "active").length,
     archivedAssets: dataset.assets.filter((asset) => asset.status === "archived").length,
-    storageMode: isDatabaseEnabled() ? ("neon" as const) : ("in-memory" as const),
+    storageMode: "in-memory" as const,
   };
 }
 
@@ -2359,22 +2366,46 @@ export async function publishDueDraftPages(now = new Date()): Promise<{
   const { checkExcerptSourceForPublish, excerptAudienceFor, excerptSourceCheckerFor } =
     await import("@/lib/excerpts");
   const { validatePageForPublish } = await import("@/lib/publish-gate");
-  const dataset = await getDataset();
-  const due = dataset.pages.filter((page) => {
-    if (page.status !== "draft") return false;
-    if ((page.nodeKind ?? "page") !== "page" && (page.nodeKind ?? "page") !== "group" && (page.nodeKind ?? "page") !== "link") {
-      return false;
+
+  let due: KbPage[];
+  const kbById = new Map<string, KnowledgeBase>();
+
+  if (isDatabaseEnabled()) {
+    // Targeted due-draft query — do not pull the full corpus on every 15-minute cron tick.
+    due = await loadDueScheduledPagesFromDb(now);
+    if (due.length === 0) {
+      return { attempted: 0, published: [], blocked: [] };
     }
-    if (!page.publishAt) return false;
-    const when = new Date(page.publishAt);
-    return !Number.isNaN(when.getTime()) && when.getTime() <= now.getTime();
-  });
+    for (const page of due) {
+      if (kbById.has(page.kbId)) continue;
+      const kb = await loadKnowledgeBaseByIdFromDb(page.kbId);
+      if (kb) kbById.set(page.kbId, kb);
+    }
+  } else {
+    const dataset = await getDataset();
+    due = dataset.pages.filter((page) => {
+      if (page.status !== "draft") return false;
+      if (
+        (page.nodeKind ?? "page") !== "page" &&
+        (page.nodeKind ?? "page") !== "group" &&
+        (page.nodeKind ?? "page") !== "link"
+      ) {
+        return false;
+      }
+      if (!page.publishAt) return false;
+      const when = new Date(page.publishAt);
+      return !Number.isNaN(when.getTime()) && when.getTime() <= now.getTime();
+    });
+    for (const kb of dataset.knowledgeBases) {
+      kbById.set(kb.id, kb);
+    }
+  }
 
   const published: string[] = [];
   const blocked: Array<{ pageId: string; issues: string[] }> = [];
 
   for (const page of due) {
-    const kb = dataset.knowledgeBases.find((candidate) => candidate.id === page.kbId);
+    const kb = kbById.get(page.kbId);
     const issues = await validatePageForPublish(
       page,
       getAssetStatusById,

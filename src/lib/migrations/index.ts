@@ -1099,11 +1099,11 @@ export async function runMigrations(sql: Sql): Promise<void> {
       )
     `,
   ]);
+  // One round-trip for applied ids — avoid N SELECTs on every serverless cold start (Neon egress).
+  const appliedRows = (await sql`SELECT id FROM _schema_migrations`) as unknown as Array<{ id: string }>;
+  const applied = new Set(appliedRows.map((row) => row.id));
   for (const migration of migrations) {
-    const applied = (await sql`
-      SELECT id FROM _schema_migrations WHERE id = ${migration.id} LIMIT 1
-    `) as unknown as Array<{ id: string }>;
-    if (applied.length > 0) {
+    if (applied.has(migration.id)) {
       continue;
     }
     const queries = await collectMigrationQueries(sql, migration);
@@ -1112,6 +1112,7 @@ export async function runMigrations(sql: Sql): Promise<void> {
       ...queries,
       sql`INSERT INTO _schema_migrations (id) VALUES (${migration.id}) ON CONFLICT (id) DO NOTHING`,
     ]);
+    applied.add(migration.id);
   }
 }
 

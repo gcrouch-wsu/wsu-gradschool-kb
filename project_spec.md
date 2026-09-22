@@ -811,16 +811,22 @@ part of the rule. Grouped by area so you can read only what your change touches:
   reads use targeted loaders in `src/lib/db.ts` behind the stable `kb-store.ts` API. `getDataset()` may
   remain for admin/write paths that genuinely need broad state, but every new `isDatabaseEnabled()`
   branch needs a matching live-DB test so the in-memory and Neon paths do not drift.
+  Cron jobs must not call `getDataset()` either: `publishDueDraftPages` uses
+  `loadDueScheduledPagesFromDb` so the 15-minute schedule does not download every page body when
+  nothing is due. Prefer `getDbPageSummariesForKb` / `loadPagesForKbWithoutBlocksFromDb` whenever
+  callers only need titles, paths, tags, or visibility.
 - **Migration `up()` functions must be straight-line, idempotent SQL.** `runMigrations` does not
   execute a migration's `up()` directly: it first replays `up()` against a **collector** that records
   each query and returns an empty result, then runs the recorded queries in one `sql.transaction`
-  under `pg_advisory_xact_lock`. Two consequences when adding a migration (Phase 1's `029` followed
+  under `pg_advisory_xact_lock`. Applied ids are loaded once (`SELECT id FROM _schema_migrations`)
+  into a Set before the loop — do not reintroduce per-migration existence queries on cold start.
+  Two consequences when adding a migration (Phase 1's `029` followed
   this pattern):
   (1) `up()` cannot branch on query results — every awaited query resolves to `[]` during collection,
   so conditional logic must live *inside* SQL (`IF NOT EXISTS`, `ON CONFLICT`, `WHERE NOT EXISTS`);
-  (2) the applied-check runs *before* the lock is taken, so two racing cold starts can both execute
-  the same migration — every statement must be individually idempotent, and the `_schema_migrations`
-  insert uses `ON CONFLICT DO NOTHING` for that reason.
+  (2) the applied-check runs *before* the per-migration lock is taken, so two racing cold starts can
+  both execute the same migration — every statement must be individually idempotent, and the
+  `_schema_migrations` insert uses `ON CONFLICT DO NOTHING` for that reason.
 
 ### Security, CSP, and request guards
 

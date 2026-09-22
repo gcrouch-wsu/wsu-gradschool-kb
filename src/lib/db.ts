@@ -789,6 +789,57 @@ export async function clearPagePublishAtColumn(pageId: string): Promise<void> {
   `;
 }
 
+/**
+ * Due scheduled drafts only — avoids `SELECT * FROM kb_pages` on every 15-minute cron when
+ * nothing is due (Neon egress). Callers that need full rows for the publish gate get them here
+ * only for the matching set.
+ */
+export async function loadDueScheduledPagesFromDb(now = new Date()): Promise<KbPage[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const iso = now.toISOString();
+  const rows = (await sql`
+    SELECT *
+    FROM kb_pages
+    WHERE status = 'draft'
+      AND publish_at IS NOT NULL
+      AND publish_at <= ${iso}::timestamptz
+      AND COALESCE(node_kind, 'page') IN ('page', 'group', 'link')
+  `) as unknown as PageRow[];
+  return rows.map(mapPage);
+}
+
+export async function loadAdminCountsFromDb(): Promise<{
+  publishedKbs: number;
+  publishedPages: number;
+  draftPages: number;
+  archivedPages: number;
+  activeAssets: number;
+  archivedAssets: number;
+}> {
+  await ensureSchema();
+  const sql = getSql();
+  const [kbRows, pageRows, assetRows] = await Promise.all([
+    sql`SELECT count(*)::int AS n FROM knowledge_bases WHERE status = 'published'`,
+    sql`SELECT status, count(*)::int AS n FROM kb_pages GROUP BY status`,
+    sql`SELECT status, count(*)::int AS n FROM kb_assets GROUP BY status`,
+  ]);
+  const pageByStatus = new Map(
+    (pageRows as unknown as Array<{ status: string; n: number }>).map((row) => [row.status, row.n]),
+  );
+  const assetByStatus = new Map(
+    (assetRows as unknown as Array<{ status: string; n: number }>).map((row) => [row.status, row.n]),
+  );
+  return {
+    publishedKbs: (kbRows as unknown as Array<{ n: number }>)[0]?.n ?? 0,
+    publishedPages: pageByStatus.get("published") ?? 0,
+    draftPages: pageByStatus.get("draft") ?? 0,
+    archivedPages: pageByStatus.get("archived") ?? 0,
+    activeAssets: assetByStatus.get("active") ?? 0,
+    archivedAssets: assetByStatus.get("archived") ?? 0,
+  };
+}
+
 export async function releasePageLock(pageId: string, userEmail: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
