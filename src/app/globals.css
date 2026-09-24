@@ -761,6 +761,11 @@ p {
   box-shadow: var(--shadow-sm);
   position: sticky;
   top: 96px;
+  /* A page tree taller than the viewport must scroll on its own — sticky positioning alone
+     leaves the middle/bottom of a tall tree unreachable by any scroll input once the sidebar
+     hits the end of its sticky range. */
+  max-height: calc(100vh - 96px - 2rem);
+  overflow-y: auto;
 }
 
 .sidebar a {
