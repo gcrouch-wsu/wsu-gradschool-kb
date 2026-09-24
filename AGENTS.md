@@ -12,6 +12,7 @@ not an onboarding doc.
 | **KB page content work** — reviewing or editing KB page HTML | `style/style.md` (authoritative), then `automated_review.md` |
 | **Editing live pages in the production admin** | `automated_review.md` — what the last pass changed, how to spot broken links, session gotchas |
 | **Running, testing, deploying** | `README.md` |
+| **Reading/writing a KB as an agent** (no browser sign-in) | `docs/kaas-agent-access.md` — scoped API keys, `scripts/kaas-client.mjs` |
 
 ---
 
