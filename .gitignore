@@ -23,6 +23,9 @@ confluence/
 .vercel
 .env*
 
+# Local-only handoff notes that may contain secrets (API keys, etc.) — never committed.
+corinna.md
+
 # Image files (screenshots, exports, scratch assets) — managed assets live in
 # Vercel Blob / the DB, not the repo. Force-add (git add -f) if one is ever needed.
 *.png
