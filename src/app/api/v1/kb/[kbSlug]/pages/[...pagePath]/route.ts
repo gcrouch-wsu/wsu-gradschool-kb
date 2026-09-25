@@ -150,6 +150,7 @@ export async function PATCH(
       {
         pageId: page.id,
         title: page.title,
+        slug: page.slug,
         blocks,
         summary,
         status: "published",

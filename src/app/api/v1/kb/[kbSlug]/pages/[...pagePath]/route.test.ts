@@ -150,6 +150,19 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     );
   }
 
+  it("preserves the existing slug even when it no longer matches the title", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage(
+      { summary: "Updated summary." },
+      { title: "A much longer, completely different title" },
+    );
+    expect(response.status).toBe(200);
+    expect(store.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({ slug: page.slug }),
+      "kaas-write-api",
+    );
+  });
+
   it("rejects unsupported block types before saving", async () => {
     const store = await import("@/lib/kb-store");
     const response = await patchPage({
