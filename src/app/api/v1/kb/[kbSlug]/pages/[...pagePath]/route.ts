@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { excerptAudienceFor, excerptSourceCheckerFor } from "@/lib/excerpts";
 import { authenticateKaasRequest, kaasCanAccessKb } from "@/lib/kaas-auth";
-import { getAssetStatusById, getKbBySlug, getPageByPath, updatePage } from "@/lib/kb-store";
+import {
+  getAllPagesForAdmin,
+  getAssetStatusById,
+  getExcerptReferencesToPage,
+  getKbBySlug,
+  getPageByPath,
+  permanentlyDeletePage,
+  updatePage,
+} from "@/lib/kb-store";
 import type { ContentBlock } from "@/lib/types";
 import { logError } from "@/lib/log";
 import { blocksToDocumentHtml, documentHtmlToBlocks } from "@/lib/page-document";
@@ -180,5 +188,88 @@ export async function PATCH(
   } catch (error) {
     logError(error, { route: "/api/v1/kb/[kbSlug]/pages/[...pagePath]", action: "kaas_patch_page" });
     return NextResponse.json({ message: "Failed to update page." }, { status: 500 });
+  }
+}
+
+/**
+ * Permanently delete a published page the key can access.
+ *
+ * No archive step first — unlike the admin UI's owner/admin-only two-step flow, a scoped
+ * KaaS key is expected to be called deliberately by code, not clicked by a person who might
+ * change their mind, so the extra confirmation step doesn't add real safety here. What does:
+ * the same referential-integrity checks the admin route enforces (no child pages, no
+ * relatedPageIds reference from another page, no excerpt reference) — those catch a delete
+ * that would actually corrupt the KB, not just a delete someone might regret.
+ */
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ kbSlug: string; pagePath: string[] }> },
+) {
+  const authResult = await authenticateKaasRequest(request);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { kbSlug, pagePath } = await context.params;
+  const limit = await rateLimit(`kaas-delete:${kbSlug}`, 10, 60);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { message: "Too many requests." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
+
+  try {
+    const kb = await getKbBySlug(kbSlug, false);
+    if (!kb || !kaasCanAccessKb(authResult.auth, kb)) {
+      return NextResponse.json({ message: "Not found." }, { status: 404 });
+    }
+    const page = await getPageByPath(kb.id, pagePath, false);
+    if (!page || (page.nodeKind ?? "page") !== "page" || page.status !== "published" || page.visibility === "staff") {
+      return NextResponse.json({ message: "Not found." }, { status: 404 });
+    }
+
+    const pages = await getAllPagesForAdmin(kb.id);
+    const hasChildren = pages.some(
+      (candidate) =>
+        candidate.id !== page.id &&
+        candidate.path.length > page.path.length &&
+        page.path.every((segment, index) => candidate.path[index] === segment),
+    );
+    if (hasChildren) {
+      return NextResponse.json(
+        { message: "This page has child pages. Move or delete them first." },
+        { status: 409 },
+      );
+    }
+    const referencedBy = pages.find((candidate) => candidate.relatedPageIds.includes(page.id));
+    if (referencedBy) {
+      return NextResponse.json(
+        { message: `Remove the related-page reference from "${referencedBy.title}" before deleting this page.` },
+        { status: 409 },
+      );
+    }
+    const excerptRefs = await getExcerptReferencesToPage(page.id);
+    if (excerptRefs.length > 0) {
+      return NextResponse.json(
+        { message: `Remove the included excerpt on "${excerptRefs[0].pageTitle}" before deleting this page.` },
+        { status: 409 },
+      );
+    }
+
+    await permanentlyDeletePage(page.id);
+    await recordAuditEvent({
+      actor: { email: "kaas-write-api", role: "admin" },
+      action: "page.deleted",
+      entityType: "page",
+      entityId: page.id,
+      entityLabel: page.title,
+      kbId: page.kbId,
+      details: { source: "kaas-write-api", path: page.path.join("/") },
+    });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    logError(error, { route: "/api/v1/kb/[kbSlug]/pages/[...pagePath]", action: "kaas_delete_page" });
+    return NextResponse.json({ message: "Failed to delete page." }, { status: 500 });
   }
 }

@@ -114,6 +114,7 @@ Useful endpoints:
 - `GET /api/v1/kb/{kbSlug}/pages/{path...}` — read one page as JSON
 - `PATCH /api/v1/kb/{kbSlug}/pages/{path...}` — update summary/blocks
 - `POST /api/v1/kb/{kbSlug}/pages` — create a published page (`title`, `blocks`, optional `summary` / `slug` / `parentPath` / `contactEmail`)
+- `DELETE /api/v1/kb/{kbSlug}/pages/{path...}` — permanently delete a page. No archive step first (unlike the admin UI) — rejected with 409 if the page has children, is referenced by another page's Related Pages, or has an included excerpt; those must be cleared first.
 
 A bare key without `kb-slug:` still works for published **public** KBs only (legacy).
 

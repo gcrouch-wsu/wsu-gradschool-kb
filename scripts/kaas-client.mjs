@@ -14,11 +14,13 @@
  *   node scripts/kaas-client.mjs get <kbSlug> <path...>
  *   node scripts/kaas-client.mjs patch <kbSlug> <path...> --file <json-file>
  *   node scripts/kaas-client.mjs patch <kbSlug> <path...>          # reads JSON body from stdin
+ *   node scripts/kaas-client.mjs delete <kbSlug> <path...>         # permanent, no confirmation prompt
  *
  * Examples:
  *   node scripts/kaas-client.mjs list wsu-reporting
  *   node scripts/kaas-client.mjs get wsu-reporting agent-start
  *   echo '{"summary":"..."}' | node scripts/kaas-client.mjs patch wsu-reporting agent-start
+ *   node scripts/kaas-client.mjs delete wsu-reporting visualizations/wsu-dumbbell-2
  *
  * Env overrides:
  *   KAAS_BASE_URL   defaults to https://wsu-gradschool-kb.vercel.app
@@ -121,8 +123,10 @@ async function main() {
       headers: { ...headers, "Content-Type": "application/json" },
       body: bodyText,
     });
+  } else if (command === "delete") {
+    response = await fetch(url, { method: "DELETE", headers });
   } else {
-    console.error(`Unknown command "${command}". Use list, get, or patch.`);
+    console.error(`Unknown command "${command}". Use list, get, patch, or delete.`);
     process.exitCode = 1;
     return;
   }

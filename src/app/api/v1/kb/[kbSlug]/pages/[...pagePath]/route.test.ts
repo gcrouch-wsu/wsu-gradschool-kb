@@ -227,3 +227,92 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     );
   });
 });
+
+describe("DELETE /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+    vi.unstubAllEnvs();
+  });
+
+  async function deletePage(otherPages: KbPage[] = [], excerptRefs: unknown[] = []) {
+    vi.stubEnv("KAAS_API_KEYS", "test-key");
+    const store = await import("@/lib/kb-store");
+    vi.spyOn(store, "getKbBySlug").mockResolvedValue(kb);
+    vi.spyOn(store, "getPageByPath").mockResolvedValue(page);
+    vi.spyOn(store, "getAllPagesForAdmin").mockResolvedValue(otherPages);
+    vi.spyOn(store, "getExcerptReferencesToPage").mockResolvedValue(
+      excerptRefs as Awaited<ReturnType<typeof store.getExcerptReferencesToPage>>,
+    );
+    vi.spyOn(store, "permanentlyDeletePage").mockResolvedValue();
+
+    const { DELETE } = await import("@/app/api/v1/kb/[kbSlug]/pages/[...pagePath]/route");
+    return DELETE(
+      new Request("http://localhost/api/v1/kb/graduate-school/pages/ready", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer test-key" },
+      }),
+      { params: Promise.resolve({ kbSlug: "graduate-school", pagePath: ["ready"] }) },
+    );
+  }
+
+  it("deletes a page with no children, references, or excerpt refs", async () => {
+    const store = await import("@/lib/kb-store");
+    const audit = await import("@/lib/audit-log");
+    const recordAuditEvent = vi.spyOn(audit, "recordAuditEvent").mockResolvedValue();
+    const response = await deletePage();
+    expect(response.status).toBe(200);
+    expect(store.permanentlyDeletePage).toHaveBeenCalledWith(page.id);
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: { email: "kaas-write-api", role: "admin" },
+        action: "page.deleted",
+        entityType: "page",
+        entityId: page.id,
+        details: expect.objectContaining({ source: "kaas-write-api" }),
+      }),
+    );
+  });
+
+  it("rejects deleting a page that has child pages", async () => {
+    const store = await import("@/lib/kb-store");
+    const child: KbPage = { ...page, id: "page-child", path: [...page.path, "child"] };
+    const response = await deletePage([child]);
+    expect(response.status).toBe(409);
+    expect(store.permanentlyDeletePage).not.toHaveBeenCalled();
+  });
+
+  it("rejects deleting a page another page's Related Pages references", async () => {
+    const store = await import("@/lib/kb-store");
+    const referrer: KbPage = { ...page, id: "page-referrer", title: "Referrer", relatedPageIds: [page.id] };
+    const response = await deletePage([referrer]);
+    expect(response.status).toBe(409);
+    expect(store.permanentlyDeletePage).not.toHaveBeenCalled();
+  });
+
+  it("rejects deleting a page an excerpt references", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await deletePage([], [{ pageTitle: "Some Page" }]);
+    expect(response.status).toBe(409);
+    expect(store.permanentlyDeletePage).not.toHaveBeenCalled();
+  });
+
+  it.each(["group", "link"] as const)("does not delete %s nodes through the article API", async (nodeKind) => {
+    vi.stubEnv("KAAS_API_KEYS", "test-key");
+    const store = await import("@/lib/kb-store");
+    vi.spyOn(store, "getKbBySlug").mockResolvedValue(kb);
+    vi.spyOn(store, "getPageByPath").mockResolvedValue({ ...page, nodeKind });
+    vi.spyOn(store, "permanentlyDeletePage").mockResolvedValue();
+
+    const { DELETE } = await import("@/app/api/v1/kb/[kbSlug]/pages/[...pagePath]/route");
+    const response = await DELETE(
+      new Request("http://localhost/api/v1/kb/graduate-school/pages/ready", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer test-key" },
+      }),
+      { params: Promise.resolve({ kbSlug: "graduate-school", pagePath: ["ready"] }) },
+    );
+    expect(response.status).toBe(404);
+    expect(store.permanentlyDeletePage).not.toHaveBeenCalled();
+  });
+});

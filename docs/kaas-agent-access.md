@@ -41,11 +41,16 @@ node scripts/kaas-client.mjs list wsu-reporting
 node scripts/kaas-client.mjs get wsu-reporting agent-start
 echo '{"summary":"Updated summary."}' | node scripts/kaas-client.mjs patch wsu-reporting agent-start
 node scripts/kaas-client.mjs patch wsu-reporting agent-start --file body.json
+node scripts/kaas-client.mjs delete wsu-reporting visualizations/some-duplicate-page
 ```
 
 It reads the matching `<KB_SLUG>_KAAS_KEY` from `.env.local`, calls
 `https://wsu-gradschool-kb.vercel.app/api/v1/kb/<kbSlug>/pages/...`, and prints the JSON response.
 Override the host with `KAAS_BASE_URL` if ever needed (e.g. a preview deployment).
+
+`delete` is permanent and immediate — no archive step first, unlike the admin UI. It's rejected
+with 409 if the page has children, is referenced by another page's Related Pages, or has an
+included excerpt; clear those first. There's no undo, so double-check the path before running it.
 
 `patch` only works on already-published pages and still runs through the publish gate
 (`validatePageForPublish`) — a patch that would leave the page failing readiness checks (missing
