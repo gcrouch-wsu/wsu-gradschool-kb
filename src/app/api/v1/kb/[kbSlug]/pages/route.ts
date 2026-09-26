@@ -27,6 +27,9 @@ function normalizeKaasBlocks(input: unknown, kbSlug: string): ContentBlock[] | n
 /**
  * List published pages in a KB the caller may access.
  * GET /api/v1/kb/{kbSlug}/pages
+ * GET /api/v1/kb/{kbSlug}/pages?allNodes=true — also include group and link nodes (tree
+ * structure, not articles), each tagged with nodeKind. Every entry always carries sortOrder,
+ * so tree position is diagnosable from this response alone instead of read from source.
  */
 export async function GET(request: Request, context: { params: Promise<{ kbSlug: string }> }) {
   const authResult = await authenticateKaasRequest(request);
@@ -35,6 +38,7 @@ export async function GET(request: Request, context: { params: Promise<{ kbSlug:
   }
 
   const { kbSlug } = await context.params;
+  const includeAllNodes = new URL(request.url).searchParams.get("allNodes") === "true";
   const limit = await rateLimit(`kaas-list:${kbSlug}`, 60, 60);
   if (!limit.allowed) {
     return NextResponse.json(
@@ -50,7 +54,7 @@ export async function GET(request: Request, context: { params: Promise<{ kbSlug:
     }
 
     const pages = (await getVisiblePagesForKb(kb.id, false))
-      .filter((page) => (page.nodeKind ?? "page") === "page")
+      .filter((page) => includeAllNodes || (page.nodeKind ?? "page") === "page")
       .map((page) => ({
         id: page.id,
         title: page.title,
@@ -58,6 +62,8 @@ export async function GET(request: Request, context: { params: Promise<{ kbSlug:
         path: page.path,
         summary: page.summary,
         updatedDisplayDate: page.updatedDisplayDate,
+        nodeKind: page.nodeKind ?? "page",
+        sortOrder: page.sortOrder,
       }));
 
     return NextResponse.json({

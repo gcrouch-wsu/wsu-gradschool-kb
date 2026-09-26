@@ -90,7 +90,11 @@ export async function GET(
   }
 }
 
-/** Limited write: update summary and/or blocks on a published page the key can access. */
+/**
+ * Limited write: update summary/blocks on a published page, or the structural position
+ * (parentPath, sortOrder) of any node kind the key can access — including a group or link,
+ * which have no article content to validate.
+ */
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ kbSlug: string; pagePath: string[] }> },
@@ -113,6 +117,7 @@ export async function PATCH(
     summary?: unknown;
     blocks?: unknown;
     parentPath?: unknown;
+    sortOrder?: unknown;
   } | null;
   if (!body) {
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
@@ -129,6 +134,9 @@ export async function PATCH(
   ) {
     return NextResponse.json({ message: "parentPath must be an array of path segments." }, { status: 400 });
   }
+  if (body.sortOrder !== undefined && (typeof body.sortOrder !== "number" || !Number.isFinite(body.sortOrder))) {
+    return NextResponse.json({ message: "sortOrder must be a number." }, { status: 400 });
+  }
 
   try {
     const kb = await getKbBySlug(kbSlug, false);
@@ -136,37 +144,53 @@ export async function PATCH(
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
     const page = await getPageByPath(kb.id, pagePath, false);
-    if (!page || (page.nodeKind ?? "page") !== "page" || page.status !== "published" || page.visibility === "staff") {
+    if (!page || page.status !== "published" || page.visibility === "staff") {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
-    const blocks =
-      body.blocks === undefined ? page.blocks : normalizeKaasBlocks(body.blocks, kb.slug);
-    if (!blocks) {
-      return NextResponse.json({ message: "Blocks include unsupported or empty content." }, { status: 400 });
-    }
-    const summary = body.summary === undefined ? page.summary : body.summary;
-    const issues = await validatePageForPublish(
-      {
-        ...page,
-        blocks,
-        summary,
-      },
-      getAssetStatusById,
-      excerptSourceCheckerFor(excerptAudienceFor(kb, page)),
-      { requireSummary: kb.requireSummary !== false },
-    );
-    if (issues.length > 0) {
+
+    const nodeKind = page.nodeKind ?? "page";
+    let blocks = page.blocks;
+    let summary = page.summary;
+
+    if (nodeKind === "page") {
+      if (body.blocks !== undefined) {
+        const normalized = normalizeKaasBlocks(body.blocks, kb.slug);
+        if (!normalized) {
+          return NextResponse.json({ message: "Blocks include unsupported or empty content." }, { status: 400 });
+        }
+        blocks = normalized;
+      }
+      summary = body.summary === undefined ? page.summary : (body.summary as string);
+      const issues = await validatePageForPublish(
+        {
+          ...page,
+          blocks,
+          summary,
+        },
+        getAssetStatusById,
+        excerptSourceCheckerFor(excerptAudienceFor(kb, page)),
+        { requireSummary: kb.requireSummary !== false },
+      );
+      if (issues.length > 0) {
+        return NextResponse.json(
+          { message: "This page cannot remain published with the proposed content.", issues },
+          { status: 422 },
+        );
+      }
+    } else if (body.blocks !== undefined || body.summary !== undefined) {
       return NextResponse.json(
-        { message: "This page cannot remain published with the proposed content.", issues },
-        { status: 422 },
+        { message: `blocks and summary cannot be set on a ${nodeKind} node — it has no article content.` },
+        { status: 400 },
       );
     }
+
     const updated = await updatePage(
       {
         pageId: page.id,
         title: page.title,
         slug: page.slug,
         parentPath: Array.isArray(body.parentPath) ? (body.parentPath as string[]) : undefined,
+        sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
         blocks,
         summary,
         status: "published",
@@ -186,6 +210,8 @@ export async function PATCH(
         path: updated.path.join("/"),
         summaryChanged: body.summary !== undefined,
         blocksChanged: body.blocks !== undefined,
+        parentPathChanged: body.parentPath !== undefined,
+        sortOrderChanged: body.sortOrder !== undefined,
       },
     });
     return NextResponse.json({

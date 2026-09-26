@@ -67,6 +67,20 @@ echo '{"parentPath":["visualizations","wsu-custom-visualizations"]}' | \
 The page's slug is preserved (only its position in the tree changes); the response's `path` field
 has the new full path, since the one you PATCHed no longer resolves after a move.
 
+**Reordering siblings** is the same idea with `sortOrder` instead — lower sorts first:
+
+```bash
+echo '{"sortOrder": 5}' | node scripts/kaas-client.mjs patch wsu-reporting development
+```
+
+`parentPath` and `sortOrder` both work on a group node too (a group has no `blocks`/`summary` to
+patch, and trying rejects with 400). **Tree position is otherwise invisible** — `GET .../pages`
+hides group/link nodes and never showed `sortOrder` until this was added. Diagnose before moving
+anything: `GET .../pages?allNodes=true` returns every node with its `nodeKind` and `sortOrder`, so
+you can see the actual tree shape instead of assuming it. A brand-new node (page or group) always
+lands at the end of its sibling list (`POST` has no `sortOrder` field) — if it needs to be
+prominent, a `PATCH` with `sortOrder` right after creating it is expected, not a special case.
+
 **Creating a group node** (a tree heading with no article body, used to organize related pages) is
 a `POST` to `/pages` with `nodeKind: "group"` and no `blocks` — there's no CLI shortcut for this
 yet, so call the endpoint directly (see `scripts/kaas-client.mjs` for the `.env.local` loading

@@ -33,6 +33,41 @@ describe("GET /api/v1/kb/[kbSlug]/pages", () => {
     );
     expect(blocked.status).toBe(404);
   });
+
+  it("hides group nodes by default, and every entry carries sortOrder", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("KAAS_API_KEYS", "test-key");
+    const { GET } = await import("@/app/api/v1/kb/[kbSlug]/pages/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/kb/graduate-school/pages", {
+        headers: { Authorization: "Bearer test-key" },
+      }),
+      { params: Promise.resolve({ kbSlug: "graduate-school" }) },
+    );
+    const data = await response.json();
+    expect(data.pages.every((page: { nodeKind: string }) => page.nodeKind === "page")).toBe(true);
+    expect(data.pages.every((page: { sortOrder: unknown }) => typeof page.sortOrder === "number")).toBe(true);
+    expect(data.pages.some((page: { slug: string }) => page.slug === "reference")).toBe(false);
+  });
+
+  it("includes group nodes when allNodes=true is passed", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("KAAS_API_KEYS", "test-key");
+    const { GET } = await import("@/app/api/v1/kb/[kbSlug]/pages/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/kb/graduate-school/pages?allNodes=true", {
+        headers: { Authorization: "Bearer test-key" },
+      }),
+      { params: Promise.resolve({ kbSlug: "graduate-school" }) },
+    );
+    const data = await response.json();
+    const reference = data.pages.find((page: { slug: string }) => page.slug === "reference");
+    expect(reference).toBeTruthy();
+    expect(reference.nodeKind).toBe("group");
+    expect(reference.sortOrder).toBe(30);
+  });
 });
 
 describe("POST /api/v1/kb/[kbSlug]/pages", () => {

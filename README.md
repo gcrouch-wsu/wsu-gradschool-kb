@@ -110,10 +110,16 @@ Give the agent the base URL, the secret (not the env var name), and instruct it 
 
 Useful endpoints:
 
-- `GET /api/v1/kb/{kbSlug}/pages` — list published pages
+- `GET /api/v1/kb/{kbSlug}/pages` — list published pages. Each entry carries `nodeKind` and
+  `sortOrder`, so tree position is readable from the API instead of guessed. Add
+  `?allNodes=true` to also include group and link nodes (hidden by default — they're tree
+  structure, not articles).
 - `GET /api/v1/kb/{kbSlug}/pages/{path...}` — read one page as JSON
-- `PATCH /api/v1/kb/{kbSlug}/pages/{path...}` — update summary/blocks, or move the page under a
-  new parent by passing `parentPath` (its slug is preserved; only its position in the tree moves)
+- `PATCH /api/v1/kb/{kbSlug}/pages/{path...}` — update summary/blocks; move the page under a new
+  parent by passing `parentPath` (its slug is preserved; only its position in the tree moves); or
+  reorder it among its siblings by passing `sortOrder` (lower sorts first). `parentPath` and
+  `sortOrder` also work on a group or link node — `summary`/`blocks` don't, since those node
+  kinds have no article content.
 - `POST /api/v1/kb/{kbSlug}/pages` — create a published page (`title`, `blocks`, optional `summary`
   / `slug` / `parentPath` / `contactEmail`), or a group node — a tree heading with no article body
   — by passing `nodeKind: "group"` (blocks and the publish gate don't apply to a group)

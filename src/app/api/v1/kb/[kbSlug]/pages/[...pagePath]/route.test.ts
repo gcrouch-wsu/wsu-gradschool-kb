@@ -192,10 +192,43 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     expect(store.updatePage).not.toHaveBeenCalled();
   });
 
-  it.each(["group", "link"] as const)("does not write %s nodes through the article API", async (nodeKind) => {
+  it.each(["group", "link"] as const)(
+    "rejects blocks/summary on a %s node — it has no article content",
+    async (nodeKind) => {
+      const store = await import("@/lib/kb-store");
+      const response = await patchPage({ summary: "Updated summary." }, { nodeKind });
+      expect(response.status).toBe(400);
+      expect(store.updatePage).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["group", "link"] as const)(
+    "allows moving or reordering a %s node via parentPath/sortOrder",
+    async (nodeKind) => {
+      const store = await import("@/lib/kb-store");
+      const response = await patchPage({ parentPath: ["visualizations"], sortOrder: 5 }, { nodeKind });
+      expect(response.status).toBe(200);
+      expect(store.updatePage).toHaveBeenCalledWith(
+        expect.objectContaining({ parentPath: ["visualizations"], sortOrder: 5 }),
+        "kaas-write-api",
+      );
+    },
+  );
+
+  it("allows setting sortOrder on a page node", async () => {
     const store = await import("@/lib/kb-store");
-    const response = await patchPage({ summary: "Updated summary." }, { nodeKind });
-    expect(response.status).toBe(404);
+    const response = await patchPage({ sortOrder: 15 });
+    expect(response.status).toBe(200);
+    expect(store.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({ sortOrder: 15 }),
+      "kaas-write-api",
+    );
+  });
+
+  it("rejects a non-numeric sortOrder", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({ sortOrder: "first" });
+    expect(response.status).toBe(400);
     expect(store.updatePage).not.toHaveBeenCalled();
   });
 
