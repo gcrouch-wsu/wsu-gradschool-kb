@@ -56,6 +56,24 @@ included excerpt; clear those first. There's no undo, so double-check the path b
 (`validatePageForPublish`) — a patch that would leave the page failing readiness checks (missing
 summary, broken alt text, etc.) is rejected with the issue list, not silently applied.
 
+**Moving a page** is a `patch` with a `parentPath` in the body — the CLI's generic `patch` command
+already handles it, no separate verb needed:
+
+```bash
+echo '{"parentPath":["visualizations","wsu-custom-visualizations"]}' | \
+  node scripts/kaas-client.mjs patch wsu-reporting visualizations/wsu-sankey
+```
+
+The page's slug is preserved (only its position in the tree changes); the response's `path` field
+has the new full path, since the one you PATCHed no longer resolves after a move.
+
+**Creating a group node** (a tree heading with no article body, used to organize related pages) is
+a `POST` to `/pages` with `nodeKind: "group"` and no `blocks` — there's no CLI shortcut for this
+yet, so call the endpoint directly (see `scripts/kaas-client.mjs` for the `.env.local` loading
+pattern to reuse in a one-off script). A group is invisible to `GET .../pages` (that list only
+returns article pages), but pages moved under it will show it as their parent in the reader's page
+tree.
+
 ## Currently provisioned KBs
 
 | KB slug | Purpose | Client env var |

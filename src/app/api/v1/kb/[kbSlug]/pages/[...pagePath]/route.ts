@@ -112,6 +112,7 @@ export async function PATCH(
   const body = (await request.json().catch(() => null)) as {
     summary?: unknown;
     blocks?: unknown;
+    parentPath?: unknown;
   } | null;
   if (!body) {
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
@@ -121,6 +122,12 @@ export async function PATCH(
   }
   if (body.blocks !== undefined && !Array.isArray(body.blocks)) {
     return NextResponse.json({ message: "Blocks must be an array." }, { status: 400 });
+  }
+  if (
+    body.parentPath !== undefined &&
+    (!Array.isArray(body.parentPath) || body.parentPath.some((part) => typeof part !== "string"))
+  ) {
+    return NextResponse.json({ message: "parentPath must be an array of path segments." }, { status: 400 });
   }
 
   try {
@@ -159,6 +166,7 @@ export async function PATCH(
         pageId: page.id,
         title: page.title,
         slug: page.slug,
+        parentPath: Array.isArray(body.parentPath) ? (body.parentPath as string[]) : undefined,
         blocks,
         summary,
         status: "published",
@@ -183,11 +191,14 @@ export async function PATCH(
     return NextResponse.json({
       ok: true,
       pageId: updated.id,
+      path: updated.path,
       updatedDisplayDate: updated.updatedDisplayDate,
     });
   } catch (error) {
     logError(error, { route: "/api/v1/kb/[kbSlug]/pages/[...pagePath]", action: "kaas_patch_page" });
-    return NextResponse.json({ message: "Failed to update page." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to update page.";
+    const status = /not found/i.test(message) ? 404 : 500;
+    return NextResponse.json({ message }, { status });
   }
 }
 

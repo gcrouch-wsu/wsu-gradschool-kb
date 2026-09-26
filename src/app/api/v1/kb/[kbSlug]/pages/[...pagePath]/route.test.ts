@@ -163,6 +163,26 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     );
   });
 
+  it("moves a page under a new parent when parentPath is given, preserving its slug", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({ parentPath: ["visualizations", "wsu-custom-visualizations"] });
+    expect(response.status).toBe(200);
+    expect(store.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: page.slug,
+        parentPath: ["visualizations", "wsu-custom-visualizations"],
+      }),
+      "kaas-write-api",
+    );
+  });
+
+  it("rejects a parentPath that isn't an array of strings", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({ parentPath: "visualizations" });
+    expect(response.status).toBe(400);
+    expect(store.updatePage).not.toHaveBeenCalled();
+  });
+
   it("rejects unsupported block types before saving", async () => {
     const store = await import("@/lib/kb-store");
     const response = await patchPage({

@@ -102,6 +102,7 @@ export async function POST(request: Request, context: { params: Promise<{ kbSlug
     slug?: unknown;
     parentPath?: unknown;
     contactEmail?: unknown;
+    nodeKind?: unknown;
   } | null;
 
   if (!body || typeof body.title !== "string" || !body.title.trim()) {
@@ -121,9 +122,15 @@ export async function POST(request: Request, context: { params: Promise<{ kbSlug
       return NextResponse.json({ message: "parentPath must be an array of path segments." }, { status: 400 });
     }
   }
+  if (body.nodeKind !== undefined && body.nodeKind !== "page" && body.nodeKind !== "group") {
+    return NextResponse.json({ message: 'nodeKind must be "page" or "group".' }, { status: 400 });
+  }
+  const nodeKind = body.nodeKind === "group" ? "group" : "page";
 
-  const blocks = normalizeKaasBlocks(body.blocks, kbSlug);
-  if (!blocks) {
+  // A group is a tree heading only — no article body, so it skips the blocks requirement and
+  // the publish gate entirely (there is nothing publishable about a heading).
+  const blocks = nodeKind === "group" ? [] : normalizeKaasBlocks(body.blocks, kbSlug);
+  if (nodeKind === "page" && !blocks) {
     return NextResponse.json({ message: "blocks must be a non-empty array of supported content." }, { status: 400 });
   }
 
@@ -142,25 +149,27 @@ export async function POST(request: Request, context: { params: Promise<{ kbSlug
     const title = body.title.trim();
     const slugHint = typeof body.slug === "string" && body.slug.trim() ? body.slug.trim() : "new-page";
 
-    const issues = await validatePageForPublish(
-      {
-        title,
-        slug: slugHint,
-        summary,
-        ownerLabel: kb.title,
-        contactEmail,
-        lastReviewedDate: new Date().toISOString().slice(0, 10),
-        blocks,
-      },
-      getAssetStatusById,
-      excerptSourceCheckerFor(excerptAudienceFor(kb, { visibility: "public" })),
-      { requireSummary: kb.requireSummary !== false },
-    );
-    if (issues.length > 0) {
-      return NextResponse.json(
-        { message: "This page cannot be published with the proposed content.", issues },
-        { status: 422 },
+    if (nodeKind === "page") {
+      const issues = await validatePageForPublish(
+        {
+          title,
+          slug: slugHint,
+          summary,
+          ownerLabel: kb.title,
+          contactEmail,
+          lastReviewedDate: new Date().toISOString().slice(0, 10),
+          blocks: blocks as ContentBlock[],
+        },
+        getAssetStatusById,
+        excerptSourceCheckerFor(excerptAudienceFor(kb, { visibility: "public" })),
+        { requireSummary: kb.requireSummary !== false },
       );
+      if (issues.length > 0) {
+        return NextResponse.json(
+          { message: "This page cannot be published with the proposed content.", issues },
+          { status: 422 },
+        );
+      }
     }
 
     const created = await createPage({
@@ -169,11 +178,12 @@ export async function POST(request: Request, context: { params: Promise<{ kbSlug
       slug: typeof body.slug === "string" ? body.slug : undefined,
       parentPath,
       summary,
-      blocks,
+      blocks: blocks as ContentBlock[],
       status: "published",
       visibility: "public",
       contactEmail,
       ownerLabel: kb.title,
+      nodeKind,
       authorEmail: "kaas-write-api",
     });
 
