@@ -115,11 +115,11 @@ Useful endpoints:
   `?allNodes=true` to also include group and link nodes (hidden by default — they're tree
   structure, not articles).
 - `GET /api/v1/kb/{kbSlug}/pages/{path...}` — read one page as JSON
-- `PATCH /api/v1/kb/{kbSlug}/pages/{path...}` — update summary/blocks; move the page under a new
-  parent by passing `parentPath` (its slug is preserved; only its position in the tree moves); or
-  reorder it among its siblings by passing `sortOrder` (lower sorts first). `parentPath` and
-  `sortOrder` also work on a group or link node — `summary`/`blocks` don't, since those node
-  kinds have no article content.
+- `PATCH /api/v1/kb/{kbSlug}/pages/{path...}` — update `title`/summary/blocks; move the page under
+  a new parent by passing `parentPath` (its slug is preserved regardless — only the title or its
+  tree position change); or reorder it among its siblings by passing `sortOrder` (lower sorts
+  first). `title`, `parentPath`, and `sortOrder` all work on a group or link node too —
+  `summary`/`blocks` don't, since those node kinds have no article content.
 - `POST /api/v1/kb/{kbSlug}/pages` — create a published page (`title`, `blocks`, optional `summary`
   / `slug` / `parentPath` / `contactEmail`), or a group node — a tree heading with no article body
   — by passing `nodeKind: "group"` (blocks and the publish gate don't apply to a group)

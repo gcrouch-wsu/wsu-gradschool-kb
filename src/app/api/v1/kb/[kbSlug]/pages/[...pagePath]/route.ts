@@ -114,6 +114,7 @@ export async function PATCH(
   }
 
   const body = (await request.json().catch(() => null)) as {
+    title?: unknown;
     summary?: unknown;
     blocks?: unknown;
     parentPath?: unknown;
@@ -121,6 +122,9 @@ export async function PATCH(
   } | null;
   if (!body) {
     return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
+  }
+  if (body.title !== undefined && (typeof body.title !== "string" || !body.title.trim())) {
+    return NextResponse.json({ message: "Title must be a non-empty string." }, { status: 400 });
   }
   if (body.summary !== undefined && typeof body.summary !== "string") {
     return NextResponse.json({ message: "Summary must be a string." }, { status: 400 });
@@ -151,6 +155,7 @@ export async function PATCH(
     const nodeKind = page.nodeKind ?? "page";
     let blocks = page.blocks;
     let summary = page.summary;
+    const title = typeof body.title === "string" ? body.title.trim() : page.title;
 
     if (nodeKind === "page") {
       if (body.blocks !== undefined) {
@@ -164,6 +169,7 @@ export async function PATCH(
       const issues = await validatePageForPublish(
         {
           ...page,
+          title,
           blocks,
           summary,
         },
@@ -187,7 +193,7 @@ export async function PATCH(
     const updated = await updatePage(
       {
         pageId: page.id,
-        title: page.title,
+        title,
         slug: page.slug,
         parentPath: Array.isArray(body.parentPath) ? (body.parentPath as string[]) : undefined,
         sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
@@ -208,6 +214,7 @@ export async function PATCH(
         source: "kaas-write-api",
         status: updated.status,
         path: updated.path.join("/"),
+        titleChanged: body.title !== undefined,
         summaryChanged: body.summary !== undefined,
         blocksChanged: body.blocks !== undefined,
         parentPathChanged: body.parentPath !== undefined,

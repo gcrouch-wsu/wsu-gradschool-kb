@@ -73,8 +73,10 @@ has the new full path, since the one you PATCHed no longer resolves after a move
 echo '{"sortOrder": 5}' | node scripts/kaas-client.mjs patch wsu-reporting development
 ```
 
-`parentPath` and `sortOrder` both work on a group node too (a group has no `blocks`/`summary` to
-patch, and trying rejects with 400). **Tree position is otherwise invisible** — `GET .../pages`
+`title`, `parentPath`, and `sortOrder` all work on a group node too (a group has no `blocks`/
+`summary` to patch, and trying rejects with 400) — renaming one is just `echo '{"title":"New
+name"}' | node scripts/kaas-client.mjs patch wsu-reporting development`. **Tree position is
+otherwise invisible** — `GET .../pages`
 hides group/link nodes and never showed `sortOrder` until this was added. Diagnose before moving
 anything: `GET .../pages?allNodes=true` returns every node with its `nodeKind` and `sortOrder`, so
 you can see the actual tree shape instead of assuming it. A brand-new node (page or group) always

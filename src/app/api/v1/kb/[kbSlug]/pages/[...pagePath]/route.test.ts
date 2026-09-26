@@ -163,6 +163,23 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     );
   });
 
+  it("allows changing the title while keeping the slug fixed", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({ title: "Human — start here" });
+    expect(response.status).toBe(200);
+    expect(store.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Human — start here", slug: page.slug }),
+      "kaas-write-api",
+    );
+  });
+
+  it("rejects an empty title", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({ title: "   " });
+    expect(response.status).toBe(400);
+    expect(store.updatePage).not.toHaveBeenCalled();
+  });
+
   it("moves a page under a new parent when parentPath is given, preserving its slug", async () => {
     const store = await import("@/lib/kb-store");
     const response = await patchPage({ parentPath: ["visualizations", "wsu-custom-visualizations"] });
