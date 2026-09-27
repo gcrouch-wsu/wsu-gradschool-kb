@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { excerptAudienceFor, excerptSourceCheckerFor } from "@/lib/excerpts";
 import { authenticateKaasRequest, kaasCanAccessKb } from "@/lib/kaas-auth";
-import { createPage, getAssetStatusById, getKbBySlug, getVisiblePagesForKb } from "@/lib/kb-store";
+import { createPage, filterPagesWithVisibleAncestors, getAssetStatusById, getKbBySlug, getVisiblePagesForKb } from "@/lib/kb-store";
 import type { ContentBlock } from "@/lib/types";
 import { logError } from "@/lib/log";
 import { blocksToDocumentHtml, documentHtmlToBlocks } from "@/lib/page-document";
@@ -53,7 +53,7 @@ export async function GET(request: Request, context: { params: Promise<{ kbSlug:
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
 
-    const pages = (await getVisiblePagesForKb(kb.id, false))
+    const pages = filterPagesWithVisibleAncestors(await getVisiblePagesForKb(kb.id, false))
       .filter((page) => includeAllNodes || (page.nodeKind ?? "page") === "page")
       .map((page) => ({
         id: page.id,
@@ -152,6 +152,14 @@ export async function POST(request: Request, context: { params: Promise<{ kbSlug
         ? body.contactEmail.trim()
         : "kaas-agent@wsu.edu";
     const parentPath = Array.isArray(body.parentPath) ? (body.parentPath as string[]) : [];
+    if (
+      parentPath.length > 0 &&
+      !filterPagesWithVisibleAncestors(await getVisiblePagesForKb(kb.id, false)).some(
+        (page) => page.path.join("/") === parentPath.join("/"),
+      )
+    ) {
+      return NextResponse.json({ message: "Parent page not found." }, { status: 404 });
+    }
     const title = body.title.trim();
     const slugHint = typeof body.slug === "string" && body.slug.trim() ? body.slug.trim() : "new-page";
 

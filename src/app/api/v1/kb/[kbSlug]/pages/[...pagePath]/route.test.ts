@@ -124,6 +124,15 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     const store = await import("@/lib/kb-store");
     vi.spyOn(store, "getKbBySlug").mockResolvedValue(kb);
     vi.spyOn(store, "getPageByPath").mockResolvedValue({ ...page, ...pageOverride });
+    const requestedParent = Array.isArray(body.parentPath) ? (body.parentPath as string[]) : [];
+    const parentPages = requestedParent.map((_, index) => ({
+      ...page,
+      id: `parent-${index}`,
+      slug: requestedParent[index],
+      path: requestedParent.slice(0, index + 1),
+      nodeKind: "group" as const,
+    }));
+    vi.spyOn(store, "getVisiblePagesForKb").mockResolvedValue([{ ...page, ...pageOverride }, ...parentPages]);
     vi.spyOn(store, "getAssetStatusById").mockResolvedValue("active");
     vi.spyOn(store, "updatePage").mockImplementation(async (input) => ({
       ...page,
@@ -296,6 +305,41 @@ describe("PATCH /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
       }),
     );
   });
+
+  it.each([1.5, 2147483648, -2147483649])("rejects sortOrder outside the database integer range: %s", async (sortOrder) => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({ sortOrder });
+    expect(response.status).toBe(400);
+    expect(store.updatePage).not.toHaveBeenCalled();
+  });
+
+  it("preserves literal tag-shaped text and all later blocks in a KaaS PATCH", async () => {
+    const store = await import("@/lib/kb-store");
+    const response = await patchPage({
+      blocks: [
+        {
+          blockId: "p-literal",
+          type: "paragraph",
+          text: "Set token to <placeholder>.",
+          html: "Set token to <placeholder>.",
+        },
+        { blockId: "h-after-literal", type: "heading", level: 2, text: "Sources" },
+        { blockId: "l-after-literal", type: "list", ordered: false, items: ["Validation", "Related pages"] },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(store.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        blocks: [
+          expect.objectContaining({ type: "paragraph", blockId: "p-literal", text: "Set token to <placeholder>." }),
+          expect.objectContaining({ type: "heading", blockId: "h-after-literal", text: "Sources" }),
+          expect.objectContaining({ type: "list", blockId: "l-after-literal", items: ["Validation", "Related pages"] }),
+        ],
+      }),
+      "kaas-write-api",
+    );
+  });
 });
 
 describe("DELETE /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
@@ -310,6 +354,7 @@ describe("DELETE /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     const store = await import("@/lib/kb-store");
     vi.spyOn(store, "getKbBySlug").mockResolvedValue(kb);
     vi.spyOn(store, "getPageByPath").mockResolvedValue(page);
+    vi.spyOn(store, "getVisiblePagesForKb").mockResolvedValue([page]);
     vi.spyOn(store, "getAllPagesForAdmin").mockResolvedValue(otherPages);
     vi.spyOn(store, "getExcerptReferencesToPage").mockResolvedValue(
       excerptRefs as Awaited<ReturnType<typeof store.getExcerptReferencesToPage>>,
@@ -357,6 +402,7 @@ describe("DELETE /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     const referrer: KbPage = { ...page, id: "page-referrer", title: "Referrer", relatedPageIds: [page.id] };
     const response = await deletePage([referrer]);
     expect(response.status).toBe(409);
+    expect((await response.json()).message).not.toContain("Referrer");
     expect(store.permanentlyDeletePage).not.toHaveBeenCalled();
   });
 
@@ -364,6 +410,7 @@ describe("DELETE /api/v1/kb/[kbSlug]/pages/[...pagePath]", () => {
     const store = await import("@/lib/kb-store");
     const response = await deletePage([], [{ pageTitle: "Some Page" }]);
     expect(response.status).toBe(409);
+    expect((await response.json()).message).not.toContain("Some Page");
     expect(store.permanentlyDeletePage).not.toHaveBeenCalled();
   });
 

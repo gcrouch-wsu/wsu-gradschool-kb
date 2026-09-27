@@ -1,4 +1,5 @@
-import { parse, type HTMLElement, type Node } from "node-html-parser";
+import { type HTMLElement, type Node } from "node-html-parser";
+import { parseContentHtml as parse } from "@/lib/content-html";
 import { SAFE_FONTS } from "@/lib/kb-theme";
 
 const ALLOWED_TAGS = new Set([

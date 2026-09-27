@@ -8,6 +8,8 @@ import {
   getExcerptReferencesToPage,
   getKbBySlug,
   getPageByPath,
+  filterPagesWithVisibleAncestors,
+  getVisiblePagesForKb,
   permanentlyDeletePage,
   updatePage,
 } from "@/lib/kb-store";
@@ -62,7 +64,8 @@ export async function GET(
     }
 
     const page = await getPageByPath(kb.id, pagePath, false);
-    if (!page || (page.nodeKind ?? "page") !== "page" || page.visibility === "staff") {
+    const visiblePages = filterPagesWithVisibleAncestors(await getVisiblePagesForKb(kb.id, false));
+    if (!page || !visiblePages.some((visiblePage) => visiblePage.id === page.id) || (page.nodeKind ?? "page") !== "page" || page.visibility === "staff") {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
 
@@ -138,8 +141,11 @@ export async function PATCH(
   ) {
     return NextResponse.json({ message: "parentPath must be an array of path segments." }, { status: 400 });
   }
-  if (body.sortOrder !== undefined && (typeof body.sortOrder !== "number" || !Number.isFinite(body.sortOrder))) {
-    return NextResponse.json({ message: "sortOrder must be a number." }, { status: 400 });
+  if (
+    body.sortOrder !== undefined &&
+    (typeof body.sortOrder !== "number" || !Number.isInteger(body.sortOrder) || body.sortOrder < -2147483648 || body.sortOrder > 2147483647)
+  ) {
+    return NextResponse.json({ message: "sortOrder must be a 32-bit integer." }, { status: 400 });
   }
 
   try {
@@ -150,6 +156,17 @@ export async function PATCH(
     const page = await getPageByPath(kb.id, pagePath, false);
     if (!page || page.status !== "published" || page.visibility === "staff") {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
+    }
+    const visiblePages = filterPagesWithVisibleAncestors(await getVisiblePagesForKb(kb.id, false));
+    if (!visiblePages.some((visiblePage) => visiblePage.id === page.id)) {
+      return NextResponse.json({ message: "Not found." }, { status: 404 });
+    }
+    if (
+      Array.isArray(body.parentPath) &&
+      body.parentPath.length > 0 &&
+      !visiblePages.some((visiblePage) => visiblePage.path.join("/") === (body.parentPath as string[]).join("/"))
+    ) {
+      return NextResponse.json({ message: "Parent page not found." }, { status: 404 });
     }
 
     const nodeKind = page.nodeKind ?? "page";
@@ -272,6 +289,10 @@ export async function DELETE(
     if (!page || (page.nodeKind ?? "page") !== "page" || page.status !== "published" || page.visibility === "staff") {
       return NextResponse.json({ message: "Not found." }, { status: 404 });
     }
+    const visiblePages = filterPagesWithVisibleAncestors(await getVisiblePagesForKb(kb.id, false));
+    if (!visiblePages.some((visiblePage) => visiblePage.id === page.id)) {
+      return NextResponse.json({ message: "Not found." }, { status: 404 });
+    }
 
     const pages = await getAllPagesForAdmin(kb.id);
     const hasChildren = pages.some(
@@ -289,14 +310,14 @@ export async function DELETE(
     const referencedBy = pages.find((candidate) => candidate.relatedPageIds.includes(page.id));
     if (referencedBy) {
       return NextResponse.json(
-        { message: `Remove the related-page reference from "${referencedBy.title}" before deleting this page.` },
+        { message: "This page is referenced by another page. Remove that reference before deleting this page." },
         { status: 409 },
       );
     }
     const excerptRefs = await getExcerptReferencesToPage(page.id);
     if (excerptRefs.length > 0) {
       return NextResponse.json(
-        { message: `Remove the included excerpt on "${excerptRefs[0].pageTitle}" before deleting this page.` },
+        { message: "An included excerpt references this page. Remove that reference before deleting this page." },
         { status: 409 },
       );
     }
