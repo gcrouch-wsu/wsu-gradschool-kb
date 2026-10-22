@@ -28,7 +28,7 @@ jobs:
         with:
           # Node 24 (current LTS) matches @types/node 24 and the Next 16 / Vercel
           # default production runtime, so CI validates on the same major we ship on.
-          node-version: "24"
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
