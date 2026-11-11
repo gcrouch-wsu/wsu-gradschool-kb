@@ -73,6 +73,11 @@ export function PublicSiteChrome({
               </span>
             )}
             {session && (
+              <Link className="nav-account" href="/account/password">
+                Change password
+              </Link>
+            )}
+            {session && (
               <form action="/api/admin/logout" className="nav-signout" method="post">
                 <button className="nav-signout__button" type="submit">
                   Sign out

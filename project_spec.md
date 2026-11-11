@@ -151,6 +151,7 @@ surfaces are added):
 | Excerpt picker + preview APIs | Owner/Admin/Manager/Editor (viewers rejected) | `GET /api/admin/excerpt-sources` filters KBs/pages/headings by the caller's read access (`filterKbsForReadAccess` / `getReadableExcerptSourcePageForPicker` — staff-ancestor rules included); `POST /api/admin/excerpt-preview` resolves refs with the caller's session via `resolveExcerptForRead`. Both use `requireAdminMutation`. | `src/app/api/admin/excerpt-sources/route.ts`, `src/app/api/admin/excerpt-preview/route.ts`, `src/lib/excerpts.ts` |
 | Sourced-content import/check APIs | Owner/Admin/Manager/Editor (viewers rejected) | `POST /api/admin/sourced-content` and `…/check` use `requireAdminMutation`; outbound fetches are gated by `parseAllowedSourceUrl` (https + host allowlist) — no KB scoping needed, no KB data is read. | `src/app/api/admin/sourced-content/route.ts`, `src/app/api/admin/sourced-content/check/route.ts`, `src/lib/sourced-content.ts` |
 | Auth endpoints | Public sign-in; signed-in logout/session delete | Login is rate-limited and creates signed HMAC cookies; logout/session delete clear the admin cookie. | `src/app/admin/sign-in/page.tsx`, `src/app/api/admin/session/route.ts`, `src/app/api/admin/logout/route.ts` |
+| Self-service password change (`/account/password`, `POST /api/admin/account/password`) | Any signed-in **managed** user, viewers included | Deliberately *not* `requireAdminMutation` (it rejects viewers): checks session + `isSameOrigin`, rate-limits per client+user, verifies the current password, and only ever targets `session.userId`. Env bootstrap owner is refused (its password lives in env). Lives outside `/admin` because the admin layout redirects viewers. | `src/app/account/password/page.tsx`, `src/app/api/admin/account/password/route.ts` |
 
 For APIs, `requireAdminMutation` means "valid admin session plus same-origin `Origin`/`Referer`";
 add it to any new state-changing admin route and keep viewers out of every mutation path. For
@@ -764,6 +765,14 @@ part of the rule. Grouped by area so you can read only what your change touches:
   labels them. This never leaks publicly because those statuses never enter an anonymous
   reader's tree. Descendants of an *archived* ancestor are still dropped for everyone
   (`isStaffVisiblePageStatus` excludes archived).
+- **The reader sidebar keeps its scroll position across navigations.** The tree lives in the
+  sticky `.sidebar`, which is its own scroll box, and the article page renders the whole sidebar,
+  so every navigation remounts it at `scrollTop` 0 — choosing a page far down a long tree used to
+  snap the tree back to the top. `PageTree` saves the sidebar offset per KB in `sessionStorage`,
+  restores it on mount, and centers the `aria-current` item only if it is still out of view. It
+  scrolls the sidebar element directly: do **not** swap in `scrollIntoView`, which also scrolls the
+  window and fights Next's scroll-to-top on navigation. It is a no-op when the sidebar is not a
+  scroll box (mobile layout, short trees).
 
 ### Theming, CSS, and reading rhythm
 
@@ -851,6 +860,14 @@ part of the rule. Grouped by area so you can read only what your change touches:
   checks the target at registration and re-resolves it at delivery. Any new feature that POSTs or
   GETs a user-supplied address needs the same guard, or it becomes an SSRF pivot; the
   sourced-content importer solves the same problem with a host allowlist instead.
+- **Password policy is length-first (`src/lib/password-policy.ts`), enforced on create, reset, and
+  self-change — never on sign-in.** Min 12 / max 128 characters, no composition rules, rejects a
+  short common/WSU-themed list (leetspeak and digit padding folded), repetitive strings, and the
+  account's own email name. Sign-in must keep accepting older passwords that predate the policy.
+  Passwords are stored only as salted scrypt hashes and can never be displayed; "Set password" on
+  `/admin/users` is the recovery path. Any password change bumps `users.updated_at`, which is the
+  session version, so it signs that user out everywhere — routes that change the *caller's own*
+  row re-issue the caller's cookie against the new version so they are not signed out mid-task.
 
 ### AI gateway
 

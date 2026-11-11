@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Eye, EyeOff, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminRowMenu } from "@/components/admin/AdminRowMenu";
 import { DropdownSelect } from "@/components/DropdownSelect";
 import KbAssignmentPicker from "@/components/KbAssignmentPicker";
 import { ModalForm } from "@/components/Modal";
+import { NewPasswordField } from "@/components/NewPasswordField";
 import { PageLoader } from "@/components/PageLoader";
+import { validatePassword } from "@/lib/password-policy";
 import type { KnowledgeBase, User } from "@/lib/types";
 import { readApiErrorMessage, useStatusModal } from "@/lib/use-status-modal";
 interface ManagedUser {
@@ -75,6 +77,11 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
   const [newRole, setNewRole] = useState<User["role"]>("editor");
   const [newAssignments, setNewAssignments] = useState<string[]>([]);
 
+  const [resetUser, setResetUser] = useState<ManagedUser | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [resetVisible, setResetVisible] = useState(false);
+  const [resetPending, setResetPending] = useState(false);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<User["role"]>("editor");
   const [editAssignments, setEditAssignments] = useState<string[]>([]);
@@ -106,6 +113,11 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
+    const problem = validatePassword(newPassword, { email: newEmail, fullName: newFullName });
+    if (problem) {
+      showError(problem);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
@@ -172,6 +184,47 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
     }
   }
 
+  function openResetPassword(user: ManagedUser) {
+    setResetUser(user);
+    setResetPasswordValue("");
+    setResetVisible(false);
+  }
+
+  function closeResetPassword() {
+    setResetUser(null);
+    setResetPasswordValue("");
+    setResetVisible(false);
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetUser) return;
+    const problem = validatePassword(resetPasswordValue, resetUser);
+    if (problem) {
+      showError(problem);
+      return;
+    }
+    setResetPending(true);
+    try {
+      const res = await fetch(`/api/admin/users/${resetUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: resetPasswordValue }),
+      });
+      if (!res.ok) {
+        throw new Error(await readApiErrorMessage(res, "Failed to set password"));
+      }
+      const label = resetUser.fullName || resetUser.email;
+      closeResetPassword();
+      await loadData();
+      showSuccess(`Password updated for ${label}.`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Error setting password");
+    } finally {
+      setResetPending(false);
+    }
+  }
+
   async function handleDelete(userId: string) {
     if (!confirm("Are you sure you want to delete this user?")) return;
     try {
@@ -235,31 +288,13 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
               onChange={(e) => setNewFullName(e.target.value)}
             />
           </label>
-          <label>
-            <span className="meta">Password</span>
-            <div className="modal-form__inline-field">
-              <input
-                className="input"
-                required
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-              <button
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-                type="button"
-              >
-                {showPassword ? (
-                  <EyeOff aria-hidden size={18} strokeWidth={1.8} />
-                ) : (
-                  <Eye aria-hidden size={18} strokeWidth={1.8} />
-                )}
-              </button>
-            </div>
-          </label>
+          <NewPasswordField
+            context={{ email: newEmail, fullName: newFullName }}
+            onChange={setNewPassword}
+            onVisibleChange={setShowPassword}
+            value={newPassword}
+            visible={showPassword}
+          />
           <DropdownSelect
             label="Role"
             onChange={(value) => setNewRole(value as User["role"])}
@@ -270,6 +305,27 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
           {usesKbAssignments(newRole) && (
             <KbAssignmentPicker kbs={kbs} selected={newAssignments} onChange={setNewAssignments} />
           )}
+        </ModalForm>
+      )}
+
+      {resetUser && (
+        <ModalForm
+          description={`Set a new password for ${resetUser.fullName || resetUser.email}. They will be signed out everywhere and can sign in with the new password right away. Share it with them directly — it can't be looked up later.`}
+          onClose={closeResetPassword}
+          onSubmit={handleResetPassword}
+          submitDisabled={resetPending}
+          submitLabel={resetPending ? "Saving…" : "Set password"}
+          title="Set password"
+          width="lg"
+        >
+          <NewPasswordField
+            autoFocus
+            context={{ email: resetUser.email, fullName: resetUser.fullName }}
+            onChange={setResetPasswordValue}
+            onVisibleChange={setResetVisible}
+            value={resetPasswordValue}
+            visible={resetVisible}
+          />
         </ModalForm>
       )}
 
@@ -360,6 +416,10 @@ export default function AdminUsersPage() {  const { showError, showSuccess, stat
                   {
                     label: "Edit",
                     onSelect: () => startEdit(user),
+                  },
+                  {
+                    label: "Set password",
+                    onSelect: () => openResetPassword(user),
                   },
                   { divider: true, label: "" },
                   {

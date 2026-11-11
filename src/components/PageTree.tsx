@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PageTreeNode } from "@/lib/types";
 
 function isCurrentNode(
@@ -75,6 +75,97 @@ export function initialExpandedIds(
   return expanded;
 }
 
+/** Nearest ancestor that actually scrolls vertically (the sticky `.sidebar`), never the window. */
+function findScrollContainer(start: HTMLElement | null): HTMLElement | null {
+  let node = start?.parentElement ?? null;
+  while (node && node !== document.body && node !== document.documentElement) {
+    const { overflowY } = window.getComputedStyle(node);
+    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function readSavedScroll(key: string): number | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    const value = raw === null ? NaN : Number(raw);
+    return Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveScroll(key: string, value: number) {
+  try {
+    window.sessionStorage.setItem(key, String(Math.round(value)));
+  } catch {
+    // Storage blocked (private mode, policy): the current-page fallback still applies.
+  }
+}
+
+/**
+ * Keep the reader's place in a long page tree across navigations.
+ *
+ * The tree sits in the sticky `.sidebar`, which scrolls on its own, and the whole sidebar is
+ * rendered by the article page — so every navigation remounts it with scrollTop 0. Picking a
+ * page far down the tree used to land the reader back at the top of the tree, with the page
+ * they just chose scrolled out of sight.
+ *
+ * Restore the sidebar's previous scroll offset (per KB, per tab), so the link that was clicked
+ * stays exactly where it was; then, if the current page is still out of view (a deep link, a
+ * search result, a different expansion state), center it. Only the sidebar is scrolled — never
+ * the window — and nothing happens when the sidebar isn't a scroll box (mobile layout).
+ */
+function usePreservedTreeScroll(
+  rootRef: React.RefObject<HTMLUListElement | null>,
+  kbSlug: string,
+  currentKey: string,
+) {
+  const storageKey = `page-tree-scroll:${kbSlug}`;
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const container = findScrollContainer(root);
+    if (!root || !container) return;
+
+    const saved = readSavedScroll(storageKey);
+    if (saved !== null) {
+      container.scrollTop = saved;
+    }
+
+    const current = root.querySelector<HTMLElement>('[aria-current="page"]');
+    if (current) {
+      const box = container.getBoundingClientRect();
+      const item = current.getBoundingClientRect();
+      const margin = 24;
+      if (item.top < box.top + margin || item.bottom > box.bottom - margin) {
+        container.scrollTop += item.top - box.top - (box.height - item.height) / 2;
+      }
+    }
+    saveScroll(storageKey, container.scrollTop);
+
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        saveScroll(storageKey, container.scrollTop);
+      });
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+      // Capture the final offset synchronously: the click that navigates away can unmount
+      // this tree before a pending animation frame fires.
+      saveScroll(storageKey, container.scrollTop);
+    };
+  }, [rootRef, storageKey, currentKey]);
+}
+
 function TreeLabel({
   node,
   kbSlug,
@@ -134,7 +225,9 @@ function TreeItems({
   idPrefix,
   depth,
   maxDepth,
+  rootRef,
 }: {
+  rootRef?: React.Ref<HTMLUListElement>;
   nodes: PageTreeNode[];
   kbSlug: string;
   homepagePageId?: string | null;
@@ -149,7 +242,7 @@ function TreeItems({
   maxDepth: number;
 }) {
   return (
-    <ul>
+    <ul ref={rootRef}>
       {nodes.map((node) => {
         const hasChildren = node.children.length > 0 && depth + 1 < maxDepth;
         const isExpanded = !collapsible || expandedIds.has(node.page.id);
@@ -249,6 +342,8 @@ export function PageTree({
     [nodes, currentPageId, currentPath, expandDepth],
   );
   const [expandedIds, setExpandedIds] = useState<Set<string>>(requiredExpanded);
+  const rootRef = useRef<HTMLUListElement>(null);
+  usePreservedTreeScroll(rootRef, kbSlug, currentPageId ?? currentPath ?? "");
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -292,6 +387,7 @@ export function PageTree({
       maxDepth={maxDepth}
       nodes={nodes}
       onToggle={onToggle}
+      rootRef={rootRef}
     />
   );
 }

@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { PasswordInput } from "@/components/PasswordInput";
 
 /**
  * Where to land after a successful sign-in.
@@ -78,18 +79,13 @@ export function AdminSignInForm() {
           onChange={(event) => setEmail(event.target.value)}
         />
       </label>
-      <label>
-        <span className="meta">Password</span>
-        <input
-          autoComplete="current-password"
-          className="input"
-          name="password"
-          required
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-      </label>
+      <PasswordInput
+        autoComplete="current-password"
+        label="Password"
+        name="password"
+        onChange={setPassword}
+        value={password}
+      />
       {error && <div className="error">{error}</div>}
       <button className="button" disabled={isPending} type="submit">
         {isPending ? "Signing in..." : "Sign in"}

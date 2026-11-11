@@ -58,6 +58,10 @@ export function TopBar({ isSidebarCollapsed, session, onToggleSidebar }: TopBarP
               <span className="admin-shell__user-email">{session.email}</span>
               <span className="admin-shell__user-role">{roleLabel(session.role)}</span>
             </span>
+            {/* Plain anchor: /account uses the public root shell, so it needs a full page load. */}
+            <a className="admin-shell__account-link" href="/account/password">
+              Change password
+            </a>
             <form action="/api/admin/logout" method="post">
               <button className="admin-shell__sign-out" type="submit">
                 Sign out

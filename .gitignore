@@ -39,3 +39,8 @@ corinna.md
 *.avif
 *.tif
 *.tiff
+
+# Local working files (not part of the app)
+4+1.html
+*.xlsx
+*.xls

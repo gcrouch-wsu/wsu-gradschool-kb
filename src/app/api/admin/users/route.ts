@@ -3,6 +3,7 @@ import { insertUser, listUserAssignments, listUsers, replaceUserAssignments } fr
 import { isDatabaseEnabled } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { logError } from "@/lib/log";
+import { validatePassword } from "@/lib/password-policy";
 import { requireAdminMutation } from "@/lib/security";
 import type { UserRole } from "@/lib/types";
 
@@ -55,7 +56,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Email and password are required." }, { status: 400 });
   }
 
-  const role: UserRole = ["owner", "admin", "manager", "editor", "viewer"].includes(body.role)
+  const passwordProblem = validatePassword(body.password, { email: body.email, fullName: body.fullName });
+  if (passwordProblem) {
+    return NextResponse.json({ message: passwordProblem }, { status: 400 });
+  }
+
+  const role: UserRole =["owner", "admin", "manager", "editor", "viewer"].includes(body.role)
     ? body.role
     : "editor";
 
